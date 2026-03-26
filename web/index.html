@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Restaurant Management System">
+
+  <!-- Responsive -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="restaurant_management_system">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Restaurant Management</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Poppins font -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!--
+    ══════════════════════════════════════════════
+    FIX uBlock Origin: CSP header
+    Mengizinkan script inline & blob worker Flutter
+    tanpa di-strip oleh uBlock filter list
+    ══════════════════════════════════════════════
+  -->
+  <meta http-equiv="Content-Security-Policy"
+    content="
+      default-src 'self';
+      script-src  'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.gstatic.com;
+      style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src    'self' https://fonts.gstatic.com data:;
+      img-src     'self' data: blob: https:;
+      connect-src 'self' https: wss: https://www.gstatic.com;
+      worker-src  'self' blob:;
+    ">
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #ffffff;
+    }
+
+    /*
+      FIX uBlock Origin: Force-visible elemen canvas Flutter.
+      uBlock kadang inject display:none / opacity:0 ke elemen
+      custom tag seperti flt-glass-pane karena dikira "ad container".
+      !important di sini mengalahkan style injection dari extension.
+    */
+    flt-glass-pane,
+    flt-scene,
+    flt-scene-host,
+    flt-rendering-backend,
+    flutter-view {
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      pointer-events: all !important;
+    }
+  </style>
+</head>
+<body>
+  <!--
+    FIX uBlock Origin: Suppress extension script errors
+    agar tidak crash Flutter initialization.
+    uBlock & AdBlock inject script ke semua halaman —
+    kalau script mereka throw error, kadang block
+    eksekusi flutter_bootstrap.js berikutnya.
+  -->
+  <script>
+    (function () {
+      var _origOnError = window.onerror;
+      window.onerror = function (msg, src, line, col, err) {
+        // Abaikan error dari extension (bukan dari app kita)
+        if (src && (
+          src.indexOf('chrome-extension://') !== -1 ||
+          src.indexOf('moz-extension://')    !== -1 ||
+          src.indexOf('safari-extension://')  !== -1
+        )) {
+          return true; // true = suppress, tidak propagate
+        }
+        if (_origOnError) return _origOnError(msg, src, line, col, err);
+        return false;
+      };
+    })();
+  </script>
+
+  <!--
+    flutter_bootstrap.js tetap pakai async (sama seperti aslinya),
+    ditambah crossorigin="anonymous" agar uBlock tidak classify
+    sebagai third-party tracking script.
+  -->
+  <script src="flutter_bootstrap.js" async crossorigin="anonymous"></script>
+</body>
+</html>
