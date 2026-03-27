@@ -28,14 +28,78 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     super.dispose();
   }
 
+  // ─── Terjemahan error Supabase → Bahasa Indonesia ──────────────
+  String _translateAuthError(String raw) {
+    final msg = raw.toLowerCase();
+
+    // Signup
+    if (msg.contains('user already registered') ||
+        msg.contains('email already') ||
+        msg.contains('already been registered')) {
+      return 'Email ini sudah terdaftar. Silakan masuk atau gunakan email lain.';
+    }
+    // Login
+    if (msg.contains('invalid login credentials') ||
+        msg.contains('invalid credentials') ||
+        msg.contains('wrong password')) {
+      return 'Email atau password salah. Periksa kembali dan coba lagi.';
+    }
+    if (msg.contains('email not confirmed')) {
+      return 'Email belum dikonfirmasi. Cek inbox kamu dan klik link verifikasi.';
+    }
+    if (msg.contains('too many requests') || msg.contains('rate limit')) {
+      return 'Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.';
+    }
+    // Password
+    if (msg.contains('password should be') ||
+        msg.contains('password must be') ||
+        msg.contains('weak password')) {
+      return 'Password terlalu lemah. Gunakan minimal 6 karakter.';
+    }
+    // Email format
+    if (msg.contains('unable to validate email') ||
+        msg.contains('invalid email')) {
+      return 'Format email tidak valid. Periksa kembali alamat emailmu.';
+    }
+    // OTP
+    if (msg.contains('token has expired') || msg.contains('otp expired')) {
+      return 'Kode OTP sudah kedaluwarsa. Minta kode baru.';
+    }
+    if (msg.contains('token is invalid') ||
+        msg.contains('invalid otp') ||
+        msg.contains('invalid token')) {
+      return 'Kode OTP salah. Periksa kembali kode yang dikirim ke HP kamu.';
+    }
+    if (msg.contains('phone') && msg.contains('already')) {
+      return 'Nomor HP ini sudah terdaftar.';
+    }
+    // Network
+    if (msg.contains('network') ||
+        msg.contains('connection') ||
+        msg.contains('timeout')) {
+      return 'Koneksi bermasalah. Periksa internet kamu dan coba lagi.';
+    }
+    if (msg.contains('server error') || msg.contains('500')) {
+      return 'Server sedang bermasalah. Coba lagi dalam beberapa saat.';
+    }
+    // Fallback
+    return 'Terjadi kesalahan: $raw';
+  }
+
+  // ─── AUTH METHODS ──────────────────────────────────────────────
   Future<void> _signInGoogle() async {
     setState(() => _loading = true);
     try {
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: '${Uri.base.origin}/#/customer');
-    } catch (e) { _err('Login Google gagal: $e'); }
-    finally { if (mounted) setState(() => _loading = false); }
+    } on AuthException catch (e) {
+      _err(_translateAuthError(e.message));
+    } catch (_) {
+      _err('Login Google gagal. Coba lagi.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _signInApple() async {
@@ -44,67 +108,127 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.apple,
         redirectTo: '${Uri.base.origin}/#/customer');
-    } catch (e) { _err('Login Apple gagal: $e'); }
-    finally { if (mounted) setState(() => _loading = false); }
+    } on AuthException catch (e) {
+      _err(_translateAuthError(e.message));
+    } catch (_) {
+      _err('Login Apple gagal. Coba lagi.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _submitEmail() async {
     final email = _emailCtrl.text.trim();
     final pass  = _passCtrl.text.trim();
-    if (email.isEmpty || pass.isEmpty) { _err('Email dan password wajib diisi'); return; }
+
+    // Validasi lokal sebelum hit API
+    if (_isSignUp && _nameCtrl.text.trim().isEmpty) {
+      _err('Nama lengkap wajib diisi.'); return;
+    }
+    if (email.isEmpty) { _err('Email wajib diisi.'); return; }
+    if (!email.contains('@') || !email.contains('.')) {
+      _err('Format email tidak valid.'); return;
+    }
+    if (pass.isEmpty) { _err('Password wajib diisi.'); return; }
+    if (pass.length < 6) { _err('Password minimal 6 karakter.'); return; }
+
     setState(() => _loading = true);
     try {
       if (_isSignUp) {
         await Supabase.instance.client.auth.signUp(
-          email: email, password: pass,
-          data: {'full_name': _nameCtrl.text.trim()});
-        if (mounted) _info('Cek email untuk konfirmasi 📧');
+          email: email,
+          password: pass,
+          data: {'full_name': _nameCtrl.text.trim()},
+        );
+        if (mounted) {
+          _info('Akun berhasil dibuat! Cek email untuk konfirmasi. 📧');
+        }
       } else {
         final res = await Supabase.instance.client.auth
             .signInWithPassword(email: email, password: pass);
         if (mounted && res.user != null) widget.onLoginSuccess();
       }
-    } on AuthException catch (e) { _err(e.message);
-    } catch (_) { _err('Terjadi kesalahan, coba lagi');
-    } finally { if (mounted) setState(() => _loading = false); }
+    } on AuthException catch (e) {
+      if (mounted) _err(_translateAuthError(e.message));
+    } catch (_) {
+      if (mounted) _err('Terjadi kesalahan. Periksa koneksi internet kamu.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _sendOtp() async {
     final phone = _phoneCtrl.text.trim();
-    if (phone.isEmpty) { _err('Nomor HP wajib diisi'); return; }
+    if (phone.isEmpty) { _err('Nomor HP wajib diisi.'); return; }
     final norm = phone.startsWith('0') ? '+62${phone.substring(1)}' : phone;
     setState(() => _loading = true);
     try {
       await Supabase.instance.client.auth.signInWithOtp(phone: norm);
-      if (mounted) { setState(() => _otpSent = true); _info('OTP dikirim ke $norm'); }
-    } on AuthException catch (e) { _err(e.message);
-    } finally { if (mounted) setState(() => _loading = false); }
+      if (mounted) {
+        setState(() => _otpSent = true);
+        _info('Kode OTP dikirim ke $norm 📱');
+      }
+    } on AuthException catch (e) {
+      if (mounted) _err(_translateAuthError(e.message));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _verifyOtp() async {
     final phone = _phoneCtrl.text.trim();
     final otp   = _otpCtrl.text.trim();
-    if (otp.length < 6) { _err('Masukkan 6 digit OTP'); return; }
+    if (otp.isEmpty) { _err('Kode OTP wajib diisi.'); return; }
+    if (otp.length < 6) { _err('Kode OTP harus 6 digit.'); return; }
     final norm = phone.startsWith('0') ? '+62${phone.substring(1)}' : phone;
     setState(() => _loading = true);
     try {
       final res = await Supabase.instance.client.auth
           .verifyOTP(phone: norm, token: otp, type: OtpType.sms);
       if (mounted && res.user != null) widget.onLoginSuccess();
-    } on AuthException catch (e) { _err(e.message);
-    } finally { if (mounted) setState(() => _loading = false); }
+    } on AuthException catch (e) {
+      if (mounted) _err(_translateAuthError(e.message));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
-  void _err(String m) => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(m, style: const TextStyle(fontFamily: 'Poppins')),
+  // ─── SNACKBARS ─────────────────────────────────────────────────
+  void _err(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.error_outline, color: Colors.white, size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Text(m, style: const TextStyle(
+          fontFamily: 'Poppins', fontSize: 13))),
+      ]),
       backgroundColor: const Color(0xFFE94560),
-      behavior: SnackBarBehavior.floating));
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
 
-  void _info(String m) => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(m, style: const TextStyle(fontFamily: 'Poppins')),
-      backgroundColor: const Color(0xFF4CAF50),
-      behavior: SnackBarBehavior.floating));
+  void _info(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Text(m, style: const TextStyle(
+          fontFamily: 'Poppins', fontSize: 13))),
+      ]),
+      backgroundColor: const Color(0xFF1D9E75),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
 
+  // ─── BUILD ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
@@ -113,64 +237,49 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     return _buildMobile();
   }
 
-  // ── DESKTOP: split 2 kolom ──────────────────────────────────
   Widget _buildDesktop() => Scaffold(
     backgroundColor: Colors.white,
     body: Row(children: [
-      // Kiri: hero panel
       Expanded(flex: 5, child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFF0D1B2A), Color(0xFF1A1A2E), Color(0xFF0F3460)])),
+        decoration: const BoxDecoration(gradient: LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF0D1B2A), Color(0xFF1A1A2E), Color(0xFF0F3460)])),
         child: Stack(children: [
           Positioned.fill(child: CustomPaint(painter: _DotPatternPainter())),
-          Padding(
-            padding: const EdgeInsets.all(60),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Logo bar
-                Row(children: [
-                  Container(
-                    width: 48, height: 48,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
-                      borderRadius: BorderRadius.circular(14)),
-                    child: const Icon(Icons.restaurant,
-                      color: Colors.white, size: 24)),
-                  const SizedBox(width: 12),
-                  const Text('RestaurantOS', style: TextStyle(
-                    fontFamily: 'Poppins', color: Colors.white,
-                    fontSize: 20, fontWeight: FontWeight.w700)),
-                ]),
-                const Spacer(),
-                // Headline besar
-                const Text('Reservasi &\nPesanan Online',
-                  style: TextStyle(fontFamily: 'Poppins',
-                    color: Colors.white, fontSize: 52,
-                    fontWeight: FontWeight.w800, height: 1.1)),
-                const SizedBox(height: 20),
-                const Text(
-                  'Nikmati kemudahan memesan makanan\n'
-                  'dan reservasi meja favorit kamu\n'
-                  'kapan saja, di mana saja.',
-                  style: TextStyle(fontFamily: 'Poppins',
-                    color: Colors.white60, fontSize: 16, height: 1.7)),
-                const SizedBox(height: 40),
-                Wrap(spacing: 10, runSpacing: 10, children: [
-                  _pill('🍽️ Menu lengkap'),
-                  _pill('📅 Reservasi mudah'),
-                  _pill('📦 Lacak pesanan'),
-                  _pill('🤖 AI Chatbot'),
-                ]),
-                const Spacer(),
-                const Text('© 2026 RestaurantOS',
-                  style: TextStyle(fontFamily: 'Poppins',
-                    color: Colors.white24, fontSize: 12)),
-              ])),
+          Padding(padding: const EdgeInsets.all(60),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(width: 48, height: 48,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
+                    borderRadius: BorderRadius.circular(14)),
+                  child: const Icon(Icons.restaurant, color: Colors.white, size: 24)),
+                const SizedBox(width: 12),
+                const Text('RestaurantOS', style: TextStyle(fontFamily: 'Poppins',
+                  color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+              ]),
+              const Spacer(),
+              const Text('Reservasi &\nPesanan Online',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
+                  fontSize: 52, fontWeight: FontWeight.w800, height: 1.1)),
+              const SizedBox(height: 20),
+              const Text(
+                'Nikmati kemudahan memesan makanan\n'
+                'dan reservasi meja favorit kamu\n'
+                'kapan saja, di mana saja.',
+                style: TextStyle(fontFamily: 'Poppins',
+                  color: Colors.white60, fontSize: 16, height: 1.7)),
+              const SizedBox(height: 40),
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                _pill('🍽️ Menu lengkap'), _pill('📅 Reservasi mudah'),
+                _pill('📦 Lacak pesanan'), _pill('🤖 AI Chatbot'),
+              ]),
+              const Spacer(),
+              const Text('© 2026 RestaurantOS', style: TextStyle(
+                fontFamily: 'Poppins', color: Colors.white24, fontSize: 12)),
+            ])),
         ]))),
-      // Kanan: form
       Expanded(flex: 4, child: Container(
         color: const Color(0xFFF8F9FA),
         child: Center(child: SingleChildScrollView(
@@ -189,46 +298,38 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     child: Text(label, style: const TextStyle(fontFamily: 'Poppins',
       color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)));
 
-  // ── TABLET: card putih di tengah ────────────────────────────
   Widget _buildTablet() => Scaffold(
     backgroundColor: const Color(0xFFEEF0F3),
     body: Center(child: SingleChildScrollView(
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
       child: Container(
-        width: 540,
-        padding: const EdgeInsets.all(40),
-        decoration: BoxDecoration(
-          color: Colors.white,
+        width: 540, padding: const EdgeInsets.all(40),
+        decoration: BoxDecoration(color: Colors.white,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 40, offset: const Offset(0, 8))]),
         child: Column(children: [
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Container(
-              width: 44, height: 44,
+            Container(width: 44, height: 44,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
                 borderRadius: BorderRadius.circular(12)),
               child: const Icon(Icons.restaurant, color: Colors.white, size: 22)),
             const SizedBox(width: 10),
-            const Text('RestaurantOS', style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 18,
-              fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+            const Text('RestaurantOS', style: TextStyle(fontFamily: 'Poppins',
+              fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
           ]),
           const SizedBox(height: 32),
           _buildForm(),
         ])))));
 
-  // ── MOBILE: full screen ─────────────────────────────────────
   Widget _buildMobile() => Scaffold(
     backgroundColor: Colors.white,
     body: SafeArea(child: SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
       child: Column(children: [
-        Container(
-          width: 64, height: 64,
+        Container(width: 64, height: 64,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
@@ -238,13 +339,11 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         _buildForm(),
       ]))));
 
-  // ── FORM KONTEN ─────────────────────────────────────────────
   Widget _buildForm() => Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const Text('Selamat Datang 👋',
-        textAlign: TextAlign.center,
+      const Text('Selamat Datang 👋', textAlign: TextAlign.center,
         style: TextStyle(fontFamily: 'Poppins', fontSize: 24,
           fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
       const SizedBox(height: 6),
@@ -277,8 +376,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
 
   Widget _buildTabSelector() => Container(
     padding: const EdgeInsets.all(4),
-    decoration: BoxDecoration(
-      color: const Color(0xFFE5E7EB),
+    decoration: BoxDecoration(color: const Color(0xFFE5E7EB),
       borderRadius: BorderRadius.circular(10)),
     child: Row(children: [
       Expanded(child: _tabItem('Email', 0)),
@@ -314,7 +412,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       _field(ctrl: _emailCtrl, hint: 'Email',
         icon: Icons.email_outlined, type: TextInputType.emailAddress),
       const SizedBox(height: 10),
-      _field(ctrl: _passCtrl, hint: 'Password',
+      _field(ctrl: _passCtrl, hint: 'Password (min. 6 karakter)',
         icon: Icons.lock_outline, obscure: _obscure,
         suffix: IconButton(
           icon: Icon(_obscure
@@ -322,10 +420,14 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
             size: 18, color: Colors.grey),
           onPressed: () => setState(() => _obscure = !_obscure))),
       const SizedBox(height: 18),
-      _primaryBtn(label: _isSignUp ? 'Buat Akun' : 'Masuk', onTap: _submitEmail),
+      _primaryBtn(
+        label: _isSignUp ? 'Buat Akun' : 'Masuk', onTap: _submitEmail),
       const SizedBox(height: 14),
       GestureDetector(
-        onTap: () => setState(() => _isSignUp = !_isSignUp),
+        onTap: () => setState(() {
+          _isSignUp = !_isSignUp;
+          ScaffoldMessenger.of(context).clearSnackBars();
+        }),
         child: Text(
           _isSignUp ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar',
           textAlign: TextAlign.center,
@@ -344,6 +446,14 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         const SizedBox(height: 10),
         _field(ctrl: _otpCtrl, hint: '6 digit kode OTP',
           icon: Icons.security_outlined, type: TextInputType.number),
+        const SizedBox(height: 6),
+        Row(children: [
+          const Icon(Icons.info_outline, size: 13, color: Colors.grey),
+          const SizedBox(width: 4),
+          Text('Kode dikirim ke ${_phoneCtrl.text.trim()}',
+            style: const TextStyle(fontFamily: 'Poppins',
+              fontSize: 11, color: Colors.grey)),
+        ]),
       ],
       const SizedBox(height: 18),
       _primaryBtn(
@@ -353,30 +463,29 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         const SizedBox(height: 14),
         GestureDetector(
           onTap: () => setState(() { _otpSent = false; _otpCtrl.clear(); }),
-          child: const Text('Ganti nomor / kirim ulang',
+          child: const Text('Ganti nomor / kirim ulang OTP',
             textAlign: TextAlign.center,
             style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
               color: Color(0xFF0F3460), fontWeight: FontWeight.w500))),
       ],
     ]);
 
-  Widget _socialBtn({required Widget icon, required String label, required VoidCallback onTap}) =>
-    GestureDetector(
-      onTap: _loading ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-          boxShadow: [BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6, offset: const Offset(0, 2))]),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          icon, const SizedBox(width: 10),
-          Text(label, style: const TextStyle(fontFamily: 'Poppins',
-            fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E))),
-        ])));
+  Widget _socialBtn({
+    required Widget icon, required String label, required VoidCallback onTap,
+  }) => GestureDetector(
+    onTap: _loading ? null : onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: BoxDecoration(color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 6, offset: const Offset(0, 2))]),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        icon, const SizedBox(width: 10),
+        Text(label, style: const TextStyle(fontFamily: 'Poppins',
+          fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E))),
+      ])));
 
   Widget _field({
     required TextEditingController ctrl, required String hint,
@@ -388,7 +497,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
     decoration: InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
+      hintStyle: const TextStyle(fontFamily: 'Poppins',
+        fontSize: 13, color: Colors.grey),
       prefixIcon: Icon(icon, size: 18, color: const Color(0xFF6B7280)),
       suffixIcon: suffix,
       filled: true,
