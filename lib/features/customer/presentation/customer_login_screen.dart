@@ -193,6 +193,146 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     }
   }
 
+  // ─── FORGOT PASSWORD ───────────────────────────────────────────
+  Future<void> _forgotPassword() async {
+    final resetCtrl = TextEditingController(text: _emailCtrl.text.trim());
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        bool sending = false;
+        return StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F3460).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.lock_reset_outlined,
+                    color: Color(0xFF0F3460), size: 20)),
+              const SizedBox(width: 10),
+              const Text('Lupa Password',
+                  style: TextStyle(fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700, fontSize: 16)),
+            ]),
+            content: Column(mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Masukkan email yang terdaftar. Kami akan kirimkan '
+                    'link untuk reset password.',
+                    style: TextStyle(fontFamily: 'Poppins',
+                        fontSize: 13, color: Color(0xFF6B7280), height: 1.5)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: resetCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    autofocus: true,
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Email kamu',
+                      hintStyle: const TextStyle(fontFamily: 'Poppins',
+                          fontSize: 13, color: Colors.grey),
+                      prefixIcon: const Icon(Icons.email_outlined,
+                          size: 18, color: Color(0xFF6B7280)),
+                      filled: true,
+                      fillColor: const Color(0xFFF9F9F9),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFE5E7EB))),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFE5E7EB))),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF0F3460), width: 1.5)),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14)),
+                  ),
+                ]),
+            actions: [
+              TextButton(
+                onPressed: sending ? null : () => Navigator.pop(ctx),
+                child: const Text('Batal',
+                    style: TextStyle(fontFamily: 'Poppins',
+                        color: Color(0xFF6B7280)))),
+              ElevatedButton(
+                onPressed: sending
+                    ? null
+                    : () async {
+                        final email = resetCtrl.text.trim();
+                        if (email.isEmpty ||
+                            !email.contains('@') ||
+                            !email.contains('.')) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('Masukkan email yang valid.',
+                                  style: TextStyle(fontFamily: 'Poppins')),
+                              backgroundColor: const Color(0xFFE94560),
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ));
+                          return;
+                        }
+                        setS(() => sending = true);
+                        try {
+                          await Supabase.instance.client.auth
+                              .resetPasswordForEmail(
+                            email,
+                            redirectTo:
+                                '${Uri.base.origin}/#/customer/reset-password',
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            _info(
+                              'Link reset password dikirim ke $email. '
+                              'Cek inbox atau folder spam kamu. 📧');
+                          }
+                        } on AuthException catch (e) {
+                          if (mounted) {
+                            _err(_translateAuthError(e.message));
+                          }
+                        } catch (_) {
+                          if (mounted) {
+                            _err('Gagal mengirim email. Coba lagi.');
+                          }
+                        } finally {
+                          if (ctx.mounted) setS(() => sending = false);
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F3460),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 10)),
+                child: sending
+                    ? const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Text('Kirim Link Reset',
+                        style: TextStyle(fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    resetCtrl.dispose();
+  }
+
   // ─── SNACKBARS ─────────────────────────────────────────────────
   void _err(String m) {
     if (!mounted) return;
@@ -422,7 +562,16 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       const SizedBox(height: 18),
       _primaryBtn(
         label: _isSignUp ? 'Buat Akun' : 'Masuk', onTap: _submitEmail),
-      const SizedBox(height: 14),
+      const SizedBox(height: 10),
+      // Lupa password — hanya tampil saat mode login
+      if (!_isSignUp)
+        GestureDetector(
+          onTap: _forgotPassword,
+          child: const Text('Lupa password?',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+              color: Color(0xFFE94560), fontWeight: FontWeight.w500))),
+      const SizedBox(height: 4),
       GestureDetector(
         onTap: () => setState(() {
           _isSignUp = !_isSignUp;
