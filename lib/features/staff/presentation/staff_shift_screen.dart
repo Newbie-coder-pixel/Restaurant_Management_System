@@ -269,8 +269,8 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Copy dari hari...',
-            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        title: const Text('Copy dari hari...',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: sourceDays.map((d) {

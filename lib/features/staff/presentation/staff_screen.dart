@@ -215,9 +215,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   style: TextStyle(fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700, color: _roleColor(s.role)))),
             const SizedBox(width: 10),
-            Expanded(
+            const Expanded(
               child: Text('Edit Staff',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontFamily: 'Poppins', fontWeight: FontWeight.w700))),
           ]),
           content: SingleChildScrollView(
@@ -927,7 +927,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         ),
                         isThreeLine:
                             s.phone != null && s.phone!.isNotEmpty,
-                        trailing: Icon(Icons.chevron_right,
+                        trailing: const Icon(Icons.chevron_right,
                             size: 20, color: AppColors.textSecondary),
                       ))),
                 const SizedBox(height: 8),
