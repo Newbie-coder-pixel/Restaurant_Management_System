@@ -12,7 +12,6 @@ import '../../features/customer/presentation/customer_menu_screen.dart';
 import '../../features/customer/presentation/customer_my_bookings_screen.dart';
 import '../../features/customer/presentation/customer_checkout_screen.dart';
 import '../../features/customer/presentation/customer_order_tracker_screen.dart';
-// FIX: Hapus unused import 'customer_auth_provider.dart'
 import '../models/staff_role.dart';
 
 abstract class AppRoutes {
@@ -30,12 +29,14 @@ abstract class AppRoutes {
   static const branches       = '/branches';
   static const chatbot        = '/chatbot';
   // Customer PWA
-  static const customer              = '/customer';
-  static const customerMenu          = '/customer/menu/:branchId';
-  static const customerBooking       = '/customer/booking/:branchId';
-  static const customerCheckout      = '/customer/checkout';
-  static const customerTrack         = '/customer/track';
-  static const customerOrderSuccess  = '/customer/order-success/:orderNumber';
+  static const customer               = '/customer';
+  static const customerMenu           = '/customer/menu/:branchId';
+  static const customerBooking        = '/customer/booking/:branchId';
+  static const customerCheckout       = '/customer/checkout';
+  // FIX: dua varian track — dengan dan tanpa orderNumber
+  static const customerTrack          = '/customer/track';
+  static const customerTrackOrder     = '/customer/track/:orderNumber';
+  static const customerOrderSuccess   = '/customer/order-success/:orderNumber';
   static const customerBookingSuccess = '/customer/booking-success';
 }
 
@@ -57,7 +58,8 @@ String _defaultRouteForRole(StaffRole role) {
 
 class _AuthChangeNotifier extends ChangeNotifier {
   _AuthChangeNotifier(this._ref) {
-    _sub = _ref.listen<AuthState>(authStateProvider, (_, __) => notifyListeners());
+    _sub = _ref.listen<AuthState>(authStateProvider,
+        (_, __) => notifyListeners());
   }
   final Ref _ref;
   late final ProviderSubscription _sub;
@@ -79,7 +81,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
-      final isLoggedIn = Supabase.instance.client.auth.currentUser != null;
+      final isLoggedIn =
+          Supabase.instance.client.auth.currentUser != null;
       final loc = state.matchedLocation;
 
       // Customer routes — bebas, tidak perlu auth
@@ -107,50 +110,83 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // ── Customer PWA (no auth) — di atas agar prioritas ───
-      GoRoute(path: AppRoutes.customer,
-  builder: (_, state) {
-    final tab = int.tryParse(
-      state.uri.queryParameters['tab'] ?? '0') ?? 0;
-    return CustomerLandingScreen(initialTab: tab);
-  }),
-      GoRoute(path: '/customer/menu/:branchId',
+      // ── Customer PWA (no auth) ────────────────────────────────
+      GoRoute(
+        path: AppRoutes.customer,
+        builder: (_, state) {
+          final tab = int.tryParse(
+                  state.uri.queryParameters['tab'] ?? '0') ?? 0;
+          return CustomerLandingScreen(initialTab: tab);
+        }),
+
+      GoRoute(
+        path: '/customer/menu/:branchId',
         builder: (_, state) => CustomerMenuScreen(
           branchId: state.pathParameters['branchId']!)),
+
       GoRoute(
-  path: '/customer/booking/:branchId',
-  builder: (_, state) => const CustomerMyBookingsScreen(),
-),
-      GoRoute(path: AppRoutes.customerCheckout,
+        path: '/customer/booking/:branchId',
+        builder: (_, state) => const CustomerMyBookingsScreen()),
+
+      GoRoute(
+        path: AppRoutes.customerCheckout,
         builder: (_, __) => const CustomerCheckoutScreen()),
-      GoRoute(path: AppRoutes.customerTrack,
-        builder: (_, __) => const CustomerOrderTrackerScreen()),
-      GoRoute(path: '/customer/order-success/:orderNumber',
+
+      // FIX: track tanpa orderNumber (dari tab Pesanan)
+      GoRoute(
+        path: AppRoutes.customerTrack,
+        builder: (_, __) =>
+            const CustomerOrderTrackerScreen()),
+
+      // FIX: track dengan orderNumber (dari order-success)
+      // → auto-search + realtime langsung aktif
+      GoRoute(
+        path: AppRoutes.customerTrackOrder,
+        builder: (_, state) => CustomerOrderTrackerScreen(
+          initialOrderNumber:
+              state.pathParameters['orderNumber'])),
+
+      GoRoute(
+        path: '/customer/order-success/:orderNumber',
         builder: (_, state) => CustomerOrderSuccessScreen(
           orderNumber: state.pathParameters['orderNumber']!)),
-      GoRoute(path: AppRoutes.customerBookingSuccess,
+
+      GoRoute(
+        path: AppRoutes.customerBookingSuccess,
         builder: (_, __) => const CustomerBookingSuccessScreen()),
 
-      // ── Staff gateway (URL rahasia, no auth) ──────────────
-      GoRoute(path: AppRoutes.staffGateway,
+      // ── Staff gateway (URL rahasia, no auth) ─────────────────
+      GoRoute(
+        path: AppRoutes.staffGateway,
         builder: (_, __) => const StaffGatewayScreen()),
 
-      // ── Staff routes (auth required) ──────────────────────
-      GoRoute(path: AppRoutes.login,     builder: (_, __) => const LoginScreen()),
-      GoRoute(path: AppRoutes.tables,    builder: (_, __) => const TableScreen()),
-      GoRoute(path: AppRoutes.booking,   builder: (_, __) => const BookingScreen()),
-      GoRoute(path: AppRoutes.order,     builder: (_, __) => const OrderScreen()),
-      GoRoute(path: AppRoutes.cashier,   builder: (_, __) => const CashierScreen()),
-      GoRoute(path: AppRoutes.kitchen,   builder: (_, __) => const KDSScreen()),
-      GoRoute(path: AppRoutes.menu,      builder: (_, __) => const MenuScreen()),
-      GoRoute(path: AppRoutes.inventory, builder: (_, __) => const InventoryScreen()),
-      GoRoute(path: AppRoutes.staff,     builder: (_, __) => const StaffScreen()),
-      GoRoute(path: AppRoutes.reports,   builder: (_, __) => const ReportsScreen()),
-      GoRoute(path: AppRoutes.branches,  builder: (_, __) => const BranchDashboardScreen()),
-      GoRoute(path: AppRoutes.chatbot,   builder: (_, __) => const ChatbotScreen()),
+      // ── Staff routes (auth required) ─────────────────────────
+      GoRoute(path: AppRoutes.login,
+          builder: (_, __) => const LoginScreen()),
+      GoRoute(path: AppRoutes.tables,
+          builder: (_, __) => const TableScreen()),
+      GoRoute(path: AppRoutes.booking,
+          builder: (_, __) => const BookingScreen()),
+      GoRoute(path: AppRoutes.order,
+          builder: (_, __) => const OrderScreen()),
+      GoRoute(path: AppRoutes.cashier,
+          builder: (_, __) => const CashierScreen()),
+      GoRoute(path: AppRoutes.kitchen,
+          builder: (_, __) => const KDSScreen()),
+      GoRoute(path: AppRoutes.menu,
+          builder: (_, __) => const MenuScreen()),
+      GoRoute(path: AppRoutes.inventory,
+          builder: (_, __) => const InventoryScreen()),
+      GoRoute(path: AppRoutes.staff,
+          builder: (_, __) => const StaffScreen()),
+      GoRoute(path: AppRoutes.reports,
+          builder: (_, __) => const ReportsScreen()),
+      GoRoute(path: AppRoutes.branches,
+          builder: (_, __) => const BranchDashboardScreen()),
+      GoRoute(path: AppRoutes.chatbot,
+          builder: (_, __) => const ChatbotScreen()),
     ],
     errorBuilder: (_, __) => const Scaffold(
-      body: Center(child: Text('Page not found')),
-    ),
+      body: Center(child: Text('Page not found'))),
   );
 });
