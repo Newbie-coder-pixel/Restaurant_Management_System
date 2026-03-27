@@ -271,7 +271,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         'booking_date': dateStr,
         'booking_time': timeStr,
         'status': 'confirmed',
-        'source': 'customer_web',
+        'source': 'website',
         if (notes.isNotEmpty) 'special_requests': notes,
       });
 
