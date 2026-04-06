@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
@@ -25,7 +26,9 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     try {
       final res = await Supabase.instance.client
           .from('branches')
-          .select('id, name, address, phone, is_active, opening_time, closing_time')
+          .select(
+              'id, name, address, phone, email, is_active, '
+              'opening_time, closing_time, latitude, longitude')
           .order('created_at');
       setState(() {
         _branches = (res as List).cast<Map<String, dynamic>>();
@@ -49,10 +52,15 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     final nameCtrl    = TextEditingController(text: branch?['name'] ?? '');
     final addressCtrl = TextEditingController(text: branch?['address'] ?? '');
     final phoneCtrl   = TextEditingController(text: branch?['phone'] ?? '');
+    final emailCtrl   = TextEditingController(text: branch?['email'] ?? '');
+    final latCtrl     = TextEditingController(
+        text: branch?['latitude']?.toString() ?? '');
+    final lngCtrl     = TextEditingController(
+        text: branch?['longitude']?.toString() ?? '');
 
-    // Parse existing times or default
-    TimeOfDay openTime  = _parseTime(branch?['opening_time'], const TimeOfDay(hour: 10, minute: 0));
+    TimeOfDay openTime  = _parseTime(branch?['opening_time'],  const TimeOfDay(hour: 10, minute: 0));
     TimeOfDay closeTime = _parseTime(branch?['closing_time'],  const TimeOfDay(hour: 22, minute: 0));
+    bool isActive  = branch?['is_active'] ?? true;
     bool isLoading = false;
     String? errorMsg;
 
@@ -64,93 +72,259 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(isEdit ? 'Edit Cabang' : 'Tambah Cabang',
           style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: nameCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Nama Cabang *', prefixIcon: Icon(Icons.store_outlined))),
-          const SizedBox(height: 12),
-          TextField(controller: addressCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Alamat', prefixIcon: Icon(Icons.location_on_outlined)),
-            maxLines: 2),
-          const SizedBox(height: 12),
-          TextField(controller: phoneCtrl,
-            decoration: const InputDecoration(
-              labelText: 'No. Telepon', prefixIcon: Icon(Icons.phone_outlined)),
-            keyboardType: TextInputType.phone),
-          const SizedBox(height: 16),
-          // Jam Operasional Section
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('🕐 Jam Operasional',
-                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: _TimePickerButton(
-                  label: 'Buka',
-                  time: openTime,
-                  onTap: () async {
-                    final t = await _pickTime(ctx, openTime);
-                    if (t != null) ss(() => openTime = t);
-                  },
-                )),
-                const SizedBox(width: 10),
-                const Text('–', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(width: 10),
-                Expanded(child: _TimePickerButton(
-                  label: 'Tutup',
-                  time: closeTime,
-                  onTap: () async {
-                    final t = await _pickTime(ctx, closeTime);
-                    if (t != null) ss(() => closeTime = t);
-                  },
-                )),
-              ]),
-            ]),
-          ),
-          if (errorMsg != null) ...[
-            const SizedBox(height: 10),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+
+            // ── Nama ──────────────────────────────────────────────
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nama Cabang *',
+                prefixIcon: Icon(Icons.store_outlined))),
+            const SizedBox(height: 12),
+
+            // ── Alamat ────────────────────────────────────────────
+            TextField(
+              controller: addressCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Alamat',
+                prefixIcon: Icon(Icons.location_on_outlined)),
+              maxLines: 2),
+            const SizedBox(height: 12),
+
+            // ── Telepon ───────────────────────────────────────────
+            TextField(
+              controller: phoneCtrl,
+              decoration: const InputDecoration(
+                labelText: 'No. Telepon',
+                prefixIcon: Icon(Icons.phone_outlined)),
+              keyboardType: TextInputType.phone),
+            const SizedBox(height: 12),
+
+            // ── Email ─────────────────────────────────────────────
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(Icons.email_outlined)),
+              keyboardType: TextInputType.emailAddress),
+            const SizedBox(height: 16),
+
+            // ── Koordinat ─────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-              child: Text(errorMsg!,
-                style: const TextStyle(color: Colors.red, fontSize: 12, fontFamily: 'Poppins'))),
-          ],
-        ])),
+                color: Colors.blue.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.2))),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(children: [
+                    Icon(Icons.my_location, size: 15, color: Colors.blue),
+                    SizedBox(width: 6),
+                    Text('Koordinat Lokasi',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: Colors.blue)),
+                  ]),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Diperlukan untuk fitur "Cabang Terdekat" di app customer.',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 11, color: Colors.grey)),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: latCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Latitude',
+                          hintText: 'cth: -6.2088',
+                          prefixIcon: Icon(Icons.expand_less, size: 18),
+                          isDense: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^-?\d*\.?\d*')),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: lngCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Longitude',
+                          hintText: 'cth: 106.8456',
+                          prefixIcon: Icon(Icons.expand_more, size: 18),
+                          isDense: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true, signed: true),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                              RegExp(r'^-?\d*\.?\d*')),
+                        ],
+                      ),
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Jam Operasional ───────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('🕐 Jam Operasional',
+                  style: TextStyle(
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: _TimePickerButton(
+                    label: 'Buka',
+                    time: openTime,
+                    onTap: () async {
+                      final t = await _pickTime(ctx, openTime);
+                      if (t != null) ss(() => openTime = t);
+                    },
+                  )),
+                  const SizedBox(width: 10),
+                  const Text('–',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _TimePickerButton(
+                    label: 'Tutup',
+                    time: closeTime,
+                    onTap: () async {
+                      final t = await _pickTime(ctx, closeTime);
+                      if (t != null) ss(() => closeTime = t);
+                    },
+                  )),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 12),
+
+            // ── Status Aktif (hanya saat edit) ────────────────────
+            if (isEdit)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: (isActive ? AppColors.available : AppColors.textHint)
+                      .withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: (isActive ? AppColors.available : AppColors.textHint)
+                        .withValues(alpha: 0.3))),
+                child: Row(children: [
+                  Icon(
+                    isActive
+                        ? Icons.check_circle_outline
+                        : Icons.cancel_outlined,
+                    size: 18,
+                    color: isActive ? AppColors.available : AppColors.textHint),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isActive ? 'Cabang Aktif' : 'Cabang Non-Aktif',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isActive
+                            ? AppColors.available
+                            : AppColors.textHint))),
+                  Switch(
+                    value: isActive,
+                    activeThumbColor: AppColors.available,
+                    onChanged: (v) => ss(() => isActive = v)),
+                ]),
+              ),
+
+            // ── Error ─────────────────────────────────────────────
+            if (errorMsg != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text(errorMsg!,
+                  style: const TextStyle(
+                    color: Colors.red, fontSize: 12, fontFamily: 'Poppins'))),
+            ],
+          ]),
+        ),
         actions: [
           TextButton(
             onPressed: isLoading ? null : () => Navigator.pop(ctx),
             child: const Text('Batal')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white),
             onPressed: isLoading ? null : () async {
+              // Validasi nama
               if (nameCtrl.text.trim().isEmpty) {
                 ss(() => errorMsg = 'Nama cabang wajib diisi.');
                 return;
               }
-              // Validate close > open
+              // Validasi jam
               final openMin  = openTime.hour * 60 + openTime.minute;
               final closeMin = closeTime.hour * 60 + closeTime.minute;
               if (closeMin <= openMin) {
                 ss(() => errorMsg = 'Jam tutup harus setelah jam buka.');
                 return;
               }
+              // Validasi koordinat — boleh kosong dua-duanya, tapi tidak boleh setengah
+              final latStr = latCtrl.text.trim();
+              final lngStr = lngCtrl.text.trim();
+              final latFilled = latStr.isNotEmpty;
+              final lngFilled = lngStr.isNotEmpty;
+              if (latFilled != lngFilled) {
+                ss(() => errorMsg =
+                    'Latitude dan Longitude harus diisi keduanya atau dikosongkan keduanya.');
+                return;
+              }
+              double? lat, lng;
+              if (latFilled) {
+                lat = double.tryParse(latStr);
+                lng = double.tryParse(lngStr);
+                if (lat == null || lng == null) {
+                  ss(() => errorMsg = 'Format koordinat tidak valid.');
+                  return;
+                }
+                if (lat < -90 || lat > 90) {
+                  ss(() => errorMsg = 'Latitude harus antara -90 dan 90.');
+                  return;
+                }
+                if (lng < -180 || lng > 180) {
+                  ss(() => errorMsg = 'Longitude harus antara -180 dan 180.');
+                  return;
+                }
+              }
+
               ss(() { isLoading = true; errorMsg = null; });
               try {
                 final data = {
                   'name':         nameCtrl.text.trim(),
                   'address':      addressCtrl.text.trim().isEmpty ? null : addressCtrl.text.trim(),
-                  'phone':        phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
-                  'is_active':    true,
-                  'opening_time': '${openTime.hour.toString().padLeft(2,'0')}:${openTime.minute.toString().padLeft(2,'0')}:00',
-                  'closing_time': '${closeTime.hour.toString().padLeft(2,'0')}:${closeTime.minute.toString().padLeft(2,'0')}:00',
+                  'phone':        phoneCtrl.text.trim().isEmpty   ? null : phoneCtrl.text.trim(),
+                  'email':        emailCtrl.text.trim().isEmpty   ? null : emailCtrl.text.trim(),
+                  'latitude':     lat,
+                  'longitude':    lng,
+                  'is_active':    isActive,
+                  'opening_time': '${openTime.hour.toString().padLeft(2, '0')}:${openTime.minute.toString().padLeft(2, '0')}:00',
+                  'closing_time': '${closeTime.hour.toString().padLeft(2, '0')}:${closeTime.minute.toString().padLeft(2, '0')}:00',
                 };
                 if (isEdit) {
                   await Supabase.instance.client
@@ -161,7 +335,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _load();
               } catch (e) {
-                ss(() { isLoading = false; errorMsg = 'Gagal: $e'; });
+                ss(() { isLoading = false; errorMsg = 'Gagal menyimpan: $e'; });
               }
             },
             child: isLoading
@@ -179,8 +353,9 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     if (t == null || t.isEmpty) return fallback;
     final parts = t.split(':');
     if (parts.length < 2) return fallback;
-    return TimeOfDay(hour: int.tryParse(parts[0]) ?? fallback.hour,
-                     minute: int.tryParse(parts[1]) ?? fallback.minute);
+    return TimeOfDay(
+      hour:   int.tryParse(parts[0]) ?? fallback.hour,
+      minute: int.tryParse(parts[1]) ?? fallback.minute);
   }
 
   @override
@@ -202,7 +377,8 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
         backgroundColor: AppColors.accent,
         icon: const Icon(Icons.add_business, color: Colors.white),
         label: const Text('Tambah Cabang',
-          style: TextStyle(color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+          style: TextStyle(
+            color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -213,16 +389,20 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                     Icon(Icons.store_outlined, size: 64, color: AppColors.textHint),
                     SizedBox(height: 12),
                     Text('Belum ada cabang',
-                      style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+                      style: TextStyle(
+                        fontFamily: 'Poppins', color: AppColors.textSecondary)),
                   ]))
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _branches.length,
                   itemBuilder: (_, i) {
-                    final b = _branches[i];
+                    final b        = _branches[i];
                     final isActive = b['is_active'] ?? true;
                     final openStr  = _fmtTime(b['opening_time']);
                     final closeStr = _fmtTime(b['closing_time']);
+                    final hasCoords =
+                        b['latitude'] != null && b['longitude'] != null;
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
@@ -239,7 +419,9 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                             size: 26)),
                         title: Text(b['name'] ?? '',
                           style: const TextStyle(
-                            fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16)),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -251,14 +433,38 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                               const SizedBox(height: 2),
                               Text(b['phone'], style: AppTextStyles.caption),
                             ],
+                            if (b['email'] != null) ...[
+                              const SizedBox(height: 2),
+                              Text(b['email'], style: AppTextStyles.caption),
+                            ],
                             const SizedBox(height: 4),
                             Row(children: [
-                              const Icon(Icons.access_time, size: 13, color: AppColors.textHint),
+                              const Icon(Icons.access_time,
+                                  size: 13, color: AppColors.textHint),
                               const SizedBox(width: 4),
                               Text('$openStr – $closeStr WIB',
                                 style: const TextStyle(
                                   fontFamily: 'Poppins', fontSize: 11,
-                                  color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w500)),
+                              const SizedBox(width: 10),
+                              Icon(
+                                hasCoords
+                                    ? Icons.location_on
+                                    : Icons.location_off_outlined,
+                                size: 13,
+                                color: hasCoords ? Colors.blue : AppColors.textHint),
+                              const SizedBox(width: 3),
+                              Text(
+                                hasCoords
+                                    ? 'Koordinat tersedia'
+                                    : 'Tanpa koordinat',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 10,
+                                  color: hasCoords
+                                      ? Colors.blue
+                                      : AppColors.textHint)),
                             ]),
                           ],
                         ),
@@ -269,17 +475,26 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                             tooltip: 'Edit',
                             onPressed: () => _showBranchDialog(branch: b)),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: (isActive ? AppColors.available : AppColors.textHint)
+                              color: (isActive
+                                      ? AppColors.available
+                                      : AppColors.textHint)
                                   .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isActive ? AppColors.available : AppColors.textHint)),
+                                color: isActive
+                                    ? AppColors.available
+                                    : AppColors.textHint)),
                             child: Text(isActive ? 'Aktif' : 'Non-Aktif',
                               style: TextStyle(
-                                fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600,
-                                color: isActive ? AppColors.available : AppColors.textHint)),
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isActive
+                                    ? AppColors.available
+                                    : AppColors.textHint)),
                           ),
                         ]),
                         isThreeLine: true,
@@ -291,11 +506,17 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
   }
 }
 
+// ─── Time Picker Button ───────────────────────────────────────────────────────
+
 class _TimePickerButton extends StatelessWidget {
   final String label;
   final TimeOfDay time;
   final VoidCallback onTap;
-  const _TimePickerButton({required this.label, required this.time, required this.onTap});
+  const _TimePickerButton({
+    required this.label,
+    required this.time,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -312,10 +533,12 @@ class _TimePickerButton extends StatelessWidget {
           border: Border.all(color: AppColors.primary.withValues(alpha: 0.4))),
         child: Column(children: [
           Text(label,
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
           const SizedBox(height: 2),
           Text('$h:$m',
-            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
         ]),
       ),
     );

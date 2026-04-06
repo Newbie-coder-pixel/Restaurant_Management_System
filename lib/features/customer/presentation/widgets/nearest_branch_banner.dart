@@ -2,14 +2,70 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/services/location_service.dart';
 import 'location_permission_sheet.dart';
 
-/// Provider untuk nearest branch result
-final nearestBranchProvider =
-    StateNotifierProvider<NearestBranchNotifier, NearestBranchState>(
-  (ref) => NearestBranchNotifier(),
-);
+// ─── Supabase branches provider ──────────────────────────────────────────────
+
+/// Fetch semua cabang aktif dari Supabase yang memiliki koordinat.
+final _branchesProvider =
+    FutureProvider.autoDispose<List<RestaurantBranch>>((ref) async {
+  final res = await Supabase.instance.client
+      .from('branches')
+      .select(
+          'id, name, address, phone, opening_time, closing_time, latitude, longitude')
+      .eq('is_active', true)
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .order('name');
+
+  final rows = (res as List).cast<Map<String, dynamic>>();
+
+  return rows.map((b) {
+    final isOpen = _isCurrentlyOpen(
+      b['opening_time'] as String?,
+      b['closing_time'] as String?,
+    );
+
+    return RestaurantBranch(
+      id: b['id'] as String,
+      name: b['name'] as String,
+      address: b['address'] as String? ?? '',
+      latitude: (b['latitude'] as num).toDouble(),
+      longitude: (b['longitude'] as num).toDouble(),
+      phone: b['phone'] as String? ?? '',
+      openHours:
+          '${b['opening_time'] ?? '?'} - ${b['closing_time'] ?? '?'}',
+      isOpen: isOpen,
+    );
+  }).toList();
+});
+
+/// Cek apakah sekarang dalam jam operasional (format "HH:MM").
+bool _isCurrentlyOpen(String? openTime, String? closeTime) {
+  if (openTime == null || closeTime == null) return true;
+  try {
+    final now = TimeOfDay.now();
+    final open = _parseTime(openTime);
+    final close = _parseTime(closeTime);
+    final nowMinutes = now.hour * 60 + now.minute;
+    final openMinutes = open.hour * 60 + open.minute;
+    final closeMinutes = close.hour * 60 + close.minute;
+    // Handle overnight (misal 22:00 - 02:00)
+    if (closeMinutes < openMinutes) {
+      return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
+    }
+    return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+  } catch (_) {
+    return true;
+  }
+}
+
+TimeOfDay _parseTime(String t) {
+  final parts = t.split(':');
+  return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+}
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -38,40 +94,8 @@ class NearestBranchNotifier extends StateNotifier<NearestBranchState> {
 
   final _service = LocationService();
 
-  static const _branches = [
-    RestaurantBranch(
-      id: 'branch-1',
-      name: 'Cabang Sudirman',
-      address: 'Jl. Jend. Sudirman No. 45, Jakarta Pusat',
-      latitude: -6.2088,
-      longitude: 106.8456,
-      phone: '021-5551234',
-      openHours: '10:00 - 22:00',
-      isOpen: true,
-    ),
-    RestaurantBranch(
-      id: 'branch-2',
-      name: 'Cabang Kemang',
-      address: 'Jl. Kemang Raya No. 12, Jakarta Selatan',
-      latitude: -6.2607,
-      longitude: 106.8152,
-      phone: '021-7891234',
-      openHours: '11:00 - 23:00',
-      isOpen: true,
-    ),
-    RestaurantBranch(
-      id: 'branch-3',
-      name: 'Cabang Kelapa Gading',
-      address: 'Jl. Kelapa Gading Blvd No. 8, Jakarta Utara',
-      latitude: -6.1584,
-      longitude: 106.9088,
-      phone: '021-4521234',
-      openHours: '10:00 - 22:00',
-      isOpen: false,
-    ),
-  ];
-
-  Future<void> detectNearestBranch() async {
+  /// Deteksi cabang terdekat dari list yang sudah di-fetch dari Supabase.
+  Future<void> detectNearestBranch(List<RestaurantBranch> branches) async {
     state = NearestBranchLoading();
 
     final ready = await _service.isLocationReady();
@@ -86,9 +110,9 @@ class NearestBranchNotifier extends StateNotifier<NearestBranchState> {
       return;
     }
 
-    final result = _service.findNearestBranch(position, _branches);
+    final result = _service.findNearestBranch(position, branches);
     if (result == null) {
-      state = NearestBranchError('Tidak ada cabang tersedia');
+      state = NearestBranchError('Tidak ada cabang dengan koordinat tersedia');
       return;
     }
 
@@ -100,10 +124,23 @@ class NearestBranchNotifier extends StateNotifier<NearestBranchState> {
   void reset() => state = NearestBranchInitial();
 }
 
+/// Provider untuk nearest branch result
+final nearestBranchProvider =
+    StateNotifierProvider<NearestBranchNotifier, NearestBranchState>(
+  (ref) => NearestBranchNotifier(),
+);
+
 // ─── Banner Widget ────────────────────────────────────────────────────────────
 
 /// Widget banner untuk ditampilkan di customer_landing_screen.dart
-/// Taruh di bagian atas body, sebelum konten menu/lainnya
+/// Self-contained: fetch cabang dari Supabase sendiri, tidak perlu data luar.
+///
+/// Taruh di bagian atas body, sebelum konten menu/lainnya:
+/// ```dart
+/// NearestBranchBanner(
+///   onBranchSelected: (branch) => context.push('/customer/menu/${branch.id}'),
+/// )
+/// ```
 class NearestBranchBanner extends ConsumerWidget {
   final void Function(RestaurantBranch branch)? onBranchSelected;
 
@@ -111,47 +148,65 @@ class NearestBranchBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final branchesAsync = ref.watch(_branchesProvider);
     final state = ref.watch(nearestBranchProvider);
 
-    if (state is NearestBranchPermissionDenied) return const SizedBox.shrink();
+    // Tunggu data Supabase dulu; jika error atau kosong, sembunyikan banner
+    return branchesAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (branches) {
+        if (branches.isEmpty) return const SizedBox.shrink();
+        if (state is NearestBranchPermissionDenied) {
+          return const SizedBox.shrink();
+        }
 
-    if (state is NearestBranchInitial) {
-      return _PromptBanner(
-        onTap: () => _showPermissionSheet(context, ref),
-      );
-    }
+        if (state is NearestBranchInitial) {
+          return _PromptBanner(
+            onTap: () => _showPermissionSheet(context, ref, branches),
+          );
+        }
 
-    if (state is NearestBranchLoading) {
-      return const _LoadingBanner();
-    }
+        if (state is NearestBranchLoading) {
+          return const _LoadingBanner();
+        }
 
-    if (state is NearestBranchLoaded) {
-      return _ResultBanner(
-        result: state.result,
-        onTap: () => onBranchSelected?.call(state.result.branch),
-        onRefresh: () => ref.read(nearestBranchProvider.notifier).detectNearestBranch(),
-      );
-    }
+        if (state is NearestBranchLoaded) {
+          return _ResultBanner(
+            result: state.result,
+            onTap: () => onBranchSelected?.call(state.result.branch),
+            onRefresh: () => ref
+                .read(nearestBranchProvider.notifier)
+                .detectNearestBranch(branches),
+          );
+        }
 
-    if (state is NearestBranchError) {
-      return _ErrorBanner(
-        message: state.message,
-        onRetry: () => ref.read(nearestBranchProvider.notifier).detectNearestBranch(),
-      );
-    }
+        if (state is NearestBranchError) {
+          return _ErrorBanner(
+            message: state.message,
+            onRetry: () => ref
+                .read(nearestBranchProvider.notifier)
+                .detectNearestBranch(branches),
+          );
+        }
 
-    return const SizedBox.shrink();
+        return const SizedBox.shrink();
+      },
+    );
   }
 
-  void _showPermissionSheet(BuildContext context, WidgetRef ref) {
+  void _showPermissionSheet(
+    BuildContext context,
+    WidgetRef ref,
+    List<RestaurantBranch> branches,
+  ) {
     LocationPermissionSheet.show(
       context,
-      onGranted: () {
-        ref.read(nearestBranchProvider.notifier).detectNearestBranch();
-      },
-      onDenied: () {
-        ref.read(nearestBranchProvider.notifier).permissionDenied();
-      },
+      onGranted: () => ref
+          .read(nearestBranchProvider.notifier)
+          .detectNearestBranch(branches),
+      onDenied: () =>
+          ref.read(nearestBranchProvider.notifier).permissionDenied(),
     );
   }
 }
@@ -334,7 +389,8 @@ class _ResultBanner extends StatelessWidget {
                       Expanded(
                         child: Text(
                           result.branch.address,
-                          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                          style:
+                              TextStyle(fontSize: 11, color: Colors.grey[600]),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
