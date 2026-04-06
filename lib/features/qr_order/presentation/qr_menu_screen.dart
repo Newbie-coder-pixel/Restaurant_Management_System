@@ -128,7 +128,9 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
         final branch = tableData['branches'] as Map<String, dynamic>?;
         final branchId = branch?['id'] as String? ?? '';
         final branchName = branch?['name'] as String? ?? 'Restoran';
-        final tableName = tableData['name'] as String? ?? 'Meja';
+        final tableName = (tableData['name'] as String?)
+            ?? (tableData['table_number'] as String?)
+            ?? 'Meja';
 
         // Set active table in provider
         WidgetsBinding.instance.addPostFrameCallback((_) {

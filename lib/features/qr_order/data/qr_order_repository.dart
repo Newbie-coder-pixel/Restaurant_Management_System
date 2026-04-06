@@ -109,7 +109,7 @@ class QrOrderRepository {
 
   Future<Map<String, dynamic>?> fetchTableInfo(String tableId) async {
     final response = await _client
-        .from('tables')
+        .from('restaurant_tables')
         .select('*, branches(name, id)')
         .eq('id', tableId)
         .maybeSingle();
