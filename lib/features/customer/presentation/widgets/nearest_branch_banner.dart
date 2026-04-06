@@ -38,7 +38,6 @@ class NearestBranchNotifier extends StateNotifier<NearestBranchState> {
 
   final _service = LocationService();
 
-  // TODO: Ganti dengan data branch dari Supabase / provider kamu
   static const _branches = [
     RestaurantBranch(
       id: 'branch-1',
@@ -175,12 +174,12 @@ class _PromptBanner extends StatelessWidget {
           border: Border.all(color: const Color(0xFFFFD199)),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
+        child: const Row(
           children: [
-            const Icon(Icons.location_on_rounded,
+            Icon(Icons.location_on_rounded,
                 color: Color(0xFFFF6B00), size: 22),
-            const SizedBox(width: 10),
-            const Expanded(
+            SizedBox(width: 10),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -200,7 +199,7 @@ class _PromptBanner extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Color(0xFFFF6B00), size: 20),
+            Icon(Icons.chevron_right, color: Color(0xFFFF6B00), size: 20),
           ],
         ),
       ),
@@ -325,9 +324,9 @@ class _ResultBanner extends StatelessWidget {
                       const SizedBox(width: 3),
                       Text(
                         service.formatDistance(result.distanceKm),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: const Color(0xFFFF6B00),
+                          color: Color(0xFFFF6B00),
                           fontWeight: FontWeight.w500,
                         ),
                       ),

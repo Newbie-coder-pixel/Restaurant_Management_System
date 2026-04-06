@@ -1,7 +1,6 @@
 // lib/core/services/location_service.dart
 
 import 'dart:math';
-import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 /// Model untuk data cabang restaurant
@@ -74,8 +73,10 @@ class LocationService {
   Future<Position?> getCurrentPosition() async {
     try {
       return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
       );
     } catch (_) {
       return null;

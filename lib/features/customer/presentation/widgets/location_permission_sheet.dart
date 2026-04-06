@@ -85,8 +85,8 @@ class LocationPermissionSheet extends StatelessWidget {
           Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFF3E0),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -121,15 +121,15 @@ class LocationPermissionSheet extends StatelessWidget {
           const SizedBox(height: 8),
 
           // Keuntungan fitur
-          _BenefitRow(
+          const _BenefitRow(
             icon: Icons.store_rounded,
             text: 'Temukan cabang terdekat dari Anda',
           ),
-          _BenefitRow(
+          const _BenefitRow(
             icon: Icons.delivery_dining_rounded,
             text: 'Estimasi waktu pengiriman lebih akurat',
           ),
-          _BenefitRow(
+          const _BenefitRow(
             icon: Icons.navigation_rounded,
             text: 'Navigasi langsung ke restoran',
           ),
