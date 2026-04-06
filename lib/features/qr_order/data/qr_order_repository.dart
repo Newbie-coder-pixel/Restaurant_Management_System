@@ -96,65 +96,48 @@ class QrOrderRepository {
   // ─── Fetch Menu Items by Branch ─────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
-    // Step 1: Ambil menu items dulu (tanpa join — hindari 400 jika FK belum terdefinisi)
-    final items = await _client
+    final response = await _client
         .from('menu_items')
-        .select(
-          'id, branch_id, category_id, name, description, price, '
-          'image_url, is_available, is_seasonal, '
-          'preparation_time_minutes, sort_order, created_at, updated_at',
-        )
+        .select('*, menu_categories(name, sort_order)')
         .eq('branch_id', branchId)
         .eq('is_available', true)
         .order('sort_order');
-
-    final itemList = List<Map<String, dynamic>>.from(items);
-    if (itemList.isEmpty) return itemList;
-
-    // Step 2: Kumpulkan category_id yang unik
-    final categoryIds = itemList
-        .map((i) => i['category_id'] as String?)
-        .whereType<String>()
-        .toSet()
-        .toList();
-
-    // Step 3: Fetch categories secara terpisah
-    Map<String, Map<String, dynamic>> categoryMap = {};
-    if (categoryIds.isNotEmpty) {
-      try {
-        final categories = await _client
-            .from('menu_categories')
-            .select('id, name, sort_order')
-            .inFilter('id', categoryIds);
-
-        for (final cat in List<Map<String, dynamic>>.from(categories)) {
-          categoryMap[cat['id'] as String] = cat;
-        }
-      } catch (_) {
-        // Jika tabel menu_categories tidak ada, lanjut tanpa kategori
-      }
-    }
-
-    // Step 4: Gabungkan manual — sama seperti hasil join tapi aman
-    return itemList.map((item) {
-      final catId = item['category_id'] as String?;
-      final category = catId != null ? categoryMap[catId] : null;
-      return {
-        ...item,
-        'menu_categories': category,
-      };
-    }).toList();
+    return List<Map<String, dynamic>>.from(response);
   }
 
   // ─── Fetch Table Info ───────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>?> fetchTableInfo(String tableId) async {
-    final response = await _client
+    // Step 1: Ambil data meja tanpa join (hindari RLS block pada branches)
+    final table = await _client
         .from('restaurant_tables')
-        .select('*, branches(name, id)')
+        .select('id, table_number, branch_id, name')
         .eq('id', tableId)
         .maybeSingle();
-    return response;
+
+    if (table == null) return null;
+
+    // Step 2: Ambil branch secara terpisah
+    final branchId = table['branch_id'] as String?;
+    Map<String, dynamic>? branch;
+
+    if (branchId != null) {
+      try {
+        branch = await _client
+            .from('branches')
+            .select('id, name')
+            .eq('id', branchId)
+            .maybeSingle();
+      } catch (_) {
+        // Lanjut tanpa branch jika gagal
+      }
+    }
+
+    // Step 3: Gabungkan manual — struktur sama seperti hasil join
+    return {
+      ...table,
+      'branches': branch,
+    };
   }
 
   // ─── Private: Generate Queue Number ────────────────────────────────────────
