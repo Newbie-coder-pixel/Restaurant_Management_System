@@ -462,6 +462,9 @@ class _CategorySidebar extends StatelessWidget {
   }
 }
 
+// ─── View Mode Provider ───────────────────────────────────────────────────────
+final _isGridViewProvider = StateProvider<bool>((ref) => true);
+
 // ─── Menu Grid ────────────────────────────────────────────────────────────────
 
 class _MenuGrid extends ConsumerWidget {
@@ -479,34 +482,137 @@ class _MenuGrid extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(activeQrCartProvider);
     final notifier = ref.read(activeQrCartNotifierProvider);
+    final isGrid = ref.watch(_isGridViewProvider);
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.75,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+    return Column(children: [
+      // ── Toolbar: item count + view toggle ─────────────────────────────
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: Row(children: [
+          Text(
+            '${items.length} menu tersedia',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[500],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const Spacer(),
+          _ViewToggle(
+            isGrid: isGrid,
+            onToggle: (v) =>
+                ref.read(_isGridViewProvider.notifier).state = v,
+          ),
+        ]),
       ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final qty = cart.items
-            .where((i) => i.menuItem.id == item.id)
-            .fold(0, (s, i) => s + i.quantity);
 
-        return _MenuItemCard(
-          item: item,
-          quantity: qty,
-          onAdd: () => notifier.addItem(item),
-          onRemove: () => notifier.removeItem(item.id),
-        );
-      },
+      // ── Content ───────────────────────────────────────────────────────
+      Expanded(
+        child: isGrid
+            ? GridView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 100),
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.82,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final qty = cart.items
+                      .where((i) => i.menuItem.id == item.id)
+                      .fold(0, (s, i) => s + i.quantity);
+                  return _MenuItemCard(
+                    item: item,
+                    quantity: qty,
+                    onAdd: () => notifier.addItem(item),
+                    onRemove: () => notifier.removeItem(item.id),
+                  );
+                },
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 100),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final qty = cart.items
+                      .where((i) => i.menuItem.id == item.id)
+                      .fold(0, (s, i) => s + i.quantity);
+                  return _MenuItemListTile(
+                    item: item,
+                    quantity: qty,
+                    onAdd: () => notifier.addItem(item),
+                    onRemove: () => notifier.removeItem(item.id),
+                  );
+                },
+              ),
+      ),
+    ]);
+  }
+}
+
+// ─── View Toggle ──────────────────────────────────────────────────────────────
+
+class _ViewToggle extends StatelessWidget {
+  final bool isGrid;
+  final ValueChanged<bool> onToggle;
+  const _ViewToggle({required this.isGrid, required this.onToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.all(2),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        _ToggleBtn(
+            icon: Icons.grid_view_rounded,
+            active: isGrid,
+            onTap: () => onToggle(true)),
+        _ToggleBtn(
+            icon: Icons.view_list_rounded,
+            active: !isGrid,
+            onTap: () => onToggle(false)),
+      ]),
     );
   }
 }
 
-// ─── Menu Item Card ───────────────────────────────────────────────────────────
+class _ToggleBtn extends StatelessWidget {
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+  const _ToggleBtn(
+      {required this.icon, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(icon,
+            size: 16,
+            color: active
+                ? colorScheme.onPrimary
+                : colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+}
+
+// ─── Menu Item Card (Grid) ────────────────────────────────────────────────────
 
 class _MenuItemCard extends StatelessWidget {
   final MenuItem item;
@@ -525,132 +631,403 @@ class _MenuItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final inCart = quantity > 0;
+    final unavailable = !item.isAvailable;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(
-          color: quantity > 0
+        border: Border.all(
+          color: inCart
               ? colorScheme.primary
-              : colorScheme.outlineVariant,
-          width: quantity > 0 ? 1.5 : 0.8,
+              : colorScheme.outlineVariant.withValues(alpha: 0.6),
+          width: inCart ? 1.5 : 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: inCart
+                ? colorScheme.primary.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.04),
+            blurRadius: inCart ? 8 : 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Gambar: AspectRatio 16:10 ─────────────────────────────
+            AspectRatio(
+              aspectRatio: 16 / 10,
+              child: Stack(fit: StackFit.expand, children: [
+                item.imageUrl != null && item.imageUrl!.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: item.imageUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => _imgPlaceholder(colorScheme),
+                        errorWidget: (_, __, ___) =>
+                            _imgPlaceholder(colorScheme),
+                      )
+                    : _imgPlaceholder(colorScheme),
+
+                // Overlay "Habis"
+                if (unavailable)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.remove_circle_outline,
+                              color: Colors.white, size: 20),
+                          SizedBox(height: 4),
+                          Text('Habis',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // Badge jumlah di keranjang
+                if (inCart)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: colorScheme.primary,
+                          borderRadius: BorderRadius.circular(20)),
+                      child: Text('$quantity',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+              ]),
+            ),
+
+            // ── Info + tombol (tight, no Expanded) ────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _fmt(item.price),
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.primary),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Tombol
+                  unavailable
+                      ? Container(
+                          width: double.infinity,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 7),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Center(
+                            child: Text('Habis',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500)),
+                          ),
+                        )
+                      : inCart
+                          ? Container(
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary
+                                    .withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _QtyButton(
+                                      icon: Icons.remove,
+                                      onTap: onRemove),
+                                  Text('$quantity',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: colorScheme.primary)),
+                                  _QtyButton(
+                                      icon: Icons.add, onTap: onAdd),
+                                ],
+                              ),
+                            )
+                          : GestureDetector(
+                              onTap: onAdd,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.add,
+                                          size: 14,
+                                          color: colorScheme.onPrimary),
+                                      const SizedBox(width: 4),
+                                      Text('Tambah',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color:
+                                                  colorScheme.onPrimary)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // ── Gambar AspectRatio 16:9 supaya proporsional di semua ukuran ──
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Stack(fit: StackFit.expand, children: [
-            item.imageUrl != null && item.imageUrl!.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: item.imageUrl!,
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(
-                      color: colorScheme.surfaceContainerHighest,
-                      child: const Center(
-                          child: Icon(Icons.image_outlined, color: Colors.grey)),
-                    ),
-                    errorWidget: (_, __, ___) => _placeholder(colorScheme),
-                  )
-                : _placeholder(colorScheme),
-            if (!item.isAvailable)
-              Container(
-                color: Colors.black54,
-                child: const Center(
-                  child: Text('Habis',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            if (quantity > 0)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: colorScheme.primary,
-                      borderRadius: BorderRadius.circular(20)),
-                  child: Text('$quantity',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onPrimary,
-                          fontWeight: FontWeight.bold)),
-                ),
-              ),
-          ]),
-        ),
+    );
+  }
 
-        // ── Info ─────────────────────────────────────────────────────────
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(item.name,
-                  style: theme.textTheme.labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 2),
-              Text(_formatPrice(item.price),
-                  style: theme.textTheme.labelMedium?.copyWith(
-                      color: colorScheme.primary, fontWeight: FontWeight.bold)),
+  Widget _imgPlaceholder(ColorScheme cs) => Container(
+        color: cs.surfaceContainerHighest,
+        child: Center(
+          child: Icon(Icons.fastfood_outlined,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.35), size: 32),
+        ),
+      );
+
+  String _fmt(double price) =>
+      'Rp ${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+}
+
+// ─── Menu Item List Tile (List view) ─────────────────────────────────────────
+
+class _MenuItemListTile extends StatelessWidget {
+  final MenuItem item;
+  final int quantity;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
+
+  const _MenuItemListTile({
+    required this.item,
+    required this.quantity,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final inCart = quantity > 0;
+    final unavailable = !item.isAvailable;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: inCart
+              ? colorScheme.primary
+              : colorScheme.outlineVariant.withValues(alpha: 0.6),
+          width: inCart ? 1.5 : 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── Gambar kiri ──────────────────────────────────────────────
+        ClipRRect(
+          borderRadius: const BorderRadius.horizontal(left: Radius.circular(13)),
+          child: SizedBox(
+            width: 100,
+            height: 100,
+            child: Stack(fit: StackFit.expand, children: [
+              item.imageUrl != null && item.imageUrl!.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: item.imageUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                          color: colorScheme.surfaceContainerHighest),
+                      errorWidget: (_, __, ___) => Container(
+                        color: colorScheme.surfaceContainerHighest,
+                        child: Icon(Icons.fastfood_outlined,
+                            color: colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.3),
+                            size: 28),
+                      ),
+                    )
+                  : Container(
+                      color: colorScheme.surfaceContainerHighest,
+                      child: Icon(Icons.fastfood_outlined,
+                          color: colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.3),
+                          size: 28),
+                    ),
+              if (unavailable)
+                Container(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  child: const Center(
+                    child: Text('Habis',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
             ]),
           ),
         ),
 
-        // ── Quantity Controls ─────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
-          child: item.isAvailable
-              ? (quantity == 0
-                  ? SizedBox(
-                      width: double.infinity,
-                      height: 32,
-                      child: ElevatedButton(
-                        onPressed: onAdd,
-                        style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8))),
-                        child: const Text('Tambah'),
-                      ),
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _QtyButton(icon: Icons.remove, onTap: onRemove),
-                        Text('$quantity',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: colorScheme.primary)),
-                        _QtyButton(icon: Icons.add, onTap: onAdd),
-                      ],
-                    ))
-              : const SizedBox(
-                  width: double.infinity,
-                  height: 32,
-                  child: OutlinedButton(
-                      onPressed: null, child: Text('Habis'))),
+        // ── Konten kanan ─────────────────────────────────────────────
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.name,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                if (item.description.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(item.description,
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.grey[500]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _fmt(item.price),
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: colorScheme.primary),
+                    ),
+                    unavailable
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text('Habis',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey)),
+                          )
+                        : inCart
+                            ? Container(
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary
+                                      .withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _QtyButton(
+                                        icon: Icons.remove,
+                                        onTap: onRemove),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10),
+                                      child: Text('$quantity',
+                                          style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: colorScheme.primary)),
+                                    ),
+                                    _QtyButton(
+                                        icon: Icons.add, onTap: onAdd),
+                                  ],
+                                ),
+                              )
+                            : GestureDetector(
+                                onTap: onAdd,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.add,
+                                          size: 14,
+                                          color: colorScheme.onPrimary),
+                                      const SizedBox(width: 4),
+                                      Text('Tambah',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: colorScheme.onPrimary)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ]),
     );
   }
 
-  Widget _placeholder(ColorScheme colorScheme) => Container(
-        color: colorScheme.surfaceContainerHighest,
-        child: Center(
-          child: Icon(Icons.fastfood_outlined,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-              size: 36),
-        ),
-      );
-
-  String _formatPrice(double price) => 'Rp ${price.toStringAsFixed(0).replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  String _fmt(double price) =>
+      'Rp ${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
+
+// ─── Qty Button ───────────────────────────────────────────────────────────────
 
 class _QtyButton extends StatelessWidget {
   final IconData icon;
@@ -663,12 +1040,12 @@ class _QtyButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 28,
-        height: 28,
+        width: 30,
+        height: 30,
         decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
+            color: colorScheme.primary.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, size: 16, color: colorScheme.onPrimaryContainer),
+        child: Icon(icon, size: 15, color: colorScheme.primary),
       ),
     );
   }
