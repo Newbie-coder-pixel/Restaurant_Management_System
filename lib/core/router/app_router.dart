@@ -93,13 +93,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final authState = ref.read(authStateProvider);
       final isLoggedIn =
           Supabase.instance.client.auth.currentUser != null;
+
+      // Gunakan fullPath sebagai fallback agar hash routing (#/qr/...) terbaca
       final loc = state.matchedLocation;
+      final fullPath = state.uri.path;
+
+      // Helper: cek apakah path ini termasuk QR route
+      bool isQrRoute(String path) =>
+          path == '/qr' ||
+          path.startsWith('/qr/');
+
+      // Helper: cek apakah path ini termasuk customer route
+      bool isCustomerRoute(String path) =>
+          path == '/customer' ||
+          path.startsWith('/customer/');
 
       // Customer routes — bebas, tidak perlu auth
-      if (loc.startsWith('/customer')) return null;
+      if (isCustomerRoute(loc) || isCustomerRoute(fullPath)) return null;
 
       // QR Order: no auth required - walk-in customer
-      if (loc.startsWith('/qr/')) return null;
+      if (isQrRoute(loc) || isQrRoute(fullPath)) return null;
 
       // Deteksi link reset password dari Supabase (?type=recovery)
       // Setelah exchangeCodeForSession di main.dart, user sudah punya session
