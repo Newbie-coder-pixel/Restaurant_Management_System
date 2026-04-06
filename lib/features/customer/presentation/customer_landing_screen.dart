@@ -651,12 +651,21 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
 // ════════════════════════════════════════════
 // HOME TAB
 // ════════════════════════════════════════════
-class _HomeTab extends ConsumerWidget {
+class _HomeTab extends ConsumerStatefulWidget {
   final void Function(int) onSwitchTab;
   const _HomeTab({required this.onSwitchTab});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends ConsumerState<_HomeTab> {
+  final branchSectionKey = GlobalKey();
+
+  void Function(int) get onSwitchTab => widget.onSwitchTab;
+
+  @override
+  Widget build(BuildContext context) {
     final userAsync = ref.watch(customerUserProvider);
     final user = userAsync.valueOrNull;
     final branchesAsync = ref.watch(_customerBranchesProvider);
@@ -733,6 +742,23 @@ class _HomeTab extends ConsumerWidget {
             Row(children: [
               Expanded(
                 child: _ActionCard(
+                  icon: Icons.restaurant_menu_rounded,
+                  label: 'Pesan Makanan',
+                  subtitle: 'Lihat menu & order',
+                  color: const Color(0xFFE94560),
+                  onTap: () {
+                    // Scroll ke section Cabang Kami
+                    Scrollable.ensureVisible(
+                      branchSectionKey.currentContext!,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeInOut,
+                    );
+                  })),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: _ActionCard(
                   icon: Icons.calendar_today_rounded,
                   label: 'Booking Meja',
                   subtitle: 'Reservasi sekarang',
@@ -750,12 +776,14 @@ class _HomeTab extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // ── Cabang Kami
-            const Text('Cabang Kami',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: Color(0xFF1A1A2E))),
+            Container(
+              key: branchSectionKey,
+              child: const Text('Cabang Kami',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: Color(0xFF1A1A2E)))),
             const SizedBox(height: 4),
             const Text('Pilih cabang untuk melihat menu & memesan',
                 style: TextStyle(
@@ -1366,7 +1394,6 @@ class _BranchCard extends StatelessWidget {
       onTap: () => context.push('/customer/menu/${branch['id']}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
@@ -1376,86 +1403,114 @@ class _BranchCard extends StatelessWidget {
                 blurRadius: 8,
                 offset: const Offset(0, 2))
           ]),
-        child: Row(children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.store_rounded,
-                color: Colors.white, size: 22)),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Flexible(
-                      child: Text(name,
-                          style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: Color(0xFF1A1A2E)),
-                          overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isOpen
-                            ? const Color(0xFFE8F5E9)
-                            : const Color(0xFFFCE4EC),
-                        borderRadius: BorderRadius.circular(4)),
-                      child: Text(
-                        isOpen ? 'Buka' : 'Tutup',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
+        child: Column(children: [
+          // Info baris
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight),
+                  borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.store_rounded,
+                    color: Colors.white, size: 22)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Flexible(
+                          child: Text(name,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: Color(0xFF1A1A2E)),
+                              overflow: TextOverflow.ellipsis)),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
                             color: isOpen
-                                ? const Color(0xFF2E7D32)
-                                : const Color(0xFFC62828)))),
-                  ]),
-                  if (address.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(address,
-                        style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Color(0xFF9CA3AF)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                  ],
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    const Icon(Icons.access_time_outlined,
-                        size: 12, color: Color(0xFF6B7280)),
-                    const SizedBox(width: 4),
-                    Text('$open – $close WIB',
-                        style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Color(0xFF6B7280))),
-                  ]),
+                                ? const Color(0xFFE8F5E9)
+                                : const Color(0xFFFCE4EC),
+                            borderRadius: BorderRadius.circular(4)),
+                          child: Text(
+                            isOpen ? 'Buka' : 'Tutup',
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: isOpen
+                                    ? const Color(0xFF2E7D32)
+                                    : const Color(0xFFC62828)))),
+                      ]),
+                      if (address.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(address,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Color(0xFF9CA3AF)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        const Icon(Icons.access_time_outlined,
+                            size: 12, color: Color(0xFF6B7280)),
+                        const SizedBox(width: 4),
+                        Text('$open – $close WIB',
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Color(0xFF6B7280))),
+                      ]),
+                    ])),
+            ])),
+
+          // Tombol Pesan Sekarang — full width di bawah
+          GestureDetector(
+            onTap: isOpen
+                ? () => context.push('/customer/menu/${branch['id']}')
+                : null,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: isOpen
+                    ? const Color(0xFFE94560)
+                    : const Color(0xFFE5E7EB),
+                borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(14))),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isOpen
+                        ? Icons.restaurant_menu_rounded
+                        : Icons.do_not_disturb_alt_outlined,
+                    color: isOpen ? Colors.white : const Color(0xFF9CA3AF),
+                    size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    isOpen ? '🍽️ Pesan Sekarang' : 'Sedang Tutup',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: isOpen
+                            ? Colors.white
+                            : const Color(0xFF9CA3AF))),
                 ])),
-          const SizedBox(width: 8),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE94560),
-              borderRadius: BorderRadius.circular(20)),
-            child: const Text('Menu',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white))),
+          ),
         ])));
   }
 }
