@@ -128,15 +128,26 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       _err('Nama lengkap wajib diisi.'); return;
     }
     if (email.isEmpty) { _err('Email wajib diisi.'); return; }
-    // Validasi format email dengan regex ketat:
-    // - harus ada karakter sebelum @
-    // - harus ada domain setelah @
-    // - TLD harus 2-6 huruf (com, id, net, co.id, dst)
+    // Validasi format email: cek struktur dasar + whitelist TLD umum
     final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,6}$',
+      r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.([a-zA-Z]{2,})$',
     );
     if (!emailRegex.hasMatch(email)) {
       _err('Format email tidak valid. Contoh: nama@gmail.com'); return;
+    }
+    // Whitelist TLD yang valid — tolak TLD tidak dikenal seperti .cok, .xyz asal, dll
+    final tld = email.split('.').last.toLowerCase();
+    const validTlds = {
+      'com', 'net', 'org', 'edu', 'gov', 'mil', 'int',
+      'id',  'co',  'ac',  'go',  'sch', 'web', 'my',
+      'sg',  'au',  'uk',  'us',  'io',  'dev', 'app',
+      'info','biz', 'tv',  'me',  'in',  'jp',  'de',
+      'fr',  'it',  'es',  'nl',  'ru',  'br',  'cn',
+      'kr',  'ph',  'th',  'vn',  'mail','cloud','online',
+    };
+    if (!validTlds.contains(tld)) {
+      _err('Domain email tidak valid. Gunakan email yang benar (contoh: @gmail.com, @yahoo.com).');
+      return;
     }
     if (pass.isEmpty) { _err('Password wajib diisi.'); return; }
     if (pass.length < 6) { _err('Password minimal 6 karakter.'); return; }
