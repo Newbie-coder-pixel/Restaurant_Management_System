@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -1,31 +1,140 @@
 // lib/features/customer/presentation/customer_landing_screen.dart
 //
-// CHANGES v2:
-// 1. _OrderTrackerBody dihapus → pakai CustomerOrderTrackerScreen (tanpa Scaffold)
-// 2. Home tab: tambah section "Cabang Kami" fetch dari Supabase → klik ke menu
-// 3. _BookingCard: tambah tombol "Hubungi Kami" → WhatsApp/telp staff
-// 4. _tabNotifier diganti _tabNotifier (tetap) tapi expose via method publik
-//    supaya bisa dipanggil dari child widget
+// CHANGES v3:
+// 1. Semua perubahan dari v2 dipertahankan
+// 2. Tambah fitur deteksi lokasi & cabang terdekat
+//    - LocationPermissionSheet (bottom sheet gaya Shopee/Tokopedia)
+//    - NearestBranchBanner di HomeTab (prompt → izin → hasil)
+//    - Fetch lat/lng dari Supabase jika kolom tersedia
+//    - Haversine distance calculation inline (tanpa package tambahan)
+// 3. Branch model diperkaya: isOpen dihitung dari opening/closing_time
 
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'customer_login_screen.dart';
 import 'customer_my_bookings_screen.dart';
 import 'customer_chatbot_screen.dart';
 import '../providers/customer_auth_provider.dart';
 
-// ── Provider cabang aktif (dipakai di Home tab) ──────────────────
+// ── Provider cabang aktif ─────────────────────────────────────────
 final _customerBranchesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final res = await Supabase.instance.client
       .from('branches')
-      .select('id, name, address, phone, opening_time, closing_time')
+      .select(
+          'id, name, address, phone, opening_time, closing_time, latitude, longitude')
       .eq('is_active', true)
       .order('name');
   return (res as List).cast<Map<String, dynamic>>();
 });
+
+// ── Nearest Branch State ──────────────────────────────────────────
+abstract class _NearestState {}
+
+class _NearestInitial extends _NearestState {}
+
+class _NearestLoading extends _NearestState {}
+
+class _NearestLoaded extends _NearestState {
+  final Map<String, dynamic> branch;
+  final double distanceKm;
+  _NearestLoaded(this.branch, this.distanceKm);
+}
+
+class _NearestDenied extends _NearestState {}
+
+class _NearestError extends _NearestState {
+  final String msg;
+  _NearestError(this.msg);
+}
+
+// ── Nearest Branch Notifier ───────────────────────────────────────
+class _NearestBranchNotifier extends StateNotifier<_NearestState> {
+  _NearestBranchNotifier() : super(_NearestInitial());
+
+  Future<void> detect(List<Map<String, dynamic>> branches) async {
+    state = _NearestLoading();
+
+    // Cek dan minta permission
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      state = _NearestError('GPS tidak aktif. Aktifkan lokasi di pengaturan.');
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.deniedForever ||
+        permission == LocationPermission.denied) {
+      state = _NearestDenied();
+      return;
+    }
+
+    // Get posisi user
+    Position? pos;
+    try {
+      pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
+    } catch (_) {
+      state = _NearestError('Gagal mendapatkan lokasi. Coba lagi.');
+      return;
+    }
+
+    // Filter branch yang punya koordinat
+    final branchesWithCoord = branches.where((b) {
+      final lat = b['latitude'];
+      final lng = b['longitude'];
+      return lat != null && lng != null;
+    }).toList();
+
+    if (branchesWithCoord.isEmpty) {
+      state = _NearestError('Data koordinat cabang belum tersedia.');
+      return;
+    }
+
+    // Cari yang terdekat
+    Map<String, dynamic>? nearest;
+    double minDist = double.infinity;
+
+    for (final b in branchesWithCoord) {
+      final lat = (b['latitude'] as num).toDouble();
+      final lng = (b['longitude'] as num).toDouble();
+      final dist = _haversine(pos.latitude, pos.longitude, lat, lng);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = b;
+      }
+    }
+
+    state = _NearestLoaded(nearest!, minDist);
+  }
+
+  void deny() => state = _NearestDenied();
+  void reset() => state = _NearestInitial();
+
+  double _haversine(double lat1, double lon1, double lat2, double lon2) {
+    const r = 6371.0;
+    final dLat = _rad(lat2 - lat1);
+    final dLon = _rad(lon2 - lon1);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_rad(lat1)) * cos(_rad(lat2)) * sin(dLon / 2) * sin(dLon / 2);
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a));
+  }
+
+  double _rad(double deg) => deg * pi / 180;
+}
+
+final _nearestBranchProvider =
+    StateNotifierProvider<_NearestBranchNotifier, _NearestState>(
+        (ref) => _NearestBranchNotifier());
 
 // ════════════════════════════════════════════
 // SCREEN UTAMA
@@ -52,6 +161,20 @@ class _CustomerLandingScreenState
     _tabNotifier.addListener(() {
       if (mounted) setState(() => _tab = _tabNotifier.value);
     });
+
+    // Auto-detect jika permission sudah pernah diberikan
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final perm = await Geolocator.checkPermission();
+      if ((perm == LocationPermission.always ||
+              perm == LocationPermission.whileInUse) &&
+          mounted) {
+        final branches =
+            ref.read(_customerBranchesProvider).valueOrNull ?? [];
+        if (branches.isNotEmpty) {
+          ref.read(_nearestBranchProvider.notifier).detect(branches);
+        }
+      }
+    });
   }
 
   @override
@@ -73,9 +196,7 @@ class _CustomerLandingScreenState
             child: CircularProgressIndicator(color: Color(0xFFE94560)))),
       error: (e, _) => CustomerLoginScreen(onLoginSuccess: () {}),
       data: (user) {
-        if (user == null) {
-          return CustomerLoginScreen(onLoginSuccess: () {});
-        }
+        if (user == null) return CustomerLoginScreen(onLoginSuccess: () {});
         return Scaffold(
           backgroundColor: const Color(0xFFF8F9FA),
           body: SafeArea(
@@ -90,7 +211,7 @@ class _CustomerLandingScreenState
     );
   }
 
-  // ── Safe helpers ─────────────────────────────────────────────
+  // ── Safe helpers ──────────────────────────────────────────────
   String _displayName(User user) {
     final meta = user.userMetadata;
     if (meta != null) {
@@ -145,8 +266,7 @@ class _CustomerLandingScreenState
           child: avatarUrl.isEmpty
               ? Text(initial,
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700))
+                      color: Colors.white, fontWeight: FontWeight.w700))
               : null,
         ),
         const SizedBox(width: 12),
@@ -185,16 +305,15 @@ class _CustomerLandingScreenState
             borderRadius: BorderRadius.circular(16)),
         title: const Text('Keluar?',
             style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w700)),
+                fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: const Text('Kamu akan keluar dari akun.',
             style: TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Batal',
-                style: TextStyle(
-                    fontFamily: 'Poppins', color: Colors.grey))),
+                style:
+                    TextStyle(fontFamily: 'Poppins', color: Colors.grey))),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
@@ -221,8 +340,6 @@ class _CustomerLandingScreenState
         visible: _tab == 1,
         maintainState: true,
         child: const CustomerMyBookingsScreen()),
-      // FIX: Ganti _OrderTrackerBody lama → CustomerOrderTrackerScreen
-      // tanpa Scaffold (embedded mode)
       Visibility(
         visible: _tab == 2,
         maintainState: true,
@@ -240,8 +357,7 @@ class _CustomerLandingScreenState
       (Icons.home_outlined, Icons.home_rounded, 'Beranda'),
       (Icons.calendar_today_outlined, Icons.calendar_today_rounded,
           'Booking'),
-      (Icons.receipt_long_outlined, Icons.receipt_long_rounded,
-          'Pesanan'),
+      (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Pesanan'),
       (Icons.smart_toy_outlined, Icons.smart_toy_rounded, 'Chat AI'),
     ];
 
@@ -269,12 +385,10 @@ class _CustomerLandingScreenState
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 4),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
                       color: active
-                          ? const Color(0xFFE94560)
-                              .withValues(alpha: 0.08)
+                          ? const Color(0xFFE94560).withValues(alpha: 0.08)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(10)),
                     child: Column(
@@ -305,15 +419,12 @@ class _CustomerLandingScreenState
 
 // ════════════════════════════════════════════
 // EMBEDDED ORDER TRACKER
-// Wrapper tipis supaya CustomerOrderTrackerScreen bisa
-// dipakai tanpa Scaffold (embedded di tab)
 // ════════════════════════════════════════════
 class _EmbeddedOrderTracker extends StatefulWidget {
   const _EmbeddedOrderTracker();
 
   @override
-  State<_EmbeddedOrderTracker> createState() =>
-      _EmbeddedOrderTrackerState();
+  State<_EmbeddedOrderTracker> createState() => _EmbeddedOrderTrackerState();
 }
 
 class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
@@ -412,15 +523,15 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
   @override
   Widget build(BuildContext context) {
     return ListView(padding: const EdgeInsets.all(16), children: [
-      // Header realtime indicator
       if (_order != null)
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             Container(
-              width: 8, height: 8,
-              decoration: const BoxDecoration(
-                color: Color(0xFF1D9E75), shape: BoxShape.circle)),
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                    color: Color(0xFF1D9E75), shape: BoxShape.circle)),
             const SizedBox(width: 4),
             const Text('Live tracking aktif',
                 style: TextStyle(
@@ -436,67 +547,63 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8)]),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Masukkan Nomor Pesanan',
-                  style: TextStyle(
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)
+          ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Masukkan Nomor Pesanan',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14)),
+          const SizedBox(height: 4),
+          const Text('Nomor pesanan ada di struk atau layar konfirmasi.',
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, color: Colors.grey)),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                textCapitalization: TextCapitalization.characters,
+                onSubmitted: (_) => _search(),
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5),
+                decoration: InputDecoration(
+                  hintText: 'Contoh: WEB-20260327-1234',
+                  hintStyle: const TextStyle(
                       fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14)),
-              const SizedBox(height: 4),
-              const Text(
-                  'Nomor pesanan ada di struk atau layar konfirmasi.',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: Colors.grey)),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: _ctrl,
-                    textCapitalization: TextCapitalization.characters,
-                    onSubmitted: (_) => _search(),
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5),
-                    decoration: InputDecoration(
-                      hintText: 'Contoh: WEB-20260327-1234',
-                      hintStyle: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.normal,
-                          color: Colors.grey,
-                          letterSpacing: 0),
-                      filled: true,
-                      fillColor: const Color(0xFFF3F4F6),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none)),
-                  )),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: _loading ? null : _search,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE94560),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(52, 52),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10))),
-                  child: _loading
-                      ? const SizedBox(
-                          width: 18, height: 18,
-                          child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.search_rounded)),
-              ]),
-            ])),
+                      fontWeight: FontWeight.normal,
+                      color: Colors.grey,
+                      letterSpacing: 0),
+                  filled: true,
+                  fillColor: const Color(0xFFF3F4F6),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none)),
+              )),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: _loading ? null : _search,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE94560),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(52, 52),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+              child: _loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.search_rounded)),
+          ]),
+        ])),
 
-      // Error
       if (_error != null) ...[
         const SizedBox(height: 16),
         Container(
@@ -504,11 +611,9 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
           decoration: BoxDecoration(
             color: Colors.red.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(12),
-            border:
-                Border.all(color: Colors.red.withValues(alpha: 0.2))),
+            border: Border.all(color: Colors.red.withValues(alpha: 0.2))),
           child: Row(children: [
-            const Icon(Icons.error_outline,
-                color: Colors.red, size: 18),
+            const Icon(Icons.error_outline, color: Colors.red, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(_error!,
@@ -519,26 +624,21 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
           ])),
       ],
 
-      // Order card
       if (_order != null) ...[
         const SizedBox(height: 16),
         _OrderStatusCard(order: _order!, items: _items),
       ],
 
-      // Empty state
       if (_order == null && _error == null && !_loading) ...[
         const SizedBox(height: 40),
         const Center(
           child: Column(children: [
-            Icon(Icons.receipt_long_outlined,
-                size: 56, color: Colors.grey),
+            Icon(Icons.receipt_long_outlined, size: 56, color: Colors.grey),
             SizedBox(height: 12),
             Text(
               'Masukkan nomor pesanan di atas\nuntuk melihat status.',
               style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.grey,
-                  height: 1.6),
+                  fontFamily: 'Poppins', color: Colors.grey, height: 1.6),
               textAlign: TextAlign.center),
           ])),
       ],
@@ -558,6 +658,7 @@ class _HomeTab extends ConsumerWidget {
     final userAsync = ref.watch(customerUserProvider);
     final user = userAsync.valueOrNull;
     final branchesAsync = ref.watch(_customerBranchesProvider);
+    final nearestState = ref.watch(_nearestBranchProvider);
     final displayName = _safeName(user);
 
     return SingleChildScrollView(
@@ -597,6 +698,26 @@ class _HomeTab extends ConsumerWidget {
                             color: Colors.white60,
                             fontSize: 12)),
                   ])),
+            const SizedBox(height: 16),
+
+            // ── Nearest Branch Banner (NEW)
+            branchesAsync.maybeWhen(
+              data: (branches) => _NearestBranchBanner(
+                nearestState: nearestState,
+                branches: branches,
+                onNavigate: (branchId) =>
+                    context.push('/customer/menu/$branchId'),
+                onDetect: () => ref
+                    .read(_nearestBranchProvider.notifier)
+                    .detect(branches),
+                onDeny: () =>
+                    ref.read(_nearestBranchProvider.notifier).deny(),
+                onRetry: () => ref
+                    .read(_nearestBranchProvider.notifier)
+                    .detect(branches),
+              ),
+              orElse: () => const SizedBox.shrink(),
+            ),
             const SizedBox(height: 20),
 
             // ── Quick Actions
@@ -652,11 +773,10 @@ class _HomeTab extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: Colors.red.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: Colors.red.withValues(alpha: 0.2))),
+                  border:
+                      Border.all(color: Colors.red.withValues(alpha: 0.2))),
                 child: const Row(children: [
-                  Icon(Icons.error_outline,
-                      color: Colors.red, size: 16),
+                  Icon(Icons.error_outline, color: Colors.red, size: 16),
                   SizedBox(width: 8),
                   Text('Gagal memuat cabang',
                       style: TextStyle(
@@ -669,8 +789,7 @@ class _HomeTab extends ConsumerWidget {
                   return const Center(
                     child: Text('Belum ada cabang aktif',
                         style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey)));
+                            fontFamily: 'Poppins', color: Colors.grey)));
                 }
                 return Column(
                   children: branches
@@ -702,17 +821,544 @@ class _HomeTab extends ConsumerWidget {
   }
 }
 
-// ── Branch Card ───────────────────────────────────────────────────
-class _BranchCard extends StatelessWidget {
+// ════════════════════════════════════════════
+// NEAREST BRANCH BANNER
+// ════════════════════════════════════════════
+class _NearestBranchBanner extends StatelessWidget {
+  final _NearestState nearestState;
+  final List<Map<String, dynamic>> branches;
+  final void Function(String branchId) onNavigate;
+  final VoidCallback onDetect;
+  final VoidCallback onDeny;
+  final VoidCallback onRetry;
+
+  const _NearestBranchBanner({
+    required this.nearestState,
+    required this.branches,
+    required this.onNavigate,
+    required this.onDetect,
+    required this.onDeny,
+    required this.onRetry,
+  });
+
+  // Cek apakah ada branch yang punya koordinat
+  bool get _hasCoordinates =>
+      branches.any((b) => b['latitude'] != null && b['longitude'] != null);
+
+  @override
+  Widget build(BuildContext context) {
+    // Jangan tampilkan banner jika tidak ada koordinat sama sekali
+    if (!_hasCoordinates) return const SizedBox.shrink();
+
+    if (nearestState is _NearestDenied) return const SizedBox.shrink();
+
+    if (nearestState is _NearestInitial) {
+      return _PromptCard(
+        onTap: () => _LocationPermissionSheet.show(
+          context,
+          onGranted: onDetect,
+          onDenied: onDeny,
+        ),
+      );
+    }
+
+    if (nearestState is _NearestLoading) {
+      return const _LoadingCard();
+    }
+
+    if (nearestState is _NearestLoaded) {
+      final loaded = nearestState as _NearestLoaded;
+      return _ResultCard(
+        branch: loaded.branch,
+        distanceKm: loaded.distanceKm,
+        onTap: () => onNavigate(loaded.branch['id'] as String),
+        onRefresh: onDetect,
+      );
+    }
+
+    if (nearestState is _NearestError) {
+      final err = nearestState as _NearestError;
+      return _ErrorCard(message: err.msg, onRetry: onRetry);
+    }
+
+    return const SizedBox.shrink();
+  }
+}
+
+// ── Banner sub-widgets ────────────────────────────────────────────
+
+class _PromptCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _PromptCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F4FF),
+          border: Border.all(color: const Color(0xFFBFD0FF)),
+          borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A2E).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.location_on_rounded,
+                color: Color(0xFF0F3460), size: 20)),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Temukan cabang terdekat',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A2E))),
+              SizedBox(height: 2),
+              Text('Ketuk untuk aktifkan lokasi',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: Color(0xFF6B7280))),
+            ])),
+          const Icon(Icons.chevron_right, color: Color(0xFF0F3460), size: 20),
+        ]),
+      ),
+    );
+  }
+}
+
+class _LoadingCard extends StatelessWidget {
+  const _LoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F4FF),
+        borderRadius: BorderRadius.circular(12)),
+      child: const Row(children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor:
+                  AlwaysStoppedAnimation(Color(0xFF0F3460)))),
+        SizedBox(width: 12),
+        Text('Mencari cabang terdekat...',
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: Color(0xFF6B7280))),
+      ]),
+    );
+  }
+}
+
+class _ResultCard extends StatelessWidget {
   final Map<String, dynamic> branch;
-  const _BranchCard({required this.branch});
+  final double distanceKm;
+  final VoidCallback onTap;
+  final VoidCallback onRefresh;
+
+  const _ResultCard({
+    required this.branch,
+    required this.distanceKm,
+    required this.onTap,
+    required this.onRefresh,
+  });
+
+  String _formatDist(double km) {
+    if (km < 1) return '${(km * 1000).round()} m';
+    return '${km.toStringAsFixed(1)} km';
+  }
+
+  bool _isOpen() {
+    final openStr = branch['opening_time'] as String?;
+    final closeStr = branch['closing_time'] as String?;
+    if (openStr == null || closeStr == null) return true;
+    try {
+      final now = TimeOfDay.now();
+      final openParts = openStr.split(':');
+      final closeParts = closeStr.split(':');
+      final openMin =
+          int.parse(openParts[0]) * 60 + int.parse(openParts[1]);
+      final closeMin =
+          int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
+      final nowMin = now.hour * 60 + now.minute;
+      return nowMin >= openMin && nowMin <= closeMin;
+    } catch (_) {
+      return true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final name = branch['name'] as String? ?? 'Cabang';
     final address = branch['address'] as String? ?? '';
-    final open = (branch['opening_time'] as String?)?.substring(0, 5) ?? '10:00';
-    final close = (branch['closing_time'] as String?)?.substring(0, 5) ?? '22:00';
+    final isOpen = _isOpen();
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F4FF),
+          border: Border.all(color: const Color(0xFFBFD0FF)),
+          borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.store_rounded,
+                color: Colors.white, size: 18)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(name,
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A2E)),
+                      overflow: TextOverflow.ellipsis)),
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isOpen
+                        ? const Color(0xFFE8F5E9)
+                        : const Color(0xFFFCE4EC),
+                    borderRadius: BorderRadius.circular(4)),
+                  child: Text(
+                    isOpen ? 'Buka' : 'Tutup',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: isOpen
+                            ? const Color(0xFF2E7D32)
+                            : const Color(0xFFC62828)))),
+              ]),
+              const SizedBox(height: 3),
+              Row(children: [
+                const Icon(Icons.location_on_outlined,
+                    size: 12, color: Color(0xFF0F3460)),
+                const SizedBox(width: 3),
+                Text(_formatDist(distanceKm),
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F3460))),
+                if (address.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  const Text('·',
+                      style: TextStyle(color: Color(0xFF9CA3AF))),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(address,
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Color(0xFF9CA3AF)),
+                        overflow: TextOverflow.ellipsis)),
+                ],
+              ]),
+            ])),
+          const SizedBox(width: 8),
+          Column(children: [
+            const Icon(Icons.chevron_right,
+                color: Color(0xFF0F3460), size: 20),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: onRefresh,
+              child: const Icon(Icons.refresh_rounded,
+                  color: Color(0xFF9CA3AF), size: 16)),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorCard({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.2))),
+      child: Row(children: [
+        const Icon(Icons.error_outline, color: Colors.red, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(message,
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: Colors.red))),
+        GestureDetector(
+          onTap: onRetry,
+          child: const Text('Coba lagi',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: Color(0xFF0F3460),
+                  fontWeight: FontWeight.w600))),
+      ]),
+    );
+  }
+}
+
+// ════════════════════════════════════════════
+// LOCATION PERMISSION BOTTOM SHEET
+// Gaya Shopee / Tokopedia
+// ════════════════════════════════════════════
+class _LocationPermissionSheet extends StatelessWidget {
+  final VoidCallback onGranted;
+  final VoidCallback onDenied;
+
+  const _LocationPermissionSheet({
+    required this.onGranted,
+    required this.onDenied,
+  });
+
+  static Future<void> show(
+    BuildContext context, {
+    required VoidCallback onGranted,
+    required VoidCallback onDenied,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _LocationPermissionSheet(
+        onGranted: onGranted,
+        onDenied: onDenied,
+      ),
+    );
+  }
+
+  Future<void> _handleAllow(BuildContext context) async {
+    Navigator.of(context).pop();
+
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      await Geolocator.openLocationSettings();
+      onDenied();
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.deniedForever) {
+      await Geolocator.openAppSettings();
+      onDenied();
+      return;
+    }
+
+    if (permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse) {
+      onGranted();
+    } else {
+      onDenied();
+    }
+  }
+
+  void _handleDeny(BuildContext context) {
+    Navigator.of(context).pop();
+    onDenied();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      padding: EdgeInsets.fromLTRB(
+          24, 12, 24, MediaQuery.of(context).padding.bottom + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 24),
+
+          // Icon
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A2E).withValues(alpha: 0.06),
+              shape: BoxShape.circle),
+            child: const Icon(Icons.location_on_rounded,
+                size: 36, color: Color(0xFF0F3460))),
+          const SizedBox(height: 18),
+
+          // Judul
+          const Text('Izinkan Akses Lokasi',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A2E))),
+          const SizedBox(height: 8),
+
+          // Deskripsi
+          Text(
+            'Kami menggunakan lokasi Anda untuk\nmenampilkan cabang restoran terdekat.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: Colors.grey[600],
+                height: 1.5)),
+          const SizedBox(height: 18),
+
+          // Benefit rows
+          _benefitRow(Icons.store_rounded, 'Cabang terdekat dari posisi Anda'),
+          _benefitRow(Icons.access_time_rounded,
+              'Info buka/tutup yang relevan'),
+          _benefitRow(Icons.navigation_rounded, 'Langsung navigasi ke cabang'),
+
+          const SizedBox(height: 22),
+
+          // Tombol Izinkan
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => _handleAllow(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A1A2E),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0),
+              child: const Text('Izinkan Akses Lokasi',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600)))),
+          const SizedBox(height: 8),
+
+          // Tombol Lewati
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => _handleDeny(context),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12))),
+              child: Text('Lewati',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w500)))),
+
+          // Privacy note
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.lock_outline, size: 11, color: Colors.grey[400]),
+            const SizedBox(width: 4),
+            Text('Lokasi hanya digunakan saat aplikasi terbuka',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 10,
+                    color: Colors.grey[400])),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _benefitRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A2E).withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8)),
+          child: Icon(icon, size: 15, color: const Color(0xFF0F3460))),
+        const SizedBox(width: 12),
+        Text(text,
+            style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: Color(0xFF424242))),
+      ]),
+    );
+  }
+}
+
+// ── Branch Card ───────────────────────────────────────────────────
+class _BranchCard extends StatelessWidget {
+  final Map<String, dynamic> branch;
+  const _BranchCard({required this.branch});
+
+  bool _isOpen() {
+    final openStr = branch['opening_time'] as String?;
+    final closeStr = branch['closing_time'] as String?;
+    if (openStr == null || closeStr == null) return true;
+    try {
+      final now = TimeOfDay.now();
+      final openParts = openStr.split(':');
+      final closeParts = closeStr.split(':');
+      final openMin =
+          int.parse(openParts[0]) * 60 + int.parse(openParts[1]);
+      final closeMin =
+          int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
+      final nowMin = now.hour * 60 + now.minute;
+      return nowMin >= openMin && nowMin <= closeMin;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = branch['name'] as String? ?? 'Cabang';
+    final address = branch['address'] as String? ?? '';
+    final open =
+        (branch['opening_time'] as String?)?.substring(0, 5) ?? '10:00';
+    final close =
+        (branch['closing_time'] as String?)?.substring(0, 5) ?? '22:00';
+    final isOpen = _isOpen();
 
     return GestureDetector(
       onTap: () => context.push('/customer/menu/${branch['id']}'),
@@ -722,13 +1368,16 @@ class _BranchCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2))]),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ]),
         child: Row(children: [
           Container(
-            width: 48, height: 48,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
@@ -742,12 +1391,34 @@ class _BranchCard extends StatelessWidget {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name,
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: Color(0xFF1A1A2E))),
+                  Row(children: [
+                    Flexible(
+                      child: Text(name,
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: Color(0xFF1A1A2E)),
+                          overflow: TextOverflow.ellipsis)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isOpen
+                            ? const Color(0xFFE8F5E9)
+                            : const Color(0xFFFCE4EC),
+                        borderRadius: BorderRadius.circular(4)),
+                      child: Text(
+                        isOpen ? 'Buka' : 'Tutup',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: isOpen
+                                ? const Color(0xFF2E7D32)
+                                : const Color(0xFFC62828)))),
+                  ]),
                   if (address.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(address,
@@ -772,8 +1443,8 @@ class _BranchCard extends StatelessWidget {
                 ])),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 6),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: const Color(0xFFE94560),
               borderRadius: BorderRadius.circular(20)),
@@ -809,39 +1480,37 @@ class _ActionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(
-          color: color.withValues(alpha: 0.3),
-          blurRadius: 10,
-          offset: const Offset(0, 4))]),
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(height: 10),
-            Text(label,
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13)),
-            const SizedBox(height: 2),
-            Text(subtitle,
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 10)),
-          ])));
+        boxShadow: [
+          BoxShadow(
+              color: color.withValues(alpha: 0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: Colors.white, size: 22),
+        const SizedBox(height: 10),
+        Text(label,
+            style: const TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 13)),
+        const SizedBox(height: 2),
+        Text(subtitle,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 10)),
+      ])));
 }
 
 // ════════════════════════════════════════════
-// ORDER STATUS CARD (dipakai di _EmbeddedOrderTracker)
-// Copy dari CustomerOrderTrackerScreen supaya embedded
+// ORDER STATUS CARD
 // ════════════════════════════════════════════
 class _OrderStatusCard extends StatelessWidget {
   final Map<String, dynamic> order;
   final List<Map<String, dynamic>> items;
-  const _OrderStatusCard(
-      {required this.order, required this.items});
+  const _OrderStatusCard({required this.order, required this.items});
 
   static const _statusLabels = {
     'new': '🆕 Pesanan Baru',
@@ -883,155 +1552,149 @@ class _OrderStatusCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04),
-          blurRadius: 8)]),
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(order['order_number'] as String? ?? '',
-                          style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16)),
-                      if (customerName != null)
-                        Text('Atas nama: $customerName',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Colors.grey)),
-                    ])),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20)),
-                child: Text(statusLabel,
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: statusColor))),
-            ]),
-            if (statusMsg.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(10)),
-                child: Text(statusMsg,
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        color: statusColor,
-                        height: 1.4))),
-            ],
-            const Divider(height: 20),
-            _StatusProgress(status: status),
-            const SizedBox(height: 16),
-            const Text('Item Pesanan',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13)),
-            const SizedBox(height: 8),
-            ...items.map((item) {
-              final name = (item['menu_items'] as Map?)?['name']
-                      as String? ?? '-';
-              final qty = item['quantity'] as int? ?? 1;
-              final sub =
-                  (item['subtotal'] as num?)?.toDouble() ?? 0;
-              final special = item['special_requests'] as String?;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Text('${qty}x ',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                color: Colors.grey,
-                                fontSize: 12)),
-                        Expanded(
-                          child: Text(name,
-                              style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 12))),
-                        Text('Rp ${_fmt(sub)}',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500)),
-                      ]),
-                      if (special != null && special.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                              left: 24, top: 2),
-                          child: Text('⚡ $special',
-                              style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 11,
-                                  color: Color(0xFFD97706)))),
-                    ]));
-            }),
-            if (notes != null && notes.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(8)),
-                child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.notes,
-                          size: 14, color: Colors.grey),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(notes,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.grey))),
-                    ])),
-            ],
-            const Divider(height: 16),
-            Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)
+        ]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Total',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14)),
-                  Text('Rp ${_fmt(total)}',
+                  Text(order['order_number'] as String? ?? '',
                       style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                          color: Color(0xFFE94560))),
-                ]),
-            if (status != 'paid' && status != 'cancelled') ...[
-              const SizedBox(height: 10),
-              const Text(
-                  '💡 Pembayaran di kasir saat pesanan siap.',
+                          fontSize: 16)),
+                  if (customerName != null)
+                    Text('Atas nama: $customerName',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            color: Colors.grey)),
+                ])),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20)),
+            child: Text(statusLabel,
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor))),
+        ]),
+        if (statusMsg.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10)),
+            child: Text(statusMsg,
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: statusColor,
+                    height: 1.4))),
+        ],
+        const Divider(height: 20),
+        _StatusProgress(status: status),
+        const SizedBox(height: 16),
+        const Text('Item Pesanan',
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w700,
+                fontSize: 13)),
+        const SizedBox(height: 8),
+        ...items.map((item) {
+          final name =
+              (item['menu_items'] as Map?)?['name'] as String? ?? '-';
+          final qty = item['quantity'] as int? ?? 1;
+          final sub = (item['subtotal'] as num?)?.toDouble() ?? 0;
+          final special = item['special_requests'] as String?;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Text('${qty}x ',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.grey,
+                            fontSize: 12)),
+                    Expanded(
+                      child: Text(name,
+                          style: const TextStyle(
+                              fontFamily: 'Poppins', fontSize: 12))),
+                    Text('Rp ${_fmt(sub)}',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500)),
+                  ]),
+                  if (special != null && special.isNotEmpty)
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(left: 24, top: 2),
+                      child: Text('⚡ $special',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              color: Color(0xFFD97706)))),
+                ]));
+        }),
+        if (notes != null && notes.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(8)),
+            child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.notes, size: 14, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(notes,
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.grey))),
+                ])),
+        ],
+        const Divider(height: 16),
+        Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total',
                   style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: Colors.grey)),
-            ],
-          ]));
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14)),
+              Text('Rp ${_fmt(total)}',
+                  style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: Color(0xFFE94560))),
+            ]),
+        if (status != 'paid' && status != 'cancelled') ...[
+          const SizedBox(height: 10),
+          const Text('💡 Pembayaran di kasir saat pesanan siap.',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: Colors.grey)),
+        ],
+      ]));
   }
 
   String _fmt(double v) {
@@ -1096,10 +1759,12 @@ class _StatusProgress extends StatelessWidget {
                         : const Color(0xFFE5E7EB),
                     shape: BoxShape.circle,
                     boxShadow: isCurrent
-                        ? [BoxShadow(
-                            color: const Color(0xFFE94560)
-                                .withValues(alpha: 0.4),
-                            blurRadius: 8)]
+                        ? [
+                            BoxShadow(
+                                color: const Color(0xFFE94560)
+                                    .withValues(alpha: 0.4),
+                                blurRadius: 8)
+                          ]
                         : []),
                   child: isActive
                       ? const Icon(Icons.check,
