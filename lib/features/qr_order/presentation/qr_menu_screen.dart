@@ -484,8 +484,7 @@ class _MenuGrid extends ConsumerWidget {
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        // Rasio diperbaiki: lebar:tinggi = 1:1.45
-        childAspectRatio: 0.69,
+        childAspectRatio: 0.75,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
@@ -540,10 +539,9 @@ class _MenuItemCard extends StatelessWidget {
         ),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // ── Gambar FIXED height 120px ─────────────────────────────────────
-        SizedBox(
-          height: 120,
-          width: double.infinity,
+        // ── Gambar AspectRatio 16:9 supaya proporsional di semua ukuran ──
+        AspectRatio(
+          aspectRatio: 16 / 9,
           child: Stack(fit: StackFit.expand, children: [
             item.imageUrl != null && item.imageUrl!.isNotEmpty
                 ? CachedNetworkImage(
