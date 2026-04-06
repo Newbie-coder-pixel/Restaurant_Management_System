@@ -128,8 +128,15 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       _err('Nama lengkap wajib diisi.'); return;
     }
     if (email.isEmpty) { _err('Email wajib diisi.'); return; }
-    if (!email.contains('@') || !email.contains('.')) {
-      _err('Format email tidak valid.'); return;
+    // Validasi format email dengan regex ketat:
+    // - harus ada karakter sebelum @
+    // - harus ada domain setelah @
+    // - TLD harus 2-6 huruf (com, id, net, co.id, dst)
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,6}$',
+    );
+    if (!emailRegex.hasMatch(email)) {
+      _err('Format email tidak valid. Contoh: nama@gmail.com'); return;
     }
     if (pass.isEmpty) { _err('Password wajib diisi.'); return; }
     if (pass.length < 6) { _err('Password minimal 6 karakter.'); return; }
