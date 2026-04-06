@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/router/app_router.dart';
@@ -15,6 +16,21 @@ void main() async {
       eventsPerSecond: 40,
     ),
   );
+
+  // Handle OAuth callback: Supabase mengirim ?code= sebagai query param
+  // di URL sebelum fragment (#). Kita perlu exchange code → session
+  // sebelum GoRouter membaca route-nya.
+  if (kIsWeb) {
+    final uri = Uri.base;
+    final code = uri.queryParameters['code'];
+    if (code != null && code.isNotEmpty) {
+      try {
+        await Supabase.instance.client.auth.exchangeCodeForSession(code);
+      } catch (_) {
+        // Kalau gagal (code sudah expired dll), biarkan mengalir ke router
+      }
+    }
+  }
 
   runApp(const ProviderScope(child: RestaurantApp()));
 }

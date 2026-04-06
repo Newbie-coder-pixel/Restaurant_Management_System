@@ -12,6 +12,7 @@ import '../../features/customer/presentation/customer_menu_screen.dart';
 import '../../features/customer/presentation/customer_my_bookings_screen.dart';
 import '../../features/customer/presentation/customer_checkout_screen.dart';
 import '../../features/customer/presentation/customer_order_tracker_screen.dart';
+import '../../features/customer/presentation/customer_reset_password_screen.dart';
 import '../models/staff_role.dart';
 
 abstract class AppRoutes {
@@ -37,7 +38,8 @@ abstract class AppRoutes {
   static const customerTrack          = '/customer/track';
   static const customerTrackOrder     = '/customer/track/:orderNumber';
   static const customerOrderSuccess   = '/customer/order-success/:orderNumber';
-  static const customerBookingSuccess = '/customer/booking-success';
+  static const customerBookingSuccess    = '/customer/booking-success';
+  static const customerResetPassword     = '/customer/reset-password';
 }
 
 String _defaultRouteForRole(StaffRole role) {
@@ -87,6 +89,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Customer routes — bebas, tidak perlu auth
       if (loc.startsWith('/customer')) return null;
+
+      // Deteksi link reset password dari Supabase (?type=recovery)
+      // Setelah exchangeCodeForSession di main.dart, user sudah punya session
+      // tapi perlu diarahkan ke halaman ganti password
+      if (kIsWeb) {
+        final uri = Uri.base;
+        final type = uri.queryParameters['type'];
+        if (type == 'recovery' && loc != AppRoutes.customerResetPassword) {
+          return AppRoutes.customerResetPassword;
+        }
+      }
 
       // Staff gateway — URL rahasia, tidak perlu auth
       if (loc == AppRoutes.staffGateway) return null;
@@ -154,6 +167,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.customerBookingSuccess,
         builder: (_, __) => const CustomerBookingSuccessScreen()),
+
+      GoRoute(
+        path: AppRoutes.customerResetPassword,
+        builder: (_, __) => const CustomerResetPasswordScreen()),
 
       // ── Staff gateway (URL rahasia, no auth) ─────────────────
       GoRoute(
