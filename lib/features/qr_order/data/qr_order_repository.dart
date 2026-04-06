@@ -96,13 +96,54 @@ class QrOrderRepository {
   // ─── Fetch Menu Items by Branch ─────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
-    final response = await _client
+    // Step 1: Ambil menu items dulu (tanpa join — hindari 400 jika FK belum terdefinisi)
+    final items = await _client
         .from('menu_items')
-        .select('*, menu_categories(name, sort_order)')
+        .select(
+          'id, branch_id, category_id, name, description, price, '
+          'image_url, is_available, is_seasonal, '
+          'preparation_time_minutes, sort_order, created_at, updated_at',
+        )
         .eq('branch_id', branchId)
         .eq('is_available', true)
         .order('sort_order');
-    return List<Map<String, dynamic>>.from(response);
+
+    final itemList = List<Map<String, dynamic>>.from(items);
+    if (itemList.isEmpty) return itemList;
+
+    // Step 2: Kumpulkan category_id yang unik
+    final categoryIds = itemList
+        .map((i) => i['category_id'] as String?)
+        .whereType<String>()
+        .toSet()
+        .toList();
+
+    // Step 3: Fetch categories secara terpisah
+    Map<String, Map<String, dynamic>> categoryMap = {};
+    if (categoryIds.isNotEmpty) {
+      try {
+        final categories = await _client
+            .from('menu_categories')
+            .select('id, name, sort_order')
+            .inFilter('id', categoryIds);
+
+        for (final cat in List<Map<String, dynamic>>.from(categories)) {
+          categoryMap[cat['id'] as String] = cat;
+        }
+      } catch (_) {
+        // Jika tabel menu_categories tidak ada, lanjut tanpa kategori
+      }
+    }
+
+    // Step 4: Gabungkan manual — sama seperti hasil join tapi aman
+    return itemList.map((item) {
+      final catId = item['category_id'] as String?;
+      final category = catId != null ? categoryMap[catId] : null;
+      return {
+        ...item,
+        'menu_categories': category,
+      };
+    }).toList();
   }
 
   // ─── Fetch Table Info ───────────────────────────────────────────────────────
