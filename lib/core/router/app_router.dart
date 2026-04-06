@@ -13,6 +13,10 @@ import '../../features/customer/presentation/customer_my_bookings_screen.dart';
 import '../../features/customer/presentation/customer_checkout_screen.dart';
 import '../../features/customer/presentation/customer_order_tracker_screen.dart';
 import '../../features/customer/presentation/customer_reset_password_screen.dart';
+import '../../features/qr_order/presentation/qr_menu_screen.dart';
+import '../../features/qr_order/presentation/qr_cart_screen.dart';
+import '../../features/qr_order/presentation/qr_payment_screen.dart';
+import '../../features/qr_order/presentation/qr_order_tracker_screen.dart';
 import '../models/staff_role.dart';
 
 abstract class AppRoutes {
@@ -40,6 +44,10 @@ abstract class AppRoutes {
   static const customerOrderSuccess   = '/customer/order-success/:orderNumber';
   static const customerBookingSuccess    = '/customer/booking-success';
   static const customerResetPassword     = '/customer/reset-password';
+  static const qrMenu       = '/qr/:tableId';
+  static const qrCart       = '/qr/:tableId/cart';
+  static const qrPayment    = '/qr/:tableId/payment';
+  static const qrTrack      = '/qr/:tableId/track/:orderId';
 }
 
 String _defaultRouteForRole(StaffRole role) {
@@ -89,6 +97,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Customer routes — bebas, tidak perlu auth
       if (loc.startsWith('/customer')) return null;
+
+      // QR Order: no auth required - walk-in customer
+      if (loc.startsWith('/qr/')) return null;
 
       // Deteksi link reset password dari Supabase (?type=recovery)
       // Setelah exchangeCodeForSession di main.dart, user sudah punya session
@@ -171,6 +182,58 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.customerResetPassword,
         builder: (_, __) => const CustomerResetPasswordScreen()),
+
+      // ── QR Order (walk-in, no auth) ──────────────────────────
+      GoRoute(
+        path: '/qr/:tableId',
+        name: 'qrMenu',
+        pageBuilder: (context, state) {
+          final tableId = state.pathParameters['tableId']!;
+          return NoTransitionPage(
+            key: state.pageKey,
+            child: QrMenuScreen(tableId: tableId),
+          );
+        },
+        routes: [
+          GoRoute(
+            path: 'cart',
+            name: 'qrCart',
+            pageBuilder: (context, state) {
+              final tableId = state.pathParameters['tableId']!;
+              return MaterialPage(
+                key: state.pageKey,
+                child: QrCartScreen(tableId: tableId),
+              );
+            },
+          ),
+          GoRoute(
+            path: 'payment',
+            name: 'qrPayment',
+            pageBuilder: (context, state) {
+              final tableId = state.pathParameters['tableId']!;
+              return MaterialPage(
+                key: state.pageKey,
+                child: QrPaymentScreen(tableId: tableId),
+              );
+            },
+          ),
+          GoRoute(
+            path: 'track/:orderId',
+            name: 'qrTrack',
+            pageBuilder: (context, state) {
+              final orderId = state.pathParameters['orderId']!;
+              final queueNumber = state.uri.queryParameters['queue'];
+              return MaterialPage(
+                key: state.pageKey,
+                child: QrOrderTrackerScreen(
+                  orderId: orderId,
+                  queueNumber: queueNumber,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
 
       // ── Staff gateway (URL rahasia, no auth) ─────────────────
       GoRoute(

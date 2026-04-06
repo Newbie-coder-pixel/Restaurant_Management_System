@@ -661,8 +661,33 @@ class _HomeTab extends ConsumerStatefulWidget {
 
 class _HomeTabState extends ConsumerState<_HomeTab> {
   final branchSectionKey = GlobalKey();
+  final _scrollController = ScrollController();
 
   void Function(int) get onSwitchTab => widget.onSwitchTab;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBranches() {
+    final ctx = branchSectionKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      // Fallback: scroll ke bawah jika key belum ter-render
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -673,6 +698,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     final displayName = _safeName(user);
 
     return SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.all(20),
       child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -746,14 +772,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   label: 'Pesan Makanan',
                   subtitle: 'Lihat menu & order',
                   color: const Color(0xFFE94560),
-                  onTap: () {
-                    // Scroll ke section Cabang Kami
-                    Scrollable.ensureVisible(
-                      branchSectionKey.currentContext!,
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeInOut,
-                    );
-                  })),
+                  onTap: _scrollToBranches)),
             ]),
             const SizedBox(height: 10),
             Row(children: [
