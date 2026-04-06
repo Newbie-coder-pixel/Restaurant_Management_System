@@ -92,7 +92,9 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     try {
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: '${Uri.base.origin}/#/customer');
+        redirectTo: '${Uri.base.origin}/customer',
+        authScreenLaunchMode: LaunchMode.inAppWebView,
+      );
     } on AuthException catch (e) {
       _err(_translateAuthError(e.message));
     } catch (_) {
@@ -107,7 +109,9 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     try {
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.apple,
-        redirectTo: '${Uri.base.origin}/#/customer');
+        redirectTo: '${Uri.base.origin}/customer',
+        authScreenLaunchMode: LaunchMode.inAppWebView,
+      );
     } on AuthException catch (e) {
       _err(_translateAuthError(e.message));
     } catch (_) {
@@ -289,7 +293,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                               .resetPasswordForEmail(
                             email,
                             redirectTo:
-                                '${Uri.base.origin}/#/customer/reset-password',
+                                '${Uri.base.origin}/customer/reset-password',
                           );
                           if (ctx.mounted) Navigator.pop(ctx);
                           if (mounted) {
