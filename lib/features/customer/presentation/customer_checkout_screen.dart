@@ -29,7 +29,7 @@ class _CustomerCheckoutScreenState
     _phoneCtrl.dispose();
     _tableCtrl.dispose();
     _notesCtrl.dispose();
-    for (final c in _itemNotesCtrls.values) c.dispose();
+    for (final c in _itemNotesCtrls.values) { c.dispose(); }
     super.dispose();
   }
 

@@ -210,21 +210,21 @@ class _CustomerOrderTrackerScreenState
 
         if ((ownOrders as List).isNotEmpty) {
           // Ketemu — order milik user ini
-          await _processOrderResult(ownOrders.first as Map<String, dynamic>);
+          await _processOrderResult(ownOrders.first);
           return;
         }
 
         // Coba tanpa filter user (mungkin order sebelum login)
         final anyOrder = await query.limit(1);
         if ((anyOrder as List).isNotEmpty) {
-          await _processOrderResult(anyOrder.first as Map<String, dynamic>);
+          await _processOrderResult(anyOrder.first);
           return;
         }
       } else {
         // Tidak login — cari by exact order number
         final res = await query.limit(1);
         if ((res as List).isNotEmpty) {
-          await _processOrderResult(res.first as Map<String, dynamic>);
+          await _processOrderResult(res.first);
           return;
         }
       }

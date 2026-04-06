@@ -46,8 +46,12 @@ class _CustomerOrderHistoryScreenState
             i['menu_item_id'] != null && i['menu_items'] != null)
         .toList();
 
+    // Capture context-dependent objects BEFORE any async gaps
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+
     if (validItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      messenger.showSnackBar(const SnackBar(
         content: Text('Tidak ada item yang bisa dipesan ulang.'),
         backgroundColor: Colors.orange));
       return;
@@ -112,12 +116,11 @@ class _CustomerOrderHistoryScreenState
       ));
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('✅ Item ditambahkan ke cart!'),
-        backgroundColor: Color(0xFF1D9E75)));
-      context.go('/customer/checkout');
-    }
+    if (!mounted) return;
+    messenger.showSnackBar(const SnackBar(
+      content: Text('✅ Item ditambahkan ke cart!'),
+      backgroundColor: Color(0xFF1D9E75)));
+    router.go('/customer/checkout');
   }
 
   @override

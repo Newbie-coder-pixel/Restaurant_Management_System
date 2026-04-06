@@ -29,7 +29,7 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
   late int _duration;
 
   bool _isSearching = false;
-  bool _isSaving = false;
+  final bool _isSaving = false;
   Map<String, dynamic>? _assignedTable;
   String? _assignError;
   bool _tableChanged = false; // apakah meja perlu di-assign ulang
@@ -322,6 +322,7 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
 
                     // Durasi
                     DropdownButtonFormField<int>(
+                      // ignore: deprecated_member_use
                       value: _duration,
                       decoration: const InputDecoration(
                           labelText: 'Durasi',

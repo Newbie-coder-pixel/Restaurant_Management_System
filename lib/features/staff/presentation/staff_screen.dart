@@ -259,6 +259,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<StaffRole>(
+                // ignore: deprecated_member_use
                 value: selectedRole,
                 decoration: const InputDecoration(labelText: 'Role'),
                 items: StaffRole.values.map((r) => DropdownMenuItem(
@@ -316,14 +317,14 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                              content: Text('✅ Data ${name} berhasil diperbarui'),
+                              content: Text('✅ Data $name berhasil diperbarui'),
                               backgroundColor: const Color(0xFF4CAF50)));
                         }
                         await _load();
                       } catch (e) {
                         ss(() {
                           isLoading = false;
-                          errorMsg = 'Gagal menyimpan: ${e.toString()}';
+                          errorMsg = 'Gagal menyimpan: $e';
                         });
                       }
                     },
@@ -527,6 +528,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   keyboardType: TextInputType.phone),
               const SizedBox(height: 12),
               DropdownButtonFormField<StaffRole>(
+                // ignore: deprecated_member_use
                 value: selectedRole,
                 decoration: const InputDecoration(labelText: 'Role'),
                 items: StaffRole.values.map((r) => DropdownMenuItem(
