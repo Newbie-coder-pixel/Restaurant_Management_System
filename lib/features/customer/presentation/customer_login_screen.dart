@@ -128,25 +128,130 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       _err('Nama lengkap wajib diisi.'); return;
     }
     if (email.isEmpty) { _err('Email wajib diisi.'); return; }
-    // Validasi format email: cek struktur dasar + whitelist TLD umum
+    // Validasi format email dasar
     final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.([a-zA-Z]{2,})$',
+      r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$',
     );
     if (!emailRegex.hasMatch(email)) {
       _err('Format email tidak valid. Contoh: nama@gmail.com'); return;
     }
-    // Whitelist TLD yang valid — tolak TLD tidak dikenal seperti .cok, .xyz asal, dll
-    final tld = email.split('.').last.toLowerCase();
-    const validTlds = {
-      'com', 'net', 'org', 'edu', 'gov', 'mil', 'int',
-      'id',  'co',  'ac',  'go',  'sch', 'web', 'my',
-      'sg',  'au',  'uk',  'us',  'io',  'dev', 'app',
-      'info','biz', 'tv',  'me',  'in',  'jp',  'de',
-      'fr',  'it',  'es',  'nl',  'ru',  'br',  'cn',
-      'kr',  'ph',  'th',  'vn',  'mail','cloud','online',
+    // Whitelist domain email valid — komprehensif berdasarkan data global & Indonesia
+    final domain = email.split('@').last.toLowerCase();
+    const validDomains = {
+      // ── Google ─────────────────────────────────────────────
+      'gmail.com', 'googlemail.com',
+
+      // ── Microsoft ──────────────────────────────────────────
+      'outlook.com', 'outlook.co.id', 'outlook.co.uk', 'outlook.de',
+      'outlook.fr', 'outlook.it', 'outlook.jp', 'outlook.com.au',
+      'hotmail.com', 'hotmail.co.uk', 'hotmail.co.id', 'hotmail.fr',
+      'hotmail.it', 'hotmail.de', 'hotmail.es', 'hotmail.com.ar',
+      'hotmail.com.br', 'hotmail.com.au', 'hotmail.be', 'hotmail.nl',
+      'live.com', 'live.co.uk', 'live.com.au', 'live.nl', 'live.fr',
+      'live.de', 'live.it', 'live.be', 'live.co.za', 'msn.com',
+
+      // ── Yahoo ──────────────────────────────────────────────
+      'yahoo.com', 'yahoo.co.id', 'yahoo.co.uk', 'yahoo.co.in',
+      'yahoo.co.jp', 'yahoo.co.au', 'yahoo.com.ar', 'yahoo.com.br',
+      'yahoo.com.mx', 'yahoo.com.ph', 'yahoo.com.sg', 'yahoo.fr',
+      'yahoo.de', 'yahoo.it', 'yahoo.es', 'yahoo.ca', 'yahoo.gr',
+      'ymail.com', 'rocketmail.com',
+
+      // ── Apple ──────────────────────────────────────────────
+      'icloud.com', 'me.com', 'mac.com',
+
+      // ── Privacy / Secure ───────────────────────────────────
+      'protonmail.com', 'proton.me', 'pm.me',
+      'tutanota.com', 'tuta.io', 'tutamail.com',
+      'fastmail.com', 'fastmail.fm',
+      'hey.com',
+
+      // ── Global lainnya ─────────────────────────────────────
+      'aol.com', 'aim.com',
+      'zoho.com', 'zohomail.com',
+      'mail.com', 'email.com', 'post.com', 'usa.com',
+      'gmx.com', 'gmx.net', 'gmx.de', 'gmx.us', 'gmx.at', 'gmx.ch',
+      'web.de', 'freenet.de', 't-online.de', '1und1.de',
+      'yandex.com', 'yandex.ru',
+      'mail.ru', 'inbox.ru', 'bk.ru', 'list.ru', 'internet.ru',
+      'rediffmail.com',
+
+      // ── Asia Pasifik ───────────────────────────────────────
+      '163.com', '126.com', 'qq.com', 'sina.com', 'sina.cn',
+      'naver.com', 'daum.net', 'hanmail.net',
+      'wp.pl', 'o2.pl', 'interia.pl',
+
+      // ── ISP / Telecom global ───────────────────────────────
+      'comcast.net', 'att.net', 'sbcglobal.net', 'verizon.net',
+      'bellsouth.net', 'cox.net', 'charter.net', 'earthlink.net',
+      'roadrunner.com', 'optonline.net',
+      'btinternet.com', 'virginmedia.com', 'sky.com',
+      'orange.fr', 'sfr.fr', 'free.fr', 'laposte.net',
+      'libero.it', 'virgilio.it', 'tin.it', 'alice.it',
+      'terra.com.br', 'bol.com.br', 'uol.com.br', 'ig.com.br',
+      'telenet.be', 'skynet.be',
+
+      // ── Indonesia — domain resmi ───────────────────────────
+      'go.id', 'ac.id', 'sch.id', 'co.id', 'net.id',
+      'or.id', 'web.id', 'my.id', 'biz.id', 'mil.id', 'desa.id',
+
+      // ── Indonesia — universitas negeri ─────────────────────
+      'ui.ac.id',           'student.ui.ac.id',
+      'ugm.ac.id',          'mail.ugm.ac.id',
+      'itb.ac.id',          'student.itb.ac.id',
+      'its.ac.id',          'student.its.ac.id',
+      'unair.ac.id',        'student.unair.ac.id',
+      'ipb.ac.id',          'apps.ipb.ac.id',
+      'undip.ac.id',        'student.undip.ac.id', 'apps.undip.ac.id',
+      'upi.edu',            'student.upi.edu',
+      'uny.ac.id',          'student.uny.ac.id',
+      'unhas.ac.id',
+      'uns.ac.id',          'student.uns.ac.id',
+      'unpad.ac.id',        'student.unpad.ac.id',
+      'ub.ac.id',           'student.ub.ac.id',
+      'unibraw.ac.id',
+      'unila.ac.id',
+      'unsri.ac.id',
+      'unram.ac.id',
+      'unud.ac.id',
+      'undiksha.ac.id',
+      'unmul.ac.id',
+      'untan.ac.id',
+
+      // ── Indonesia — universitas swasta ─────────────────────
+      'binus.ac.id',        'binus.edu',         'student.binus.ac.id',
+      'gunadarma.ac.id',    'student.gunadarma.ac.id',
+      'trisakti.ac.id',
+      'atmajaya.ac.id',     'uajy.ac.id',
+      'atma.ac.id',
+      'president.ac.id',    'student.president.ac.id',
+      'umn.ac.id',          'student.umn.ac.id',
+      'mercubuana.ac.id',   'student.mercubuana.ac.id',
+      'uii.ac.id',          'students.uii.ac.id',
+      'unika.ac.id',
+      'uph.edu',
+      'untar.ac.id',
+      'petra.ac.id',        'student.petra.ac.id',
+      'ubaya.ac.id',
+      'umm.ac.id',
+      'stiki.ac.id',
+      'isbi.ac.id',
+      'isi.ac.id',
+
+      // ── Indonesia — politeknik & sekolah tinggi ────────────
+      'polinema.ac.id',
+      'pens.ac.id',
+      'tel.ac.id',          'student.tel.ac.id',
+      'poliban.ac.id',
+      'polmed.ac.id',
+      'poltekkes-denpasar.ac.id',
     };
-    if (!validTlds.contains(tld)) {
-      _err('Domain email tidak valid. Gunakan email yang benar (contoh: @gmail.com, @yahoo.com).');
+
+    // Cek exact domain ATAU suffix (misal: staff.ui.ac.id → valid karena berakhir .ui.ac.id)
+    final isValid = validDomains.contains(domain) ||
+        validDomains.any((d) => domain.endsWith('.$d'));
+    if (!isValid) {
+      _err('Domain email tidak dikenali. Gunakan email dari provider resmi (Gmail, Yahoo, Outlook, iCloud, dll) atau email institusi (.ac.id / .go.id).');
       return;
     }
     if (pass.isEmpty) { _err('Password wajib diisi.'); return; }
