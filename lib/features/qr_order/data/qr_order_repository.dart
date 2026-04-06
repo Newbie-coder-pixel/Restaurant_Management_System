@@ -111,7 +111,7 @@ class QrOrderRepository {
     // Step 1: Ambil data meja tanpa join (hindari RLS block pada branches)
     final table = await _client
         .from('restaurant_tables')
-        .select('id, table_number, branch_id, name')
+        .select('id, table_number, branch_id')
         .eq('id', tableId)
         .maybeSingle();
 
@@ -133,7 +133,7 @@ class QrOrderRepository {
       }
     }
 
-    // Step 3: Gabungkan manual — struktur sama seperti hasil join
+    // Step 3: Gabungkan manual
     return {
       ...table,
       'branches': branch,
