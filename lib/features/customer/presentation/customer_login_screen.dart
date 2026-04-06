@@ -9,22 +9,18 @@ class CustomerLoginScreen extends StatefulWidget {
 }
 
 class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
-  int  _tab     = 0;
   bool _loading = false;
   bool _obscure = true;
   bool _isSignUp = false;
-  bool _otpSent  = false;
 
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
   final _nameCtrl  = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _otpCtrl   = TextEditingController();
 
   @override
   void dispose() {
     _emailCtrl.dispose(); _passCtrl.dispose();
-    _nameCtrl.dispose();  _phoneCtrl.dispose(); _otpCtrl.dispose();
+    _nameCtrl.dispose();
     super.dispose();
   }
 
@@ -98,22 +94,6 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       _err(_translateAuthError(e.message));
     } catch (_) {
       _err('Login Google gagal. Coba lagi.');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _signInApple() async {
-    setState(() => _loading = true);
-    try {
-      await Supabase.instance.client.auth.signInWithOAuth(
-        OAuthProvider.apple,
-        redirectTo: '${Uri.base.origin}/#/customer',
-      );
-    } on AuthException catch (e) {
-      _err(_translateAuthError(e.message));
-    } catch (_) {
-      _err('Login Apple gagal. Coba lagi.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -277,42 +257,6 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       if (mounted) _err(_translateAuthError(e.message));
     } catch (_) {
       if (mounted) _err('Terjadi kesalahan. Periksa koneksi internet kamu.');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _sendOtp() async {
-    final phone = _phoneCtrl.text.trim();
-    if (phone.isEmpty) { _err('Nomor HP wajib diisi.'); return; }
-    final norm = phone.startsWith('0') ? '+62${phone.substring(1)}' : phone;
-    setState(() => _loading = true);
-    try {
-      await Supabase.instance.client.auth.signInWithOtp(phone: norm);
-      if (mounted) {
-        setState(() => _otpSent = true);
-        _info('Kode OTP dikirim ke $norm 📱');
-      }
-    } on AuthException catch (e) {
-      if (mounted) _err(_translateAuthError(e.message));
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _verifyOtp() async {
-    final phone = _phoneCtrl.text.trim();
-    final otp   = _otpCtrl.text.trim();
-    if (otp.isEmpty) { _err('Kode OTP wajib diisi.'); return; }
-    if (otp.length < 6) { _err('Kode OTP harus 6 digit.'); return; }
-    final norm = phone.startsWith('0') ? '+62${phone.substring(1)}' : phone;
-    setState(() => _loading = true);
-    try {
-      final res = await Supabase.instance.client.auth
-          .verifyOTP(phone: norm, token: otp, type: OtpType.sms);
-      if (mounted && res.user != null) widget.onLoginSuccess();
-    } on AuthException catch (e) {
-      if (mounted) _err(_translateAuthError(e.message));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -621,10 +565,6 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         icon: SizedBox(width: 20, height: 20,
           child: CustomPaint(painter: _GoogleIconPainter())),
         label: 'Lanjutkan dengan Google', onTap: _signInGoogle),
-      const SizedBox(height: 10),
-      _socialBtn(
-        icon: const Icon(Icons.apple, size: 20, color: Color(0xFF1A1A2E)),
-        label: 'Lanjutkan dengan Apple', onTap: _signInApple),
       const SizedBox(height: 24),
       const Row(children: [
         Expanded(child: Divider(color: Color(0xFFE5E7EB))),
@@ -634,37 +574,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         Expanded(child: Divider(color: Color(0xFFE5E7EB))),
       ]),
       const SizedBox(height: 20),
-      _buildTabSelector(),
-      const SizedBox(height: 20),
-      IndexedStack(index: _tab, children: [_emailForm(), _phoneForm()]),
+      _emailForm(),
     ]);
-
-  Widget _buildTabSelector() => Container(
-    padding: const EdgeInsets.all(4),
-    decoration: BoxDecoration(color: const Color(0xFFE5E7EB),
-      borderRadius: BorderRadius.circular(10)),
-    child: Row(children: [
-      Expanded(child: _tabItem('Email', 0)),
-      Expanded(child: _tabItem('No. HP / OTP', 1)),
-    ]));
-
-  Widget _tabItem(String label, int idx) {
-    final active = _tab == idx;
-    return GestureDetector(
-      onTap: () => setState(() { _tab = idx; _otpSent = false; }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: active ? [BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)] : null),
-        child: Text(label, textAlign: TextAlign.center,
-          style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
-            fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-            color: active ? const Color(0xFF1A1A2E) : const Color(0xFF6B7280)))));
-  }
 
   Widget _emailForm() => Column(
     mainAxisSize: MainAxisSize.min,
@@ -707,41 +618,6 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
           textAlign: TextAlign.center,
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
             color: Color(0xFF0F3460), fontWeight: FontWeight.w500))),
-    ]);
-
-  Widget _phoneForm() => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _field(ctrl: _phoneCtrl, hint: 'Nomor HP (081234567890)',
-        icon: Icons.phone_outlined, type: TextInputType.phone,
-        enabled: !_otpSent),
-      if (_otpSent) ...[
-        const SizedBox(height: 10),
-        _field(ctrl: _otpCtrl, hint: '6 digit kode OTP',
-          icon: Icons.security_outlined, type: TextInputType.number),
-        const SizedBox(height: 6),
-        Row(children: [
-          const Icon(Icons.info_outline, size: 13, color: Colors.grey),
-          const SizedBox(width: 4),
-          Text('Kode dikirim ke ${_phoneCtrl.text.trim()}',
-            style: const TextStyle(fontFamily: 'Poppins',
-              fontSize: 11, color: Colors.grey)),
-        ]),
-      ],
-      const SizedBox(height: 18),
-      _primaryBtn(
-        label: _otpSent ? 'Verifikasi OTP' : 'Kirim OTP',
-        onTap: _otpSent ? _verifyOtp : _sendOtp),
-      if (_otpSent) ...[
-        const SizedBox(height: 14),
-        GestureDetector(
-          onTap: () => setState(() { _otpSent = false; _otpCtrl.clear(); }),
-          child: const Text('Ganti nomor / kirim ulang OTP',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
-              color: Color(0xFF0F3460), fontWeight: FontWeight.w500))),
-      ],
     ]);
 
   Widget _socialBtn({
