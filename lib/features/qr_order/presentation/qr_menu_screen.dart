@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 
-// ─── Local Providers ──────────────────────────────────────────────────────────
-
+// Local Providers
 final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, branchId) async {
     final repo = ref.read(qrOrderRepositoryProvider);
@@ -15,15 +15,17 @@ final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, Stri
 );
 
 final _tableInfoProvider = FutureProvider.family<Map<String, dynamic>?, String>(
-    (ref, tableId) async {
-  final repo = ref.read(qrOrderRepositoryProvider);
-  return repo.fetchTableInfo(tableId);
-});
+  (ref, tableId) async {
+    final repo = ref.read(qrOrderRepositoryProvider);
+    return repo.fetchTableInfo(tableId);
+  },
+);
 
 final _selectedCategoryProvider = StateProvider<String?>((ref) => null);
 final _searchQueryProvider = StateProvider<String>((ref) => '');
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// Provider untuk menyimpan branchId agar bisa diakses di payment screen
+final _activeBranchIdProvider = StateProvider<String>((ref) => '');
 
 class QrMenuScreen extends ConsumerStatefulWidget {
   final String tableId;
@@ -116,6 +118,9 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
         final branchName = branch?['name'] as String? ?? 'Restoran';
         final tableName = (tableData?['table_number'] as String?) ?? 'Meja';
 
+        // Simpan branchId ke provider agar bisa digunakan di payment screen
+        ref.read(_activeBranchIdProvider.notifier).state = branchId;
+
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref.read(activeQrTableProvider.notifier).state =
               (tableId: widget.tableId, tableName: tableName);
@@ -137,7 +142,6 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
 }
 
 // ─── Menu Body (Responsive) ───────────────────────────────────────────────────
-
 class _MenuBody extends ConsumerWidget {
   final String tableId, tableName, branchId, branchName;
   final List<MenuItem> Function(List<Map<String, dynamic>>) parseItems;
@@ -185,7 +189,6 @@ class _MenuBody extends ConsumerWidget {
                   const Icon(Icons.wifi_off_outlined, size: 48),
                   const SizedBox(height: 12),
                   Text('Gagal memuat menu: $e'),
-                  const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => ref.invalidate(_menuDataProvider(branchId)),
                     child: const Text('Coba Lagi'),
@@ -210,16 +213,13 @@ class _MenuBody extends ConsumerWidget {
                 }
 
                 if (isWideScreen) {
-                  // === WEB / TABLET LAYOUT ===
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _CategorySidebar(
                         categories: categories,
                         selected: selectedCat,
-                        onSelect: (cat) {
-                          ref.read(_selectedCategoryProvider.notifier).state = cat;
-                        },
+                        onSelect: (cat) => ref.read(_selectedCategoryProvider.notifier).state = cat,
                       ),
                       Expanded(
                         child: _MenuContent(
@@ -231,15 +231,12 @@ class _MenuBody extends ConsumerWidget {
                     ],
                   );
                 } else {
-                  // === MOBILE LAYOUT ===
                   return Column(
                     children: [
                       _CategorySelector(
                         categories: categories,
                         selected: selectedCat,
-                        onSelect: (cat) {
-                          ref.read(_selectedCategoryProvider.notifier).state = cat;
-                        },
+                        onSelect: (cat) => ref.read(_selectedCategoryProvider.notifier).state = cat,
                       ),
                       Expanded(
                         child: _MenuContent(
@@ -266,8 +263,7 @@ class _MenuBody extends ConsumerWidget {
   }
 }
 
-// ─── Category Sidebar (Web) ───────────────────────────────────────────────────
-
+// ─── Category Sidebar (untuk Web/Laptop) ─────────────────────────────────────
 class _CategorySidebar extends StatelessWidget {
   final List<String> categories;
   final String? selected;
@@ -288,24 +284,14 @@ class _CategorySidebar extends StatelessWidget {
       width: 180,
       decoration: BoxDecoration(
         color: cs.surface,
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(2, 0)),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(2, 0))],
       ),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Text(
-              'KATEGORI',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: cs.onSurfaceVariant,
-                letterSpacing: 0.5,
-              ),
-            ),
+            child: Text('KATEGORI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
           ),
           ...all.map((label) {
             final isActive = selected == (label == 'Semua' ? null : label);
@@ -336,8 +322,7 @@ class _CategorySidebar extends StatelessWidget {
   }
 }
 
-// ─── Category Selector (Mobile) ───────────────────────────────────────────────
-
+// ─── Category Selector (untuk HP/Mobile) ─────────────────────────────────────
 class _CategorySelector extends StatelessWidget {
   final List<String> categories;
   final String? selected;
@@ -363,7 +348,6 @@ class _CategorySelector extends StatelessWidget {
         itemBuilder: (context, index) {
           final label = allCategories[index];
           final isActive = selected == (label == 'Semua' ? null : label);
-
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
@@ -385,7 +369,6 @@ class _CategorySelector extends StatelessWidget {
 }
 
 // ─── Menu Content ─────────────────────────────────────────────────────────────
-
 class _MenuContent extends StatelessWidget {
   final List<MenuItem> displayItems;
   final String tableId;
@@ -411,22 +394,16 @@ class _MenuContent extends StatelessWidget {
         ),
       );
     }
-
     return _MenuList(items: displayItems, tableId: tableId, tableName: tableName);
   }
 }
 
 // ─── Menu List ────────────────────────────────────────────────────────────────
-
 class _MenuList extends ConsumerWidget {
   final List<MenuItem> items;
   final String tableId, tableName;
 
-  const _MenuList({
-    required this.items,
-    required this.tableId,
-    required this.tableName,
-  });
+  const _MenuList({required this.items, required this.tableId, required this.tableName});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -453,6 +430,9 @@ class _MenuList extends ConsumerWidget {
     );
   }
 }
+
+// ─── Sisanya (MenuItemTile, QtyBtn, MenuImage, Header, CartFab) ───────────────
+// Silakan copy dari kode lama kamu yang sudah berjalan di HP (dari class _MenuItemTile sampai akhir)
 
 // ─── Menu Item Tile ───────────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 
-// Branch ID provider (dari menu screen)
+// Provider untuk menyimpan branch_id dari menu screen
 final _activeBranchIdProvider = StateProvider<String>((ref) => '');
 
 class QrPaymentScreen extends ConsumerStatefulWidget {
@@ -33,7 +33,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     final updatedCart = ref.read(activeQrCartProvider);
     final branchId = ref.read(_activeBranchIdProvider).trim();
 
-    // === PERBAIKAN UTAMA ===
+    // Cek apakah branchId kosong
     if (branchId.isEmpty) {
       setState(() => _isSubmitting = false);
       if (mounted) {
@@ -52,13 +52,14 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     try {
       final order = await repo.createOrder(
         session: updatedCart,
-        branchId: branchId,           // Kirim branchId yang valid
+        branchId: branchId,
       );
 
       notifier.clearCart();
 
       if (mounted) {
         if (_selected == QrPaymentMethod.qris) {
+          // Pindah ke halaman QRIS Dynamic
           context.push(
             '/qr/${widget.tableId}/qris',
             extra: {
@@ -68,6 +69,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
             },
           );
         } else {
+          // Bayar ke Kasir → langsung ke tracker
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
         }
       }
@@ -163,14 +165,10 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
   }
 }
 
-// === Bagian bawah (class-class lain) tetap sama seperti kode kamu sebelumnya ===
-// _OrderPreviewCard, _PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen
-
-// (Copy dari kode sebelumnya yang sudah saya berikan, mulai dari class _OrderPreviewCard sampai akhir)
-
 // ─── Order Preview Card ───────────────────────────────────────────────────────
 class _OrderPreviewCard extends StatelessWidget {
   final QrOrderSession cart;
+
   const _OrderPreviewCard({required this.cart});
 
   @override
@@ -214,28 +212,21 @@ class _OrderPreviewCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
                   children: [
-                    Text('${item.quantity}×',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.primary, fontWeight: FontWeight.bold)),
+                    Text('${item.quantity}×', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 6),
-                    Expanded(
-                        child: Text(item.menuItem.name,
-                            style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
+                    Expanded(child: Text(item.menuItem.name, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
                     Text(_formatPrice(item.subtotal), style: theme.textTheme.bodySmall),
                   ],
                 ),
               )),
           if (cart.items.length > 3)
-            Text('+${cart.items.length - 3} item lainnya',
-                style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+            Text('+${cart.items.length - 3} item lainnya', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
           Divider(color: colorScheme.outlineVariant, height: 20, thickness: 0.5),
           Row(
             children: [
               Text('Total', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
               const Spacer(),
-              Text(_formatPrice(cart.totalAmount),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold, color: colorScheme.primary)),
+              Text(_formatPrice(cart.totalAmount), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ],
           ),
         ],
@@ -244,9 +235,7 @@ class _OrderPreviewCard extends StatelessWidget {
   }
 
   String _formatPrice(double price) {
-    final formatted = price
-        .toStringAsFixed(0)
-        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    final formatted = price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
   }
 }
@@ -279,15 +268,13 @@ class _PaymentMethodCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        HapticFeedback.selectionClick();   // ← Sekarang sudah terdefinisi
+        HapticFeedback.selectionClick();
         onTap();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: isSelected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
-              : colorScheme.surface,
+          color: isSelected ? colorScheme.primaryContainer.withValues(alpha: 0.5) : colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
@@ -304,11 +291,7 @@ class _PaymentMethodCard extends StatelessWidget {
                 color: isSelected ? colorScheme.primary : colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(
-                icon,
-                size: 22,
-                color: isSelected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
-              ),
+              child: Icon(icon, size: 22, color: isSelected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -322,15 +305,8 @@ class _PaymentMethodCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            badge!,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.green.shade700, fontSize: 10),
-                          ),
+                          decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
+                          child: Text(badge!, style: theme.textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontSize: 10)),
                         ),
                       ],
                     ],
@@ -346,15 +322,10 @@ class _PaymentMethodCard extends StatelessWidget {
               height: 20,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? colorScheme.primary : colorScheme.outline,
-                  width: 2,
-                ),
+                border: Border.all(color: isSelected ? colorScheme.primary : colorScheme.outline, width: 2),
                 color: isSelected ? colorScheme.primary : Colors.transparent,
               ),
-              child: isSelected
-                  ? Icon(Icons.check, size: 12, color: colorScheme.onPrimary)
-                  : null,
+              child: isSelected ? Icon(Icons.check, size: 12, color: colorScheme.onPrimary) : null,
             ),
           ],
         ),
@@ -363,9 +334,10 @@ class _PaymentMethodCard extends StatelessWidget {
   }
 }
 
-// ─── QRIS Info Card & Step ────────────────────────────────────────────────────
+// ─── QRIS Info Card ───────────────────────────────────────────────────────────
 class _QrisInfoCard extends StatelessWidget {
   final double totalAmount;
+
   const _QrisInfoCard({required this.totalAmount});
 
   @override
@@ -386,9 +358,7 @@ class _QrisInfoCard extends StatelessWidget {
             children: [
               Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
               const SizedBox(width: 6),
-              Text('Cara Bayar QRIS',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                      color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+              Text('Cara Bayar QRIS', style: theme.textTheme.labelMedium?.copyWith(color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 10),
@@ -396,9 +366,7 @@ class _QrisInfoCard extends StatelessWidget {
           const _QrisStep(number: '2', text: 'Tunjukkan nomor antrian ke kasir'),
           const _QrisStep(number: '3', text: 'Kasir akan menampilkan QRIS'),
           const _QrisStep(number: '4', text: 'Scan QR dengan aplikasi dompet digitalmu'),
-          const _QrisStep(
-              number: '5',
-              text: 'Order otomatis diproses setelah pembayaran dikonfirmasi kasir'),
+          const _QrisStep(number: '5', text: 'Order otomatis diproses setelah pembayaran dikonfirmasi kasir'),
         ],
       ),
     );
@@ -422,20 +390,10 @@ class _QrisStep extends StatelessWidget {
             width: 18,
             height: 18,
             decoration: BoxDecoration(color: Colors.blue.shade600, shape: BoxShape.circle),
-            child: Center(
-              child: Text(
-                number,
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-              ),
-            ),
+            child: Center(child: Text(number, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.blue.shade800),
-            ),
-          ),
+          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.blue.shade800))),
         ],
       ),
     );
@@ -519,8 +477,7 @@ class _PaymentBottomBar extends StatelessWidget {
             children: [
               Text('Total Pembayaran', style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.outline)),
               const Spacer(),
-              Text(_formatPrice(cart.totalAmount),
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+              Text(_formatPrice(cart.totalAmount), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ],
           ),
           const SizedBox(height: 10),
@@ -547,10 +504,7 @@ class _PaymentBottomBar extends StatelessWidget {
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          method == QrPaymentMethod.qris ? Icons.qr_code_scanner_outlined : Icons.check_circle_outline,
-                          size: 20,
-                        ),
+                        Icon(method == QrPaymentMethod.qris ? Icons.qr_code_scanner_outlined : Icons.check_circle_outline, size: 20),
                         const SizedBox(width: 8),
                         Text(
                           method == QrPaymentMethod.qris ? 'Konfirmasi & Bayar QRIS' : 'Konfirmasi Pesanan',
@@ -566,9 +520,7 @@ class _PaymentBottomBar extends StatelessWidget {
   }
 
   String _formatPrice(double price) {
-    final formatted = price
-        .toStringAsFixed(0)
-        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    final formatted = price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
   }
 }
@@ -588,6 +540,7 @@ class QrQrisScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sample Dynamic QRIS (untuk testing)
     final String qrisData = "00020101021126670016ID.CO.BANKMANDIRI01189360001100000000000215200000000000000303IDR0109${totalAmount.toInt()}5200000115300036058202ID5915Restoran A1 Kartika6007Jakarta6105123456304XXXX";
 
     return Scaffold(
