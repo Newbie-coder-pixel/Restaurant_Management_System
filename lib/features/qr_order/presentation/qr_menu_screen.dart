@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/qr_cart_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../data/qr_order_repository.dart';
 
 // ─── Local Providers ──────────────────────────────────────────────────────────
@@ -23,6 +24,21 @@ final _tableInfoProvider =
 
 final _selectedCategoryProvider = StateProvider<String?>((ref) => null);
 final _searchQueryProvider      = StateProvider<String>((ref) => '');
+
+// Provider minimal: hanya query branch_id dari restaurant_tables, tanpa join
+final _branchIdProvider =
+    FutureProvider.family<String, String>((ref, tableId) async {
+  try {
+    final row = await Supabase.instance.client
+        .from('restaurant_tables')
+        .select('branch_id')
+        .eq('id', tableId)
+        .maybeSingle();
+    return (row?['branch_id'] as String?)?.trim() ?? '';
+  } catch (_) {
+    return '';
+  }
+});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -82,10 +98,11 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
 
   @override
   Widget build(BuildContext context) {
-    final tableInfo = ref.watch(_tableInfoProvider(widget.tableId));
-    final theme     = Theme.of(context);
+    final branchIdAsync  = ref.watch(_branchIdProvider(widget.tableId));
+    final tableInfoAsync = ref.watch(_tableInfoProvider(widget.tableId));
+    final theme = Theme.of(context);
 
-    return tableInfo.when(
+    return branchIdAsync.when(
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
@@ -99,8 +116,8 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
           ]),
         ),
       ),
-      data: (tableData) {
-        if (tableData == null) {
+      data: (branchId) {
+        if (branchId.isEmpty) {
           return Scaffold(
             body: Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -113,10 +130,10 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
           );
         }
 
-        final branch    = tableData['branches'] as Map<String, dynamic>?;
-        final branchId  = branch?['id'] as String? ?? '';
+        final tableData  = tableInfoAsync.valueOrNull;
+        final branch     = tableData?['branches'] as Map<String, dynamic>?;
         final branchName = branch?['name'] as String? ?? 'Restoran';
-        final tableName = (tableData['table_number'] as String?) ?? 'Meja';
+        final tableName  = (tableData?['table_number'] as String?) ?? 'Meja';
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref.read(activeQrTableProvider.notifier).state =
@@ -229,21 +246,14 @@ class _MenuBody extends ConsumerWidget {
                   // ── Daftar Menu ───────────────────────────────────────
                   Expanded(
                     child: displayItems.isEmpty
-                        ? Center(
+                        ? const Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.search_off,
+                                Icon(Icons.search_off,
                                     size: 48, color: Colors.grey),
-                                const SizedBox(height: 12),
-                                const Text('Menu tidak ditemukan'),
-                                const SizedBox(height: 8),
-                                // DEBUG: tampilkan branchId & jumlah item
-                                Text(
-                                  'branchId: "$branchId"\nrawItems: ${rawItems.length}\nallItems: ${allItems.length}',
-                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
-                                  textAlign: TextAlign.center,
-                                ),
+                                SizedBox(height: 12),
+                                Text('Menu tidak ditemukan'),
                               ],
                             ),
                           )
