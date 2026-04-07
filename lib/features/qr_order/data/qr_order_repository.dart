@@ -95,7 +95,6 @@ class QrOrderRepository {
   // ─── Fetch Menu Items by Branch ─────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
-    // Step 1: Ambil menu_items tanpa join (hindari 400 dari PostgREST FK join)
     final items = await _client
         .from('menu_items')
         .select(
@@ -110,14 +109,12 @@ class QrOrderRepository {
     final itemList = List<Map<String, dynamic>>.from(items);
     if (itemList.isEmpty) return itemList;
 
-    // Step 2: Kumpulkan category_id unik
     final categoryIds = itemList
         .map((i) => i['category_id'] as String?)
         .whereType<String>()
         .toSet()
         .toList();
 
-    // Step 3: Fetch categories terpisah
     Map<String, Map<String, dynamic>> categoryMap = {};
     if (categoryIds.isNotEmpty) {
       try {
@@ -128,12 +125,9 @@ class QrOrderRepository {
         for (final cat in List<Map<String, dynamic>>.from(categories)) {
           categoryMap[cat['id'] as String] = cat;
         }
-      } catch (_) {
-        // Lanjut tanpa kategori jika gagal
-      }
+      } catch (_) {}
     }
 
-    // Step 4: Gabungkan manual
     return itemList.map((item) {
       final catId = item['category_id'] as String?;
       return {
@@ -144,23 +138,24 @@ class QrOrderRepository {
   }
 
   // ─── Fetch Table Info ───────────────────────────────────────────────────────
-  // FIX: Ganti FK join PostgREST `branches(name, id)` → 2-step query terpisah.
-  // FK join gagal di mobile karena RLS anon/public role tidak punya permission
-  // untuk resolve foreign key ke tabel `branches` secara langsung via PostgREST.
+  // FIX: Pakai select('*') agar tidak tergantung nama kolom spesifik,
+  // lalu fetch branch secara terpisah (hindari FK join yang error 400).
 
   Future<Map<String, dynamic>?> fetchTableInfo(String tableId) async {
-    // Step 1: Ambil data meja tanpa join
+    // Step 1: Ambil semua kolom meja — tanpa FK join
     final tableRow = await _client
         .from('restaurant_tables')
-        .select('id, table_number, branch_id, status, capacity, description')
+        .select('*')
         .eq('id', tableId)
         .maybeSingle();
 
     if (tableRow == null) return null;
 
-    // Step 2: Ambil branch secara terpisah menggunakan branch_id dari meja
-    final branchId = tableRow['branch_id'] as String?;
+    // Step 2: Ambil data branch secara terpisah
+    // Coba kedua kemungkinan nama kolom: 'branch_id' atau 'branchId'
+    final branchId = (tableRow['branch_id'] ?? tableRow['branchId']) as String?;
     Map<String, dynamic>? branchData;
+
     if (branchId != null && branchId.isNotEmpty) {
       try {
         branchData = await _client
@@ -169,12 +164,12 @@ class QrOrderRepository {
             .eq('id', branchId)
             .maybeSingle();
       } catch (_) {
-        // Lanjut tanpa nama branch — branchId tetap ada untuk load menu
+        // Lanjut tanpa nama branch — branchId tetap tersedia untuk load menu
       }
     }
 
-    // Step 3: Gabungkan dengan struktur yang sama persis dengan FK join
-    // sehingga kode di qr_menu_screen.dart tidak perlu diubah sama sekali
+    // Step 3: Return dengan struktur yang sama seperti FK join
+    // sehingga qr_menu_screen.dart tidak perlu diubah
     return {
       ...tableRow,
       'branches': branchData,
