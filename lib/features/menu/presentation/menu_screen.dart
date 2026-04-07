@@ -285,7 +285,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               },
             ),
             ListTile(
-              leading: Icon(Icons.delete_outline, color: AppColors.accent),
+              leading: const Icon(Icons.delete_outline, color: AppColors.accent),
               title: const Text('Hapus Kategori',
                   style: TextStyle(fontFamily: 'Poppins')),
               onTap: () {
