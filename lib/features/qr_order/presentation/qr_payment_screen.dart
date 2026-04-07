@@ -7,7 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 
-// Provider untuk menyimpan branch_id dari menu screen
+// Provider untuk menyimpan branch_id
 final _activeBranchIdProvider = StateProvider<String>((ref) => '');
 
 class QrPaymentScreen extends ConsumerStatefulWidget {
@@ -33,7 +33,6 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     final updatedCart = ref.read(activeQrCartProvider);
     final branchId = ref.read(_activeBranchIdProvider).trim();
 
-    // Cek apakah branchId kosong
     if (branchId.isEmpty) {
       setState(() => _isSubmitting = false);
       if (mounted) {
@@ -59,7 +58,6 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
 
       if (mounted) {
         if (_selected == QrPaymentMethod.qris) {
-          // Pindah ke halaman QRIS Dynamic
           context.push(
             '/qr/${widget.tableId}/qris',
             extra: {
@@ -69,7 +67,6 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
             },
           );
         } else {
-          // Bayar ke Kasir → langsung ke tracker
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
         }
       }
@@ -113,8 +110,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Metode Pembayaran',
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  Text('Metode Pembayaran', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   _PaymentMethodCard(
                     method: QrPaymentMethod.kasir,
@@ -168,7 +164,6 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
 // ─── Order Preview Card ───────────────────────────────────────────────────────
 class _OrderPreviewCard extends StatelessWidget {
   final QrOrderSession cart;
-
   const _OrderPreviewCard({required this.cart});
 
   @override
@@ -190,10 +185,7 @@ class _OrderPreviewCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(10)),
                 child: Icon(Icons.receipt_long_outlined, color: colorScheme.primary, size: 20),
               ),
               const SizedBox(width: 10),
@@ -201,8 +193,7 @@ class _OrderPreviewCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Ringkasan Pesanan', style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
-                  Text('${cart.tableName ?? "Meja"} · ${cart.customerName ?? "Tamu"}',
-                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+                  Text('${cart.tableName ?? "Meja"} · ${cart.customerName ?? "Tamu"}', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
                 ],
               ),
             ],
@@ -239,6 +230,9 @@ class _OrderPreviewCard extends StatelessWidget {
     return 'Rp $formatted';
   }
 }
+
+// (Lanjutkan dengan _PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen seperti kode sebelumnya yang sudah saya berikan)
+
 
 // ─── Payment Method Card ──────────────────────────────────────────────────────
 class _PaymentMethodCard extends StatelessWidget {

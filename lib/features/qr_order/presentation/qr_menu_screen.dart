@@ -118,7 +118,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
         final branchName = branch?['name'] as String? ?? 'Restoran';
         final tableName = (tableData?['table_number'] as String?) ?? 'Meja';
 
-        // Simpan branchId ke provider agar bisa digunakan di payment screen
+        // === PENTING: Simpan branchId ke provider ===
         ref.read(_activeBranchIdProvider.notifier).state = branchId;
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -263,17 +263,13 @@ class _MenuBody extends ConsumerWidget {
   }
 }
 
-// ─── Category Sidebar (untuk Web/Laptop) ─────────────────────────────────────
+// ─── Category Sidebar (Web) ───────────────────────────────────────────────────
 class _CategorySidebar extends StatelessWidget {
   final List<String> categories;
   final String? selected;
   final ValueChanged<String?> onSelect;
 
-  const _CategorySidebar({
-    required this.categories,
-    required this.selected,
-    required this.onSelect,
-  });
+  const _CategorySidebar({required this.categories, required this.selected, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
@@ -322,17 +318,13 @@ class _CategorySidebar extends StatelessWidget {
   }
 }
 
-// ─── Category Selector (untuk HP/Mobile) ─────────────────────────────────────
+// ─── Category Selector (Mobile) ───────────────────────────────────────────────
 class _CategorySelector extends StatelessWidget {
   final List<String> categories;
   final String? selected;
   final ValueChanged<String?> onSelect;
 
-  const _CategorySelector({
-    required this.categories,
-    required this.selected,
-    required this.onSelect,
-  });
+  const _CategorySelector({required this.categories, required this.selected, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
@@ -374,11 +366,7 @@ class _MenuContent extends StatelessWidget {
   final String tableId;
   final String tableName;
 
-  const _MenuContent({
-    required this.displayItems,
-    required this.tableId,
-    required this.tableName,
-  });
+  const _MenuContent({required this.displayItems, required this.tableId, required this.tableName});
 
   @override
   Widget build(BuildContext context) {
@@ -431,11 +419,7 @@ class _MenuList extends ConsumerWidget {
   }
 }
 
-// ─── Sisanya (MenuItemTile, QtyBtn, MenuImage, Header, CartFab) ───────────────
-// Silakan copy dari kode lama kamu yang sudah berjalan di HP (dari class _MenuItemTile sampai akhir)
-
 // ─── Menu Item Tile ───────────────────────────────────────────────────────────
-
 class _MenuItemTile extends StatelessWidget {
   final MenuItem item;
   final int quantity;
@@ -489,11 +473,7 @@ class _MenuItemTile extends StatelessWidget {
                     Container(
                       color: Colors.black.withValues(alpha: 0.52),
                       child: const Center(
-                        child: Text('Habis',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700)),
+                        child: Text('Habis', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                       ),
                     ),
                 ],
@@ -517,10 +497,7 @@ class _MenuItemTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       item.description,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: cs.onSurfaceVariant,
-                          height: 1.3),
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.3),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -528,10 +505,7 @@ class _MenuItemTile extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     _fmt(item.price),
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: cs.primary),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.primary),
                   ),
                 ],
               ),
@@ -546,19 +520,14 @@ class _MenuItemTile extends StatelessWidget {
                       color: cs.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text('Habis',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w500)),
+                    child: Text('Habis', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
                   )
                 : inCart
                     ? Container(
                         decoration: BoxDecoration(
                           color: cs.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: cs.primary.withValues(alpha: 0.2), width: 1),
+                          border: Border.all(color: cs.primary.withValues(alpha: 0.2), width: 1),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -566,13 +535,7 @@ class _MenuItemTile extends StatelessWidget {
                             _QtyBtn(icon: Icons.remove, onTap: onRemove, cs: cs),
                             SizedBox(
                               width: 28,
-                              child: Center(
-                                child: Text('$quantity',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w800,
-                                        color: cs.primary)),
-                              ),
+                              child: Center(child: Text('$quantity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: cs.primary))),
                             ),
                             _QtyBtn(icon: Icons.add, onTap: onAdd, cs: cs),
                           ],
@@ -581,8 +544,7 @@ class _MenuItemTile extends StatelessWidget {
                     : GestureDetector(
                         onTap: onAdd,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: cs.primary,
                             borderRadius: BorderRadius.circular(10),
@@ -592,11 +554,7 @@ class _MenuItemTile extends StatelessWidget {
                             children: [
                               Icon(Icons.add, size: 14, color: cs.onPrimary),
                               const SizedBox(width: 4),
-                              Text('Tambah',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: cs.onPrimary)),
+                              Text('Tambah', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onPrimary)),
                             ],
                           ),
                         ),
@@ -607,11 +565,8 @@ class _MenuItemTile extends StatelessWidget {
     );
   }
 
-  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
-
-// ─── Qty Button ───────────────────────────────────────────────────────────────
 
 class _QtyBtn extends StatelessWidget {
   final IconData icon;
@@ -624,16 +579,10 @@ class _QtyBtn extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: SizedBox(
-        width: 32,
-        height: 32,
-        child: Icon(icon, size: 16, color: cs.primary),
-      ),
+      child: SizedBox(width: 32, height: 32, child: Icon(icon, size: 16, color: cs.primary)),
     );
   }
 }
-
-// ─── Menu Image ───────────────────────────────────────────────────────────────
 
 class _MenuImage extends StatelessWidget {
   final String? imageUrl;
@@ -650,13 +599,7 @@ class _MenuImage extends StatelessWidget {
       fit: BoxFit.cover,
       placeholder: (_, __) => Container(
         color: cs.surfaceContainerHighest,
-        child: const Center(
-          child: SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 1.5),
-          ),
-        ),
+        child: const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 1.5))),
       ),
       errorWidget: (_, __, ___) => _placeholder(),
     );
@@ -664,13 +607,9 @@ class _MenuImage extends StatelessWidget {
 
   Widget _placeholder() => Container(
         color: cs.surfaceContainerHighest,
-        child: const Center(
-          child: Icon(Icons.fastfood_outlined, size: 28, color: Colors.grey),
-        ),
+        child: const Center(child: Icon(Icons.fastfood_outlined, size: 28, color: Colors.grey)),
       );
 }
-
-// ─── Header ───────────────────────────────────────────────────────────────────
 
 class _QrMenuHeader extends StatelessWidget {
   final String tableName, branchName;
@@ -705,31 +644,20 @@ class _QrMenuHeader extends StatelessWidget {
                 Icon(Icons.restaurant, color: cs.onPrimary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(branchName,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                          color: cs.onPrimary.withValues(alpha: 0.85)),
-                      overflow: TextOverflow.ellipsis),
+                  child: Text(branchName, style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary.withValues(alpha: 0.85)), overflow: TextOverflow.ellipsis),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: cs.onPrimary.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  decoration: BoxDecoration(color: cs.onPrimary.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.table_restaurant, size: 14, color: cs.onPrimary),
                     const SizedBox(width: 4),
-                    Text(tableName,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                            color: cs.onPrimary,
-                            fontWeight: FontWeight.bold)),
+                    Text(tableName, style: theme.textTheme.labelMedium?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
                   ]),
                 ),
               ]),
               const SizedBox(height: 8),
-              Text('Pilih menu favoritmu',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                      color: cs.onPrimary, fontWeight: FontWeight.bold)),
+              Text('Pilih menu favoritmu', style: theme.textTheme.headlineSmall?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
               const SizedBox(height: 14),
               TextField(
                 controller: searchCtrl,
@@ -739,20 +667,12 @@ class _QrMenuHeader extends StatelessWidget {
                   hintText: 'Cari makanan atau minuman...',
                   prefixIcon: const Icon(Icons.search, size: 20),
                   suffixIcon: searchCtrl.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
-                          onPressed: () {
-                            searchCtrl.clear();
-                            onSearchChanged('');
-                          },
-                        )
+                      ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () { searchCtrl.clear(); onSearchChanged(''); })
                       : null,
                   filled: true,
                   fillColor: cs.surface,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   isDense: true,
                 ),
               ),
@@ -764,17 +684,11 @@ class _QrMenuHeader extends StatelessWidget {
   }
 }
 
-// ─── Cart FAB ─────────────────────────────────────────────────────────────────
-
 class _CartFab extends StatelessWidget {
   final QrOrderSession cart;
   final String tableId, tableName;
 
-  const _CartFab({
-    required this.cart,
-    required this.tableId,
-    required this.tableName,
-  });
+  const _CartFab({required this.cart, required this.tableId, required this.tableName});
 
   @override
   Widget build(BuildContext context) {
@@ -788,12 +702,7 @@ class _CartFab extends StatelessWidget {
         decoration: BoxDecoration(
           color: cs.primary,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-                color: cs.primary.withValues(alpha: 0.35),
-                blurRadius: 12,
-                offset: const Offset(0, 4))
-          ],
+          boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Stack(children: [
@@ -806,31 +715,20 @@ class _CartFab extends StatelessWidget {
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
                   constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                  child: Text('${cart.totalItems}',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center),
+                  child: Text('${cart.totalItems}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                 ),
               ),
           ]),
           const SizedBox(width: 10),
-          Text('Keranjang',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  color: cs.onPrimary, fontWeight: FontWeight.bold)),
+          Text('Keranjang', style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
           const SizedBox(width: 8),
-          Container(
-              width: 1, height: 16, color: cs.onPrimary.withValues(alpha: 0.4)),
+          Container(width: 1, height: 16, color: cs.onPrimary.withValues(alpha: 0.4)),
           const SizedBox(width: 8),
-          Text(_fmt(cart.totalAmount),
-              style: theme.textTheme.labelLarge?.copyWith(
-                  color: cs.onPrimary, fontWeight: FontWeight.bold)),
+          Text(_fmt(cart.totalAmount), style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
         ]),
       ),
     );
   }
 
-  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
