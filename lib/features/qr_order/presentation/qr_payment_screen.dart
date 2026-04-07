@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart';           // ← Ini yang diperbaiki
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 
-// Branch ID provider (set from tableInfo in menu screen via activeQrTableProvider)
+// Branch ID provider
 final _activeBranchIdProvider = StateProvider<String>((ref) => '');
 
 class QrPaymentScreen extends ConsumerStatefulWidget {
@@ -28,7 +30,6 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     final notifier = ref.read(activeQrCartNotifierProvider);
     notifier.setPaymentMethod(_selected);
 
-    // Re-read after update
     final updatedCart = ref.read(activeQrCartProvider);
     final branchId = ref.read(_activeBranchIdProvider);
 
@@ -40,19 +41,28 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
         branchId: branchId.isNotEmpty ? branchId : 'default',
       );
 
-      // Clear cart after success
       notifier.clearCart();
 
       if (mounted) {
-        // Navigate to tracker, remove all previous routes (can't go back to order)
-        context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
+        if (_selected == QrPaymentMethod.qris) {
+          context.push(
+            '/qr/${widget.tableId}/qris',
+            extra: {
+              'orderId': order.id,
+              'totalAmount': updatedCart.totalAmount,
+              'tableId': widget.tableId,
+            },
+          );
+        } else {
+          context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
+        }
       }
     } catch (e) {
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal membuat pesanan: ${e.toString()}'),
+            content: Text('Gagal membuat pesanan: $e'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -74,15 +84,12 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
       ),
       body: CustomScrollView(
         slivers: [
-          // ── Order Preview ────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: _OrderPreviewCard(cart: cart),
             ),
           ),
-
-          // ── Payment Methods ──────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -90,8 +97,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Metode Pembayaran',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.bold)),
+                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   _PaymentMethodCard(
                     method: QrPaymentMethod.kasir,
@@ -100,8 +106,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
                     subtitle: 'Bayar tunai atau kartu di kasir',
                     icon: Icons.point_of_sale_outlined,
                     badge: 'Rekomendasi',
-                    onTap: () =>
-                        setState(() => _selected = QrPaymentMethod.kasir),
+                    onTap: () => setState(() => _selected = QrPaymentMethod.kasir),
                   ),
                   const SizedBox(height: 10),
                   _PaymentMethodCard(
@@ -110,15 +115,12 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
                     title: 'QRIS',
                     subtitle: 'Scan QR code untuk bayar digital',
                     icon: Icons.qr_code_scanner_outlined,
-                    onTap: () =>
-                        setState(() => _selected = QrPaymentMethod.qris),
+                    onTap: () => setState(() => _selected = QrPaymentMethod.qris),
                   ),
                 ],
               ),
             ),
           ),
-
-          // ── QRIS Info (conditional) ──────────────────────────────────────
           if (_selected == QrPaymentMethod.qris)
             SliverToBoxAdapter(
               child: Padding(
@@ -126,22 +128,14 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
                 child: _QrisInfoCard(totalAmount: cart.totalAmount),
               ),
             ),
-
-          // ── Notes ────────────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
-              child: _NotesSection(
-                onChanged: (val) {
-                  // notes for the whole order can be stored separately
-                },
-              ),
+              child: _NotesSection(onChanged: (val) {}),
             ),
           ),
         ],
       ),
-
-      // ── Bottom: Confirm Order ──────────────────────────────────────────────
       bottomNavigationBar: _PaymentBottomBar(
         cart: cart,
         method: _selected,
@@ -152,11 +146,9 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
   }
 }
 
-// ─── Order Preview ────────────────────────────────────────────────────────────
-
+// ─── Order Preview Card ───────────────────────────────────────────────────────
 class _OrderPreviewCard extends StatelessWidget {
   final QrOrderSession cart;
-
   const _OrderPreviewCard({required this.cart});
 
   @override
@@ -182,21 +174,15 @@ class _OrderPreviewCard extends StatelessWidget {
                   color: colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.receipt_long_outlined,
-                    color: colorScheme.primary, size: 20),
+                child: Icon(Icons.receipt_long_outlined, color: colorScheme.primary, size: 20),
               ),
               const SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Ringkasan Pesanan',
-                      style: theme.textTheme.labelLarge
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                  Text(
-                    '${cart.tableName ?? "Meja"} · ${cart.customerName ?? "Tamu"}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: colorScheme.outline),
-                  ),
+                  Text('Ringkasan Pesanan', style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  Text('${cart.tableName ?? "Meja"} · ${cart.customerName ?? "Tamu"}',
+                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
                 ],
               ),
             ],
@@ -208,39 +194,26 @@ class _OrderPreviewCard extends StatelessWidget {
                   children: [
                     Text('${item.quantity}×',
                         style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.primary,
-                            fontWeight: FontWeight.bold)),
+                            color: colorScheme.primary, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 6),
                     Expanded(
                         child: Text(item.menuItem.name,
-                            style: theme.textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis)),
-                    Text(_formatPrice(item.subtotal),
-                        style: theme.textTheme.bodySmall),
+                            style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
+                    Text(_formatPrice(item.subtotal), style: theme.textTheme.bodySmall),
                   ],
                 ),
               )),
           if (cart.items.length > 3)
-            Text(
-              '+${cart.items.length - 3} item lainnya',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: colorScheme.outline),
-            ),
-          Divider(
-              color: colorScheme.outlineVariant, height: 20, thickness: 0.5),
+            Text('+${cart.items.length - 3} item lainnya',
+                style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+          Divider(color: colorScheme.outlineVariant, height: 20, thickness: 0.5),
           Row(
             children: [
-              Text('Total',
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
+              Text('Total', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
               const Spacer(),
-              Text(
-                _formatPrice(cart.totalAmount),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
-                ),
-              ),
+              Text(_formatPrice(cart.totalAmount),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ],
           ),
         ],
@@ -251,14 +224,12 @@ class _OrderPreviewCard extends StatelessWidget {
   String _formatPrice(double price) {
     final formatted = price
         .toStringAsFixed(0)
-        .replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
   }
 }
 
 // ─── Payment Method Card ──────────────────────────────────────────────────────
-
 class _PaymentMethodCard extends StatelessWidget {
   final QrPaymentMethod method;
   final QrPaymentMethod selected;
@@ -286,7 +257,7 @@ class _PaymentMethodCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        HapticFeedback.selectionClick();
+        HapticFeedback.selectionClick();   // ← Sekarang sudah terdefinisi
         onTap();
       },
       child: AnimatedContainer(
@@ -297,8 +268,7 @@ class _PaymentMethodCard extends StatelessWidget {
               : colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color:
-                isSelected ? colorScheme.primary : colorScheme.outlineVariant,
+            color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
             width: isSelected ? 2 : 0.8,
           ),
         ),
@@ -309,17 +279,13 @@ class _PaymentMethodCard extends StatelessWidget {
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? colorScheme.primary
-                    : colorScheme.surfaceContainerHighest,
+                color: isSelected ? colorScheme.primary : colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 icon,
                 size: 22,
-                color: isSelected
-                    ? colorScheme.onPrimary
-                    : colorScheme.onSurfaceVariant,
+                color: isSelected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(width: 12),
@@ -329,14 +295,11 @@ class _PaymentMethodCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(title,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.bold)),
+                      Text(title, style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
                       if (badge != null) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.green.shade100,
                             borderRadius: BorderRadius.circular(4),
@@ -344,17 +307,14 @@ class _PaymentMethodCard extends StatelessWidget {
                           child: Text(
                             badge!,
                             style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.green.shade700,
-                                fontSize: 10),
+                                color: Colors.green.shade700, fontSize: 10),
                           ),
                         ),
                       ],
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: colorScheme.outline)),
+                  Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
                 ],
               ),
             ),
@@ -365,16 +325,13 @@ class _PaymentMethodCard extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected
-                      ? colorScheme.primary
-                      : colorScheme.outline,
+                  color: isSelected ? colorScheme.primary : colorScheme.outline,
                   width: 2,
                 ),
                 color: isSelected ? colorScheme.primary : Colors.transparent,
               ),
               child: isSelected
-                  ? Icon(Icons.check,
-                      size: 12, color: colorScheme.onPrimary)
+                  ? Icon(Icons.check, size: 12, color: colorScheme.onPrimary)
                   : null,
             ),
           ],
@@ -384,11 +341,9 @@ class _PaymentMethodCard extends StatelessWidget {
   }
 }
 
-// ─── QRIS Info Card ───────────────────────────────────────────────────────────
-
+// ─── QRIS Info Card & Step ────────────────────────────────────────────────────
 class _QrisInfoCard extends StatelessWidget {
   final double totalAmount;
-
   const _QrisInfoCard({required this.totalAmount});
 
   @override
@@ -407,31 +362,21 @@ class _QrisInfoCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline,
-                  size: 16, color: Colors.blue.shade700),
+              Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
               const SizedBox(width: 6),
-              Text(
-                'Cara Bayar QRIS',
-                style: theme.textTheme.labelMedium?.copyWith(
-                    color: Colors.blue.shade700,
-                    fontWeight: FontWeight.bold),
-              ),
+              Text('Cara Bayar QRIS',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                      color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 10),
-          const _QrisStep(
-              number: '1',
-              text: 'Tekan tombol "Konfirmasi Pesanan" di bawah'),
-          const _QrisStep(
-              number: '2', text: 'Tunjukkan nomor antrian ke kasir'),
+          const _QrisStep(number: '1', text: 'Tekan tombol "Konfirmasi Pesanan" di bawah'),
+          const _QrisStep(number: '2', text: 'Tunjukkan nomor antrian ke kasir'),
           const _QrisStep(number: '3', text: 'Kasir akan menampilkan QRIS'),
-          const _QrisStep(
-              number: '4',
-              text: 'Scan QR dengan aplikasi dompet digitalmu'),
+          const _QrisStep(number: '4', text: 'Scan QR dengan aplikasi dompet digitalmu'),
           const _QrisStep(
               number: '5',
-              text:
-                  'Order otomatis diproses setelah pembayaran dikonfirmasi kasir'),
+              text: 'Order otomatis diproses setelah pembayaran dikonfirmasi kasir'),
         ],
       ),
     );
@@ -454,17 +399,11 @@ class _QrisStep extends StatelessWidget {
           Container(
             width: 18,
             height: 18,
-            decoration: BoxDecoration(
-              color: Colors.blue.shade600,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: Colors.blue.shade600, shape: BoxShape.circle),
             child: Center(
               child: Text(
                 number,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -472,9 +411,7 @@ class _QrisStep extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.blue.shade800,
-                  ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.blue.shade800),
             ),
           ),
         ],
@@ -484,7 +421,6 @@ class _QrisStep extends StatelessWidget {
 }
 
 // ─── Notes Section ────────────────────────────────────────────────────────────
-
 class _NotesSection extends StatelessWidget {
   final ValueChanged<String>? onChanged;
 
@@ -507,12 +443,9 @@ class _NotesSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.edit_note_outlined,
-                  size: 18, color: colorScheme.primary),
+              Icon(Icons.edit_note_outlined, size: 18, color: colorScheme.primary),
               const SizedBox(width: 8),
-              Text('Catatan (Opsional)',
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
+              Text('Catatan (Opsional)', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 12),
@@ -520,13 +453,9 @@ class _NotesSection extends StatelessWidget {
             onChanged: onChanged,
             maxLines: 3,
             decoration: InputDecoration(
-              hintText:
-                  'Contoh: tidak pedas, alergi kacang, dll...',
+              hintText: 'Contoh: tidak pedas, alergi kacang, dll...',
               filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.all(12),
             ),
           ),
@@ -537,7 +466,6 @@ class _NotesSection extends StatelessWidget {
 }
 
 // ─── Payment Bottom Bar ───────────────────────────────────────────────────────
-
 class _PaymentBottomBar extends StatelessWidget {
   final QrOrderSession cart;
   final QrPaymentMethod method;
@@ -557,29 +485,20 @@ class _PaymentBottomBar extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(
-          16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        border: Border(
-            top: BorderSide(color: colorScheme.outlineVariant, width: 0.5)),
+        border: Border(top: BorderSide(color: colorScheme.outlineVariant, width: 0.5)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Text('Total Pembayaran',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: colorScheme.outline)),
+              Text('Total Pembayaran', style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.outline)),
               const Spacer(),
-              Text(
-                _formatPrice(cart.totalAmount),
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
-                ),
-              ),
+              Text(_formatPrice(cart.totalAmount),
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ],
           ),
           const SizedBox(height: 10),
@@ -591,47 +510,29 @@ class _PaymentBottomBar extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: colorScheme.primary,
                 foregroundColor: colorScheme.onPrimary,
-                disabledBackgroundColor:
-                    colorScheme.primary.withValues(alpha: 0.5),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
               child: isLoading
-                  ? Row(
+                  ? const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            color: colorScheme.onPrimary,
-                            strokeWidth: 2,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text('Memproses...',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                                color: colorScheme.onPrimary)),
+                        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                        SizedBox(width: 10),
+                        Text('Memproses...'),
                       ],
                     )
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          method == QrPaymentMethod.qris
-                              ? Icons.qr_code_scanner_outlined
-                              : Icons.check_circle_outline,
+                          method == QrPaymentMethod.qris ? Icons.qr_code_scanner_outlined : Icons.check_circle_outline,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          method == QrPaymentMethod.qris
-                              ? 'Konfirmasi & Bayar QRIS'
-                              : 'Konfirmasi Pesanan',
-                          style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.onPrimary,
-                              fontWeight: FontWeight.bold),
+                          method == QrPaymentMethod.qris ? 'Konfirmasi & Bayar QRIS' : 'Konfirmasi Pesanan',
+                          style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -645,8 +546,99 @@ class _PaymentBottomBar extends StatelessWidget {
   String _formatPrice(double price) {
     final formatted = price
         .toStringAsFixed(0)
-        .replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
+  }
+}
+
+// ─── QRIS Dynamic Screen ──────────────────────────────────────────────────────
+class QrQrisScreen extends StatelessWidget {
+  final String tableId;
+  final String orderId;
+  final double totalAmount;
+
+  const QrQrisScreen({
+    super.key,
+    required this.tableId,
+    required this.orderId,
+    required this.totalAmount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String qrisData = "00020101021126670016ID.CO.BANKMANDIRI01189360001100000000000215200000000000000303IDR0109${totalAmount.toInt()}5200000115300036058202ID5915Restoran A1 Kartika6007Jakarta6105123456304XXXX";
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bayar dengan QRIS')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    const Text('Total yang harus dibayar', style: TextStyle(fontSize: 16)),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Rp ${totalAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
+                      style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15)],
+              ),
+              child: QrImageView(
+                data: qrisData,
+                version: QrVersions.auto,
+                size: 280,
+                gapless: false,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Scan QRIS ini menggunakan aplikasi\nbank atau e-wallet kamu',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, height: 1.4),
+            ),
+            const SizedBox(height: 40),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(16)),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Cara Membayar:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 12),
+                  Text('1. Buka aplikasi bank / dompet digital'),
+                  Text('2. Pilih menu Scan QR'),
+                  Text('3. Arahkan kamera ke QR code di atas'),
+                  Text('4. Nominal akan muncul otomatis'),
+                  Text('5. Konfirmasi pembayaran'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+            ElevatedButton.icon(
+              onPressed: () => context.go('/qr/$tableId/track/$orderId'),
+              icon: const Icon(Icons.receipt_long),
+              label: const Text('Lihat Status Pesanan'),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
