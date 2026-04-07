@@ -195,6 +195,111 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     );
   }
 
+  // ─── Edit Kategori ──────────────────────────────────────────────────────────
+
+  Future<void> _showEditCategoryDialog(MenuCategory cat) async {
+    final nameCtrl = TextEditingController(text: cat.name);
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Kategori',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Nama Kategori *',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            onPressed: () async {
+              final newName = nameCtrl.text.trim();
+              if (newName.isEmpty) return;
+              try {
+                await Supabase.instance.client
+                    .from('menu_categories')
+                    .update({'name': newName})
+                    .eq('id', cat.id);
+                if (ctx.mounted) Navigator.pop(ctx);
+                await _load();
+              } on PostgrestException catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text('Gagal menyimpan: ${e.message}'),
+                    backgroundColor: Colors.red,
+                  ));
+                }
+              } catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                  ));
+                }
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+    nameCtrl.dispose();
+  }
+
+  // ─── Opsi Kategori (Edit / Hapus) ──────────────────────────────────────────
+
+  void _showCategoryOptions(MenuCategory cat) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                cat.name,
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15),
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, color: AppColors.primary),
+              title: const Text('Edit Nama Kategori',
+                  style: TextStyle(fontFamily: 'Poppins')),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showEditCategoryDialog(cat);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: AppColors.accent),
+              title: const Text('Hapus Kategori',
+                  style: TextStyle(fontFamily: 'Poppins')),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showDeleteCategoryDialog(cat);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ─── Tambah Menu ────────────────────────────────────────────────────────────
 
   Future<void> _showAddItemDialog() async {
@@ -469,7 +574,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                       return GestureDetector(
                         onTap: () => setState(() => _selectedCategoryId = cat.id),
                         onLongPress: _canEdit
-                            ? () => _showDeleteCategoryDialog(cat)
+                            ? () => _showCategoryOptions(cat)
                             : null,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 150),
