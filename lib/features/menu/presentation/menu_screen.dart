@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../shared/models/menu_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
@@ -197,12 +198,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   // ─── Tambah Menu ────────────────────────────────────────────────────────────
 
   Future<void> _showAddItemDialog() async {
-    final nameCtrl  = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final descCtrl  = TextEditingController();
-    final imageCtrl = TextEditingController();
-    String? selCatId = _selectedCategoryId;
-    String? previewUrl;
+    final nameCtrl    = TextEditingController();
+    final priceCtrl   = TextEditingController();
+    final descCtrl    = TextEditingController();
+    String? selCatId  = _selectedCategoryId;
+    String? imageUrlResult;
 
     if (!mounted) return;
     await showDialog(
@@ -212,15 +212,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           title: const Text('Tambah Menu',
               style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
           content: _MenuItemForm(
-            nameCtrl:   nameCtrl,
-            priceCtrl:  priceCtrl,
-            descCtrl:   descCtrl,
-            imageCtrl:  imageCtrl,
-            selCatId:   selCatId,
-            previewUrl: previewUrl,
+            nameCtrl:  nameCtrl,
+            priceCtrl: priceCtrl,
+            descCtrl:  descCtrl,
+            selCatId:  selCatId,
             categories: _categories,
-            onCatChanged:     (v) => ss(() => selCatId   = v),
-            onPreviewChanged: (v) => ss(() => previewUrl = v),
+            onCatChanged:      (v) => ss(() => selCatId      = v),
+            onImageUrlChanged: (v) => ss(() => imageUrlResult = v),
           ),
           actions: [
             TextButton(
@@ -233,14 +231,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 if (nameCtrl.text.trim().isEmpty ||
                     priceCtrl.text.trim().isEmpty) { return; }
                 try {
-                  final imageUrl = imageCtrl.text.trim();
                   await Supabase.instance.client.from('menu_items').insert({
                     'branch_id':   _branchId,
                     'category_id': selCatId,
                     'name':        nameCtrl.text.trim(),
                     'price':       double.tryParse(priceCtrl.text.trim()) ?? 0,
                     'description': descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
-                    'image_url':   imageUrl.isEmpty ? null : imageUrl,
+                    'image_url':   imageUrlResult,
                     'is_available': true,
                   });
                   if (ctx.mounted) Navigator.pop(ctx);
@@ -268,9 +265,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     final nameCtrl  = TextEditingController(text: item.name);
     final priceCtrl = TextEditingController(text: item.price.toStringAsFixed(0));
     final descCtrl  = TextEditingController(text: item.description ?? '');
-    final imageCtrl = TextEditingController(text: item.imageUrl ?? '');
-    String? selCatId   = item.categoryId;
-    String? previewUrl = item.imageUrl?.isNotEmpty == true ? item.imageUrl : null;
+    String? selCatId      = item.categoryId;
+    String? imageUrlResult = item.imageUrl?.isNotEmpty == true ? item.imageUrl : null;
 
     if (!mounted) return;
     await showDialog(
@@ -280,15 +276,14 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           title: const Text('Edit Menu',
               style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
           content: _MenuItemForm(
-            nameCtrl:   nameCtrl,
-            priceCtrl:  priceCtrl,
-            descCtrl:   descCtrl,
-            imageCtrl:  imageCtrl,
-            selCatId:   selCatId,
-            previewUrl: previewUrl,
+            nameCtrl:  nameCtrl,
+            priceCtrl: priceCtrl,
+            descCtrl:  descCtrl,
+            selCatId:  selCatId,
+            initialImageUrl: item.imageUrl,
             categories: _categories,
-            onCatChanged:     (v) => ss(() => selCatId   = v),
-            onPreviewChanged: (v) => ss(() => previewUrl = v),
+            onCatChanged:      (v) => ss(() => selCatId      = v),
+            onImageUrlChanged: (v) => ss(() => imageUrlResult = v),
           ),
           actions: [
             TextButton(
@@ -301,7 +296,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 if (nameCtrl.text.trim().isEmpty ||
                     priceCtrl.text.trim().isEmpty) { return; }
                 try {
-                  final imageUrl = imageCtrl.text.trim();
                   await Supabase.instance.client
                       .from('menu_items')
                       .update({
@@ -309,7 +303,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         'name':        nameCtrl.text.trim(),
                         'price':       double.tryParse(priceCtrl.text.trim()) ?? 0,
                         'description': descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
-                        'image_url':   imageUrl.isEmpty ? null : imageUrl,
+                        'image_url':   imageUrlResult,
                       })
                       .eq('id', item.id);
                   if (ctx.mounted) Navigator.pop(ctx);
@@ -543,82 +537,128 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
 // ─── Reusable Form Widget (dipakai di Add & Edit) ─────────────────────────────
 
-class _MenuItemForm extends StatelessWidget {
-  final TextEditingController nameCtrl, priceCtrl, descCtrl, imageCtrl;
+class _MenuItemForm extends StatefulWidget {
+  final TextEditingController nameCtrl, priceCtrl, descCtrl;
   final String? selCatId;
-  final String? previewUrl;
+  final String? initialImageUrl;
   final List<MenuCategory> categories;
   final ValueChanged<String?> onCatChanged;
-  final ValueChanged<String?> onPreviewChanged;
+  final ValueChanged<String?> onImageUrlChanged;
 
   const _MenuItemForm({
     required this.nameCtrl,
     required this.priceCtrl,
     required this.descCtrl,
-    required this.imageCtrl,
     required this.selCatId,
-    required this.previewUrl,
     required this.categories,
     required this.onCatChanged,
-    required this.onPreviewChanged,
+    required this.onImageUrlChanged,
+    this.initialImageUrl,
   });
 
   @override
+  State<_MenuItemForm> createState() => _MenuItemFormState();
+}
+
+class _MenuItemFormState extends State<_MenuItemForm> {
+  // 0 = pilih, 1 = upload file, 2 = url
+  int _imageMode = 0;
+  final _urlCtrl = TextEditingController();
+  String? _previewUrl;
+  bool       _isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty) {
+      _previewUrl = widget.initialImageUrl;
+      _imageMode  = 2;
+      _urlCtrl.text = widget.initialImageUrl!;
+      // Beritahu parent URL awal
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onImageUrlChanged(widget.initialImageUrl);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAndUpload() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source:     ImageSource.gallery,
+      maxWidth:   1200,
+      maxHeight:  1200,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    final bytes    = await picked.readAsBytes();
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${picked.name}';
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      await Supabase.instance.client.storage
+          .from('menu-images')
+          .uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: picked.mimeType ?? 'image/jpeg',
+              upsert: true,
+            ),
+          );
+
+      final publicUrl = Supabase.instance.client.storage
+          .from('menu-images')
+          .getPublicUrl(fileName);
+
+      setState(() {
+        _previewUrl  = publicUrl;
+        _isUploading = false;
+      });
+      widget.onImageUrlChanged(publicUrl);
+    } catch (e) {
+      setState(() => _isUploading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal upload: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       width: 400,
       child: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Preview gambar
-          if (previewUrl != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: CachedNetworkImage(
-                imageUrl: previewUrl!,
-                height: 140,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => Container(
-                  height: 140,
-                  color: Colors.grey[200],
-                  child: const Center(
-                    child: Icon(Icons.broken_image_outlined,
-                        color: Colors.grey, size: 40)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
 
-          // URL Gambar
-          TextField(
-            controller: imageCtrl,
-            decoration: InputDecoration(
-              labelText: 'URL Gambar',
-              hintText: 'https://...',
-              prefixIcon: const Icon(Icons.image_outlined),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.visibility_outlined),
-                tooltip: 'Preview',
-                onPressed: () {
-                  final url = imageCtrl.text.trim();
-                  onPreviewChanged(url.isNotEmpty ? url : null);
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
+          // ── Area Gambar ─────────────────────────────────────────────
+          _buildImageSection(cs),
+          const SizedBox(height: 16),
 
           // Nama
           TextField(
-            controller: nameCtrl,
+            controller: widget.nameCtrl,
             decoration: const InputDecoration(labelText: 'Nama Menu *'),
           ),
           const SizedBox(height: 12),
 
           // Harga
           TextField(
-            controller: priceCtrl,
+            controller: widget.priceCtrl,
             decoration: const InputDecoration(
                 labelText: 'Harga *', prefixText: 'Rp '),
             keyboardType: TextInputType.number,
@@ -627,7 +667,7 @@ class _MenuItemForm extends StatelessWidget {
 
           // Deskripsi
           TextField(
-            controller: descCtrl,
+            controller: widget.descCtrl,
             decoration: const InputDecoration(labelText: 'Deskripsi'),
             maxLines: 2,
           ),
@@ -635,19 +675,152 @@ class _MenuItemForm extends StatelessWidget {
 
           // Dropdown Kategori
           DropdownButtonFormField<String>(
-            initialValue: selCatId,
+            initialValue: widget.selCatId,
             decoration: const InputDecoration(labelText: 'Kategori'),
-            items: categories.map((c) => DropdownMenuItem(
+            items: widget.categories.map((c) => DropdownMenuItem(
               value: c.id,
               child: Text(c.name,
                   style: const TextStyle(fontFamily: 'Poppins')),
             )).toList(),
-            onChanged: onCatChanged,
+            onChanged: widget.onCatChanged,
           ),
         ]),
       ),
     );
   }
+
+  Widget _buildImageSection(ColorScheme cs) {
+    // Preview jika ada
+    Widget preview = _previewUrl != null
+        ? ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+            child: Stack(children: [
+              CachedNetworkImage(
+                imageUrl: _previewUrl!,
+                height:   150,
+                width:    double.infinity,
+                fit:      BoxFit.cover,
+                errorWidget: (_, __, ___) => _imagePlaceholderBox(cs),
+              ),
+              // Tombol ganti foto
+              Positioned(
+                top: 8, right: 8,
+                child: GestureDetector(
+                  onTap: () => setState(() {
+                    _previewUrl = null;
+                    _imageMode  = 0;
+                    _urlCtrl.clear();
+                    widget.onImageUrlChanged(null);
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                        color: Colors.black54, shape: BoxShape.circle),
+                    child: const Icon(Icons.close, size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            ]),
+          )
+        : const SizedBox.shrink();
+
+    return Container(
+      decoration: BoxDecoration(
+        border:       Border.all(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (_previewUrl != null) preview,
+
+        if (_isUploading)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 8),
+              Text('Mengupload gambar...', style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+            ]),
+          )
+        else if (_imageMode == 0 || _previewUrl == null) ...[
+          // Mode pilih: dua tombol
+          if (_previewUrl == null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('Pilih gambar', style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 10),
+                Row(children: [
+                  // Tombol Upload
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() => _imageMode = 1);
+                        _pickAndUpload();
+                      },
+                      icon:  const Icon(Icons.upload_file_outlined, size: 18),
+                      label: const Text('Upload File',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Tombol URL
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => setState(() => _imageMode = 2),
+                      icon:  const Icon(Icons.link, size: 18),
+                      label: const Text('Pakai URL',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
+
+          // Mode URL: tampilkan input
+          if (_imageMode == 2 && _previewUrl == null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _urlCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'URL Gambar',
+                      hintText:  'https://...',
+                      isDense:   true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
+                  onPressed: () {
+                    final url = _urlCtrl.text.trim();
+                    if (url.isEmpty) return;
+                    setState(() => _previewUrl = url);
+                    widget.onImageUrlChanged(url);
+                  },
+                  child: const Text('OK', style: TextStyle(fontFamily: 'Poppins')),
+                ),
+              ]),
+            ),
+        ],
+      ]),
+    );
+  }
+
+  Widget _imagePlaceholderBox(ColorScheme cs) => Container(
+        height: 150,
+        color: cs.surfaceContainerHighest,
+        child: Center(
+          child: Icon(Icons.broken_image_outlined,
+              size: 40, color: cs.onSurfaceVariant),
+        ),
+      );
 }
 
 // ─── Menu Item Card ───────────────────────────────────────────────────────────
