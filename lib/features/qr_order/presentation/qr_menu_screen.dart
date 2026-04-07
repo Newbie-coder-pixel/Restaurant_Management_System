@@ -368,86 +368,83 @@ class _CategorySidebar extends StatelessWidget {
     required this.onSelect,
   });
 
-  static const _icons = <String, IconData>{
-    'Makanan': Icons.rice_bowl_outlined,
-    'Minuman': Icons.local_drink_outlined,
-    'Snack':   Icons.cookie_outlined,
-    'Dessert': Icons.cake_outlined,
-    'Paket':   Icons.lunch_dining_outlined,
-    'Promo':   Icons.local_offer_outlined,
-    'Lainnya': Icons.more_horiz,
-  };
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-
-    // "Semua" selalu di posisi pertama, diikuti kategori dari data
+    final cs = Theme.of(context).colorScheme;
     final all = ['Semua', ...categories];
 
     return Container(
-      width: 72,
+      width: 160,
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.25),
-        border: Border(
-          right: BorderSide(
-              color: cs.outlineVariant.withValues(alpha: 0.4), width: 1),
-        ),
+        color: cs.surface,
+        boxShadow: [
+          BoxShadow(
+              color:     Colors.black.withValues(alpha: 0.05),
+              blurRadius: 4,
+              offset:    const Offset(2, 0)),
+        ],
       ),
-      child: ListView.separated(
-        padding:          const EdgeInsets.symmetric(vertical: 12),
-        itemCount:        all.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 4),
-        itemBuilder: (context, i) {
-          final label   = all[i];
-          final isSemua = label == 'Semua';
-          final isActive = isSemua ? selected == null : selected == label;
-          final icon    = isSemua
-              ? Icons.apps_rounded
-              : (_icons[label] ?? Icons.fastfood_outlined);
-
-          return GestureDetector(
-            onTap: () {
-              if (isSemua) {
-                onSelect(null); // reset ke "Semua" = tampilkan semua
-              } else {
-                // Toggle: kalau sudah aktif → kembali ke semua, kalau belum → pilih
-                onSelect(selected == label ? null : label);
-              }
-            },
-            child: AnimatedContainer(
-              duration:  const Duration(milliseconds: 200),
-              margin:    const EdgeInsets.symmetric(horizontal: 6),
-              padding:   const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? cs.primary
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(
-                  icon,
-                  size:  22,
-                  color: isActive ? cs.onPrimary : cs.onSurfaceVariant,
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  label,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color:      isActive ? cs.onPrimary : cs.onSurfaceVariant,
-                    fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
-                    fontSize:   10,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines:  2,
-                  overflow:  TextOverflow.ellipsis,
-                ),
-              ]),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          // Header "KATEGORI"
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Text(
+              'KATEGORI',
+              style: TextStyle(
+                  fontSize:      11,
+                  fontWeight:    FontWeight.w600,
+                  color:         cs.onSurfaceVariant,
+                  letterSpacing: 1),
             ),
-          );
-        },
+          ),
+
+          // Item "Semua"
+          GestureDetector(
+            onTap: () => onSelect(null),
+            child: AnimatedContainer(
+              duration:   const Duration(milliseconds: 150),
+              margin:     const EdgeInsets.fromLTRB(8, 2, 8, 2),
+              padding:    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color:        selected == null ? cs.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Semua',
+                style: TextStyle(
+                    fontSize:   13,
+                    fontWeight: selected == null ? FontWeight.w600 : FontWeight.normal,
+                    color:      selected == null ? cs.onPrimary : cs.onSurfaceVariant),
+              ),
+            ),
+          ),
+
+          // Item tiap kategori
+          ...all.skip(1).map((label) {
+            final isActive = selected == label;
+            return GestureDetector(
+              onTap: () => onSelect(isActive ? null : label),
+              child: AnimatedContainer(
+                duration:   const Duration(milliseconds: 150),
+                margin:     const EdgeInsets.fromLTRB(8, 2, 8, 2),
+                padding:    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color:        isActive ? cs.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                      fontSize:   13,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                      color:      isActive ? cs.onPrimary : cs.onSurfaceVariant),
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
