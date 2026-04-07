@@ -113,10 +113,14 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
           );
         }
 
-        final branch    = tableData['branches'] as Map<String, dynamic>?;
-        final branchId  = branch?['id'] as String? ?? '';
+        final branch     = tableData['branches'] as Map<String, dynamic>?;
+        // FIX: Ambil branchId langsung dari kolom 'branch_id' di tabel meja,
+        // tidak bergantung pada nested 'branches' object yang bisa null.
+        final branchId   = (tableData['branch_id'] as String?)
+                        ?? branch?['id'] as String?
+                        ?? '';
         final branchName = branch?['name'] as String? ?? 'Restoran';
-        final tableName = (tableData['table_number'] as String?) ?? 'Meja';
+        final tableName  = (tableData['table_number'] as String?) ?? 'Meja';
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref.read(activeQrTableProvider.notifier).state =
