@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';           // ← Ini yang diperbaiki
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -7,7 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 
-// Branch ID provider
+// Branch ID provider (dari menu screen)
 final _activeBranchIdProvider = StateProvider<String>((ref) => '');
 
 class QrPaymentScreen extends ConsumerStatefulWidget {
@@ -31,14 +31,28 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     notifier.setPaymentMethod(_selected);
 
     final updatedCart = ref.read(activeQrCartProvider);
-    final branchId = ref.read(_activeBranchIdProvider);
+    final branchId = ref.read(_activeBranchIdProvider).trim();
+
+    // === PERBAIKAN UTAMA ===
+    if (branchId.isEmpty) {
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Branch ID tidak ditemukan. Silakan scan ulang QR meja.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     final repo = ref.read(qrOrderRepositoryProvider);
 
     try {
       final order = await repo.createOrder(
         session: updatedCart,
-        branchId: branchId.isNotEmpty ? branchId : 'default',
+        branchId: branchId,           // Kirim branchId yang valid
       );
 
       notifier.clearCart();
@@ -90,6 +104,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
               child: _OrderPreviewCard(cart: cart),
             ),
           ),
+
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -121,6 +136,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
               ),
             ),
           ),
+
           if (_selected == QrPaymentMethod.qris)
             SliverToBoxAdapter(
               child: Padding(
@@ -128,6 +144,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
                 child: _QrisInfoCard(totalAmount: cart.totalAmount),
               ),
             ),
+
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
@@ -145,6 +162,11 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     );
   }
 }
+
+// === Bagian bawah (class-class lain) tetap sama seperti kode kamu sebelumnya ===
+// _OrderPreviewCard, _PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen
+
+// (Copy dari kode sebelumnya yang sudah saya berikan, mulai dari class _OrderPreviewCard sampai akhir)
 
 // ─── Order Preview Card ───────────────────────────────────────────────────────
 class _OrderPreviewCard extends StatelessWidget {
