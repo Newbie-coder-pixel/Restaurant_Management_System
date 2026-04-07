@@ -18,8 +18,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   List<MenuItem> _items = [];
   String? _selectedCategoryId;
   String? _branchId;
+  String? _staffRole;
   bool _isLoading = true;
   bool _initialized = false;
+
+  // Role yang boleh edit/tambah/hapus menu
+  bool get _canEdit =>
+      _staffRole == 'superadmin' || _staffRole == 'manager';
 
   @override
   void didChangeDependencies() {
@@ -27,14 +32,18 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (_initialized) return;
     final staff = ref.read(currentStaffProvider);
     if (staff != null) {
-      _branchId = staff.branchId;
+      _branchId  = staff.branchId;
+      _staffRole = staff.role.name;
       _initialized = true;
       _init();
     } else {
       _initialized = true;
       ref.listenManual(currentStaffProvider, (_, next) {
         if (next != null && _branchId == null && mounted) {
-          setState(() => _branchId = next.branchId);
+          setState(() {
+            _branchId  = next.branchId;
+            _staffRole = next.role.name;
+          });
           _init();
         }
       });
@@ -80,6 +89,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     await _load();
   }
 
+  // ─── Tambah Kategori ────────────────────────────────────────────────────────
+
   Future<void> _showAddCategoryDialog() async {
     final nameCtrl = TextEditingController();
     if (!mounted) return;
@@ -103,7 +114,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary, foregroundColor: Colors.white),
             onPressed: () async {
-              if (nameCtrl.text.trim().isEmpty) return;
+              if (nameCtrl.text.trim().isEmpty) { return; }
               try {
                 await Supabase.instance.client.from('menu_categories').insert({
                   'branch_id': _branchId,
@@ -135,6 +146,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       ),
     );
   }
+
+  // ─── Hapus Kategori ─────────────────────────────────────────────────────────
 
   Future<void> _showDeleteCategoryDialog(MenuCategory cat) async {
     final count = _items.where((m) => m.categoryId == cat.id).length;
@@ -181,6 +194,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     );
   }
 
+  // ─── Tambah Menu ────────────────────────────────────────────────────────────
+
   Future<void> _showAddItemDialog() async {
     final nameCtrl  = TextEditingController();
     final priceCtrl = TextEditingController();
@@ -196,82 +211,16 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         builder: (ctx, ss) => AlertDialog(
           title: const Text('Tambah Menu',
               style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-          content: SizedBox(
-            width: 400,
-            child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                if (previewUrl != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: CachedNetworkImage(
-                      imageUrl: previewUrl!,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(
-                        height: 140,
-                        color: Colors.grey[200],
-                        child: const Center(
-                          child: Icon(Icons.broken_image_outlined,
-                              color: Colors.grey, size: 40)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                TextField(
-                  controller: imageCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'URL Gambar',
-                    hintText: 'https://...',
-                    prefixIcon: const Icon(Icons.image_outlined),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.visibility_outlined),
-                      tooltip: 'Preview',
-                      onPressed: () {
-                        final url = imageCtrl.text.trim();
-                        ss(() => previewUrl = url.isNotEmpty ? url : null);
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Nama Menu *'),
-                ),
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: priceCtrl,
-                  decoration: const InputDecoration(
-                      labelText: 'Harga *', prefixText: 'Rp '),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: descCtrl,
-                  decoration: const InputDecoration(labelText: 'Deskripsi'),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 12),
-
-                // FIX 1: 'value' → 'initialValue' (deprecated after v3.33.0-1.0.pre)
-                DropdownButtonFormField<String>(
-                  initialValue: selCatId,
-                  decoration: const InputDecoration(labelText: 'Kategori'),
-                  items: _categories.map((c) => DropdownMenuItem(
-                    value: c.id,
-                    child: Text(c.name,
-                        style: const TextStyle(fontFamily: 'Poppins')),
-                  )).toList(),
-                  onChanged: (v) => ss(() => selCatId = v),
-                ),
-              ]),
-            ),
+          content: _MenuItemForm(
+            nameCtrl:   nameCtrl,
+            priceCtrl:  priceCtrl,
+            descCtrl:   descCtrl,
+            imageCtrl:  imageCtrl,
+            selCatId:   selCatId,
+            previewUrl: previewUrl,
+            categories: _categories,
+            onCatChanged:     (v) => ss(() => selCatId   = v),
+            onPreviewChanged: (v) => ss(() => previewUrl = v),
           ),
           actions: [
             TextButton(
@@ -282,23 +231,28 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                   foregroundColor: Colors.white),
               onPressed: () async {
                 if (nameCtrl.text.trim().isEmpty ||
-                    priceCtrl.text.trim().isEmpty) {
-                  return; // FIX 2: wrap single-statement if body in braces
+                    priceCtrl.text.trim().isEmpty) { return; }
+                try {
+                  final imageUrl = imageCtrl.text.trim();
+                  await Supabase.instance.client.from('menu_items').insert({
+                    'branch_id':   _branchId,
+                    'category_id': selCatId,
+                    'name':        nameCtrl.text.trim(),
+                    'price':       double.tryParse(priceCtrl.text.trim()) ?? 0,
+                    'description': descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                    'image_url':   imageUrl.isEmpty ? null : imageUrl,
+                    'is_available': true,
+                  });
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  await _load();
+                } on PostgrestException catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                      content: Text('Gagal menyimpan: ${e.message}'),
+                      backgroundColor: Colors.red,
+                    ));
+                  }
                 }
-                final imageUrl = imageCtrl.text.trim();
-                await Supabase.instance.client.from('menu_items').insert({
-                  'branch_id': _branchId,
-                  'category_id': selCatId,
-                  'name': nameCtrl.text.trim(),
-                  'price': double.tryParse(priceCtrl.text.trim()) ?? 0,
-                  'description': descCtrl.text.trim().isEmpty
-                      ? null
-                      : descCtrl.text.trim(),
-                  'image_url': imageUrl.isEmpty ? null : imageUrl,
-                  'is_available': true,
-                });
-                if (ctx.mounted) Navigator.pop(ctx);
-                await _load();
               },
               child: const Text('Simpan'),
             ),
@@ -307,6 +261,120 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       ),
     );
   }
+
+  // ─── Edit Menu ──────────────────────────────────────────────────────────────
+
+  Future<void> _showEditItemDialog(MenuItem item) async {
+    final nameCtrl  = TextEditingController(text: item.name);
+    final priceCtrl = TextEditingController(text: item.price.toStringAsFixed(0));
+    final descCtrl  = TextEditingController(text: item.description ?? '');
+    final imageCtrl = TextEditingController(text: item.imageUrl ?? '');
+    String? selCatId   = item.categoryId;
+    String? previewUrl = item.imageUrl?.isNotEmpty == true ? item.imageUrl : null;
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, ss) => AlertDialog(
+          title: const Text('Edit Menu',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+          content: _MenuItemForm(
+            nameCtrl:   nameCtrl,
+            priceCtrl:  priceCtrl,
+            descCtrl:   descCtrl,
+            imageCtrl:  imageCtrl,
+            selCatId:   selCatId,
+            previewUrl: previewUrl,
+            categories: _categories,
+            onCatChanged:     (v) => ss(() => selCatId   = v),
+            onPreviewChanged: (v) => ss(() => previewUrl = v),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white),
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty ||
+                    priceCtrl.text.trim().isEmpty) { return; }
+                try {
+                  final imageUrl = imageCtrl.text.trim();
+                  await Supabase.instance.client
+                      .from('menu_items')
+                      .update({
+                        'category_id': selCatId,
+                        'name':        nameCtrl.text.trim(),
+                        'price':       double.tryParse(priceCtrl.text.trim()) ?? 0,
+                        'description': descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                        'image_url':   imageUrl.isEmpty ? null : imageUrl,
+                      })
+                      .eq('id', item.id);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  await _load();
+                } on PostgrestException catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                      content: Text('Gagal menyimpan: ${e.message}'),
+                      backgroundColor: Colors.red,
+                    ));
+                  }
+                }
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Hapus Menu ─────────────────────────────────────────────────────────────
+
+  Future<void> _showDeleteItemDialog(MenuItem item) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Menu?',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+        content: Text(
+          'Hapus "${item.name}" dari daftar menu?',
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              try {
+                await Supabase.instance.client
+                    .from('menu_items')
+                    .delete()
+                    .eq('id', item.id);
+                if (ctx.mounted) Navigator.pop(ctx);
+                await _load();
+              } on PostgrestException catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text('Gagal menghapus: ${e.message}'),
+                    backgroundColor: Colors.red,
+                  ));
+                }
+              }
+            },
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -326,19 +394,22 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load)
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddItemDialog,
-        backgroundColor: AppColors.accent,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Tambah Menu',
-            style: TextStyle(
-                color: Colors.white,
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600)),
-      ),
+      floatingActionButton: _canEdit
+          ? FloatingActionButton.extended(
+              onPressed: _showAddItemDialog,
+              backgroundColor: AppColors.accent,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('Tambah Menu',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600)),
+            )
+          : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Row(children: [
+              // ── Sidebar Kategori ──────────────────────────────────────────
               Container(
                 width: 160,
                 decoration: BoxDecoration(
@@ -362,20 +433,20 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                                   color: AppColors.textSecondary,
                                   letterSpacing: 1)),
                         ),
-                        InkWell(
-                          onTap: _showAddCategoryDialog,
-                          borderRadius: BorderRadius.circular(8),
-                          child: const Padding(
-                            padding: EdgeInsets.all(4),
-                            child: Icon(Icons.add_circle_outline,
-                                size: 18, color: AppColors.primary),
+                        if (_canEdit)
+                          InkWell(
+                            onTap: _showAddCategoryDialog,
+                            borderRadius: BorderRadius.circular(8),
+                            child: const Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(Icons.add_circle_outline,
+                                  size: 18, color: AppColors.primary),
+                            ),
                           ),
-                        ),
                       ]),
                     ),
                     GestureDetector(
-                      onTap: () =>
-                          setState(() => _selectedCategoryId = null),
+                      onTap: () => setState(() => _selectedCategoryId = null),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         margin: const EdgeInsets.fromLTRB(8, 2, 8, 2),
@@ -402,18 +473,17 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     ..._categories.map((cat) {
                       final sel = _selectedCategoryId == cat.id;
                       return GestureDetector(
-                        onTap: () =>
-                            setState(() => _selectedCategoryId = cat.id),
-                        onLongPress: () => _showDeleteCategoryDialog(cat),
+                        onTap: () => setState(() => _selectedCategoryId = cat.id),
+                        onLongPress: _canEdit
+                            ? () => _showDeleteCategoryDialog(cat)
+                            : null,
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 150),
                           margin: const EdgeInsets.fromLTRB(8, 2, 8, 2),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
-                            color: sel
-                                ? AppColors.primary
-                                : Colors.transparent,
+                            color: sel ? AppColors.primary : Colors.transparent,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(cat.name,
@@ -435,6 +505,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
               const VerticalDivider(width: 1),
 
+              // ── Grid Menu ─────────────────────────────────────────────────
               Expanded(
                 child: _filtered.isEmpty
                     ? const Center(
@@ -455,9 +526,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         itemBuilder: (_, i) {
                           final item = _filtered[i];
                           return _MenuItemCard(
-                            item: item,
+                            item:     item,
+                            canEdit:  _canEdit,
                             onToggle: () =>
                                 _toggleAvailability(item.id, item.isAvailable),
+                            onEdit:   () => _showEditItemDialog(item),
+                            onDelete: () => _showDeleteItemDialog(item),
                           );
                         },
                       ),
@@ -467,11 +541,129 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 }
 
+// ─── Reusable Form Widget (dipakai di Add & Edit) ─────────────────────────────
+
+class _MenuItemForm extends StatelessWidget {
+  final TextEditingController nameCtrl, priceCtrl, descCtrl, imageCtrl;
+  final String? selCatId;
+  final String? previewUrl;
+  final List<MenuCategory> categories;
+  final ValueChanged<String?> onCatChanged;
+  final ValueChanged<String?> onPreviewChanged;
+
+  const _MenuItemForm({
+    required this.nameCtrl,
+    required this.priceCtrl,
+    required this.descCtrl,
+    required this.imageCtrl,
+    required this.selCatId,
+    required this.previewUrl,
+    required this.categories,
+    required this.onCatChanged,
+    required this.onPreviewChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 400,
+      child: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Preview gambar
+          if (previewUrl != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: CachedNetworkImage(
+                imageUrl: previewUrl!,
+                height: 140,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => Container(
+                  height: 140,
+                  color: Colors.grey[200],
+                  child: const Center(
+                    child: Icon(Icons.broken_image_outlined,
+                        color: Colors.grey, size: 40)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // URL Gambar
+          TextField(
+            controller: imageCtrl,
+            decoration: InputDecoration(
+              labelText: 'URL Gambar',
+              hintText: 'https://...',
+              prefixIcon: const Icon(Icons.image_outlined),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.visibility_outlined),
+                tooltip: 'Preview',
+                onPressed: () {
+                  final url = imageCtrl.text.trim();
+                  onPreviewChanged(url.isNotEmpty ? url : null);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Nama
+          TextField(
+            controller: nameCtrl,
+            decoration: const InputDecoration(labelText: 'Nama Menu *'),
+          ),
+          const SizedBox(height: 12),
+
+          // Harga
+          TextField(
+            controller: priceCtrl,
+            decoration: const InputDecoration(
+                labelText: 'Harga *', prefixText: 'Rp '),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+
+          // Deskripsi
+          TextField(
+            controller: descCtrl,
+            decoration: const InputDecoration(labelText: 'Deskripsi'),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+
+          // Dropdown Kategori
+          DropdownButtonFormField<String>(
+            initialValue: selCatId,
+            decoration: const InputDecoration(labelText: 'Kategori'),
+            items: categories.map((c) => DropdownMenuItem(
+              value: c.id,
+              child: Text(c.name,
+                  style: const TextStyle(fontFamily: 'Poppins')),
+            )).toList(),
+            onChanged: onCatChanged,
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── Menu Item Card ───────────────────────────────────────────────────────────
+
 class _MenuItemCard extends StatelessWidget {
   final MenuItem item;
-  final VoidCallback onToggle;
+  final bool canEdit;
+  final VoidCallback onToggle, onEdit, onDelete;
 
-  const _MenuItemCard({required this.item, required this.onToggle});
+  const _MenuItemCard({
+    required this.item,
+    required this.canEdit,
+    required this.onToggle,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -480,23 +672,48 @@ class _MenuItemCard extends StatelessWidget {
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── Gambar + overlay tombol edit/delete ──────────────────────────
         SizedBox(
           height: 120,
           width: double.infinity,
-          child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-              ? CachedNetworkImage(
-                  imageUrl: item.imageUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) => Container(
-                    color: Colors.grey[200],
-                    child: const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2)),
+          child: Stack(fit: StackFit.expand, children: [
+            item.imageUrl != null && item.imageUrl!.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: item.imageUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      color: Colors.grey[200],
+                      child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                    ),
+                    errorWidget: (_, __, ___) => _imagePlaceholder(),
+                  )
+                : _imagePlaceholder(),
+
+            // Tombol edit & delete hanya muncul kalau _canEdit
+            if (canEdit)
+              Positioned(
+                top: 6, right: 6,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  _OverlayIconBtn(
+                    icon:    Icons.edit_outlined,
+                    color:   Colors.blue,
+                    tooltip: 'Edit',
+                    onTap:   onEdit,
                   ),
-                  errorWidget: (_, __, ___) => _imagePlaceholder(),
-                )
-              : _imagePlaceholder(),
+                  const SizedBox(width: 4),
+                  _OverlayIconBtn(
+                    icon:    Icons.delete_outline,
+                    color:   Colors.red,
+                    tooltip: 'Hapus',
+                    onTap:   onDelete,
+                  ),
+                ]),
+              ),
+          ]),
         ),
 
+        // ── Konten card ──────────────────────────────────────────────────
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
@@ -517,9 +734,8 @@ class _MenuItemCard extends StatelessWidget {
                       scale: 0.8,
                       child: Switch(
                         value: item.isAvailable,
-                        // FIX 3: 'activeColor' → 'activeThumbColor' (deprecated after v3.31.0-2.0.pre)
                         activeThumbColor: AppColors.available,
-                        onChanged: (_) => onToggle(),
+                        onChanged: canEdit ? (_) => onToggle() : null,
                         materialTapTargetSize:
                             MaterialTapTargetSize.shrinkWrap,
                       ),
@@ -583,4 +799,43 @@ class _MenuItemCard extends StatelessWidget {
       .toStringAsFixed(0)
       .replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+}
+
+// ─── Overlay Icon Button (di atas gambar card) ────────────────────────────────
+
+class _OverlayIconBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _OverlayIconBtn({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 30, height: 30,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 4)
+            ],
+          ),
+          child: Icon(icon, size: 16, color: color),
+        ),
+      ),
+    );
+  }
 }
