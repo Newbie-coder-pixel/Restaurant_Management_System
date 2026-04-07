@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart'; // Untuk debugPrint
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/qr_order_model.dart';
@@ -93,87 +94,85 @@ class QrOrderRepository {
   }
 
   // ─── Fetch Menu Items by Branch ─────────────────────────────────────────────
-
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
-    final items = await _client
-        .from('menu_items')
-        .select(
-          'id, branch_id, category_id, name, description, price, '
-          'image_url, is_available, is_seasonal, '
-          'preparation_time_minutes, sort_order, created_at, updated_at',
-        )
-        .eq('branch_id', branchId)
-        .eq('is_available', true)
-        .order('sort_order');
-
-    final itemList = List<Map<String, dynamic>>.from(items);
-    if (itemList.isEmpty) return itemList;
-
-    final categoryIds = itemList
-        .map((i) => i['category_id'] as String?)
-        .whereType<String>()
-        .toSet()
-        .toList();
-
-    Map<String, Map<String, dynamic>> categoryMap = {};
-    if (categoryIds.isNotEmpty) {
-      try {
-        final categories = await _client
-            .from('menu_categories')
-            .select('id, name, sort_order')
-            .inFilter('id', categoryIds);
-        for (final cat in List<Map<String, dynamic>>.from(categories)) {
-          categoryMap[cat['id'] as String] = cat;
-        }
-      } catch (_) {}
+    if (branchId.trim().isEmpty) {
+      debugPrint('❌ fetchMenuByBranch: branchId kosong!');
+      return [];
     }
 
-    return itemList.map((item) {
-      final catId = item['category_id'] as String?;
-      return {
-        ...item,
-        'menu_categories': catId != null ? categoryMap[catId] : null,
-      };
-    }).toList();
+    try {
+      debugPrint('🔄 Fetching menu for branch: $branchId');
+
+      final items = await _client
+          .from('menu_items')
+          .select('''
+            id,
+            branch_id,
+            category_id,
+            name,
+            description,
+            price,
+            image_url,
+            is_available,
+            is_seasonal,
+            preparation_time_minutes,
+            sort_order,
+            created_at,
+            updated_at,
+            menu_categories!inner(id, name, sort_order)
+          ''')
+          .eq('branch_id', branchId)
+          .eq('is_available', true)
+          .order('sort_order', ascending: true);
+
+      debugPrint('✅ Berhasil fetch ${items.length} menu items');
+
+      final itemList = List<Map<String, dynamic>>.from(items);
+
+      if (itemList.isEmpty) {
+        debugPrint('⚠️  Tidak ada menu yang tersedia untuk branch ini');
+      }
+
+      return itemList;
+    } catch (e, stack) {
+      debugPrint('❌ ERROR di fetchMenuByBranch: $e');
+      debugPrint('Stack: $stack');
+      rethrow;
+    }
   }
 
   // ─── Fetch Table Info ───────────────────────────────────────────────────────
-  // FIX: Pakai select('*') agar tidak tergantung nama kolom spesifik,
-  // lalu fetch branch secara terpisah (hindari FK join yang error 400).
 
   Future<Map<String, dynamic>?> fetchTableInfo(String tableId) async {
-    // Step 1: Ambil semua kolom meja — tanpa FK join
-    final tableRow = await _client
-        .from('restaurant_tables')
-        .select('*')
-        .eq('id', tableId)
-        .maybeSingle();
+    try {
+      final tableRow = await _client
+          .from('restaurant_tables')
+          .select('*, branches(id, name)')
+          .eq('id', tableId)
+          .maybeSingle();
 
-    if (tableRow == null) return null;
-
-    // Step 2: Ambil data branch secara terpisah
-    // Coba kedua kemungkinan nama kolom: 'branch_id' atau 'branchId'
-    final branchId = (tableRow['branch_id'] ?? tableRow['branchId']) as String?;
-    Map<String, dynamic>? branchData;
-
-    if (branchId != null && branchId.isNotEmpty) {
-      try {
-        branchData = await _client
-            .from('branches')
-            .select('id, name')
-            .eq('id', branchId)
-            .maybeSingle();
-      } catch (_) {
-        // Lanjut tanpa nama branch — branchId tetap tersedia untuk load menu
+      if (tableRow == null) {
+        debugPrint('⚠️ Table dengan ID $tableId tidak ditemukan');
+        return null;
       }
-    }
 
-    // Step 3: Return dengan struktur yang sama seperti FK join
-    // sehingga qr_menu_screen.dart tidak perlu diubah
-    return {
-      ...tableRow,
-      'branches': branchData,
-    };
+      debugPrint('✅ Table info ditemukan: ${tableRow['table_number']}');
+      return tableRow;
+    } catch (e) {
+      debugPrint('❌ ERROR fetchTableInfo: $e');
+
+      // Fallback tanpa join
+      final tableRow = await _client
+          .from('restaurant_tables')
+          .select('*')
+          .eq('id', tableId)
+          .maybeSingle();
+
+      if (tableRow != null) {
+        return {...tableRow, 'branches': null};
+      }
+      return null;
+    }
   }
 
   // ─── Private: Generate Queue Number ────────────────────────────────────────
