@@ -22,7 +22,14 @@ final _tableInfoProvider =
 });
 
 final _selectedCategoryProvider = StateProvider<String?>((ref) => null);
-final _searchQueryProvider = StateProvider<String>((ref) => '');
+final _searchQueryProvider      = StateProvider<String>((ref) => '');
+final _isGridViewProvider       = StateProvider<bool>((ref) => true);
+
+// ─── Konstanta ukuran card ────────────────────────────────────────────────────
+// Dengan mainAxisExtent semua card SELALU sama tinggi, tidak ada space sisa.
+const double _kCardImageHeight = 110.0;
+const double _kCardInfoHeight  = 108.0; // nama(2baris)+harga+tombol+padding
+const double _kCardHeight      = _kCardImageHeight + _kCardInfoHeight; // 218
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -59,15 +66,15 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
     return rows.map((row) {
       final cat = row['menu_categories'] as Map<String, dynamic>?;
       return MenuItem(
-        id: row['id'] as String,
-        name: row['name'] as String,
-        description: row['description'] as String? ?? '',
-        price: (row['price'] as num).toDouble(),
-        categoryId: row['category_id'] as String? ?? '',
+        id:           row['id'] as String,
+        name:         row['name'] as String,
+        description:  row['description'] as String? ?? '',
+        price:        (row['price'] as num).toDouble(),
+        categoryId:   row['category_id'] as String? ?? '',
         categoryName: cat?['name'] as String? ?? 'Lainnya',
-        imageUrl: row['image_url'] as String?,
-        isAvailable: row['is_available'] as bool? ?? true,
-        sortOrder: row['sort_order'] as int? ?? 0,
+        imageUrl:     row['image_url'] as String?,
+        isAvailable:  row['is_available'] as bool? ?? true,
+        sortOrder:    row['sort_order'] as int? ?? 0,
       );
     }).toList();
   }
@@ -113,8 +120,8 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
           );
         }
 
-        final branch = tableData['branches'] as Map<String, dynamic>?;
-        final branchId = branch?['id'] as String? ?? '';
+        final branch    = tableData['branches'] as Map<String, dynamic>?;
+        final branchId  = branch?['id'] as String? ?? '';
         final branchName = branch?['name'] as String? ?? 'Restoran';
         final tableName = (tableData['table_number'] as String?) ?? 'Meja';
 
@@ -124,14 +131,14 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
         });
 
         return _MenuBody(
-          tableId: widget.tableId,
-          tableName: tableName,
-          branchId: branchId,
-          branchName: branchName,
-          parseItems: _parseItems,
+          tableId:       widget.tableId,
+          tableName:     tableName,
+          branchId:      branchId,
+          branchName:    branchName,
+          parseItems:    _parseItems,
           groupByCategory: _groupByCategory,
-          fabAnimCtrl: _fabAnimCtrl,
-          searchCtrl: _searchCtrl,
+          fabAnimCtrl:   _fabAnimCtrl,
+          searchCtrl:    _searchCtrl,
         );
       },
     );
@@ -141,10 +148,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
 // ─── Menu Body ────────────────────────────────────────────────────────────────
 
 class _MenuBody extends ConsumerWidget {
-  final String tableId;
-  final String tableName;
-  final String branchId;
-  final String branchName;
+  final String tableId, tableName, branchId, branchName;
   final List<MenuItem> Function(List<Map<String, dynamic>>) parseItems;
   final Map<String, List<MenuItem>> Function(List<MenuItem>) groupByCategory;
   final AnimationController fabAnimCtrl;
@@ -163,30 +167,27 @@ class _MenuBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final menuAsync = ref.watch(_menuDataProvider(branchId));
-    final selectedCategory = ref.watch(_selectedCategoryProvider);
-    final searchQuery = ref.watch(_searchQueryProvider);
-    final cart = ref.watch(activeQrCartProvider);
+    final menuAsync      = ref.watch(_menuDataProvider(branchId));
+    final selectedCat    = ref.watch(_selectedCategoryProvider);
+    final searchQuery    = ref.watch(_searchQueryProvider);
+    final cart           = ref.watch(activeQrCartProvider);
 
-    if (cart.totalItems > 0) {
-      fabAnimCtrl.forward();
-    } else {
-      fabAnimCtrl.reverse();
-    }
+    cart.totalItems > 0 ? fabAnimCtrl.forward() : fabAnimCtrl.reverse();
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: Column(children: [
         _QrMenuHeader(
-          tableName: tableName,
-          branchName: branchName,
-          searchCtrl: searchCtrl,
+          tableName:       tableName,
+          branchName:      branchName,
+          searchCtrl:      searchCtrl,
           onSearchChanged: (q) =>
               ref.read(_searchQueryProvider.notifier).state = q,
         ),
         Expanded(
           child: menuAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () =>
+                const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.wifi_off_outlined, size: 48),
@@ -194,59 +195,51 @@ class _MenuBody extends ConsumerWidget {
                 const Text('Gagal memuat menu'),
                 const SizedBox(height: 8),
                 ElevatedButton(
-                  onPressed: () => ref.invalidate(_menuDataProvider(branchId)),
+                  onPressed: () =>
+                      ref.invalidate(_menuDataProvider(branchId)),
                   child: const Text('Coba Lagi'),
                 ),
               ]),
             ),
             data: (rawItems) {
-              final allItems = parseItems(rawItems);
-              final grouped = groupByCategory(allItems);
+              final allItems  = parseItems(rawItems);
+              final grouped   = groupByCategory(allItems);
               final categories = grouped.keys.toList();
 
-              List<MenuItem> displayItems;
-              if (selectedCategory == null) {
-                displayItems = allItems;
-              } else {
-                displayItems = grouped[selectedCategory] ?? [];
-              }
+              var displayItems = selectedCat == null
+                  ? allItems
+                  : (grouped[selectedCat] ?? []);
 
               if (searchQuery.isNotEmpty) {
-                displayItems = displayItems.where((item) {
-                  return item.name
-                          .toLowerCase()
-                          .contains(searchQuery.toLowerCase()) ||
-                      item.description
-                          .toLowerCase()
-                          .contains(searchQuery.toLowerCase());
-                }).toList();
+                final q = searchQuery.toLowerCase();
+                displayItems = displayItems
+                    .where((i) =>
+                        i.name.toLowerCase().contains(q) ||
+                        i.description.toLowerCase().contains(q))
+                    .toList();
               }
 
               return Row(children: [
                 _CategorySidebar(
                   categories: categories,
-                  selected: selectedCategory,
-                  onSelect: (cat) {
+                  selected:   selectedCat,
+                  onSelect:   (cat) {
                     ref.read(_selectedCategoryProvider.notifier).state =
-                        cat == selectedCategory ? null : cat;
+                        cat == selectedCat ? null : cat;
                   },
                 ),
                 Expanded(
                   child: displayItems.isEmpty
                       ? const Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.search_off,
-                                  size: 48, color: Colors.grey),
-                              SizedBox(height: 12),
-                              Text('Menu tidak ditemukan'),
-                            ],
-                          ),
+                          child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.search_off, size: 48, color: Colors.grey),
+                            SizedBox(height: 12),
+                            Text('Menu tidak ditemukan'),
+                          ]),
                         )
                       : _MenuGrid(
-                          items: displayItems,
-                          tableId: tableId,
+                          items:     displayItems,
+                          tableId:   tableId,
                           tableName: tableName,
                         ),
                 ),
@@ -270,8 +263,7 @@ class _MenuBody extends ConsumerWidget {
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 class _QrMenuHeader extends StatelessWidget {
-  final String tableName;
-  final String branchName;
+  final String tableName, branchName;
   final TextEditingController searchCtrl;
   final ValueChanged<String> onSearchChanged;
 
@@ -284,20 +276,19 @@ class _QrMenuHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme       = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.primary,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+        color:         colorScheme.primary,
+        borderRadius:  const BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Icon(Icons.restaurant, color: colorScheme.onPrimary, size: 20),
               const SizedBox(width: 8),
@@ -308,11 +299,10 @@ class _QrMenuHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: colorScheme.onPrimary.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
+                  color:         colorScheme.onPrimary.withValues(alpha: 0.2),
+                  borderRadius:  BorderRadius.circular(20),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.table_restaurant,
@@ -320,7 +310,7 @@ class _QrMenuHeader extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(tableName,
                       style: theme.textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onPrimary,
+                          color:      colorScheme.onPrimary,
                           fontWeight: FontWeight.bold)),
                 ]),
               ),
@@ -328,32 +318,32 @@ class _QrMenuHeader extends StatelessWidget {
             const SizedBox(height: 8),
             Text('Pilih menu favoritmu',
                 style: theme.textTheme.headlineSmall?.copyWith(
-                    color: colorScheme.onPrimary,
+                    color:      colorScheme.onPrimary,
                     fontWeight: FontWeight.bold)),
             const SizedBox(height: 14),
             TextField(
               controller: searchCtrl,
-              onChanged: onSearchChanged,
-              style: theme.textTheme.bodyMedium,
+              onChanged:  onSearchChanged,
+              style:      theme.textTheme.bodyMedium,
               decoration: InputDecoration(
-                hintText: 'Cari makanan atau minuman...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: searchCtrl.text.isNotEmpty
+                hintText:    'Cari makanan atau minuman...',
+                prefixIcon:  const Icon(Icons.search, size: 20),
+                suffixIcon:  searchCtrl.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
+                        icon:      const Icon(Icons.clear, size: 18),
                         onPressed: () {
                           searchCtrl.clear();
                           onSearchChanged('');
                         },
                       )
                     : null,
-                filled: true,
-                fillColor: colorScheme.surface,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                filled:         true,
+                fillColor:      colorScheme.surface,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
+                    borderSide:   BorderSide.none),
                 isDense: true,
               ),
             ),
@@ -377,36 +367,36 @@ class _CategorySidebar extends StatelessWidget {
     required this.onSelect,
   });
 
-  static const _categoryIcons = <String, IconData>{
+  static const _icons = <String, IconData>{
     'Makanan': Icons.rice_bowl_outlined,
     'Minuman': Icons.local_drink_outlined,
-    'Snack': Icons.cookie_outlined,
+    'Snack':   Icons.cookie_outlined,
     'Dessert': Icons.cake_outlined,
-    'Paket': Icons.lunch_dining_outlined,
-    'Promo': Icons.local_offer_outlined,
+    'Paket':   Icons.lunch_dining_outlined,
+    'Promo':   Icons.local_offer_outlined,
     'Lainnya': Icons.more_horiz,
   };
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme       = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final allItems = ['Semua', ...categories];
+    final all         = ['Semua', ...categories];
 
     return Container(
       width: 72,
       color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: allItems.length,
+        padding:          const EdgeInsets.symmetric(vertical: 8),
+        itemCount:        all.length,
         separatorBuilder: (_, __) => const SizedBox(height: 2),
-        itemBuilder: (context, index) {
-          final label = allItems[index];
-          final isSemua = label == 'Semua';
-          final isSelected = isSemua ? selected == null : selected == label;
-          final icon = isSemua
+        itemBuilder: (context, i) {
+          final label    = all[i];
+          final isSemua  = label == 'Semua';
+          final isSel    = isSemua ? selected == null : selected == label;
+          final icon     = isSemua
               ? Icons.grid_view_rounded
-              : (_categoryIcons[label] ?? Icons.fastfood_outlined);
+              : (_icons[label] ?? Icons.fastfood_outlined);
 
           return GestureDetector(
             onTap: () {
@@ -417,34 +407,30 @@ class _CategorySidebar extends StatelessWidget {
               }
             },
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.symmetric(horizontal: 6),
-              padding:
-                  const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              duration:  const Duration(milliseconds: 200),
+              margin:    const EdgeInsets.symmetric(horizontal: 6),
+              padding:   const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
               decoration: BoxDecoration(
-                color: isSelected ? colorScheme.primary : Colors.transparent,
+                color:        isSel ? colorScheme.primary : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Icon(icon,
-                    size: 22,
-                    color: isSelected
+                    size:  22,
+                    color: isSel
                         ? colorScheme.onPrimary
                         : colorScheme.onSurfaceVariant),
                 const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: isSelected
-                        ? colorScheme.onPrimary
-                        : colorScheme.onSurfaceVariant,
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                Text(label,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color:      isSel
+                          ? colorScheme.onPrimary
+                          : colorScheme.onSurfaceVariant,
+                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines:  2,
+                    overflow:  TextOverflow.ellipsis),
               ]),
             ),
           );
@@ -454,16 +440,11 @@ class _CategorySidebar extends StatelessWidget {
   }
 }
 
-// ─── View Mode Provider ───────────────────────────────────────────────────────
-
-final _isGridViewProvider = StateProvider<bool>((ref) => true);
-
 // ─── Menu Grid ────────────────────────────────────────────────────────────────
 
 class _MenuGrid extends ConsumerWidget {
   final List<MenuItem> items;
-  final String tableId;
-  final String tableName;
+  final String tableId, tableName;
 
   const _MenuGrid({
     required this.items,
@@ -473,74 +454,67 @@ class _MenuGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cart = ref.watch(activeQrCartProvider);
+    final cart     = ref.watch(activeQrCartProvider);
     final notifier = ref.read(activeQrCartNotifierProvider);
-    final isGrid = ref.watch(_isGridViewProvider);
+    final isGrid   = ref.watch(_isGridViewProvider);
 
     return Column(children: [
       // ── Toolbar ───────────────────────────────────────────────────────
       Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
         child: Row(children: [
-          Text(
-            '${items.length} menu tersedia',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[500],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text('${items.length} menu tersedia',
+              style: TextStyle(
+                  fontSize:   11,
+                  color:      Colors.grey[500],
+                  fontWeight: FontWeight.w500)),
           const Spacer(),
           _ViewToggle(
-            isGrid: isGrid,
-            onToggle: (v) => ref.read(_isGridViewProvider.notifier).state = v,
+            isGrid:   isGrid,
+            onToggle: (v) =>
+                ref.read(_isGridViewProvider.notifier).state = v,
           ),
         ]),
       ),
 
-      // ── Content ───────────────────────────────────────────────────────
       Expanded(
         child: isGrid
             ? GridView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 100),
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 100),
                 gridDelegate:
                     const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  // FIX SPACE PUTIH: gunakan childAspectRatio yang pas
-                  // Rumus: lebar_cell / tinggi_cell
-                  // Tinggi = gambar(AspectRatio 16:10 → ~lebar*0.625) + info(~110px)
-                  // Dengan lebar ~160px: gambar ~100px + info ~110px = ~210px
-                  // ratio = 160/210 ≈ 0.76, tapi karena nama bisa 2 baris pakai 0.72
-                  childAspectRatio: 0.72,
+                  crossAxisCount:  2,
                   crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
+                  mainAxisSpacing:  10,
+                  // ✅ mainAxisExtent = fixed height, TIDAK ada space sisa
+                  mainAxisExtent:  _kCardHeight,
                 ),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  final qty = cart.items
-                      .where((i) => i.menuItem.id == item.id)
-                      .fold(0, (s, i) => s + i.quantity);
+                itemCount:   items.length,
+                itemBuilder: (_, i) {
+                  final item = items[i];
+                  final qty  = cart.items
+                      .where((c) => c.menuItem.id == item.id)
+                      .fold(0, (s, c) => s + c.quantity);
                   return _MenuItemCard(
-                    item: item,
+                    item:     item,
                     quantity: qty,
-                    onAdd: () => notifier.addItem(item),
+                    onAdd:    () => notifier.addItem(item),
                     onRemove: () => notifier.removeItem(item.id),
                   );
                 },
               )
             : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 100),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  final qty = cart.items
-                      .where((i) => i.menuItem.id == item.id)
-                      .fold(0, (s, i) => s + i.quantity);
+                padding:     const EdgeInsets.fromLTRB(12, 6, 12, 100),
+                itemCount:   items.length,
+                itemBuilder: (_, i) {
+                  final item = items[i];
+                  final qty  = cart.items
+                      .where((c) => c.menuItem.id == item.id)
+                      .fold(0, (s, c) => s + c.quantity);
                   return _MenuItemListTile(
-                    item: item,
+                    item:     item,
                     quantity: qty,
-                    onAdd: () => notifier.addItem(item),
+                    onAdd:    () => notifier.addItem(item),
                     onRemove: () => notifier.removeItem(item.id),
                   );
                 },
@@ -559,54 +533,115 @@ class _ViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color:        cs.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.all(2),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        _ToggleBtn(
-            icon: Icons.grid_view_rounded,
-            active: isGrid,
-            onTap: () => onToggle(true)),
-        _ToggleBtn(
-            icon: Icons.view_list_rounded,
-            active: !isGrid,
-            onTap: () => onToggle(false)),
+        _TBtn(icon: Icons.grid_view_rounded,  active: isGrid,  onTap: () => onToggle(true)),
+        _TBtn(icon: Icons.view_list_rounded,  active: !isGrid, onTap: () => onToggle(false)),
       ]),
     );
   }
 }
 
-class _ToggleBtn extends StatelessWidget {
+class _TBtn extends StatelessWidget {
   final IconData icon;
   final bool active;
   final VoidCallback onTap;
-  const _ToggleBtn(
-      {required this.icon, required this.active, required this.onTap});
+  const _TBtn({required this.icon, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        duration:  const Duration(milliseconds: 180),
+        padding:   const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: active ? colorScheme.primary : Colors.transparent,
+          color:        active ? cs.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Icon(icon,
-            size: 16,
-            color: active
-                ? colorScheme.onPrimary
-                : colorScheme.onSurfaceVariant),
+            size:  16,
+            color: active ? cs.onPrimary : cs.onSurfaceVariant),
       ),
     );
   }
+}
+
+// ─── Shared: Menu Image ───────────────────────────────────────────────────────
+// Gambar dengan double-fallback:
+//  1. CachedNetworkImage (dengan headers)
+//  2. Image.network langsung (browser handle CORS)
+//  3. Placeholder icon
+// Mengatasi URL 404 dari Unsplash / imgix dengan graceful degradation.
+
+class _MenuImage extends StatelessWidget {
+  final String? imageUrl;
+  final ColorScheme cs;
+  const _MenuImage({required this.imageUrl, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.trim().isEmpty) return _placeholder();
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl!,
+      fit:      BoxFit.cover,
+      httpHeaders: const {
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      },
+      placeholder: (_, __) => Container(
+        color: cs.surfaceContainerHighest,
+        child: Center(
+          child: SizedBox(
+            width: 18, height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              color: cs.primary.withValues(alpha: 0.35),
+            ),
+          ),
+        ),
+      ),
+      errorWidget: (_, url, __) => Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder:   (_, __, ___) => _placeholder(),
+        loadingBuilder: (_, child, prog) =>
+            prog == null ? child : _loadingBox(prog),
+      ),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: cs.surfaceContainerHighest,
+        child: Center(
+          child: Icon(Icons.fastfood_outlined,
+              size:  32,
+              color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
+        ),
+      );
+
+  Widget _loadingBox(ImageChunkEvent prog) => Container(
+        color: cs.surfaceContainerHighest,
+        child: Center(
+          child: SizedBox(
+            width: 18, height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              value: prog.expectedTotalBytes != null
+                  ? prog.cumulativeBytesLoaded / prog.expectedTotalBytes!
+                  : null,
+              color: cs.primary.withValues(alpha: 0.35),
+            ),
+          ),
+        ),
+      );
 }
 
 // ─── Menu Item Card (Grid) ────────────────────────────────────────────────────
@@ -614,8 +649,7 @@ class _ToggleBtn extends StatelessWidget {
 class _MenuItemCard extends StatelessWidget {
   final MenuItem item;
   final int quantity;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
+  final VoidCallback onAdd, onRemove;
 
   const _MenuItemCard({
     required this.item,
@@ -626,288 +660,214 @@ class _MenuItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final inCart = quantity > 0;
+    final theme       = Theme.of(context);
+    final cs          = theme.colorScheme;
+    final inCart      = quantity > 0;
     final unavailable = !item.isAvailable;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color:        cs.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: inCart
-              ? colorScheme.primary
-              : colorScheme.outlineVariant.withValues(alpha: 0.6),
+              ? cs.primary
+              : cs.outlineVariant.withValues(alpha: 0.6),
           width: inCart ? 1.5 : 0.8,
         ),
         boxShadow: [
           BoxShadow(
-            color: inCart
-                ? colorScheme.primary.withValues(alpha: 0.08)
+            color:     inCart
+                ? cs.primary.withValues(alpha: 0.08)
                 : Colors.black.withValues(alpha: 0.04),
             blurRadius: inCart ? 8 : 4,
-            offset: const Offset(0, 2),
+            offset:     const Offset(0, 2),
           ),
         ],
       ),
-      // FIX SPACE PUTIH: ganti ClipRRect + Column biasa → IntrinsicHeight tidak
-      // diperlukan karena card sudah dikontrol GridView childAspectRatio.
-      // Pakai Column dengan mainAxisSize.max agar fill semua space dari GridView.
       child: ClipRRect(
         borderRadius: BorderRadius.circular(13),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            // ── Gambar: fixed height 110px (bukan AspectRatio) ──────────
-            // AspectRatio menyebabkan tinggi gambar bervariasi tergantung
-            // lebar, sehingga sisa ruang untuk konten tidak konsisten dan
-            // menyisakan space putih. Fixed height jauh lebih aman untuk grid.
-            SizedBox(
-              height: 110,
-              width: double.infinity,
-              child: Stack(fit: StackFit.expand, children: [
-                _MenuImage(
-                  imageUrl: item.imageUrl,
-                  colorScheme: colorScheme,
-                ),
+        // ✅ Column dengan fixed height dari mainAxisExtent — tidak ada sisa ruang
+        child: SizedBox(
+          height: _kCardHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Gambar: fixed 110px ──────────────────────────────────
+              SizedBox(
+                height: _kCardImageHeight,
+                width:  double.infinity,
+                child: Stack(fit: StackFit.expand, children: [
+                  _MenuImage(imageUrl: item.imageUrl, cs: cs),
 
-                // Overlay "Habis"
-                if (unavailable)
-                  Container(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    child: const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
+                  if (unavailable)
+                    Container(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      child: const Center(
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
                           Icon(Icons.remove_circle_outline,
-                              color: Colors.white, size: 20),
-                          SizedBox(height: 4),
+                              color: Colors.white, size: 18),
+                          SizedBox(height: 3),
                           Text('Habis',
                               style: TextStyle(
-                                  color: Colors.white,
+                                  color:      Colors.white,
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 12)),
-                        ],
+                                  fontSize:   11)),
+                        ]),
                       ),
                     ),
-                  ),
 
-                // Badge jumlah di keranjang
-                if (inCart)
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                          color: colorScheme.primary,
-                          borderRadius: BorderRadius.circular(20)),
-                      child: Text('$quantity',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
+                  if (inCart)
+                    Positioned(
+                      top: 6, right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                            color:        cs.primary,
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Text('$quantity',
+                            style: const TextStyle(
+                                color:      Colors.white,
+                                fontSize:   11,
+                                fontWeight: FontWeight.w700)),
+                      ),
                     ),
+                ]),
+              ),
+
+              // ── Info: sisa _kCardInfoHeight ──────────────────────────
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                  child: Column(
+                    crossAxisAlignment:  CrossAxisAlignment.start,
+                    mainAxisAlignment:   MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Nama + harga
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.name,
+                              style: const TextStyle(
+                                  fontSize:   13,
+                                  fontWeight: FontWeight.w600),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 2),
+                          Text(_fmt(item.price),
+                              style: TextStyle(
+                                  fontSize:   12,
+                                  fontWeight: FontWeight.w700,
+                                  color:      cs.primary)),
+                        ],
+                      ),
+
+                      // Tombol — selalu di paling bawah
+                      _ActionButton(
+                        inCart:      inCart,
+                        unavailable: unavailable,
+                        quantity:    quantity,
+                        cs:          cs,
+                        onAdd:       onAdd,
+                        onRemove:    onRemove,
+                      ),
+                    ],
                   ),
-              ]),
-            ),
-
-            // ── Info + tombol: Expanded agar isi sisa ruang card ────────
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Nama + harga di atas
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.name,
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w600),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          _fmt(item.price),
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: colorScheme.primary),
-                        ),
-                      ],
-                    ),
-
-                    // Tombol selalu di bawah
-                    unavailable
-                        ? Container(
-                            width: double.infinity,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 7),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Center(
-                              child: Text('Habis',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey,
-                                      fontWeight: FontWeight.w500)),
-                            ),
-                          )
-                        : inCart
-                            ? Container(
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primary
-                                      .withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    _QtyButton(
-                                        icon: Icons.remove,
-                                        onTap: onRemove),
-                                    Text('$quantity',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                            color: colorScheme.primary)),
-                                    _QtyButton(
-                                        icon: Icons.add, onTap: onAdd),
-                                  ],
-                                ),
-                              )
-                            : GestureDetector(
-                                onTap: onAdd,
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Center(
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.add,
-                                            size: 14,
-                                            color: colorScheme.onPrimary),
-                                        const SizedBox(width: 4),
-                                        Text('Tambah',
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color:
-                                                    colorScheme.onPrimary)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _fmt(double price) =>
-      'Rp ${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
-}
-
-// ─── Menu Image Widget ────────────────────────────────────────────────────────
-// Widget terpisah untuk handle loading gambar dengan fallback yang robust.
-// FIX GAMBAR TIDAK MUNCUL:
-//  - Gunakan Image.network dengan headers untuk bypass CORS di web
-//  - Fallback bertingkat: CachedNetworkImage → Image.network → placeholder icon
-//  - Tambahkan filterQuality untuk performa di web
-
-class _MenuImage extends StatelessWidget {
-  final String? imageUrl;
-  final ColorScheme colorScheme;
-
-  const _MenuImage({required this.imageUrl, required this.colorScheme});
-
-  @override
-  Widget build(BuildContext context) {
-    if (imageUrl == null || imageUrl!.isEmpty) {
-      return _placeholder();
-    }
-
-    // Coba CachedNetworkImage dulu, fallback ke Image.network jika gagal
-    return CachedNetworkImage(
-      imageUrl: imageUrl!,
-      fit: BoxFit.cover,
-      // Headers membantu bypass beberapa CORS restriction di web Flutter
-      httpHeaders: const {
-        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-      },
-      placeholder: (_, __) => Container(
-        color: colorScheme.surfaceContainerHighest,
-        child: Center(
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: colorScheme.primary.withValues(alpha: 0.4),
-            ),
+            ],
           ),
         ),
       ),
-      errorWidget: (_, url, error) {
-        // Fallback: coba Image.network langsung (tanpa cache) — kadang
-        // CachedNetworkImage gagal di web karena cache CORS, tapi
-        // Image.network berhasil karena browser handle langsung
-        return Image.network(
-          url,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholder(),
-          loadingBuilder: (_, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              color: colorScheme.surfaceContainerHighest,
-              child: Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
-                  color: colorScheme.primary.withValues(alpha: 0.4),
-                ),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
-  Widget _placeholder() => Container(
-        color: colorScheme.surfaceContainerHighest,
-        child: Center(
-          child: Icon(Icons.fastfood_outlined,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
-              size: 32),
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+}
+
+// ─── Shared: Action Button ────────────────────────────────────────────────────
+
+class _ActionButton extends StatelessWidget {
+  final bool inCart, unavailable;
+  final int quantity;
+  final ColorScheme cs;
+  final VoidCallback onAdd, onRemove;
+
+  const _ActionButton({
+    required this.inCart,
+    required this.unavailable,
+    required this.quantity,
+    required this.cs,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (unavailable) {
+      return Container(
+        width:     double.infinity,
+        padding:   const EdgeInsets.symmetric(vertical: 7),
+        decoration: BoxDecoration(
+          color:        cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Center(
+          child: Text('Habis',
+              style: TextStyle(
+                  fontSize:   12,
+                  color:      Colors.grey,
+                  fontWeight: FontWeight.w500)),
         ),
       );
+    }
+
+    if (inCart) {
+      return Container(
+        decoration: BoxDecoration(
+          color:        cs.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _QtyButton(icon: Icons.remove, onTap: onRemove, cs: cs),
+            Text('$quantity',
+                style: TextStyle(
+                    fontSize:   13,
+                    fontWeight: FontWeight.w700,
+                    color:      cs.primary)),
+            _QtyButton(icon: Icons.add, onTap: onAdd, cs: cs),
+          ],
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: onAdd,
+      child: Container(
+        width:   double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        decoration: BoxDecoration(
+          color:        cs.primary,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.add, size: 14, color: cs.onPrimary),
+            const SizedBox(width: 4),
+            Text('Tambah',
+                style: TextStyle(
+                    fontSize:   12,
+                    fontWeight: FontWeight.w600,
+                    color:      cs.onPrimary)),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Menu Item List Tile (List view) ─────────────────────────────────────────
@@ -915,8 +875,7 @@ class _MenuImage extends StatelessWidget {
 class _MenuItemListTile extends StatelessWidget {
   final MenuItem item;
   final int quantity;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
+  final VoidCallback onAdd, onRemove;
 
   const _MenuItemListTile({
     required this.item,
@@ -927,56 +886,52 @@ class _MenuItemListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final inCart = quantity > 0;
+    final cs          = Theme.of(context).colorScheme;
+    final inCart      = quantity > 0;
     final unavailable = !item.isAvailable;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.only(bottom: 10),
+      margin:   const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color:        cs.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: inCart
-              ? colorScheme.primary
-              : colorScheme.outlineVariant.withValues(alpha: 0.6),
+              ? cs.primary
+              : cs.outlineVariant.withValues(alpha: 0.6),
           width: inCart ? 1.5 : 0.8,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color:     Colors.black.withValues(alpha: 0.04),
             blurRadius: 4,
-            offset: const Offset(0, 2),
+            offset:     const Offset(0, 2),
           ),
         ],
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // ── Gambar kiri ──────────────────────────────────────────────
         ClipRRect(
           borderRadius:
               const BorderRadius.horizontal(left: Radius.circular(13)),
           child: SizedBox(
-            width: 100,
-            height: 100,
+            width: 100, height: 100,
             child: Stack(fit: StackFit.expand, children: [
-              _MenuImage(imageUrl: item.imageUrl, colorScheme: colorScheme),
+              _MenuImage(imageUrl: item.imageUrl, cs: cs),
               if (unavailable)
                 Container(
                   color: Colors.black.withValues(alpha: 0.5),
                   child: const Center(
                     child: Text('Habis',
                         style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
+                            color:      Colors.white,
+                            fontSize:   11,
                             fontWeight: FontWeight.w700)),
                   ),
                 ),
             ]),
           ),
         ),
-
-        // ── Konten kanan ─────────────────────────────────────────────
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
@@ -985,14 +940,14 @@ class _MenuItemListTile extends StatelessWidget {
               children: [
                 Text(item.name,
                     style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
+                        fontSize:   13,
+                        fontWeight: FontWeight.w600),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
                 if (item.description.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(item.description,
-                      style: TextStyle(
-                          fontSize: 11, color: Colors.grey[500]),
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ],
@@ -1000,77 +955,19 @@ class _MenuItemListTile extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      _fmt(item.price),
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.primary),
+                    Text(_fmt(item.price),
+                        style: TextStyle(
+                            fontSize:   13,
+                            fontWeight: FontWeight.w700,
+                            color:      cs.primary)),
+                    _ActionButton(
+                      inCart:      inCart,
+                      unavailable: unavailable,
+                      quantity:    quantity,
+                      cs:          cs,
+                      onAdd:       onAdd,
+                      onRemove:    onRemove,
                     ),
-                    unavailable
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text('Habis',
-                                style: TextStyle(
-                                    fontSize: 11, color: Colors.grey)),
-                          )
-                        : inCart
-                            ? Container(
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primary
-                                      .withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _QtyButton(
-                                        icon: Icons.remove,
-                                        onTap: onRemove),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10),
-                                      child: Text('$quantity',
-                                          style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
-                                              color: colorScheme.primary)),
-                                    ),
-                                    _QtyButton(
-                                        icon: Icons.add, onTap: onAdd),
-                                  ],
-                                ),
-                              )
-                            : GestureDetector(
-                                onTap: onAdd,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.add,
-                                          size: 14,
-                                          color: colorScheme.onPrimary),
-                                      const SizedBox(width: 4),
-                                      Text('Tambah',
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: colorScheme.onPrimary)),
-                                    ],
-                                  ),
-                                ),
-                              ),
                   ],
                 ),
               ],
@@ -1081,8 +978,8 @@ class _MenuItemListTile extends StatelessWidget {
     );
   }
 
-  String _fmt(double price) =>
-      'Rp ${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
 
 // ─── Qty Button ───────────────────────────────────────────────────────────────
@@ -1090,20 +987,20 @@ class _MenuItemListTile extends StatelessWidget {
 class _QtyButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _QtyButton({required this.icon, required this.onTap});
+  final ColorScheme cs;
+  const _QtyButton(
+      {required this.icon, required this.onTap, required this.cs});
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 30,
-        height: 30,
+        width: 30, height: 30,
         decoration: BoxDecoration(
-            color: colorScheme.primary.withValues(alpha: 0.12),
+            color:        cs.primary.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, size: 15, color: colorScheme.primary),
+        child: Icon(icon, size: 15, color: cs.primary),
       ),
     );
   }
@@ -1113,8 +1010,7 @@ class _QtyButton extends StatelessWidget {
 
 class _CartFab extends StatelessWidget {
   final QrOrderSession cart;
-  final String tableId;
-  final String tableName;
+  final String tableId, tableName;
 
   const _CartFab(
       {required this.cart, required this.tableId, required this.tableName});
@@ -1122,39 +1018,38 @@ class _CartFab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cs    = theme.colorScheme;
 
     return GestureDetector(
       onTap: () => context.push('/qr/$tableId/cart'),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          color: colorScheme.primary,
+          color:        cs.primary,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: colorScheme.primary.withValues(alpha: 0.35),
+                color:     cs.primary.withValues(alpha: 0.35),
                 blurRadius: 12,
-                offset: const Offset(0, 4))
+                offset:     const Offset(0, 4))
           ],
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Stack(children: [
             Icon(Icons.shopping_cart_outlined,
-                color: colorScheme.onPrimary, size: 22),
+                color: cs.onPrimary, size: 22),
             Positioned(
-              top: -2,
-              right: -2,
+              top: -2, right: -2,
               child: Container(
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
-                    color: colorScheme.error, shape: BoxShape.circle),
+                    color: cs.error, shape: BoxShape.circle),
                 constraints:
                     const BoxConstraints(minWidth: 14, minHeight: 14),
                 child: Text('${cart.totalItems}',
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
+                        color:      Colors.white,
+                        fontSize:   9,
                         fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center),
               ),
@@ -1163,23 +1058,21 @@ class _CartFab extends StatelessWidget {
           const SizedBox(width: 10),
           Text('Keranjang',
               style: theme.textTheme.labelLarge?.copyWith(
-                  color: colorScheme.onPrimary,
+                  color:      cs.onPrimary,
                   fontWeight: FontWeight.bold)),
           const SizedBox(width: 8),
-          Container(
-              width: 1,
-              height: 16,
-              color: colorScheme.onPrimary.withValues(alpha: 0.4)),
+          Container(width: 1, height: 16,
+              color: cs.onPrimary.withValues(alpha: 0.4)),
           const SizedBox(width: 8),
-          Text(_formatPrice(cart.totalAmount),
+          Text(_fmt(cart.totalAmount),
               style: theme.textTheme.labelLarge?.copyWith(
-                  color: colorScheme.onPrimary,
+                  color:      cs.onPrimary,
                   fontWeight: FontWeight.bold)),
         ]),
       ),
     );
   }
 
-  String _formatPrice(double price) =>
-      'Rp ${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
