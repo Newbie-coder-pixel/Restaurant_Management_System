@@ -222,9 +222,7 @@ class _MenuBody extends ConsumerWidget {
                     categories: categories,
                     selected:   selectedCat,
                     onSelect:   (cat) {
-                      // Tap "Semua" atau tap kategori yang sudah aktif → reset
-                      ref.read(_selectedCategoryProvider.notifier).state =
-                          (cat == selectedCat) ? null : cat;
+                      ref.read(_selectedCategoryProvider.notifier).state = cat;
                     },
                   ),
 
@@ -362,7 +360,7 @@ class _QrMenuHeader extends StatelessWidget {
 class _CategorySidebar extends StatelessWidget {
   final List<String> categories;
   final String? selected;
-  final ValueChanged<String> onSelect;
+  final ValueChanged<String?> onSelect;
 
   const _CategorySidebar({
     required this.categories,
@@ -412,10 +410,10 @@ class _CategorySidebar extends StatelessWidget {
           return GestureDetector(
             onTap: () {
               if (isSemua) {
-                // Kalau sudah di "Semua", tidak perlu melakukan apa-apa
-                if (selected != null) onSelect(selected!);
+                onSelect(null); // reset ke "Semua" = tampilkan semua
               } else {
-                onSelect(label);
+                // Toggle: kalau sudah aktif → kembali ke semua, kalau belum → pilih
+                onSelect(selected == label ? null : label);
               }
             },
             child: AnimatedContainer(
