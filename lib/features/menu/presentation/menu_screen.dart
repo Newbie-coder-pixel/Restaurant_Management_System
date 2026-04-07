@@ -104,14 +104,30 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 backgroundColor: AppColors.primary, foregroundColor: Colors.white),
             onPressed: () async {
               if (nameCtrl.text.trim().isEmpty) return;
-              await Supabase.instance.client.from('menu_categories').insert({
-                'branch_id': _branchId,
-                'name': nameCtrl.text.trim(),
-                'sort_order': _categories.length + 1,
-                'is_active': true,
-              });
-              if (ctx.mounted) Navigator.pop(ctx);
-              await _load();
+              try {
+                await Supabase.instance.client.from('menu_categories').insert({
+                  'branch_id': _branchId,
+                  'name': nameCtrl.text.trim(),
+                  'sort_order': _categories.length + 1,
+                  'is_active': true,
+                });
+                if (ctx.mounted) Navigator.pop(ctx);
+                await _load();
+              } on PostgrestException catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text('Gagal menyimpan: ${e.message}'),
+                    backgroundColor: Colors.red,
+                  ));
+                }
+              } catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                  ));
+                }
+              }
             },
             child: const Text('Simpan'),
           ),
@@ -141,13 +157,22 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent, foregroundColor: Colors.white),
             onPressed: () async {
-              await Supabase.instance.client
-                  .from('menu_categories')
-                  .delete()
-                  .eq('id', cat.id);
-              if (ctx.mounted) Navigator.pop(ctx);
-              setState(() => _selectedCategoryId = null);
-              await _load();
+              try {
+                await Supabase.instance.client
+                    .from('menu_categories')
+                    .delete()
+                    .eq('id', cat.id);
+                if (ctx.mounted) Navigator.pop(ctx);
+                setState(() => _selectedCategoryId = null);
+                await _load();
+              } on PostgrestException catch (e) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    content: Text('Gagal menghapus: ${e.message}'),
+                    backgroundColor: Colors.red,
+                  ));
+                }
+              }
             },
             child: const Text('Hapus'),
           ),
