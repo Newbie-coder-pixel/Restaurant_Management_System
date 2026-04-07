@@ -15,7 +15,6 @@ class QrOrderRepository {
     required QrOrderSession session,
     required String branchId,
   }) async {
-    // Generate queue number: 3-digit daily sequence, e.g. A001
     final queueNumber = await _generateQueueNumber(branchId);
 
     final orderData = {
@@ -145,14 +144,41 @@ class QrOrderRepository {
   }
 
   // ─── Fetch Table Info ───────────────────────────────────────────────────────
+  // FIX: Ganti FK join PostgREST `branches(name, id)` → 2-step query terpisah.
+  // FK join gagal di mobile karena RLS anon/public role tidak punya permission
+  // untuk resolve foreign key ke tabel `branches` secara langsung via PostgREST.
 
   Future<Map<String, dynamic>?> fetchTableInfo(String tableId) async {
-    final response = await _client
+    // Step 1: Ambil data meja tanpa join
+    final tableRow = await _client
         .from('restaurant_tables')
-        .select('*, branches(name, id)')
+        .select('id, table_number, branch_id, status, capacity, description')
         .eq('id', tableId)
         .maybeSingle();
-    return response;
+
+    if (tableRow == null) return null;
+
+    // Step 2: Ambil branch secara terpisah menggunakan branch_id dari meja
+    final branchId = tableRow['branch_id'] as String?;
+    Map<String, dynamic>? branchData;
+    if (branchId != null && branchId.isNotEmpty) {
+      try {
+        branchData = await _client
+            .from('branches')
+            .select('id, name')
+            .eq('id', branchId)
+            .maybeSingle();
+      } catch (_) {
+        // Lanjut tanpa nama branch — branchId tetap ada untuk load menu
+      }
+    }
+
+    // Step 3: Gabungkan dengan struktur yang sama persis dengan FK join
+    // sehingga kode di qr_menu_screen.dart tidak perlu diubah sama sekali
+    return {
+      ...tableRow,
+      'branches': branchData,
+    };
   }
 
   // ─── Private: Generate Queue Number ────────────────────────────────────────
@@ -173,7 +199,6 @@ class QrOrderRepository {
       if (rows.isEmpty) return 'A001';
 
       final lastQueue = rows.first['queue_number'] as String;
-      // Format: A001, A002 ... A999, B001 ...
       final letter = lastQueue[0];
       final number = int.tryParse(lastQueue.substring(1)) ?? 0;
 
@@ -184,7 +209,6 @@ class QrOrderRepository {
         return '${nextLetter}001';
       }
     } catch (_) {
-      // Fallback: random 3-digit
       final rnd = Random().nextInt(999) + 1;
       return 'A${rnd.toString().padLeft(3, '0')}';
     }
