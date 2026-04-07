@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/qr_cart_provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../data/qr_order_repository.dart';
 
 // ─── Local Providers ──────────────────────────────────────────────────────────
@@ -24,21 +23,6 @@ final _tableInfoProvider =
 
 final _selectedCategoryProvider = StateProvider<String?>((ref) => null);
 final _searchQueryProvider      = StateProvider<String>((ref) => '');
-
-// Provider minimal: hanya query branch_id dari restaurant_tables, tanpa join
-final _branchIdProvider =
-    FutureProvider.family<String, String>((ref, tableId) async {
-  try {
-    final row = await Supabase.instance.client
-        .from('restaurant_tables')
-        .select('branch_id')
-        .eq('id', tableId)
-        .maybeSingle();
-    return (row?['branch_id'] as String?)?.trim() ?? '';
-  } catch (_) {
-    return '';
-  }
-});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -98,11 +82,14 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
 
   @override
   Widget build(BuildContext context) {
-    final branchIdAsync  = ref.watch(_branchIdProvider(widget.tableId));
+    // ─── FIX: Hanya gunakan satu provider (_tableInfoProvider) ───────────────
+    // _branchIdProvider dihapus karena menyebabkan race condition di HP:
+    // dua query terpisah ke restaurant_tables, yang satu bisa return ''
+    // sebelum data tiba sehingga menu tidak pernah di-fetch.
     final tableInfoAsync = ref.watch(_tableInfoProvider(widget.tableId));
     final theme = Theme.of(context);
 
-    return branchIdAsync.when(
+    return tableInfoAsync.when(
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
@@ -116,7 +103,11 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
           ]),
         ),
       ),
-      data: (branchId) {
+      data: (tableData) {
+        // Ambil branchId langsung dari tableData — tidak perlu query tambahan
+        final branchId =
+            (tableData?['branch_id'] as String?)?.trim() ?? '';
+
         if (branchId.isEmpty) {
           return Scaffold(
             body: Center(
@@ -124,16 +115,17 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
                 const Icon(Icons.table_restaurant_outlined,
                     size: 64, color: Colors.orange),
                 const SizedBox(height: 16),
-                Text('Meja tidak tersedia', style: theme.textTheme.titleLarge),
+                Text('Meja tidak tersedia',
+                    style: theme.textTheme.titleLarge),
               ]),
             ),
           );
         }
 
-        final tableData  = tableInfoAsync.valueOrNull;
         final branch     = tableData?['branches'] as Map<String, dynamic>?;
         final branchName = branch?['name'] as String? ?? 'Restoran';
-        final tableName  = (tableData?['table_number'] as String?) ?? 'Meja';
+        final tableName  =
+            (tableData?['table_number'] as String?) ?? 'Meja';
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref.read(activeQrTableProvider.notifier).state =
@@ -239,7 +231,8 @@ class _MenuBody extends ConsumerWidget {
                     categories: categories,
                     selected:   selectedCat,
                     onSelect:   (cat) {
-                      ref.read(_selectedCategoryProvider.notifier).state = cat;
+                      ref.read(_selectedCategoryProvider.notifier).state =
+                          cat;
                     },
                   ),
 
@@ -309,7 +302,9 @@ class _QrMenuHeader extends StatelessWidget {
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             Row(children: [
               Icon(Icons.restaurant, color: cs.onPrimary, size: 20),
               const SizedBox(width: 8),
@@ -320,24 +315,28 @@ class _QrMenuHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
                   color:        cs.onPrimary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.table_restaurant, size: 14, color: cs.onPrimary),
+                  Icon(Icons.table_restaurant,
+                      size: 14, color: cs.onPrimary),
                   const SizedBox(width: 4),
                   Text(tableName,
                       style: theme.textTheme.labelMedium?.copyWith(
-                          color: cs.onPrimary, fontWeight: FontWeight.bold)),
+                          color:      cs.onPrimary,
+                          fontWeight: FontWeight.bold)),
                 ]),
               ),
             ]),
             const SizedBox(height: 8),
             Text('Pilih menu favoritmu',
                 style: theme.textTheme.headlineSmall?.copyWith(
-                    color: cs.onPrimary, fontWeight: FontWeight.bold)),
+                    color:      cs.onPrimary,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 14),
             TextField(
               controller: searchCtrl,
@@ -387,7 +386,7 @@ class _CategorySidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final cs  = Theme.of(context).colorScheme;
     final all = ['Semua', ...categories];
 
     return Container(
@@ -396,9 +395,9 @@ class _CategorySidebar extends StatelessWidget {
         color: cs.surface,
         boxShadow: [
           BoxShadow(
-              color:     Colors.black.withValues(alpha: 0.05),
+              color:      Colors.black.withValues(alpha: 0.05),
               blurRadius: 4,
-              offset:    const Offset(2, 0)),
+              offset:     const Offset(2, 0)),
         ],
       ),
       child: ListView(
@@ -423,17 +422,24 @@ class _CategorySidebar extends StatelessWidget {
             child: AnimatedContainer(
               duration:   const Duration(milliseconds: 150),
               margin:     const EdgeInsets.fromLTRB(8, 2, 8, 2),
-              padding:    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding:    const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color:        selected == null ? cs.primary : Colors.transparent,
+                color: selected == null
+                    ? cs.primary
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 'Semua',
                 style: TextStyle(
                     fontSize:   13,
-                    fontWeight: selected == null ? FontWeight.w600 : FontWeight.normal,
-                    color:      selected == null ? cs.onPrimary : cs.onSurfaceVariant),
+                    fontWeight: selected == null
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: selected == null
+                        ? cs.onPrimary
+                        : cs.onSurfaceVariant),
               ),
             ),
           ),
@@ -446,17 +452,22 @@ class _CategorySidebar extends StatelessWidget {
               child: AnimatedContainer(
                 duration:   const Duration(milliseconds: 150),
                 margin:     const EdgeInsets.fromLTRB(8, 2, 8, 2),
-                padding:    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:    const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color:        isActive ? cs.primary : Colors.transparent,
+                  color: isActive ? cs.primary : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   label,
                   style: TextStyle(
                       fontSize:   13,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                      color:      isActive ? cs.onPrimary : cs.onSurfaceVariant),
+                      fontWeight: isActive
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      color: isActive
+                          ? cs.onPrimary
+                          : cs.onSurfaceVariant),
                 ),
               ),
             );
@@ -467,7 +478,7 @@ class _CategorySidebar extends StatelessWidget {
   }
 }
 
-// ─── Menu List (list view only) ───────────────────────────────────────────────
+// ─── Menu List ────────────────────────────────────────────────────────────────
 
 class _MenuList extends ConsumerWidget {
   final List<MenuItem> items;
@@ -538,7 +549,7 @@ class _MenuItemTile extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color:     inCart
+            color: inCart
                 ? cs.primary.withValues(alpha: 0.07)
                 : Colors.black.withValues(alpha: 0.04),
             blurRadius: 6,
@@ -550,7 +561,8 @@ class _MenuItemTile extends StatelessWidget {
 
         // ── Gambar kiri: 90×90 rounded ────────────────────────────────
         ClipRRect(
-          borderRadius: const BorderRadius.horizontal(left: Radius.circular(15)),
+          borderRadius:
+              const BorderRadius.horizontal(left: Radius.circular(15)),
           child: SizedBox(
             width: 90, height: 90,
             child: Stack(fit: StackFit.expand, children: [
@@ -573,12 +585,12 @@ class _MenuItemTile extends StatelessWidget {
         // ── Konten tengah ─────────────────────────────────────────────
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize:       MainAxisSize.min,
               children: [
-                // Nama
                 Text(
                   item.name,
                   style: const TextStyle(
@@ -587,7 +599,6 @@ class _MenuItemTile extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                // Deskripsi
                 if (item.description.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
@@ -601,7 +612,6 @@ class _MenuItemTile extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 6),
-                // Harga
                 Text(
                   _fmt(item.price),
                   style: TextStyle(
@@ -627,44 +637,42 @@ class _MenuItemTile extends StatelessWidget {
                   ),
                   child: Text('Habis',
                       style: TextStyle(
-                          fontSize: 12,
-                          color:    cs.onSurfaceVariant,
+                          fontSize:   12,
+                          color:      cs.onSurfaceVariant,
                           fontWeight: FontWeight.w500)),
                 )
               : inCart
-                  // ── Stepper qty ──────────────────────────────────────
                   ? Container(
                       decoration: BoxDecoration(
-                        color:        cs.primary.withValues(alpha: 0.08),
+                        color: cs.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                             color: cs.primary.withValues(alpha: 0.2),
                             width: 1),
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        _QtyBtn(
-                          icon:  Icons.remove,
-                          onTap: onRemove,
-                          cs:    cs,
-                        ),
-                        SizedBox(
-                          width: 28,
-                          child: Center(
-                            child: Text('$quantity',
-                                style: TextStyle(
-                                    fontSize:   14,
-                                    fontWeight: FontWeight.w800,
-                                    color:      cs.primary)),
-                          ),
-                        ),
-                        _QtyBtn(
-                          icon:  Icons.add,
-                          onTap: onAdd,
-                          cs:    cs,
-                        ),
-                      ]),
+                      child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _QtyBtn(
+                                icon: Icons.remove,
+                                onTap: onRemove,
+                                cs: cs),
+                            SizedBox(
+                              width: 28,
+                              child: Center(
+                                child: Text('$quantity',
+                                    style: TextStyle(
+                                        fontSize:   14,
+                                        fontWeight: FontWeight.w800,
+                                        color:      cs.primary)),
+                              ),
+                            ),
+                            _QtyBtn(
+                                icon: Icons.add,
+                                onTap: onAdd,
+                                cs: cs),
+                          ]),
                     )
-                  // ── Tombol Tambah ────────────────────────────────────
                   : GestureDetector(
                       onTap: onAdd,
                       child: Container(
@@ -674,15 +682,18 @@ class _MenuItemTile extends StatelessWidget {
                           color:        cs.primary,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.add, size: 14, color: cs.onPrimary),
-                          const SizedBox(width: 4),
-                          Text('Tambah',
-                              style: TextStyle(
-                                  fontSize:   12,
-                                  fontWeight: FontWeight.w600,
-                                  color:      cs.onPrimary)),
-                        ]),
+                        child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add,
+                                  size: 14, color: cs.onPrimary),
+                              const SizedBox(width: 4),
+                              Text('Tambah',
+                                  style: TextStyle(
+                                      fontSize:   12,
+                                      fontWeight: FontWeight.w600,
+                                      color:      cs.onPrimary)),
+                            ]),
                       ),
                     ),
         ),
@@ -690,8 +701,8 @@ class _MenuItemTile extends StatelessWidget {
     );
   }
 
-  String _fmt(double p) =>
-      'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
 
 // ─── Qty Button ───────────────────────────────────────────────────────────────
@@ -700,7 +711,8 @@ class _QtyBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final ColorScheme cs;
-  const _QtyBtn({required this.icon, required this.onTap, required this.cs});
+  const _QtyBtn(
+      {required this.icon, required this.onTap, required this.cs});
 
   @override
   Widget build(BuildContext context) {
@@ -714,7 +726,7 @@ class _QtyBtn extends StatelessWidget {
   }
 }
 
-// ─── Menu Image (double fallback) ─────────────────────────────────────────────
+// ─── Menu Image ───────────────────────────────────────────────────────────────
 
 class _MenuImage extends StatelessWidget {
   final String? imageUrl;
@@ -738,7 +750,7 @@ class _MenuImage extends StatelessWidget {
             width: 16, height: 16,
             child: CircularProgressIndicator(
               strokeWidth: 1.5,
-              color: cs.primary.withValues(alpha: 0.3),
+              color:       cs.primary.withValues(alpha: 0.3),
             ),
           ),
         ),
@@ -786,22 +798,23 @@ class _CartFab extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color:     cs.primary.withValues(alpha: 0.35),
+                color:      cs.primary.withValues(alpha: 0.35),
                 blurRadius: 12,
                 offset:     const Offset(0, 4))
           ],
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Stack(children: [
-            Icon(Icons.shopping_cart_outlined, color: cs.onPrimary, size: 22),
+            Icon(Icons.shopping_cart_outlined,
+                color: cs.onPrimary, size: 22),
             Positioned(
               top: -2, right: -2,
               child: Container(
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
                     color: cs.error, shape: BoxShape.circle),
-                constraints:
-                    const BoxConstraints(minWidth: 14, minHeight: 14),
+                constraints: const BoxConstraints(
+                    minWidth: 14, minHeight: 14),
                 child: Text('${cart.totalItems}',
                     style: const TextStyle(
                         color:      Colors.white,
@@ -830,6 +843,6 @@ class _CartFab extends StatelessWidget {
     );
   }
 
-  String _fmt(double p) =>
-      'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
