@@ -7,16 +7,15 @@ import '../data/qr_order_repository.dart';
 
 // ─── Local Providers ──────────────────────────────────────────────────────────
 
-final _menuDataProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String>(
+final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, branchId) async {
     final repo = ref.read(qrOrderRepositoryProvider);
     return repo.fetchMenuByBranch(branchId);
   },
 );
 
-final _tableInfoProvider =
-    FutureProvider.family<Map<String, dynamic>?, String>((ref, tableId) async {
+final _tableInfoProvider = FutureProvider.family<Map<String, dynamic>?, String>(
+    (ref, tableId) async {
   final repo = ref.read(qrOrderRepositoryProvider);
   return repo.fetchTableInfo(tableId);
 });
@@ -86,8 +85,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
     final theme = Theme.of(context);
 
     return tableInfoAsync.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
         body: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -106,11 +104,9 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
           return Scaffold(
             body: Center(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.table_restaurant_outlined,
-                    size: 64, color: Colors.orange),
+                const Icon(Icons.table_restaurant_outlined, size: 64, color: Colors.orange),
                 const SizedBox(height: 16),
-                Text('Meja tidak tersedia',
-                    style: theme.textTheme.titleLarge),
+                Text('Meja tidak tersedia', style: theme.textTheme.titleLarge),
               ]),
             ),
           );
@@ -140,7 +136,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
   }
 }
 
-// ─── Menu Body ────────────────────────────────────────────────────────────────
+// ─── Menu Body (Responsive) ───────────────────────────────────────────────────
 
 class _MenuBody extends ConsumerWidget {
   final String tableId, tableName, branchId, branchName;
@@ -167,8 +163,7 @@ class _MenuBody extends ConsumerWidget {
     final searchQuery = ref.watch(_searchQueryProvider);
     final cart = ref.watch(activeQrCartProvider);
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isWideScreen = screenWidth > 600; // Web / Tablet
+    final isWideScreen = MediaQuery.of(context).size.width > 700;
 
     cart.totalItems > 0 ? fabAnimCtrl.forward() : fabAnimCtrl.reverse();
 
@@ -180,8 +175,7 @@ class _MenuBody extends ConsumerWidget {
             tableName: tableName,
             branchName: branchName,
             searchCtrl: searchCtrl,
-            onSearchChanged: (q) =>
-                ref.read(_searchQueryProvider.notifier).state = q,
+            onSearchChanged: (q) => ref.read(_searchQueryProvider.notifier).state = q,
           ),
           Expanded(
             child: menuAsync.when(
@@ -193,8 +187,7 @@ class _MenuBody extends ConsumerWidget {
                   Text('Gagal memuat menu: $e'),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () =>
-                        ref.invalidate(_menuDataProvider(branchId)),
+                    onPressed: () => ref.invalidate(_menuDataProvider(branchId)),
                     child: const Text('Coba Lagi'),
                   ),
                 ]),
@@ -211,46 +204,53 @@ class _MenuBody extends ConsumerWidget {
                 if (searchQuery.isNotEmpty) {
                   final q = searchQuery.toLowerCase();
                   displayItems = displayItems
-                      .where((i) =>
-                          i.name.toLowerCase().contains(q) ||
+                      .where((i) => i.name.toLowerCase().contains(q) ||
                           i.description.toLowerCase().contains(q))
                       .toList();
                 }
 
-                return Column(
-                  children: [
-                    // Kategori Responsive
-                    _CategorySelector(
-                      categories: categories,
-                      selected: selectedCat,
-                      onSelect: (cat) {
-                        ref.read(_selectedCategoryProvider.notifier).state = cat;
-                      },
-                      isWideScreen: isWideScreen,
-                    ),
-
-                    // Daftar Menu
-                    Expanded(
-                      child: displayItems.isEmpty
-                          ? const Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.search_off,
-                                      size: 48, color: Colors.grey),
-                                  SizedBox(height: 12),
-                                  Text('Menu tidak ditemukan'),
-                                ],
-                              ),
-                            )
-                          : _MenuList(
-                              items: displayItems,
-                              tableId: tableId,
-                              tableName: tableName,
-                            ),
-                    ),
-                  ],
-                );
+                if (isWideScreen) {
+                  // === WEB / TABLET LAYOUT ===
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _CategorySidebar(
+                        categories: categories,
+                        selected: selectedCat,
+                        onSelect: (cat) {
+                          ref.read(_selectedCategoryProvider.notifier).state = cat;
+                        },
+                      ),
+                      Expanded(
+                        child: _MenuContent(
+                          displayItems: displayItems,
+                          tableId: tableId,
+                          tableName: tableName,
+                        ),
+                      ),
+                    ],
+                  );
+                } else {
+                  // === MOBILE LAYOUT ===
+                  return Column(
+                    children: [
+                      _CategorySelector(
+                        categories: categories,
+                        selected: selectedCat,
+                        onSelect: (cat) {
+                          ref.read(_selectedCategoryProvider.notifier).state = cat;
+                        },
+                      ),
+                      Expanded(
+                        child: _MenuContent(
+                          displayItems: displayItems,
+                          tableId: tableId,
+                          tableName: tableName,
+                        ),
+                      ),
+                    ],
+                  );
+                }
               },
             ),
           ),
@@ -259,28 +259,94 @@ class _MenuBody extends ConsumerWidget {
       floatingActionButton: cart.isEmpty
           ? null
           : ScaleTransition(
-              scale: CurvedAnimation(
-                  parent: fabAnimCtrl, curve: Curves.elasticOut),
-              child: _CartFab(
-                  cart: cart, tableId: tableId, tableName: tableName),
+              scale: CurvedAnimation(parent: fabAnimCtrl, curve: Curves.elasticOut),
+              child: _CartFab(cart: cart, tableId: tableId, tableName: tableName),
             ),
     );
   }
 }
 
-// ─── Category Selector (Responsive) ───────────────────────────────────────────
+// ─── Category Sidebar (Web) ───────────────────────────────────────────────────
+
+class _CategorySidebar extends StatelessWidget {
+  final List<String> categories;
+  final String? selected;
+  final ValueChanged<String?> onSelect;
+
+  const _CategorySidebar({
+    required this.categories,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final all = ['Semua', ...categories];
+
+    return Container(
+      width: 180,
+      decoration: BoxDecoration(
+        color: cs.surface,
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(2, 0)),
+        ],
+      ),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Text(
+              'KATEGORI',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurfaceVariant,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          ...all.map((label) {
+            final isActive = selected == (label == 'Semua' ? null : label);
+            return GestureDetector(
+              onTap: () => onSelect(label == 'Semua' ? null : label),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isActive ? cs.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                    color: isActive ? cs.onPrimary : cs.onSurface,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Category Selector (Mobile) ───────────────────────────────────────────────
 
 class _CategorySelector extends StatelessWidget {
   final List<String> categories;
   final String? selected;
   final ValueChanged<String?> onSelect;
-  final bool isWideScreen;
 
   const _CategorySelector({
     required this.categories,
     required this.selected,
     required this.onSelect,
-    required this.isWideScreen,
   });
 
   @override
@@ -288,98 +354,340 @@ class _CategorySelector extends StatelessWidget {
     final allCategories = ['Semua', ...categories];
     final cs = Theme.of(context).colorScheme;
 
-    if (isWideScreen) {
-      // Sidebar untuk Web / Tablet
-      return Container(
-        width: 160,
-        decoration: BoxDecoration(
-          color: cs.surface,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 4,
-              offset: const Offset(2, 0),
-            ),
-          ],
-        ),
-        child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              child: Text(
-                'KATEGORI',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurfaceVariant,
-                  letterSpacing: 1,
-                ),
-              ),
-            ),
-            ...allCategories.map((label) {
-              final isActive = selected == (label == 'Semua' ? null : label);
-              return GestureDetector(
-                onTap: () => onSelect(label == 'Semua' ? null : label),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isActive ? cs.primary : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                      color: isActive
-                          ? cs.onPrimary
-                          : cs.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ],
-        ),
-      );
-    } else {
-      // Horizontal Chips untuk Mobile
-      return Container(
-        height: 60,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: allCategories.length,
-          itemBuilder: (context, index) {
-            final label = allCategories[index];
-            final isActive = selected == (label == 'Semua' ? null : label);
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: allCategories.length,
+        itemBuilder: (context, index) {
+          final label = allCategories[index];
+          final isActive = selected == (label == 'Semua' ? null : label);
 
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: FilterChip(
-                selected: isActive,
-                label: Text(label),
-                onSelected: (_) => onSelect(label == 'Semua' ? null : label),
-                backgroundColor: cs.surfaceContainer,
-                selectedColor: cs.primary,
-                labelStyle: TextStyle(
-                  color: isActive ? cs.onPrimary : cs.onSurface,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                ),
-                elevation: 0,
-                pressElevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              selected: isActive,
+              label: Text(label),
+              onSelected: (_) => onSelect(label == 'Semua' ? null : label),
+              backgroundColor: cs.surfaceContainer,
+              selectedColor: cs.primary,
+              labelStyle: TextStyle(
+                color: isActive ? cs.onPrimary : cs.onSurface,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
               ),
-            );
-          },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Menu Content ─────────────────────────────────────────────────────────────
+
+class _MenuContent extends StatelessWidget {
+  final List<MenuItem> displayItems;
+  final String tableId;
+  final String tableName;
+
+  const _MenuContent({
+    required this.displayItems,
+    required this.tableId,
+    required this.tableName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (displayItems.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off, size: 48, color: Colors.grey),
+            SizedBox(height: 12),
+            Text('Menu tidak ditemukan'),
+          ],
         ),
       );
     }
+
+    return _MenuList(items: displayItems, tableId: tableId, tableName: tableName);
   }
+}
+
+// ─── Menu List ────────────────────────────────────────────────────────────────
+
+class _MenuList extends ConsumerWidget {
+  final List<MenuItem> items;
+  final String tableId, tableName;
+
+  const _MenuList({
+    required this.items,
+    required this.tableId,
+    required this.tableName,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cart = ref.watch(activeQrCartProvider);
+    final notifier = ref.read(activeQrCartNotifierProvider);
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) {
+        final item = items[i];
+        final qty = cart.items
+            .where((c) => c.menuItem.id == item.id)
+            .fold(0, (s, c) => s + c.quantity);
+
+        return _MenuItemTile(
+          item: item,
+          quantity: qty,
+          onAdd: () => notifier.addItem(item),
+          onRemove: () => notifier.removeItem(item.id),
+        );
+      },
+    );
+  }
+}
+
+// ─── Menu Item Tile ───────────────────────────────────────────────────────────
+
+class _MenuItemTile extends StatelessWidget {
+  final MenuItem item;
+  final int quantity;
+  final VoidCallback onAdd, onRemove;
+
+  const _MenuItemTile({
+    required this.item,
+    required this.quantity,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final inCart = quantity > 0;
+    final unavailable = !item.isAvailable;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: inCart ? cs.primary : cs.outlineVariant.withValues(alpha: 0.5),
+          width: inCart ? 1.5 : 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: inCart
+                ? cs.primary.withValues(alpha: 0.07)
+                : Colors.black.withValues(alpha: 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.horizontal(left: Radius.circular(15)),
+            child: SizedBox(
+              width: 90,
+              height: 90,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _MenuImage(imageUrl: item.imageUrl, cs: cs),
+                  if (unavailable)
+                    Container(
+                      color: Colors.black.withValues(alpha: 0.52),
+                      child: const Center(
+                        child: Text('Habis',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (item.description.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.description,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                          height: 1.3),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Text(
+                    _fmt(item.price),
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: cs.primary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: unavailable
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('Habis',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w500)),
+                  )
+                : inCart
+                    ? Container(
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: cs.primary.withValues(alpha: 0.2), width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _QtyBtn(icon: Icons.remove, onTap: onRemove, cs: cs),
+                            SizedBox(
+                              width: 28,
+                              child: Center(
+                                child: Text('$quantity',
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: cs.primary)),
+                              ),
+                            ),
+                            _QtyBtn(icon: Icons.add, onTap: onAdd, cs: cs),
+                          ],
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: onAdd,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: cs.primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add, size: 14, color: cs.onPrimary),
+                              const SizedBox(width: 4),
+                              Text('Tambah',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: cs.onPrimary)),
+                            ],
+                          ),
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+}
+
+// ─── Qty Button ───────────────────────────────────────────────────────────────
+
+class _QtyBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final ColorScheme cs;
+
+  const _QtyBtn({required this.icon, required this.onTap, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: Icon(icon, size: 16, color: cs.primary),
+      ),
+    );
+  }
+}
+
+// ─── Menu Image ───────────────────────────────────────────────────────────────
+
+class _MenuImage extends StatelessWidget {
+  final String? imageUrl;
+  final ColorScheme cs;
+
+  const _MenuImage({required this.imageUrl, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.trim().isEmpty) return _placeholder();
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl!,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => Container(
+        color: cs.surfaceContainerHighest,
+        child: const Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 1.5),
+          ),
+        ),
+      ),
+      errorWidget: (_, __, ___) => _placeholder(),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: cs.surfaceContainerHighest,
+        child: const Center(
+          child: Icon(Icons.fastfood_outlined, size: 28, color: Colors.grey),
+        ),
+      );
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
@@ -423,8 +731,7 @@ class _QrMenuHeader extends StatelessWidget {
                       overflow: TextOverflow.ellipsis),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
                     color: cs.onPrimary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
@@ -462,8 +769,7 @@ class _QrMenuHeader extends StatelessWidget {
                       : null,
                   filled: true,
                   fillColor: cs.surface,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none),
@@ -478,275 +784,7 @@ class _QrMenuHeader extends StatelessWidget {
   }
 }
 
-// ─── Menu List & Tile (tidak diubah) ─────────────────────────────────────────
-
-class _MenuList extends ConsumerWidget {
-  final List<MenuItem> items;
-  final String tableId, tableName;
-
-  const _MenuList({
-    required this.items,
-    required this.tableId,
-    required this.tableName,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cart = ref.watch(activeQrCartProvider);
-    final notifier = ref.read(activeQrCartNotifierProvider);
-
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (_, i) {
-        final item = items[i];
-        final qty = cart.items
-            .where((c) => c.menuItem.id == item.id)
-            .fold(0, (s, c) => s + c.quantity);
-
-        return _MenuItemTile(
-          item: item,
-          quantity: qty,
-          onAdd: () => notifier.addItem(item),
-          onRemove: () => notifier.removeItem(item.id),
-        );
-      },
-    );
-  }
-}
-
-// ─── Menu Item Tile, QtyBtn, MenuImage, CartFab (sama seperti sebelumnya) ─────
-
-class _MenuItemTile extends StatelessWidget {
-  final MenuItem item;
-  final int quantity;
-  final VoidCallback onAdd, onRemove;
-
-  const _MenuItemTile({
-    required this.item,
-    required this.quantity,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final inCart = quantity > 0;
-    final unavailable = !item.isAvailable;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: inCart
-              ? cs.primary
-              : cs.outlineVariant.withValues(alpha: 0.5),
-          width: inCart ? 1.5 : 0.8,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: inCart
-                ? cs.primary.withValues(alpha: 0.07)
-                : Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        ClipRRect(
-          borderRadius:
-              const BorderRadius.horizontal(left: Radius.circular(15)),
-          child: SizedBox(
-            width: 90,
-            height: 90,
-            child: Stack(fit: StackFit.expand, children: [
-              _MenuImage(imageUrl: item.imageUrl, cs: cs),
-              if (unavailable)
-                Container(
-                  color: Colors.black.withValues(alpha: 0.52),
-                  child: const Center(
-                    child: Text('Habis',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ),
-            ]),
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  item.name,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w700),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (item.description.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    item.description,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: cs.onSurfaceVariant,
-                        height: 1.3),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 6),
-                Text(
-                  _fmt(item.price),
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: cs.primary),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: unavailable
-              ? Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text('Habis',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w500)),
-                )
-              : inCart
-                  ? Container(
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: cs.primary.withValues(alpha: 0.2), width: 1),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _QtyBtn(icon: Icons.remove, onTap: onRemove, cs: cs),
-                          SizedBox(
-                            width: 28,
-                            child: Center(
-                              child: Text('$quantity',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                      color: cs.primary)),
-                            ),
-                          ),
-                          _QtyBtn(icon: Icons.add, onTap: onAdd, cs: cs),
-                        ],
-                      ),
-                    )
-                  : GestureDetector(
-                      onTap: onAdd,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: cs.primary,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add, size: 14, color: cs.onPrimary),
-                            const SizedBox(width: 4),
-                            Text('Tambah',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: cs.onPrimary)),
-                          ],
-                        ),
-                      ),
-                    ),
-        ),
-      ]),
-    );
-  }
-
-  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
-}
-
-class _QtyBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final ColorScheme cs;
-
-  const _QtyBtn(
-      {required this.icon, required this.onTap, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 32,
-        height: 32,
-        child: Icon(icon, size: 16, color: cs.primary),
-      ),
-    );
-  }
-}
-
-class _MenuImage extends StatelessWidget {
-  final String? imageUrl;
-  final ColorScheme cs;
-
-  const _MenuImage({required this.imageUrl, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    if (imageUrl == null || imageUrl!.trim().isEmpty) return _placeholder();
-
-    return CachedNetworkImage(
-      imageUrl: imageUrl!,
-      fit: BoxFit.cover,
-      placeholder: (_, __) => Container(
-        color: cs.surfaceContainerHighest,
-        child: const Center(
-          child: SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 1.5),
-          ),
-        ),
-      ),
-      errorWidget: (_, __, ___) => _placeholder(),
-    );
-  }
-
-  Widget _placeholder() => Container(
-        color: cs.surfaceContainerHighest,
-        child: const Center(
-          child: Icon(Icons.fastfood_outlined, size: 28, color: Colors.grey),
-        ),
-      );
-}
+// ─── Cart FAB ─────────────────────────────────────────────────────────────────
 
 class _CartFab extends StatelessWidget {
   final QrOrderSession cart;
@@ -779,18 +817,14 @@ class _CartFab extends StatelessWidget {
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Stack(children: [
-            Icon(Icons.shopping_cart_outlined,
-                color: cs.onPrimary, size: 22),
+            Icon(Icons.shopping_cart_outlined, color: cs.onPrimary, size: 22),
             if (cart.totalItems > 0)
               Positioned(
                 top: -2,
                 right: -2,
                 child: Container(
                   padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: cs.error,
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
                   constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
                   child: Text('${cart.totalItems}',
                       style: const TextStyle(
