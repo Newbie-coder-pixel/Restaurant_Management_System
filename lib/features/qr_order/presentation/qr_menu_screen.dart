@@ -113,14 +113,10 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
           );
         }
 
-        final branch     = tableData['branches'] as Map<String, dynamic>?;
-        // FIX: Ambil branchId langsung dari kolom 'branch_id' di tabel meja,
-        // tidak bergantung pada nested 'branches' object yang bisa null.
-        final branchId   = (tableData['branch_id'] as String?)
-                        ?? branch?['id'] as String?
-                        ?? '';
+        final branch    = tableData['branches'] as Map<String, dynamic>?;
+        final branchId  = branch?['id'] as String? ?? '';
         final branchName = branch?['name'] as String? ?? 'Restoran';
-        final tableName  = (tableData['table_number'] as String?) ?? 'Meja';
+        final tableName = (tableData['table_number'] as String?) ?? 'Meja';
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref.read(activeQrTableProvider.notifier).state =
@@ -233,14 +229,21 @@ class _MenuBody extends ConsumerWidget {
                   // ── Daftar Menu ───────────────────────────────────────
                   Expanded(
                     child: displayItems.isEmpty
-                        ? const Center(
+                        ? Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.search_off,
+                                const Icon(Icons.search_off,
                                     size: 48, color: Colors.grey),
-                                SizedBox(height: 12),
-                                Text('Menu tidak ditemukan'),
+                                const SizedBox(height: 12),
+                                const Text('Menu tidak ditemukan'),
+                                const SizedBox(height: 8),
+                                // DEBUG: tampilkan branchId & jumlah item
+                                Text(
+                                  'branchId: "$branchId"\nrawItems: ${rawItems.length}\nallItems: ${allItems.length}',
+                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                  textAlign: TextAlign.center,
+                                ),
                               ],
                             ),
                           )
