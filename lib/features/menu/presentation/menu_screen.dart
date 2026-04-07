@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../shared/models/menu_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
@@ -588,21 +588,29 @@ class _MenuItemFormState extends State<_MenuItemForm> {
   }
 
   Future<void> _pickAndUpload() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source:     ImageSource.gallery,
-      maxWidth:   1200,
-      maxHeight:  1200,
-      imageQuality: 85,
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true, // required for web — loads bytes directly
     );
-    if (picked == null) return;
 
-    final bytes    = await picked.readAsBytes();
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${picked.name}';
+    if (result == null || result.files.isEmpty) return;
 
-    setState(() {
-      _isUploading = true;
-    });
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Gagal membaca file. Coba lagi.'),
+          backgroundColor: Colors.red,
+        ));
+      }
+      return;
+    }
+
+    final ext = file.extension ?? 'jpg';
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+
+    setState(() => _isUploading = true);
 
     try {
       await Supabase.instance.client.storage
@@ -611,7 +619,7 @@ class _MenuItemFormState extends State<_MenuItemForm> {
             fileName,
             bytes,
             fileOptions: FileOptions(
-              contentType: picked.mimeType ?? 'image/jpeg',
+              contentType: 'image/$ext',
               upsert: true,
             ),
           );
@@ -787,9 +795,24 @@ class _MenuItemFormState extends State<_MenuItemForm> {
                     controller: _urlCtrl,
                     decoration: const InputDecoration(
                       labelText: 'URL Gambar',
-                      hintText:  'https://...',
+                      hintText:  'Paste URL lalu tekan Enter atau OK',
                       isDense:   true,
                     ),
+                    // Auto-apply saat tekan Enter
+                    onSubmitted: (url) {
+                      url = url.trim();
+                      if (url.isEmpty) return;
+                      setState(() => _previewUrl = url);
+                      widget.onImageUrlChanged(url);
+                    },
+                    // Auto-apply saat paste (setelah field tidak aktif)
+                    onTapOutside: (_) {
+                      final url = _urlCtrl.text.trim();
+                      if (url.isNotEmpty && _previewUrl == null) {
+                        setState(() => _previewUrl = url);
+                        widget.onImageUrlChanged(url);
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
