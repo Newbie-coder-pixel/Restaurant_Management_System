@@ -77,37 +77,40 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     _subscribeRealtime();
   }
 
-  Future<void> _load() async {
-    if (_branchId == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-    try {
-      final ordRes = await Supabase.instance.client
-          .from('orders')
-          .select(
-              '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
-          .eq('branch_id', _branchId!)
-          .inFilter('status', ['new', 'preparing', 'ready', 'served'])
-          .order('created_at', ascending: false);
-      final tblRes = await Supabase.instance.client
-          .from('restaurant_tables')
-          .select()
-          .eq('branch_id', _branchId!)
-          .order('table_number');
-      if (mounted) {
-        setState(() {
-          _orders =
-              (ordRes as List).map((e) => OrderModel.fromJson(e)).toList();
-          _tables =
-              (tblRes as List).map((e) => TableModel.fromJson(e)).toList();
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-    }
+Future<void> _load() async {
+  if (_branchId == null) {
+    if (mounted) setState(() => _isLoading = false);
+    return;
   }
+
+  try {
+    final ordRes = await Supabase.instance.client
+        .from('orders')
+        .select(
+            '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
+        .eq('branch_id', _branchId!)
+        // Perbaikan: tambahkan 'created'
+        .inFilter('status', ['created', 'new', 'preparing', 'ready', 'served'])
+        .order('created_at', ascending: false);
+
+    final tblRes = await Supabase.instance.client
+        .from('restaurant_tables')
+        .select()
+        .eq('branch_id', _branchId!)
+        .order('table_number');
+
+    if (mounted) {
+      setState(() {
+        _orders = (ordRes as List).map((e) => OrderModel.fromJson(e)).toList();
+        _tables = (tblRes as List).map((e) => TableModel.fromJson(e)).toList();
+        _isLoading = false;
+      });
+    }
+  } catch (e) {
+    debugPrint('Error load orders: $e');
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
 
   Future<void> _loadHistory() async {
     if (_branchId == null) return;

@@ -33,18 +33,20 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     _subscribeRealtime();
   }
 
-  Future<void> _load() async {
+Future<void> _load() async {
   if (_branchId == null) {
     if (mounted) setState(() => _isLoading = false);
     return;
   }
+
   try {
     final res = await Supabase.instance.client
         .from('orders')
         .select(
             '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
         .eq('branch_id', _branchId!)
-        .inFilter('status', ['new', 'created', 'preparing', 'ready', 'served'])  // ← Ditambahkan 'created'
+        // Perbaikan: tambahkan 'created' dan 'new'
+        .inFilter('status', ['created', 'new', 'preparing', 'ready', 'served'])
         .order('created_at', ascending: false);
 
     if (mounted) {
