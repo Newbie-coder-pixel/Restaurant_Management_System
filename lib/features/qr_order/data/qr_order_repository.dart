@@ -16,6 +16,7 @@ class QrOrderRepository {
   Future<QrOrderModel> createOrder({
     required QrOrderSession session,
     required String branchId,
+    String? notes, // ✅ FIX: tambah parameter notes
   }) async {
     final queueNumber = await _generateQueueNumber(branchId);
 
@@ -35,6 +36,8 @@ class QrOrderRepository {
         'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
         'branch_id': branchId,
         'order_type': 'qr_order',
+        'source': 'dine_in', // ✅ FIX: pakai dine_in bukan dineIn
+        if (notes != null && notes.isNotEmpty) 'notes': notes, // ✅ FIX: simpan notes
         'created_at': DateTime.now().toIso8601String(),
       };
 
@@ -46,25 +49,31 @@ class QrOrderRepository {
 
       final String orderId = orderResponse['id'] as String;
 
-      // 2. Insert ke tabel order_items (subtotal dihapus karena GENERATED column)
+      // 2. Insert ke tabel order_items
+      // ✅ FIX: subtotal DIHAPUS karena GENERATED column di DB
       if (session.items.isNotEmpty) {
-        final orderItemsData = session.items.map((cartItem) => {
-              'order_id': orderId,
-              'menu_item_id': cartItem.menuItem.id,
-              'menu_item_name': cartItem.menuItem.name,
-              'unit_price': cartItem.menuItem.price,
-              'quantity': cartItem.quantity,
-              // 'subtotal' dihapus → akan dihitung otomatis oleh database
-              if (cartItem.notes != null && cartItem.notes!.isNotEmpty)
-                'special_requests': cartItem.notes,
-            }).toList();
+        final orderItemsData = session.items.map((cartItem) {
+          final itemData = <String, dynamic>{
+            'order_id': orderId,
+            'menu_item_id': cartItem.menuItem.id,
+            'menu_item_name': cartItem.menuItem.name,
+            'unit_price': cartItem.menuItem.price,
+            'quantity': cartItem.quantity,
+            // subtotal tidak di-insert → dihitung otomatis oleh DB
+          };
+          // ✅ FIX: simpan notes per item (special_requests)
+          if (cartItem.notes != null && cartItem.notes!.isNotEmpty) {
+            itemData['special_requests'] = cartItem.notes;
+          }
+          return itemData;
+        }).toList();
 
         await _client.from('order_items').insert(orderItemsData);
 
         debugPrint('✅ Berhasil menyimpan ${orderItemsData.length} item ke tabel order_items');
       }
 
-      debugPrint('✅ Order berhasil dibuat! ID: $orderId | Queue: $queueNumber | Status: created');
+      debugPrint('✅ Order berhasil dibuat! ID: $orderId | Queue: $queueNumber');
 
       return QrOrderModel.fromMap(orderResponse);
     } catch (e, stack) {
@@ -75,8 +84,6 @@ class QrOrderRepository {
   }
 
   // ── Watch Order (realtime) ─────────────────────────────────────────────────
-  // Supabase .stream() tidak support JOIN, jadi kita pakai RealtimeChannel
-  // + fetch manual setiap ada perubahan.
   Stream<QrOrderModel> watchOrder(String orderId) {
     late StreamController<QrOrderModel> controller;
     RealtimeChannel? channel;
@@ -94,10 +101,8 @@ class QrOrderRepository {
 
     controller = StreamController<QrOrderModel>(
       onListen: () async {
-        // Fetch awal
         await fetchAndEmit();
 
-        // Subscribe realtime — trigger fetch ulang setiap ada update
         channel = _client
             .channel('order_watch_$orderId')
             .onPostgresChanges(
@@ -137,7 +142,7 @@ class QrOrderRepository {
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     final response = await _client
         .from('orders')
-        .select('*, order_items(*)')   // ← JOIN order_items
+        .select('*, order_items(*)')
         .eq('id', orderId)
         .maybeSingle();
     if (response == null) return null;
@@ -150,7 +155,7 @@ class QrOrderRepository {
 
     final response = await _client
         .from('orders')
-        .select('*, order_items(*)')   // ← JOIN order_items
+        .select('*, order_items(*)')
         .eq('queue_number', queueNumber)
         .gte('created_at', startOfDay.toIso8601String())
         .maybeSingle();
@@ -158,18 +163,14 @@ class QrOrderRepository {
     return QrOrderModel.fromMap(_normalizeOrderMap(response));
   }
 
-  // ── Normalize map: rename order_items → items & field names ───────────────
-  // order_items di DB pakai kolom: menu_item_id, menu_item_name, unit_price, quantity
-  // QrOrderItemModel.fromMap expects: menu_item_id, menu_item_name, price, quantity
+  // ── Normalize map ──────────────────────────────────────────────────────────
   Map<String, dynamic> _normalizeOrderMap(Map<String, dynamic> raw) {
     final orderItems = (raw['order_items'] as List<dynamic>? ?? [])
         .map((e) {
           final item = Map<String, dynamic>.from(e as Map);
-          // rename unit_price → price jika perlu
           if (!item.containsKey('price') && item.containsKey('unit_price')) {
             item['price'] = item['unit_price'];
           }
-          // rename special_requests → notes jika perlu
           if (!item.containsKey('notes') && item.containsKey('special_requests')) {
             item['notes'] = item['special_requests'];
           }
@@ -179,7 +180,7 @@ class QrOrderRepository {
 
     return {
       ...raw,
-      'items': orderItems,   // QrOrderModel.fromMap expects 'items'
+      'items': orderItems,
     };
   }
 
@@ -273,7 +274,7 @@ class QrOrderRepository {
   }
 }
 
-// Providers tetap sama
+// ── Providers ──────────────────────────────────────────────────────────────────
 final qrOrderRepositoryProvider = Provider<QrOrderRepository>((ref) {
   return QrOrderRepository(Supabase.instance.client);
 });
@@ -286,12 +287,14 @@ class QrOrderCreationNotifier extends StateNotifier<AsyncValue<QrOrderModel?>> {
   Future<QrOrderModel?> submit({
     required QrOrderSession session,
     required String branchId,
+    String? notes,
   }) async {
     state = const AsyncValue.loading();
     try {
       final order = await _repo.createOrder(
         session: session,
         branchId: branchId,
+        notes: notes,
       );
       state = AsyncValue.data(order);
       return order;

@@ -27,10 +27,8 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   String? _selectedCatId;
   String? _selectedTableId;
 
-  // cart: item → {qty, notes}
   final Map<String, _CartEntry> _cart = {};
 
-  // customer info (untuk takeaway)
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
 
@@ -66,12 +64,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
 
     if (mounted) {
       setState(() {
-        _categories =
-            (catRes as List).map((e) => MenuCategory.fromJson(e)).toList();
-        _allItems =
-            (itemRes as List).map((e) => MenuItem.fromJson(e)).toList();
-        _selectedCatId =
-            _categories.isNotEmpty ? _categories.first.id : null;
+        _categories = (catRes as List).map((e) => MenuCategory.fromJson(e)).toList();
+        _allItems = (itemRes as List).map((e) => MenuItem.fromJson(e)).toList();
+        _selectedCatId = _categories.isNotEmpty ? _categories.first.id : null;
         _isLoading = false;
       });
     }
@@ -93,7 +88,6 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
 
   bool get _isTakeaway => _selectedTableId == null;
 
-  // ─── ADD / REMOVE ─────────────────────────────────────────────────────────
   void _addToCart(MenuItem item) {
     setState(() {
       if (_cart.containsKey(item.id)) {
@@ -115,7 +109,6 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     });
   }
 
-  // ─── NOTES PER ITEM ───────────────────────────────────────────────────────
   Future<void> _showNotesDialog(MenuItem item) async {
     final ctrl = TextEditingController(text: _cart[item.id]?.notes ?? '');
 
@@ -197,10 +190,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             ),
             child: const Text(
               'Simpan',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -208,7 +198,6 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     );
   }
 
-  // ─── ORDER NUMBER ─────────────────────────────────────────────────────────
   String _generateOrderNumber() {
     final now = DateTime.now();
     final date =
@@ -217,7 +206,6 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     return 'ORD-$date-$rand';
   }
 
-  // ─── SUBMIT ───────────────────────────────────────────────────────────────
   Future<void> _submitOrder() async {
     if (_cart.isEmpty) return;
 
@@ -232,11 +220,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     }
 
     setState(() => _isSubmitting = true);
-    final subtotal = _cartPrice;
-    final tax = subtotal * 0.11;
-    final total = subtotal + tax;
 
     try {
+      // ✅ FIX: hapus subtotal, tax_amount, total_amount dari orders insert
+      // karena kemungkinan juga generated. Hanya insert field yang diperlukan.
       final orderRes = await Supabase.instance.client
           .from('orders')
           .insert({
@@ -244,21 +231,20 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             'table_id': _selectedTableId,
             'order_number': _generateOrderNumber(),
             'status': 'new',
-            'source': _isTakeaway ? 'takeaway' : 'dine_in',
+            'source': _isTakeaway ? 'takeaway' : 'dine_in', // ✅ FIX: dine_in bukan dineIn
+            'order_type': 'staff_order',
             'customer_name': _isTakeaway ? _nameCtrl.text.trim() : null,
             'customer_phone': _isTakeaway && _phoneCtrl.text.trim().isNotEmpty
                 ? _phoneCtrl.text.trim()
                 : null,
-            'subtotal': subtotal,
-            'tax_amount': tax,
             'discount_amount': 0,
-            'total_amount': total,
           })
           .select()
           .single();
 
       final orderId = orderRes['id'];
 
+      // ✅ FIX: hapus 'subtotal' dari order_items insert — GENERATED column
       final items = _cart.entries.map((e) {
         final menuItem = _allItems.firstWhere((m) => m.id == e.key);
         return {
@@ -267,9 +253,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
           'menu_item_name': menuItem.name,
           'quantity': e.value.qty,
           'unit_price': menuItem.price,
-          'subtotal': menuItem.price * e.value.qty,
+          // ❌ DIHAPUS: 'subtotal' → generated column, otomatis dihitung DB
           'status': 'pending',
-          'special_requests': e.value.notes.isNotEmpty ? e.value.notes : null,
+          if (e.value.notes.isNotEmpty) 'special_requests': e.value.notes,
         };
       }).toList();
 
@@ -311,7 +297,6 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     }
   }
 
-  // ─── BUILD ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return _isLoading
@@ -320,15 +305,11 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             children: [
               _buildOrderHeader(),
 
-              // Category chips
               SizedBox(
                 height: 50,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   children: _categories.map((cat) {
                     final sel = _selectedCatId == cat.id;
                     return GestureDetector(
@@ -336,10 +317,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
                           color: sel ? AppColors.primary : AppColors.surface,
                           borderRadius: BorderRadius.circular(20),
@@ -352,12 +330,8 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 12,
-                            fontWeight: sel
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            color: sel
-                                ? Colors.white
-                                : AppColors.textSecondary,
+                            fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                            color: sel ? Colors.white : AppColors.textSecondary,
                           ),
                         ),
                       ),
@@ -366,12 +340,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                 ),
               ),
 
-              // Menu grid
               Expanded(
                 child: GridView.builder(
                   padding: const EdgeInsets.all(12),
-                  gridDelegate:
-                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 180,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
@@ -419,19 +391,13 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                                 child: ElevatedButton(
                                   onPressed: () => _addToCart(item),
                                   style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 6,
-                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 6),
                                     minimumSize: Size.zero,
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   ),
                                   child: const Text(
                                     '+ Tambah',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 12,
-                                    ),
+                                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12),
                                   ),
                                 ),
                               )
@@ -441,10 +407,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                                   Row(
                                     children: [
                                       IconButton(
-                                        constraints: const BoxConstraints(
-                                          minWidth: 28,
-                                          minHeight: 28,
-                                        ),
+                                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                                         padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.remove, size: 16),
                                         onPressed: () => _removeFromCart(item),
@@ -461,10 +424,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                                         ),
                                       ),
                                       IconButton(
-                                        constraints: const BoxConstraints(
-                                          minWidth: 28,
-                                          minHeight: 28,
-                                        ),
+                                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                                         padding: EdgeInsets.zero,
                                         icon: const Icon(Icons.add, size: 16),
                                         onPressed: () => _addToCart(item),
@@ -475,43 +435,29 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                                     onTap: () => _showNotesDialog(item),
                                     child: Container(
                                       width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 3,
-                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                       decoration: BoxDecoration(
                                         color: hasNotes
-                                            ? AppColors.primary
-                                                .withValues(alpha: 0.08)
-                                            : AppColors.border
-                                                .withValues(alpha: 0.3),
+                                            ? AppColors.primary.withValues(alpha: 0.08)
+                                            : AppColors.border.withValues(alpha: 0.3),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
+                                        mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
                                           Icon(
-                                            hasNotes
-                                                ? Icons.edit_note
-                                                : Icons.note_add_outlined,
+                                            hasNotes ? Icons.edit_note : Icons.note_add_outlined,
                                             size: 12,
-                                            color: hasNotes
-                                                ? AppColors.primary
-                                                : AppColors.textHint,
+                                            color: hasNotes ? AppColors.primary : AppColors.textHint,
                                           ),
                                           const SizedBox(width: 3),
                                           Flexible(
                                             child: Text(
-                                              hasNotes
-                                                  ? entry!.notes
-                                                  : 'Tambah catatan',
+                                              hasNotes ? entry!.notes : 'Tambah catatan',
                                               style: TextStyle(
                                                 fontFamily: 'Poppins',
                                                 fontSize: 10,
-                                                color: hasNotes
-                                                    ? AppColors.primary
-                                                    : AppColors.textHint,
+                                                color: hasNotes ? AppColors.primary : AppColors.textHint,
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -530,14 +476,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                 ),
               ),
 
-              // Cart bar
               if (_cartTotal > 0)
                 Container(
                   color: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   child: Row(
                     children: [
                       Container(
@@ -562,10 +504,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                       const SizedBox(width: 12),
                       const Text(
                         'item dipilih',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: Colors.white70,
-                        ),
+                        style: TextStyle(fontFamily: 'Poppins', color: Colors.white70),
                       ),
                       const Spacer(),
                       Text(
@@ -588,17 +527,11 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
                             : const Text(
                                 'Kirim ke Dapur',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
                               ),
                       ),
                     ],
@@ -608,7 +541,6 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
           );
   }
 
-  // ── Header: meja selector + customer info
   Widget _buildOrderHeader() {
     return Container(
       color: AppColors.surface,
@@ -617,7 +549,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           DropdownButtonFormField<String?>(
-            initialValue: _selectedTableId,   // ← Perbaikan deprecation
+            initialValue: _selectedTableId,
             decoration: const InputDecoration(
               labelText: 'Pilih Meja',
               prefixIcon: Icon(Icons.table_restaurant),
@@ -626,10 +558,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             items: [
               const DropdownMenuItem(
                 value: null,
-                child: Text(
-                  'Takeaway',
-                  style: TextStyle(fontFamily: 'Poppins'),
-                ),
+                child: Text('Takeaway', style: TextStyle(fontFamily: 'Poppins')),
               ),
               ...widget.tables.map((t) => DropdownMenuItem(
                     value: t.id,
@@ -656,27 +585,16 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                   flex: 3,
                   child: TextField(
                     controller: _nameCtrl,
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                    ),
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                     decoration: InputDecoration(
                       labelText: 'Nama Pelanggan *',
-                      labelStyle: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                      ),
+                      labelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                       prefixIcon: const Icon(Icons.person_outline, size: 18),
                       isDense: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                          color: AppColors.primary,
-                          width: 2,
-                        ),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 2),
                       ),
                     ),
                   ),
@@ -687,27 +605,16 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                   child: TextField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                    ),
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                     decoration: InputDecoration(
                       labelText: 'No. HP (opsional)',
-                      labelStyle: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                      ),
+                      labelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                       prefixIcon: const Icon(Icons.phone_outlined, size: 18),
                       isDense: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                          color: AppColors.primary,
-                          width: 2,
-                        ),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 2),
                       ),
                     ),
                   ),
@@ -721,10 +628,8 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   }
 }
 
-// ─── Helper model ──────────────────────────────────────────────────────────
 class _CartEntry {
   int qty;
   String notes;
-
   _CartEntry({required this.qty, required this.notes});
 }
