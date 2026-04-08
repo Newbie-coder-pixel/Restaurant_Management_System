@@ -4,19 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/presentation/staff_gateway_screen.dart';
 import '../../features/screens.dart';
+
 import '../../features/customer/presentation/customer_landing_screen.dart';
 import '../../features/customer/presentation/customer_menu_screen.dart';
 import '../../features/customer/presentation/customer_my_bookings_screen.dart';
 import '../../features/customer/presentation/customer_checkout_screen.dart';
 import '../../features/customer/presentation/customer_order_tracker_screen.dart';
 import '../../features/customer/presentation/customer_reset_password_screen.dart';
+
 import '../../features/qr_order/presentation/qr_menu_screen.dart';
 import '../../features/qr_order/presentation/qr_cart_screen.dart';
 import '../../features/qr_order/presentation/qr_payment_screen.dart';
 import '../../features/qr_order/presentation/qr_order_tracker_screen.dart';
+
 import '../models/staff_role.dart';
 
 abstract class AppRoutes {
@@ -33,20 +37,23 @@ abstract class AppRoutes {
   static const reports        = '/reports';
   static const branches       = '/branches';
   static const chatbot        = '/chatbot';
+
   // Customer PWA
   static const customer               = '/customer';
   static const customerMenu           = '/customer/menu/:branchId';
   static const customerBooking        = '/customer/booking/:branchId';
   static const customerCheckout       = '/customer/checkout';
-  // FIX: dua varian track — dengan dan tanpa orderNumber
   static const customerTrack          = '/customer/track';
   static const customerTrackOrder     = '/customer/track/:orderNumber';
   static const customerOrderSuccess   = '/customer/order-success/:orderNumber';
-  static const customerBookingSuccess    = '/customer/booking-success';
-  static const customerResetPassword     = '/customer/reset-password';
+  static const customerBookingSuccess = '/customer/booking-success';
+  static const customerResetPassword  = '/customer/reset-password';
+
+  // QR Order Routes
   static const qrMenu       = '/qr/:tableId';
   static const qrCart       = '/qr/:tableId/cart';
   static const qrPayment    = '/qr/:tableId/payment';
+  static const qrQris       = '/qr/:tableId/payment/qris';
   static const qrTrack      = '/qr/:tableId/track/:orderId';
 }
 
@@ -68,8 +75,7 @@ String _defaultRouteForRole(StaffRole role) {
 
 class _AuthChangeNotifier extends ChangeNotifier {
   _AuthChangeNotifier(this._ref) {
-    _sub = _ref.listen<AuthState>(authStateProvider,
-        (_, __) => notifyListeners());
+    _sub = _ref.listen<AuthState>(authStateProvider, (_, __) => notifyListeners());
   }
   final Ref _ref;
   late final ProviderSubscription _sub;
@@ -87,36 +93,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: AppRoutes.customer,
-    debugLogDiagnostics: false,
+    debugLogDiagnostics: true,
     refreshListenable: notifier,
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
-      final isLoggedIn =
-          Supabase.instance.client.auth.currentUser != null;
+      final isLoggedIn = Supabase.instance.client.auth.currentUser != null;
 
-      // Gunakan fullPath sebagai fallback agar hash routing (#/qr/...) terbaca
       final loc = state.matchedLocation;
       final fullPath = state.uri.path;
 
-      // Helper: cek apakah path ini termasuk QR route
-      bool isQrRoute(String path) =>
-          path == '/qr' ||
-          path.startsWith('/qr/');
+      bool isQrRoute(String path) => path.startsWith('/qr/') || path == '/qr';
+      bool isCustomerRoute(String path) => path.startsWith('/customer/') || path == '/customer';
 
-      // Helper: cek apakah path ini termasuk customer route
-      bool isCustomerRoute(String path) =>
-          path == '/customer' ||
-          path.startsWith('/customer/');
+      if (isCustomerRoute(loc) || isCustomerRoute(fullPath) || isQrRoute(loc) || isQrRoute(fullPath)) {
+        return null;
+      }
 
-      // Customer routes — bebas, tidak perlu auth
-      if (isCustomerRoute(loc) || isCustomerRoute(fullPath)) return null;
+      if (loc == AppRoutes.staffGateway) return null;
 
-      // QR Order: no auth required - walk-in customer
-      if (isQrRoute(loc) || isQrRoute(fullPath)) return null;
-
-      // Deteksi link reset password dari Supabase (?type=recovery)
-      // Setelah exchangeCodeForSession di main.dart, user sudah punya session
-      // tapi perlu diarahkan ke halaman ganti password
       if (kIsWeb) {
         final uri = Uri.base;
         final type = uri.queryParameters['type'];
@@ -125,20 +119,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // Staff gateway — URL rahasia, tidak perlu auth
-      if (loc == AppRoutes.staffGateway) return null;
-
       if (kIsWeb && !isLoggedIn && loc != AppRoutes.login) {
         return AppRoutes.customer;
       }
 
-      // Di mobile/desktop: kalau belum login → ke login
-      if (!isLoggedIn && loc != AppRoutes.login) return AppRoutes.login;
+      if (!isLoggedIn && loc != AppRoutes.login) {
+        return AppRoutes.login;
+      }
 
-      // Masih loading data staff → tunggu
       if (isLoggedIn && authState.isLoading) return null;
 
-      // Sudah login + di halaman login → arahkan ke halaman sesuai role
       if (isLoggedIn && loc == AppRoutes.login) {
         final s = authState.staff;
         if (s != null) return _defaultRouteForRole(s.role);
@@ -147,56 +137,52 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // ── Customer PWA (no auth) ────────────────────────────────
+      // ── Customer PWA Routes ────────────────────────────────
       GoRoute(
         path: AppRoutes.customer,
         builder: (_, state) {
-          final tab = int.tryParse(
-                  state.uri.queryParameters['tab'] ?? '0') ?? 0;
+          final tab = int.tryParse(state.uri.queryParameters['tab'] ?? '0') ?? 0;
           return CustomerLandingScreen(initialTab: tab);
-        }),
-
+        },
+      ),
       GoRoute(
         path: '/customer/menu/:branchId',
-        builder: (_, state) => CustomerMenuScreen(
-          branchId: state.pathParameters['branchId']!)),
-
+        builder: (_, state) => CustomerMenuScreen(branchId: state.pathParameters['branchId']!),
+      ),
       GoRoute(
         path: '/customer/booking/:branchId',
-        builder: (_, state) => const CustomerMyBookingsScreen()),
-
+        builder: (_, state) => const CustomerMyBookingsScreen(),
+      ),
       GoRoute(
         path: AppRoutes.customerCheckout,
-        builder: (_, __) => const CustomerCheckoutScreen()),
-
-      // FIX: track tanpa orderNumber (dari tab Pesanan)
+        builder: (_, __) => const CustomerCheckoutScreen(),
+      ),
       GoRoute(
         path: AppRoutes.customerTrack,
-        builder: (_, __) =>
-            const CustomerOrderTrackerScreen()),
-
-      // FIX: track dengan orderNumber (dari order-success)
-      // → auto-search + realtime langsung aktif
+        builder: (_, __) => const CustomerOrderTrackerScreen(),
+      ),
       GoRoute(
         path: AppRoutes.customerTrackOrder,
         builder: (_, state) => CustomerOrderTrackerScreen(
-          initialOrderNumber:
-              state.pathParameters['orderNumber'])),
-
+          initialOrderNumber: state.pathParameters['orderNumber'],
+        ),
+      ),
       GoRoute(
         path: '/customer/order-success/:orderNumber',
         builder: (_, state) => CustomerOrderSuccessScreen(
-          orderNumber: state.pathParameters['orderNumber']!)),
-
+          orderNumber: state.pathParameters['orderNumber']!,
+        ),
+      ),
       GoRoute(
         path: AppRoutes.customerBookingSuccess,
-        builder: (_, __) => const CustomerBookingSuccessScreen()),
-
+        builder: (_, __) => const CustomerBookingSuccessScreen(),
+      ),
       GoRoute(
         path: AppRoutes.customerResetPassword,
-        builder: (_, __) => const CustomerResetPasswordScreen()),
+        builder: (_, __) => const CustomerResetPasswordScreen(),
+      ),
 
-      // ── QR Order (walk-in, no auth) ──────────────────────────
+      // ── QR Order Routes ────────────────────────────────
       GoRoute(
         path: '/qr/:tableId',
         name: 'qrMenu',
@@ -229,6 +215,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 child: QrPaymentScreen(tableId: tableId),
               );
             },
+            routes: [
+              GoRoute(
+                path: 'qris',
+                name: 'qrQris',
+                pageBuilder: (context, state) {
+                  final tableId = state.pathParameters['tableId']!;
+                  final extra = state.extra as Map<String, dynamic>? ?? {};
+                  return MaterialPage(
+                    key: state.pageKey,
+                    child: QrQrisScreen(
+                      tableId: tableId,
+                      orderId: extra['orderId'] ?? '',
+                      totalAmount: (extra['totalAmount'] as num?)?.toDouble() ?? 0.0,
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: 'track/:orderId',
@@ -248,38 +252,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── Staff gateway (URL rahasia, no auth) ─────────────────
-      GoRoute(
-        path: AppRoutes.staffGateway,
-        builder: (_, __) => const StaffGatewayScreen()),
-
-      // ── Staff routes (auth required) ─────────────────────────
-      GoRoute(path: AppRoutes.login,
-          builder: (_, __) => const LoginScreen()),
-      GoRoute(path: AppRoutes.tables,
-          builder: (_, __) => const TableScreen()),
-      GoRoute(path: AppRoutes.booking,
-          builder: (_, __) => const BookingScreen()),
-      GoRoute(path: AppRoutes.order,
-          builder: (_, __) => const OrderScreen()),
-      GoRoute(path: AppRoutes.cashier,
-          builder: (_, __) => const CashierScreen()),
-      GoRoute(path: AppRoutes.kitchen,
-          builder: (_, __) => const KDSScreen()),
-      GoRoute(path: AppRoutes.menu,
-          builder: (_, __) => const MenuScreen()),
-      GoRoute(path: AppRoutes.inventory,
-          builder: (_, __) => const InventoryScreen()),
-      GoRoute(path: AppRoutes.staff,
-          builder: (_, __) => const StaffScreen()),
-      GoRoute(path: AppRoutes.reports,
-          builder: (_, __) => const ReportsScreen()),
-      GoRoute(path: AppRoutes.branches,
-          builder: (_, __) => const BranchDashboardScreen()),
-      GoRoute(path: AppRoutes.chatbot,
-          builder: (_, __) => const ChatbotScreen()),
+      // ── Staff Routes ────────────────────────────────
+      GoRoute(path: AppRoutes.staffGateway, builder: (_, __) => const StaffGatewayScreen()),
+      GoRoute(path: AppRoutes.login, builder: (_, __) => const LoginScreen()),
+      GoRoute(path: AppRoutes.tables, builder: (_, __) => const TableScreen()),
+      GoRoute(path: AppRoutes.booking, builder: (_, __) => const BookingScreen()),
+      GoRoute(path: AppRoutes.order, builder: (_, __) => const OrderScreen()),
+      GoRoute(path: AppRoutes.cashier, builder: (_, __) => const CashierScreen()),
+      GoRoute(path: AppRoutes.kitchen, builder: (_, __) => const KDSScreen()),
+      GoRoute(path: AppRoutes.menu, builder: (_, __) => const MenuScreen()),
+      GoRoute(path: AppRoutes.inventory, builder: (_, __) => const InventoryScreen()),
+      GoRoute(path: AppRoutes.staff, builder: (_, __) => const StaffScreen()),
+      GoRoute(path: AppRoutes.reports, builder: (_, __) => const ReportsScreen()),
+      GoRoute(path: AppRoutes.branches, builder: (_, __) => const BranchDashboardScreen()),
+      GoRoute(path: AppRoutes.chatbot, builder: (_, __) => const ChatbotScreen()),
     ],
-    errorBuilder: (_, __) => const Scaffold(
-      body: Center(child: Text('Page not found'))),
+    errorBuilder: (context, state) => Scaffold(   // ← context sudah didefinisikan di sini
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 80, color: Colors.red),
+            const SizedBox(height: 16),
+            Text('Page not found:\n${state.uri.path}'),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => GoRouter.of(context).go(AppRoutes.customer),
+              child: const Text('Kembali ke Beranda'),
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 });

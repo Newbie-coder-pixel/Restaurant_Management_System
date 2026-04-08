@@ -54,13 +54,23 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
 
       if (mounted) {
         if (_selected == QrPaymentMethod.qris) {
-          context.push('/qr/${widget.tableId}/qris', extra: {
+          // Perbaikan route QRIS
+          context.push('/qr/${widget.tableId}/payment/qris', extra: {
             'orderId': order.id,
+            'queueNumber': order.queueNumber,
             'totalAmount': cart.totalAmount,
             'tableId': widget.tableId,
           });
         } else {
+          // Bayar ke Kasir
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Pesanan #${order.queueNumber} berhasil dibuat. Silakan bayar ke kasir.'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       }
     } catch (e) {
@@ -69,6 +79,10 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal membuat pesanan: $e'), backgroundColor: Colors.red),
         );
+      }
+    } finally {
+      if (mounted && _isSubmitting) {
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -151,8 +165,6 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
   }
 }
 
-// Bagian widget lain tetap sama seperti kode asli kamu (_OrderPreviewCard, _PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen)
-
 // ─── Order Preview Card ───────────────────────────────────────────────────────
 class _OrderPreviewCard extends StatelessWidget {
   final QrOrderSession cart;
@@ -222,12 +234,6 @@ class _OrderPreviewCard extends StatelessWidget {
     return 'Rp $formatted';
   }
 }
-
-// Sisanya (_PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen) 
-// tetap sama persis seperti kode asli kamu. Copy-paste bagian itu dari file lama kamu.
-
-// (Lanjutkan dengan _PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen seperti kode sebelumnya yang sudah saya berikan)
-
 
 // ─── Payment Method Card ──────────────────────────────────────────────────────
 class _PaymentMethodCard extends StatelessWidget {
@@ -529,7 +535,6 @@ class QrQrisScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sample Dynamic QRIS (untuk testing)
     final String qrisData = "00020101021126670016ID.CO.BANKMANDIRI01189360001100000000000215200000000000000303IDR0109${totalAmount.toInt()}5200000115300036058202ID5915Restoran A1 Kartika6007Jakarta6105123456304XXXX";
 
     return Scaffold(

@@ -34,29 +34,30 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }
 
   Future<void> _load() async {
-    if (_branchId == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-    try {
-      final res = await Supabase.instance.client
-          .from('orders')
-          .select(
-              '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
-          .eq('branch_id', _branchId!)
-          .inFilter('status', ['new', 'preparing', 'ready', 'served'])
-          .order('created_at', ascending: false);
-      if (mounted) {
-        setState(() {
-          _orders =
-              (res as List).map((e) => OrderModel.fromJson(e)).toList();
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  if (_branchId == null) {
+    if (mounted) setState(() => _isLoading = false);
+    return;
   }
+  try {
+    final res = await Supabase.instance.client
+        .from('orders')
+        .select(
+            '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
+        .eq('branch_id', _branchId!)
+        .inFilter('status', ['new', 'created', 'preparing', 'ready', 'served'])  // ← Ditambahkan 'created'
+        .order('created_at', ascending: false);
+
+    if (mounted) {
+      setState(() {
+        _orders = (res as List).map((e) => OrderModel.fromJson(e)).toList();
+        _isLoading = false;
+      });
+    }
+  } catch (e) {
+    debugPrint('Error load cashier orders: $e');
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
 
   void _subscribeRealtime() {
     _channel = Supabase.instance.client
