@@ -54,12 +54,16 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     try {
       final res = await Supabase.instance.client
           .from('orders')
-          .select('*, restaurant_tables(table_number), order_items(*, menu_items(name))')
+          .select('''
+            *,
+            restaurant_tables(table_number),
+            order_items(
+              id, menu_item_id, menu_item_name, unit_price,
+              quantity, subtotal, special_requests, status
+            )
+          ''')
           .eq('branch_id', _branchId!)
-          // ✅ FIX: tambah 'paid' — order QR masuk KDS setelah kasir konfirmasi
-          // 'new' = order internal dari waiter/kasir
-          // 'paid' = order QR yang sudah dibayar, siap dimasak
-          // 'preparing' = sedang dimasak
+          // 'new' = order internal waiter, 'paid' = QR sudah bayar, 'preparing' = dimasak
           .inFilter('status', ['new', 'paid', 'preparing'])
           .order('created_at');
       if (mounted) {
@@ -117,12 +121,11 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     }).eq('order_id', orderId);
   }
 
-  int _elapsedMinutes(DateTime dt) => DateTime.now().difference(dt).inMinutes;
-
-  // ── Helpers: tentukan apakah order ini "baru" (belum mulai masak) ──────────
-  // 'new' = order internal waiter, 'paid' = order QR sudah bayar — keduanya belum masak
   bool _isNewOrder(OrderModel order) =>
       order.status == OrderStatus.new_ || order.status == OrderStatus.paid;
+
+  bool _isQrOrder(OrderModel order) =>
+      order.orderType == 'qr_order' || order.status == OrderStatus.paid;
 
   @override
   Widget build(BuildContext context) {
@@ -140,44 +143,36 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           Container(
             width: 10, height: 10,
             decoration: BoxDecoration(
-              color: _orders.isNotEmpty ? AppColors.available : Colors.grey,
+              color: _orders.isNotEmpty ? const Color(0xFF4CAF50) : Colors.grey,
               shape: BoxShape.circle,
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            'Dapur (KDS)',
+          Text('Dapur (KDS)',
             style: theme.textTheme.titleLarge?.copyWith(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w700,
               color: colorScheme.onSurface,
-            ),
-          ),
+            )),
         ]),
         actions: [
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: _orders.isEmpty
-                  ? colorScheme.surfaceContainerHighest
-                  : AppColors.accent,
+              color: _orders.isEmpty ? colorScheme.surfaceContainerHighest : AppColors.accent,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Text(
-              '${_orders.length} Aktif',
+            child: Text('${_orders.length} Aktif',
               style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 12,
+                fontFamily: 'Poppins', fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: _orders.isEmpty ? colorScheme.outline : Colors.white,
-              ),
-            ),
+              )),
           ),
           IconButton(
             icon: Icon(Icons.refresh, color: colorScheme.onSurface),
-            onPressed: _load,
-          ),
+            onPressed: _load),
         ],
       ),
       body: _isLoading
@@ -188,12 +183,11 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
                   onRefresh: _load,
                   child: GridView.builder(
                     padding: const EdgeInsets.all(16),
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 340,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 0.72,
+                      childAspectRatio: 0.70,
                     ),
                     itemCount: _orders.length,
                     itemBuilder: (_, i) => _buildKDSCard(_orders[i], colorScheme),
@@ -210,72 +204,44 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           Container(
             width: 100, height: 100,
             decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              shape: BoxShape.circle,
-            ),
+              color: Colors.green.shade50, shape: BoxShape.circle),
             child: Icon(Icons.check_circle_outline,
-                size: 60, color: Colors.green.shade400),
+              size: 60, color: Colors.green.shade400),
           ),
           const SizedBox(height: 20),
-          Text(
-            'Semua order selesai! 🎉',
+          Text('Semua order selesai! 🎉',
             style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onSurface,
-            ),
-          ),
+              fontFamily: 'Poppins', fontSize: 20,
+              fontWeight: FontWeight.w700, color: colorScheme.onSurface)),
           const SizedBox(height: 8),
-          Text(
-            'Menunggu order baru...',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: colorScheme.outline,
-            ),
-          ),
+          Text('Menunggu order baru...',
+            style: TextStyle(fontFamily: 'Poppins', color: colorScheme.outline)),
         ],
       ),
     );
   }
 
   Widget _buildKDSCard(OrderModel order, ColorScheme colorScheme) {
-    final elapsed = _elapsedMinutes(order.createdAt);
-    final isUrgent = elapsed > 15;
     final isNew = _isNewOrder(order);
+    final isQr = _isQrOrder(order);
 
-    // Warna berdasarkan urgensi & status
-    final Color statusColor = isUrgent
-        ? AppColors.accent
-        : isNew
-            ? AppColors.orderNew
-            : AppColors.orderPreparing;
-
-    // Badge label untuk tipe order
-    final bool isQrOrder = order.status == OrderStatus.paid;
+    final Color statusColor = isNew
+        ? (isQr ? const Color(0xFF7C3AED) : AppColors.orderNew)
+        : AppColors.orderPreparing;
 
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isUrgent
-              ? AppColors.accent.withValues(alpha: 0.8)
-              : colorScheme.outlineVariant,
-          width: isUrgent ? 2 : 1,
-        ),
+        border: Border.all(color: colorScheme.outlineVariant, width: 1),
         boxShadow: [
           BoxShadow(
-            color: isUrgent
-                ? AppColors.accent.withValues(alpha: 0.12)
-                : Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(children: [
-        // ── Header ──────────────────────────────────────────────────────────
+        // ── Header ───────────────────────────────────────────────────────────
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           decoration: BoxDecoration(
@@ -283,236 +249,176 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
           ),
           child: Row(children: [
-            // Status dot
-            Container(
-              width: 8, height: 8,
-              decoration: BoxDecoration(
-                color: statusColor, shape: BoxShape.circle),
-            ),
+            Container(width: 8, height: 8,
+              decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                '# ${order.orderNumber}',
+              child: Text('# ${order.orderNumber}',
                 style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-            ),
-            // Meja badge
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                  fontSize: 15, color: colorScheme.onSurface))),
             if (order.tableNumber != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Meja ${order.tableNumber}',
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text('Meja ${order.tableNumber}',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
+                    fontFamily: 'Poppins', fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
+                    color: colorScheme.onPrimaryContainer))),
           ]),
         ),
 
-        // ── Sub-header: tipe order + timer ──────────────────────────────────
+        // ── Sub-header: badge tipe order + status ────────────────────────────
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
-            color: isUrgent
-                ? AppColors.accent.withValues(alpha: 0.08)
-                : colorScheme.surfaceContainerLowest,
+            color: colorScheme.surfaceContainerLowest,
             border: Border(
-              bottom: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
-            ),
+              bottom: BorderSide(color: colorScheme.outlineVariant, width: 0.5)),
           ),
           child: Row(children: [
-            // QR badge
-            if (isQrOrder)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'QR Order',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.primary,
-                  ),
-                ),
+            // Badge: QR Order atau Staff Order
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: isQr
+                    ? const Color(0xFF7C3AED).withValues(alpha: 0.10)
+                    : AppColors.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isQr
+                      ? const Color(0xFF7C3AED).withValues(alpha: 0.4)
+                      : AppColors.primary.withValues(alpha: 0.4)),
               ),
-            Icon(
-              Icons.timer_outlined,
-              size: 13,
-              color: isUrgent ? AppColors.accent : colorScheme.outline,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '$elapsed mnt',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 12,
-                color: isUrgent ? AppColors.accent : colorScheme.outline,
-                fontWeight: isUrgent ? FontWeight.w700 : FontWeight.normal,
-              ),
-            ),
-            if (isUrgent) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  '⚠ TERLAMBAT',
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(
+                  isQr ? Icons.qr_code_scanner : Icons.person_outline,
+                  size: 11,
+                  color: isQr ? const Color(0xFF7C3AED) : AppColors.primary),
+                const SizedBox(width: 4),
+                Text(
+                  isQr ? 'QR Order' : 'Staff Order',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 10,
-                    color: AppColors.accent,
+                    fontFamily: 'Poppins', fontSize: 10,
                     fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+                    color: isQr ? const Color(0xFF7C3AED) : AppColors.primary)),
+              ]),
+            ),
             const Spacer(),
             // Status pill
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
+                color: statusColor.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-              ),
+                border: Border.all(color: statusColor.withValues(alpha: 0.35))),
               child: Text(
-                isNew ? 'Baru' : 'Dimasak',
+                isNew ? 'Menunggu Masak' : 'Dimasak',
                 style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: statusColor,
-                ),
-              ),
+                  fontFamily: 'Poppins', fontSize: 10,
+                  fontWeight: FontWeight.w700, color: statusColor)),
             ),
           ]),
         ),
 
-        // ── Items list ───────────────────────────────────────────────────────
+        // ── Items list ────────────────────────────────────────────────────────
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-            children: order.items.map((item) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
-              ),
-              child: Row(children: [
-                // Quantity badge
-                Container(
-                  width: 30, height: 30,
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(child: Text(
-                    '${item.quantity}',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w800,
-                      color: statusColor,
-                      fontSize: 14,
-                    ),
-                  )),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.menuItemName,
+            children: order.items.map((item) {
+              // Ambil special_requests dari item
+              final notes = item.specialRequests;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.outlineVariant, width: 0.8)),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // Quantity badge
+                  Container(
+                    width: 30, height: 30,
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8)),
+                    child: Center(child: Text('${item.quantity}',
                       style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurface,
-                        fontSize: 13,
-                      ),
-                    ),
-                    if (item.specialRequests != null &&
-                        item.specialRequests!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          '📝 ${item.specialRequests}',
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: AppColors.reserved,
-                          ),
-                        ),
-                      ),
-                  ],
-                )),
-              ]),
-            )).toList(),
+                        fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                        color: statusColor, fontSize: 14)))),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.menuItemName,
+                        style: TextStyle(
+                          fontFamily: 'Poppins', fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface, fontSize: 13)),
+                      // ✅ FIX: tampilkan notes/special_requests
+                      if (notes != null && notes.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.amber.shade200)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.edit_note,
+                                  size: 13, color: Colors.amber.shade700),
+                                const SizedBox(width: 4),
+                                Flexible(child: Text(notes,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins', fontSize: 11,
+                                    color: Colors.amber.shade800,
+                                    fontWeight: FontWeight.w500))),
+                              ]),
+                          )),
+                    ])),
+                ]),
+              );
+            }).toList(),
           ),
         ),
 
-        // ── Action button ────────────────────────────────────────────────────
+        // ── Action button ─────────────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
           child: SizedBox(
-            width: double.infinity,
-            height: 42,
+            width: double.infinity, height: 44,
             child: isNew
                 ? ElevatedButton.icon(
                     onPressed: () => _markPreparing(order.id),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.orderPreparing,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
+                      foregroundColor: Colors.white, elevation: 0,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
+                        borderRadius: BorderRadius.circular(10))),
                     icon: const Icon(Icons.local_fire_department_outlined, size: 16),
                     label: const Text('Mulai Masak',
                       style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      )),
-                  )
+                        fontWeight: FontWeight.w600, fontSize: 13)))
                 : ElevatedButton.icon(
                     onPressed: () => _markReady(order.id),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green.shade600,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
+                      foregroundColor: Colors.white, elevation: 0,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
+                        borderRadius: BorderRadius.circular(10))),
                     icon: const Icon(Icons.check_circle_outline, size: 16),
                     label: const Text('✓ Siap Saji',
                       style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      )),
-                  ),
+                        fontWeight: FontWeight.w700, fontSize: 13))),
           ),
         ),
       ]),

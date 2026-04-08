@@ -105,6 +105,7 @@ class OrderModel {
   final String orderNumber;
   final OrderStatus status;
   final OrderSource source;
+  final String? orderType; 
   final String? customerName;
   final double discountAmount;
   final String? notes;
@@ -124,6 +125,7 @@ class OrderModel {
     required this.orderNumber,
     required this.status,
     required this.source,
+    this.orderType, 
     this.customerName,
     this.discountAmount = 0.0,
     this.notes,
@@ -146,6 +148,7 @@ class OrderModel {
       orderNumber: j['order_number'] ?? j['queue_number'] ?? 'UNKNOWN',
       status: OrderStatusExt.fromString(j['status'] ?? 'created'),
       source: _orderSourceFromString(j['source'] ?? 'dine_in'),
+      orderType: j['order_type'] as String?, 
       customerName: j['customer_name'],
       discountAmount: (j['discount_amount'] ?? 0).toDouble(),
       notes: j['notes'],
