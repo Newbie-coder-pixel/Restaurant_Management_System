@@ -45,22 +45,22 @@ class QrOrderRepository {
 
       final String orderId = orderResponse['id'] as String;
 
-      // 2. Insert ke tabel order_items (dengan menu_item_name)
+      // 2. Insert ke tabel order_items (subtotal dihapus karena GENERATED column)
       if (session.items.isNotEmpty) {
         final orderItemsData = session.items.map((cartItem) => {
               'order_id': orderId,
               'menu_item_id': cartItem.menuItem.id,
-              'menu_item_name': cartItem.menuItem.name,        // ← sekarang disimpan
+              'menu_item_name': cartItem.menuItem.name,
               'unit_price': cartItem.menuItem.price,
               'quantity': cartItem.quantity,
-              'subtotal': cartItem.subtotal,
+              // 'subtotal' dihapus → akan dihitung otomatis oleh database
               if (cartItem.notes != null && cartItem.notes!.isNotEmpty)
-                'special_requests': cartItem.notes,   // lebih sesuai dengan kolom yang ada
+                'special_requests': cartItem.notes,
             }).toList();
 
         await _client.from('order_items').insert(orderItemsData);
 
-        debugPrint('✅ Berhasil menyimpan ${orderItemsData.length} item ke tabel order_items (termasuk nama menu)');
+        debugPrint('✅ Berhasil menyimpan ${orderItemsData.length} item ke tabel order_items');
       }
 
       debugPrint('✅ Order berhasil dibuat! ID: $orderId | Queue: $queueNumber | Status: created');
@@ -73,7 +73,7 @@ class QrOrderRepository {
     }
   }
 
-  // Semua method lain tetap sama (watchOrder, fetchOrder, fetchMenuByBranch, dll.)
+  // ==================== Bagian lain tetap sama (tidak perlu diubah) ====================
   Stream<QrOrderModel> watchOrder(String orderId) {
     return _client
         .from('orders')
@@ -121,19 +121,9 @@ class QrOrderRepository {
       final items = await _client
           .from('menu_items')
           .select('''
-            id,
-            branch_id,
-            category_id,
-            name,
-            description,
-            price,
-            image_url,
-            is_available,
-            is_seasonal,
-            preparation_time_minutes,
-            sort_order,
-            created_at,
-            updated_at,
+            id, branch_id, category_id, name, description, price,
+            image_url, is_available, is_seasonal, preparation_time_minutes,
+            sort_order, created_at, updated_at,
             menu_categories!inner(id, name, sort_order)
           ''')
           .eq('branch_id', branchId)
