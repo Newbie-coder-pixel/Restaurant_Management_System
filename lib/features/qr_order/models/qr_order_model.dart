@@ -87,9 +87,11 @@ class QrOrderItemModel {
   factory QrOrderItemModel.fromMap(Map<String, dynamic> map) => QrOrderItemModel(
         menuItemId: map['menu_item_id'] as String,
         menuItemName: map['menu_item_name'] as String,
-        price: (map['price'] as num).toDouble(),
+        // DB kolom: unit_price (bukan price)
+        price: (map['unit_price'] ?? map['price'] as num).toDouble(),
         quantity: map['quantity'] as int,
-        notes: map['notes'] as String?,
+        // DB kolom: special_requests (bukan notes)
+        notes: (map['special_requests'] ?? map['notes']) as String?,
         imageUrl: map['image_url'] as String?,
       );
 
@@ -146,7 +148,7 @@ class QrOrderModel {
         tableId: map['table_id'] as String,
         tableName: map['table_name'] as String,
         customerName: map['customer_name'] as String,
-        items: (map['items'] as List<dynamic>)
+        items: ((map['items'] ?? map['order_items']) as List<dynamic>? ?? [])
             .map((e) => QrOrderItemModel.fromMap(e as Map<String, dynamic>))
             .toList(),
         totalAmount: (map['total_amount'] as num).toDouble(),

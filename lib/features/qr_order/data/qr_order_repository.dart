@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -73,26 +74,74 @@ class QrOrderRepository {
     }
   }
 
-  // ==================== Bagian lain tetap sama (tidak perlu diubah) ====================
+  // ── Watch Order (realtime) ─────────────────────────────────────────────────
+  // Supabase .stream() tidak support JOIN, jadi kita pakai RealtimeChannel
+  // + fetch manual setiap ada perubahan.
   Stream<QrOrderModel> watchOrder(String orderId) {
-    return _client
-        .from('orders')
-        .stream(primaryKey: ['id'])
-        .eq('id', orderId)
-        .map((rows) {
-          if (rows.isEmpty) throw Exception('Order tidak ditemukan');
-          return QrOrderModel.fromMap(rows.first);
-        });
+    late StreamController<QrOrderModel> controller;
+    RealtimeChannel? channel;
+
+    Future<void> fetchAndEmit() async {
+      try {
+        final order = await fetchOrder(orderId);
+        if (order != null && !controller.isClosed) {
+          controller.add(order);
+        }
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      }
+    }
+
+    controller = StreamController<QrOrderModel>(
+      onListen: () async {
+        // Fetch awal
+        await fetchAndEmit();
+
+        // Subscribe realtime — trigger fetch ulang setiap ada update
+        channel = _client
+            .channel('order_watch_$orderId')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'orders',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'id',
+                value: orderId,
+              ),
+              callback: (_) => fetchAndEmit(),
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'order_items',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'order_id',
+                value: orderId,
+              ),
+              callback: (_) => fetchAndEmit(),
+            )
+            .subscribe();
+      },
+      onCancel: () {
+        channel?.unsubscribe();
+        controller.close();
+      },
+    );
+
+    return controller.stream;
   }
 
+  // ── Fetch Order (dengan items) ─────────────────────────────────────────────
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     final response = await _client
         .from('orders')
-        .select()
+        .select('*, order_items(*)')   // ← JOIN order_items
         .eq('id', orderId)
         .maybeSingle();
     if (response == null) return null;
-    return QrOrderModel.fromMap(response);
+    return QrOrderModel.fromMap(_normalizeOrderMap(response));
   }
 
   Future<QrOrderModel?> fetchByQueueNumber(String queueNumber) async {
@@ -101,12 +150,37 @@ class QrOrderRepository {
 
     final response = await _client
         .from('orders')
-        .select()
+        .select('*, order_items(*)')   // ← JOIN order_items
         .eq('queue_number', queueNumber)
         .gte('created_at', startOfDay.toIso8601String())
         .maybeSingle();
     if (response == null) return null;
-    return QrOrderModel.fromMap(response);
+    return QrOrderModel.fromMap(_normalizeOrderMap(response));
+  }
+
+  // ── Normalize map: rename order_items → items & field names ───────────────
+  // order_items di DB pakai kolom: menu_item_id, menu_item_name, unit_price, quantity
+  // QrOrderItemModel.fromMap expects: menu_item_id, menu_item_name, price, quantity
+  Map<String, dynamic> _normalizeOrderMap(Map<String, dynamic> raw) {
+    final orderItems = (raw['order_items'] as List<dynamic>? ?? [])
+        .map((e) {
+          final item = Map<String, dynamic>.from(e as Map);
+          // rename unit_price → price jika perlu
+          if (!item.containsKey('price') && item.containsKey('unit_price')) {
+            item['price'] = item['unit_price'];
+          }
+          // rename special_requests → notes jika perlu
+          if (!item.containsKey('notes') && item.containsKey('special_requests')) {
+            item['notes'] = item['special_requests'];
+          }
+          return item;
+        })
+        .toList();
+
+    return {
+      ...raw,
+      'items': orderItems,   // QrOrderModel.fromMap expects 'items'
+    };
   }
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
