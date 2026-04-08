@@ -35,11 +35,11 @@ class QrOrderRepository {
               })
           .toList(),
       'total_amount': session.totalAmount,
-      'status': QrOrderStatus.pending.name,
-      'payment_status': QrPaymentStatus.unpaid.name,
-      'payment_method': session.paymentMethod?.name ?? 'kasir',
+      'status': QrOrderStatus.initial.dbValue,           // 'new'
+      'payment_status': QrPaymentStatus.pending.dbValue, // 'pending'
+      'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
       'branch_id': branchId,
-      'order_type': 'walk_in',
+      'order_type': 'qr_order',
       'created_at': DateTime.now().toIso8601String(),
     };
 
@@ -51,7 +51,6 @@ class QrOrderRepository {
 
     return QrOrderModel.fromMap(response);
   }
-
   // ─── Realtime Stream ────────────────────────────────────────────────────────
 
   Stream<QrOrderModel> watchOrder(String orderId) {

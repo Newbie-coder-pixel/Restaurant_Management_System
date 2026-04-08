@@ -1,84 +1,92 @@
 import 'package:flutter/foundation.dart';
 
 enum QrOrderStatus {
-  pending,
-  confirmed,
+  initial,      // menggantikan 'new' (karena 'new' adalah keyword)
   preparing,
   ready,
-  completed,
-  cancelled;
+  served,
+  cancelled,
+  paid;
 
   String get label {
     switch (this) {
-      case QrOrderStatus.pending:
-        return 'Menunggu Konfirmasi';
-      case QrOrderStatus.confirmed:
-        return 'Dikonfirmasi';
+      case QrOrderStatus.initial:
+        return 'Pesanan Baru';
       case QrOrderStatus.preparing:
         return 'Sedang Dimasak';
       case QrOrderStatus.ready:
         return 'Siap Disajikan';
-      case QrOrderStatus.completed:
-        return 'Selesai';
+      case QrOrderStatus.served:
+        return 'Sudah Disajikan';
       case QrOrderStatus.cancelled:
         return 'Dibatalkan';
+      case QrOrderStatus.paid:
+        return 'Sudah Dibayar';
     }
   }
 
   String get emoji {
     switch (this) {
-      case QrOrderStatus.pending:
-        return '⏳';
-      case QrOrderStatus.confirmed:
-        return '✅';
+      case QrOrderStatus.initial:
+        return '🆕';
       case QrOrderStatus.preparing:
         return '👨‍🍳';
       case QrOrderStatus.ready:
         return '🍽️';
-      case QrOrderStatus.completed:
-        return '🎉';
+      case QrOrderStatus.served:
+        return '✅';
       case QrOrderStatus.cancelled:
         return '❌';
+      case QrOrderStatus.paid:
+        return '💰';
     }
   }
 
   int get stepIndex {
     switch (this) {
-      case QrOrderStatus.pending:
+      case QrOrderStatus.initial:
         return 0;
-      case QrOrderStatus.confirmed:
-        return 1;
       case QrOrderStatus.preparing:
-        return 2;
+        return 1;
       case QrOrderStatus.ready:
+        return 2;
+      case QrOrderStatus.served:
         return 3;
-      case QrOrderStatus.completed:
-        return 4;
       case QrOrderStatus.cancelled:
         return -1;
+      case QrOrderStatus.paid:
+        return 4;
     }
   }
 
-  /// Progress 0.0 – 1.0 untuk LinearProgressIndicator di tracker screen
   double get progress {
     switch (this) {
-      case QrOrderStatus.pending:
+      case QrOrderStatus.initial:
         return 0.0;
-      case QrOrderStatus.confirmed:
-        return 0.25;
       case QrOrderStatus.preparing:
-        return 0.5;
+        return 0.33;
       case QrOrderStatus.ready:
-        return 0.75;
-      case QrOrderStatus.completed:
+        return 0.66;
+      case QrOrderStatus.served:
         return 1.0;
       case QrOrderStatus.cancelled:
         return 0.0;
+      case QrOrderStatus.paid:
+        return 1.0;
     }
   }
+
+  String get dbValue => name;   // 'initial', 'preparing', dll.
 }
 
-enum QrPaymentStatus { unpaid, paid, refunded }
+enum QrPaymentStatus {
+  pending,
+  paid,
+  refunded,
+  partial;
+
+  String get dbValue => name;
+}
 
 @immutable
 class QrOrderItemModel {
@@ -131,7 +139,7 @@ class QrOrderModel {
   final double totalAmount;
   final QrOrderStatus status;
   final QrPaymentStatus paymentStatus;
-  final String paymentMethod; // 'kasir' | 'qris'
+  final String paymentMethod;
   final DateTime createdAt;
   final DateTime? updatedAt;
   final String? branchId;
@@ -153,8 +161,7 @@ class QrOrderModel {
     this.branchId,
     this.notes,
   });
-
-  factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
+factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
         id: map['id'] as String,
         queueNumber: map['queue_number'] as String,
         tableId: map['table_id'] as String,
@@ -165,12 +172,12 @@ class QrOrderModel {
             .toList(),
         totalAmount: (map['total_amount'] as num).toDouble(),
         status: QrOrderStatus.values.firstWhere(
-          (s) => s.name == map['status'],
-          orElse: () => QrOrderStatus.pending,
+          (s) => s.name == (map['status'] as String).toLowerCase(),
+          orElse: () => QrOrderStatus.initial,
         ),
         paymentStatus: QrPaymentStatus.values.firstWhere(
-          (s) => s.name == map['payment_status'],
-          orElse: () => QrPaymentStatus.unpaid,
+          (s) => s.name == (map['payment_status'] as String).toLowerCase(),
+          orElse: () => QrPaymentStatus.pending,
         ),
         paymentMethod: map['payment_method'] as String,
         createdAt: DateTime.parse(map['created_at'] as String),
@@ -189,8 +196,8 @@ class QrOrderModel {
         'customer_name': customerName,
         'items': items.map((i) => i.toMap()).toList(),
         'total_amount': totalAmount,
-        'status': status.name,
-        'payment_status': paymentStatus.name,
+        'status': status.dbValue,
+        'payment_status': paymentStatus.dbValue,
         'payment_method': paymentMethod,
         'created_at': createdAt.toIso8601String(),
         if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
@@ -216,10 +223,6 @@ class QrOrderModel {
         notes: notes,
       );
 
-  /// Apakah order ini masih bisa ditrack (belum selesai/cancel)
   bool get isActive =>
-      status != QrOrderStatus.completed && status != QrOrderStatus.cancelled;
-
-  /// Progress 0.0 – 1.0 untuk progress indicator
-  double get progress => status.progress;
+      status != QrOrderStatus.served && status != QrOrderStatus.cancelled;
 }

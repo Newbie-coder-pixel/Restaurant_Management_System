@@ -73,13 +73,13 @@ class _TrackerBody extends StatelessWidget {
 
   static const _steps = [
     (
-      status: QrOrderStatus.pending,
+      status: QrOrderStatus.initial,
       label: 'Pesanan Masuk',
       sublabel: 'Menunggu konfirmasi',
       icon: Icons.hourglass_top_outlined,
     ),
     (
-      status: QrOrderStatus.confirmed,
+      status: QrOrderStatus.preparing,
       label: 'Dikonfirmasi',
       sublabel: 'Pesanan diterima',
       icon: Icons.check_circle_outline,
@@ -97,7 +97,7 @@ class _TrackerBody extends StatelessWidget {
       icon: Icons.dining_outlined,
     ),
     (
-      status: QrOrderStatus.completed,
+      status: QrOrderStatus.served,
       label: 'Selesai',
       sublabel: 'Selamat menikmati!',
       icon: Icons.celebration_outlined,
@@ -207,7 +207,7 @@ class _QueueHeader extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: order.status == QrOrderStatus.cancelled
               ? [colorScheme.errorContainer, colorScheme.error.withValues(alpha: 0.3)]
-              : order.status == QrOrderStatus.completed
+              : order.status == QrOrderStatus.served
                   ? [Colors.green.shade400, Colors.green.shade600]
                   : [colorScheme.primary, colorScheme.primaryContainer],
         ),
@@ -759,7 +759,7 @@ class _TrackerActions extends StatelessWidget {
     return Column(
       children: [
         // Scan again / new order
-        if (order.status == QrOrderStatus.completed)
+        if (order.status == QrOrderStatus.served)
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
