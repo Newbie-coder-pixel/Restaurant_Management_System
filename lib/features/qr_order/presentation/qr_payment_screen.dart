@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_flutter/qr_flutter.dart';
+import 'package:qr_flutter/qr_flutter.dart';           // ← Tambahan ini
+import 'package:supabase_flutter/supabase_flutter.dart'; // ← Tambahan ini
 
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
@@ -45,16 +46,20 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     final repo = ref.read(qrOrderRepositoryProvider);
 
     try {
-      final order = await repo.createOrder(
-        session: cart,
-        branchId: branchId,
-      );
+      final order = await repo.createOrder(session: cart, branchId: branchId);
+
+      // Update status menjadi 'paid' setelah order dibuat
+      await Supabase.instance.client.from('orders').update({
+        'status': 'paid',
+        'payment_status': 'paid',
+        'payment_method': _selected == QrPaymentMethod.qris ? 'qris' : 'cash',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', order.id);
 
       notifier.clearCart();
 
       if (mounted) {
         if (_selected == QrPaymentMethod.qris) {
-          // Perbaikan route QRIS
           context.push('/qr/${widget.tableId}/payment/qris', extra: {
             'orderId': order.id,
             'queueNumber': order.queueNumber,
@@ -64,7 +69,6 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
         } else {
           // Bayar ke Kasir
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
-
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Pesanan #${order.queueNumber} berhasil dibuat. Silakan bayar ke kasir.'),
@@ -74,16 +78,13 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
         }
       }
     } catch (e) {
-      setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal membuat pesanan: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted && _isSubmitting) {
-        setState(() => _isSubmitting = false);
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -114,7 +115,8 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Metode Pembayaran', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  Text('Metode Pembayaran',
+                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   _PaymentMethodCard(
                     method: QrPaymentMethod.kasir,
@@ -189,15 +191,18 @@ class _OrderPreviewCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(10)),
                 child: Icon(Icons.receipt_long_outlined, color: colorScheme.primary, size: 20),
               ),
               const SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Ringkasan Pesanan', style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
-                  Text('${cart.tableName ?? "Meja"} · ${cart.customerName ?? "Tamu"}', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+                  Text('Ringkasan Pesanan',
+                      style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  Text('${cart.tableName ?? "Meja"} · ${cart.customerName ?? "Tamu"}',
+                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
                 ],
               ),
             ],
@@ -208,20 +213,24 @@ class _OrderPreviewCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
                   children: [
-                    Text('${item.quantity}×', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
+                    Text('${item.quantity}×',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 6),
-                    Expanded(child: Text(item.menuItem.name, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
+                    Expanded(
+                        child: Text(item.menuItem.name,
+                            style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
                     Text(_formatPrice(item.subtotal), style: theme.textTheme.bodySmall),
                   ],
                 ),
               )),
 
           if (cart.items.length > 3)
-            Text('+${cart.items.length - 3} item lainnya', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+            Text('+${cart.items.length - 3} item lainnya',
+                style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
 
           const Divider(height: 24, thickness: 0.5),
 
-          // === TAMBAHAN: Breakdown Harga + PPN ===
           Row(
             children: [
               Text('Subtotal', style: theme.textTheme.bodyMedium),
@@ -242,8 +251,9 @@ class _OrderPreviewCard extends StatelessWidget {
             children: [
               Text('Total', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
               const Spacer(),
-              Text(_formatPrice(cart.totalAmount), 
-                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+              Text(_formatPrice(cart.totalAmount),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ],
           ),
         ],
@@ -252,7 +262,9 @@ class _OrderPreviewCard extends StatelessWidget {
   }
 
   String _formatPrice(double price) {
-    final formatted = price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    final formatted = price
+        .toStringAsFixed(0)
+        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
   }
 }
@@ -308,7 +320,9 @@ class _PaymentMethodCard extends StatelessWidget {
                 color: isSelected ? colorScheme.primary : colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 22, color: isSelected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant),
+              child: Icon(icon,
+                  size: 22,
+                  color: isSelected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -322,8 +336,11 @@ class _PaymentMethodCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
-                          child: Text(badge!, style: theme.textTheme.labelSmall?.copyWith(color: Colors.green.shade700, fontSize: 10)),
+                          decoration:
+                              BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(4)),
+                          child: Text(badge!,
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(color: Colors.green.shade700, fontSize: 10)),
                         ),
                       ],
                     ],
@@ -375,7 +392,9 @@ class _QrisInfoCard extends StatelessWidget {
             children: [
               Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
               const SizedBox(width: 6),
-              Text('Cara Bayar QRIS', style: theme.textTheme.labelMedium?.copyWith(color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+              Text('Cara Bayar QRIS',
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 10),
@@ -407,10 +426,14 @@ class _QrisStep extends StatelessWidget {
             width: 18,
             height: 18,
             decoration: BoxDecoration(color: Colors.blue.shade600, shape: BoxShape.circle),
-            child: Center(child: Text(number, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
+            child: Center(
+                child: Text(number,
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
           ),
           const SizedBox(width: 8),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.blue.shade800))),
+          Expanded(
+              child: Text(text,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.blue.shade800))),
         ],
       ),
     );
@@ -442,7 +465,8 @@ class _NotesSection extends StatelessWidget {
             children: [
               Icon(Icons.edit_note_outlined, size: 18, color: colorScheme.primary),
               const SizedBox(width: 8),
-              Text('Catatan (Opsional)', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+              Text('Catatan (Opsional)',
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 12),
@@ -494,7 +518,8 @@ class _PaymentBottomBar extends StatelessWidget {
             children: [
               Text('Total Pembayaran', style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.outline)),
               const Spacer(),
-              Text(_formatPrice(cart.totalAmount), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+              Text(_formatPrice(cart.totalAmount),
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ],
           ),
           const SizedBox(height: 10),
@@ -513,7 +538,10 @@ class _PaymentBottomBar extends StatelessWidget {
                   ? const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                        SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
                         SizedBox(width: 10),
                         Text('Memproses...'),
                       ],
@@ -521,7 +549,11 @@ class _PaymentBottomBar extends StatelessWidget {
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(method == QrPaymentMethod.qris ? Icons.qr_code_scanner_outlined : Icons.check_circle_outline, size: 20),
+                        Icon(
+                            method == QrPaymentMethod.qris
+                                ? Icons.qr_code_scanner_outlined
+                                : Icons.check_circle_outline,
+                            size: 20),
                         const SizedBox(width: 8),
                         Text(
                           method == QrPaymentMethod.qris ? 'Konfirmasi & Bayar QRIS' : 'Konfirmasi Pesanan',
@@ -537,7 +569,9 @@ class _PaymentBottomBar extends StatelessWidget {
   }
 
   String _formatPrice(double price) {
-    final formatted = price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    final formatted = price
+        .toStringAsFixed(0)
+        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
   }
 }
@@ -557,7 +591,9 @@ class QrQrisScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String qrisData = "00020101021126670016ID.CO.BANKMANDIRI01189360001100000000000215200000000000000303IDR0109${totalAmount.toInt()}5200000115300036058202ID5915Restoran A1 Kartika6007Jakarta6105123456304XXXX";
+    // Data QRIS sederhana (sesuaikan dengan format QRIS yang benar jika diperlukan)
+    final String qrisData =
+        "00020101021126670016ID.CO.BANKMANDIRI01189360001100000000000215200000000000000303IDR0109${totalAmount.toInt()}5200000115300036058202ID5915Restoran A1 Kartika6007Jakarta6105123456304XXXX";
 
     return Scaffold(
       appBar: AppBar(title: const Text('Bayar dengan QRIS')),
@@ -590,9 +626,9 @@ class QrQrisScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15)],
               ),
-              child: QrImageView(
+              child: QrImageView(               // ← Sudah diperbaiki
                 data: qrisData,
-                version: QrVersions.auto,
+                version: QrVersions.auto,       // ← Sudah diperbaiki
                 size: 280,
                 gapless: false,
               ),

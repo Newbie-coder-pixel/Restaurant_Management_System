@@ -81,33 +81,28 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   // ==================== LOAD ACTIVE ORDERS ====================
-  Future<void> _load() async {
-    if (_branchId == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
+ Future<void> _load() async {
+  if (_branchId == null) {
+    if (mounted) setState(() => _isLoading = false);
+    return;
+  }
 
-    if (mounted) setState(() => _isLoading = true);
+  if (mounted) setState(() => _isLoading = true);
 
-    try {
-      final activeStatuses = [
-        OrderStatus.created,
-        OrderStatus.new_,
-        OrderStatus.preparing,
-        OrderStatus.ready,
-        OrderStatus.served,
-      ].map((s) => s.dbValue).toList();
+  try {
+    // Hanya tampilkan order yang sudah dibayar ke atas
+    final activeStatuses = ['paid', 'preparing', 'ready', 'served'];
 
-      final ordRes = await Supabase.instance.client
-          .from('orders')
-          .select('''
-            *,
-            restaurant_tables!orders_table_id_fkey(table_number),
-            order_items(*)
-          ''')
-          .eq('branch_id', _branchId!)
-          .inFilter('status', activeStatuses)
-          .order('created_at', ascending: false);
+    final ordRes = await Supabase.instance.client
+        .from('orders')
+        .select('''
+          *,
+          restaurant_tables!orders_table_id_fkey(table_number),
+          order_items(*)
+        ''')
+        .eq('branch_id', _branchId!)
+        .inFilter('status', activeStatuses)
+        .order('created_at', ascending: false);
 
       final tblRes = await Supabase.instance.client
           .from('restaurant_tables')
@@ -166,7 +161,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       } else if (_historyFilter == 'cancelled') {
         query = query.eq('status', 'cancelled');
       } else {
-        query = query.inFilter('status', ['paid', 'cancelled', 'served']);
+        query = query..inFilter('status', ['paid', 'preparing', 'ready', 'served']);
       }
 
       final res = await query.order('created_at', ascending: false).limit(200);
