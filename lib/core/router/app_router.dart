@@ -137,7 +137,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // ── Customer PWA Routes ────────────────────────────────
+      // Customer PWA Routes
       GoRoute(
         path: AppRoutes.customer,
         builder: (_, state) {
@@ -182,7 +182,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const CustomerResetPasswordScreen(),
       ),
 
-      // ── QR Order Routes ────────────────────────────────
+      // QR Order Routes
       GoRoute(
         path: '/qr/:tableId',
         name: 'qrMenu',
@@ -252,7 +252,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── Staff Routes ────────────────────────────────
+      // Staff Routes
       GoRoute(path: AppRoutes.staffGateway, builder: (_, __) => const StaffGatewayScreen()),
       GoRoute(path: AppRoutes.login, builder: (_, __) => const LoginScreen()),
       GoRoute(path: AppRoutes.tables, builder: (_, __) => const TableScreen()),
@@ -267,7 +267,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.branches, builder: (_, __) => const BranchDashboardScreen()),
       GoRoute(path: AppRoutes.chatbot, builder: (_, __) => const ChatbotScreen()),
     ],
-    errorBuilder: (context, state) => Scaffold(   // ← context sudah didefinisikan di sini
+    errorBuilder: (context, state) => Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

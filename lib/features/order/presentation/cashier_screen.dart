@@ -33,33 +33,32 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     _subscribeRealtime();
   }
 
-Future<void> _load() async {
-  if (_branchId == null) {
-    if (mounted) setState(() => _isLoading = false);
-    return;
-  }
-
-  try {
-    final res = await Supabase.instance.client
-        .from('orders')
-        .select(
-            '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
-        .eq('branch_id', _branchId!)
-        // Perbaikan: tambahkan 'created' dan 'new'
-        .inFilter('status', ['created', 'new', 'preparing', 'ready', 'served'])
-        .order('created_at', ascending: false);
-
-    if (mounted) {
-      setState(() {
-        _orders = (res as List).map((e) => OrderModel.fromJson(e)).toList();
-        _isLoading = false;
-      });
+  Future<void> _load() async {
+    if (_branchId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
     }
-  } catch (e) {
-    debugPrint('Error load cashier orders: $e');
-    if (mounted) setState(() => _isLoading = false);
+
+    try {
+      final res = await Supabase.instance.client
+          .from('orders')
+          .select(
+              '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
+          .eq('branch_id', _branchId!)
+          .inFilter('status', ['created', 'preparing', 'ready', 'served'])
+          .order('created_at', ascending: false);
+
+      if (mounted) {
+        setState(() {
+          _orders = (res as List).map((e) => OrderModel.fromJson(e)).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error load cashier orders: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
-}
 
   void _subscribeRealtime() {
     _channel = Supabase.instance.client
@@ -88,49 +87,33 @@ Future<void> _load() async {
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Pembayaran Tunai',
-              style: TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Pembayaran Tunai', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _totalBox(order.totalAmount),
               const SizedBox(height: 16),
-              const Text('Uang Diterima',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
+              const Text('Uang Diterima', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               TextField(
                 controller: cashController,
                 keyboardType: TextInputType.number,
                 autofocus: true,
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
                   prefixText: 'Rp ',
-                  prefixStyle: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600),
+                  prefixStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600),
                   hintText: '0',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: AppColors.primary, width: 2),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
                   ),
                 ),
                 onChanged: (v) {
-                  final cash =
-                      double.tryParse(v.replaceAll('.', '')) ?? 0;
+                  final cash = double.tryParse(v.replaceAll('.', '')) ?? 0;
                   setS(() => change = cash - order.totalAmount);
                 },
               ),
@@ -138,19 +121,14 @@ Future<void> _load() async {
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: _quickCash(order.totalAmount).map((nominal) =>
-                    ActionChip(
-                      label: Text('Rp ${_formatNominal(nominal)}',
-                          style: const TextStyle(
-                              fontFamily: 'Poppins', fontSize: 11)),
-                      backgroundColor:
-                          AppColors.primary.withValues(alpha: 0.08),
-                      onPressed: () {
-                        cashController.text =
-                            nominal.toStringAsFixed(0);
-                        setS(() => change = nominal - order.totalAmount);
-                      },
-                    )).toList(),
+                children: _quickCash(order.totalAmount).map((nominal) => ActionChip(
+                  label: Text('Rp ${_formatNominal(nominal)}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.08),
+                  onPressed: () {
+                    cashController.text = nominal.toStringAsFixed(0);
+                    setS(() => change = nominal - order.totalAmount);
+                  },
+                )).toList(),
               ),
               const SizedBox(height: 14),
               _changeBox(change),
@@ -159,32 +137,23 @@ Future<void> _load() async {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: AppColors.textSecondary)),
+              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
             ),
             ElevatedButton(
               onPressed: change >= 0
                   ? () {
                       Navigator.pop(ctx);
                       _processPayment(order, 'cash',
-                          cashReceived: double.tryParse(cashController
-                                  .text
-                                  .replaceAll('.', '')) ??
-                              0,
+                          cashReceived: double.tryParse(cashController.text.replaceAll('.', '')) ?? 0,
                           changeAmount: change);
                     }
                   : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('Proses Bayar',
-                  style: TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              child: const Text('Proses Bayar', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             ),
           ],
         ),
