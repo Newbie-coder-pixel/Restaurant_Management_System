@@ -200,7 +200,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         'branch_id': widget.branchId,
         'table_id': _selectedTableId,
         'order_number': _generateOrderNumber(),
-        'status': 'new',                    // Internal staff pakai 'new'
+        'status': 'new',
         'source': _isTakeaway ? 'takeaway' : 'dineIn',
         'customer_name': _isTakeaway ? _nameCtrl.text.trim() : null,
         'customer_phone': _isTakeaway && _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
@@ -459,7 +459,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           DropdownButtonFormField<String?>(
-            initialValue: _selectedTableId,                    // ← diperbaiki (bukan initialValue)
+            initialValue: _selectedTableId,   // ← Pakai initialValue (rekomendasi Flutter terbaru)
             decoration: const InputDecoration(
               labelText: 'Pilih Meja',
               prefixIcon: Icon(Icons.table_restaurant),
@@ -468,7 +468,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             items: [
               const DropdownMenuItem(value: null, child: Text('Takeaway', style: TextStyle(fontFamily: 'Poppins'))),
               ...widget.tables
-                  .where((t) => t.status != TableStatus.occupied)
+                  .where((t) => t.status != TableStatus.occupied)   // Hanya meja yang available
                   .map((t) => DropdownMenuItem(
                         value: t.id,
                         child: Text('Meja ${t.tableNumber} (${t.capacity} org)', style: const TextStyle(fontFamily: 'Poppins')),
