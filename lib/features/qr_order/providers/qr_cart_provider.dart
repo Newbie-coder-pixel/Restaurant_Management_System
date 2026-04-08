@@ -1,8 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// ─── MenuItem (local model for QR order flow) ─────────────────────────────────
-// Defined here to avoid dependency on the internal menu feature domain layer.
-
 class MenuItem {
   final String id;
   final String name;
@@ -26,8 +23,6 @@ class MenuItem {
     this.sortOrder = 0,
   });
 }
-
-// ─── Models ───────────────────────────────────────────────────────────────────
 
 class QrCartItem {
   final MenuItem menuItem;
@@ -54,6 +49,7 @@ enum QrPaymentMethod { kasir, qris }
 class QrOrderSession {
   final String tableId;
   final String? tableName;
+  final String branchId;
   final String? customerName;
   final List<QrCartItem> items;
   final QrPaymentMethod? paymentMethod;
@@ -61,6 +57,7 @@ class QrOrderSession {
   const QrOrderSession({
     required this.tableId,
     this.tableName,
+    required this.branchId,
     this.customerName,
     this.items = const [],
     this.paymentMethod,
@@ -69,6 +66,7 @@ class QrOrderSession {
   QrOrderSession copyWith({
     String? tableId,
     String? tableName,
+    String? branchId,
     String? customerName,
     List<QrCartItem>? items,
     QrPaymentMethod? paymentMethod,
@@ -76,25 +74,28 @@ class QrOrderSession {
       QrOrderSession(
         tableId: tableId ?? this.tableId,
         tableName: tableName ?? this.tableName,
+        branchId: branchId ?? this.branchId,
         customerName: customerName ?? this.customerName,
         items: items ?? this.items,
         paymentMethod: paymentMethod ?? this.paymentMethod,
       );
 
-  double get totalAmount =>
-      items.fold(0, (sum, item) => sum + item.subtotal);
-
-  int get totalItems =>
-      items.fold(0, (sum, item) => sum + item.quantity);
-
+  double get totalAmount => items.fold(0, (sum, item) => sum + item.subtotal);
+  int get totalItems => items.fold(0, (sum, item) => sum + item.quantity);
   bool get isEmpty => items.isEmpty;
 }
 
-// ─── Notifier ─────────────────────────────────────────────────────────────────
-
+// Notifier
 class QrCartNotifier extends StateNotifier<QrOrderSession> {
-  QrCartNotifier(String tableId, String? tableName)
-      : super(QrOrderSession(tableId: tableId, tableName: tableName));
+  QrCartNotifier({
+    required String tableId,
+    required String? tableName,
+    required String branchId,
+  }) : super(QrOrderSession(
+          tableId: tableId,
+          tableName: tableName,
+          branchId: branchId,
+        ));
 
   void addItem(MenuItem item) {
     final existing = state.items.indexWhere((i) => i.menuItem.id == item.id);
@@ -111,8 +112,7 @@ class QrCartNotifier extends StateNotifier<QrOrderSession> {
   }
 
   void removeItem(String menuItemId) {
-    final existing =
-        state.items.indexWhere((i) => i.menuItem.id == menuItemId);
+    final existing = state.items.indexWhere((i) => i.menuItem.id == menuItemId);
     if (existing < 0) return;
     final current = state.items[existing];
     if (current.quantity > 1) {
@@ -147,41 +147,39 @@ class QrCartNotifier extends StateNotifier<QrOrderSession> {
   void setPaymentMethod(QrPaymentMethod method) {
     state = state.copyWith(paymentMethod: method);
   }
-
   void clearCart() {
     state = QrOrderSession(
       tableId: state.tableId,
       tableName: state.tableName,
+      branchId: state.branchId,
     );
   }
-
   int quantityOf(String menuItemId) {
     final idx = state.items.indexWhere((i) => i.menuItem.id == menuItemId);
     return idx >= 0 ? state.items[idx].quantity : 0;
   }
 }
 
-// ─── Providers ────────────────────────────────────────────────────────────────
-
-// Keyed by tableId so multiple tables can coexist if needed
-final qrCartProvider = StateNotifierProvider.family<QrCartNotifier,
-    QrOrderSession, ({String tableId, String? tableName})>(
-  (ref, arg) => QrCartNotifier(arg.tableId, arg.tableName),
+// Providers
+final qrCartProvider = StateNotifierProvider.family<QrCartNotifier, QrOrderSession,
+    ({String tableId, String? tableName, String branchId})>(
+  (ref, arg) => QrCartNotifier(
+    tableId: arg.tableId,
+    tableName: arg.tableName,
+    branchId: arg.branchId,
+  ),
 );
 
-// Convenience: active table session (set when navigating from QR scan)
-final activeQrTableProvider = StateProvider<({String tableId, String? tableName})>(
-  (ref) => (tableId: '', tableName: null),
+final activeQrTableProvider = StateProvider<({String tableId, String? tableName, String branchId})>(
+  (ref) => (tableId: '', tableName: null, branchId: ''),
 );
 
-// Derived: active cart session
 final activeQrCartProvider = Provider<QrOrderSession>((ref) {
   final table = ref.watch(activeQrTableProvider);
   return ref.watch(qrCartProvider(table));
 });
 
-final activeQrCartNotifierProvider =
-    Provider<QrCartNotifier>((ref) {
+final activeQrCartNotifierProvider = Provider<QrCartNotifier>((ref) {
   final table = ref.watch(activeQrTableProvider);
   return ref.read(qrCartProvider(table).notifier);
 });

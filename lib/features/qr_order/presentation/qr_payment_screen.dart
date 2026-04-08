@@ -7,12 +7,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 
-// Provider untuk menyimpan branch_id
-final _activeBranchIdProvider = StateProvider<String>((ref) => '');
-
 class QrPaymentScreen extends ConsumerStatefulWidget {
   final String tableId;
-
   const QrPaymentScreen({super.key, required this.tableId});
 
   @override
@@ -30,8 +26,8 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     final notifier = ref.read(activeQrCartNotifierProvider);
     notifier.setPaymentMethod(_selected);
 
-    final updatedCart = ref.read(activeQrCartProvider);
-    final branchId = ref.read(_activeBranchIdProvider).trim();
+    final cart = ref.read(activeQrCartProvider);
+    final branchId = cart.branchId.trim();
 
     if (branchId.isEmpty) {
       setState(() => _isSubmitting = false);
@@ -50,7 +46,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
 
     try {
       final order = await repo.createOrder(
-        session: updatedCart,
+        session: cart,
         branchId: branchId,
       );
 
@@ -58,14 +54,11 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
 
       if (mounted) {
         if (_selected == QrPaymentMethod.qris) {
-          context.push(
-            '/qr/${widget.tableId}/qris',
-            extra: {
-              'orderId': order.id,
-              'totalAmount': updatedCart.totalAmount,
-              'tableId': widget.tableId,
-            },
-          );
+          context.push('/qr/${widget.tableId}/qris', extra: {
+            'orderId': order.id,
+            'totalAmount': cart.totalAmount,
+            'tableId': widget.tableId,
+          });
         } else {
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
         }
@@ -74,10 +67,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal membuat pesanan: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+          SnackBar(content: Text('Gagal membuat pesanan: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -161,6 +151,8 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
   }
 }
 
+// Bagian widget lain tetap sama seperti kode asli kamu (_OrderPreviewCard, _PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen)
+
 // ─── Order Preview Card ───────────────────────────────────────────────────────
 class _OrderPreviewCard extends StatelessWidget {
   final QrOrderSession cart;
@@ -230,6 +222,9 @@ class _OrderPreviewCard extends StatelessWidget {
     return 'Rp $formatted';
   }
 }
+
+// Sisanya (_PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen) 
+// tetap sama persis seperti kode asli kamu. Copy-paste bagian itu dari file lama kamu.
 
 // (Lanjutkan dengan _PaymentMethodCard, _QrisInfoCard, _QrisStep, _NotesSection, _PaymentBottomBar, QrQrisScreen seperti kode sebelumnya yang sudah saya berikan)
 

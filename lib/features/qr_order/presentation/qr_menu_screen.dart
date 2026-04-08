@@ -6,26 +6,16 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 
-// Local Providers
 final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
-  (ref, branchId) async {
-    final repo = ref.read(qrOrderRepositoryProvider);
-    return repo.fetchMenuByBranch(branchId);
-  },
+  (ref, branchId) async => ref.read(qrOrderRepositoryProvider).fetchMenuByBranch(branchId),
 );
 
 final _tableInfoProvider = FutureProvider.family<Map<String, dynamic>?, String>(
-  (ref, tableId) async {
-    final repo = ref.read(qrOrderRepositoryProvider);
-    return repo.fetchTableInfo(tableId);
-  },
+  (ref, tableId) async => ref.read(qrOrderRepositoryProvider).fetchTableInfo(tableId),
 );
 
 final _selectedCategoryProvider = StateProvider<String?>((ref) => null);
 final _searchQueryProvider = StateProvider<String>((ref) => '');
-
-// Provider untuk menyimpan branchId agar bisa diakses di payment screen
-final _activeBranchIdProvider = StateProvider<String>((ref) => '');
 
 class QrMenuScreen extends ConsumerStatefulWidget {
   final String tableId;
@@ -35,18 +25,14 @@ class QrMenuScreen extends ConsumerStatefulWidget {
   ConsumerState<QrMenuScreen> createState() => _QrMenuScreenState();
 }
 
-class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
-    with SingleTickerProviderStateMixin {
+class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _fabAnimCtrl;
   final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _fabAnimCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
+    _fabAnimCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
   }
 
   @override
@@ -76,7 +62,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
   Map<String, List<MenuItem>> _groupByCategory(List<MenuItem> items) {
     final map = <String, List<MenuItem>>{};
     for (final item in items) {
-      map.putIfAbsent(item.categoryName, () => []).add(item);
+      map.putIfAbsent(item.categoryName, () => []).add(item);   // ← Ditambahkan kurung kurawal
     }
     return map;
   }
@@ -84,33 +70,18 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
   @override
   Widget build(BuildContext context) {
     final tableInfoAsync = ref.watch(_tableInfoProvider(widget.tableId));
-    final theme = Theme.of(context);
 
     return tableInfoAsync.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
-        body: Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 12),
-            Text('Meja tidak ditemukan', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text('Coba scan ulang QR code', style: theme.textTheme.bodySmall),
-          ]),
-        ),
+        body: Center(child: Text('Error memuat meja: $e')),
       ),
       data: (tableData) {
         final branchId = (tableData?['branch_id'] as String?)?.trim() ?? '';
 
         if (branchId.isEmpty) {
-          return Scaffold(
-            body: Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.table_restaurant_outlined, size: 64, color: Colors.orange),
-                const SizedBox(height: 16),
-                Text('Meja tidak tersedia', style: theme.textTheme.titleLarge),
-              ]),
-            ),
+          return const Scaffold(
+            body: Center(child: Text('Branch ID tidak ditemukan pada meja ini')),
           );
         }
 
@@ -118,12 +89,13 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen>
         final branchName = branch?['name'] as String? ?? 'Restoran';
         final tableName = (tableData?['table_number'] as String?) ?? 'Meja';
 
-        // === PENTING: Simpan branchId ke provider ===
-        ref.read(_activeBranchIdProvider.notifier).state = branchId;
-
+        // Simpan data ke activeQrTableProvider
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref.read(activeQrTableProvider.notifier).state =
-              (tableId: widget.tableId, tableName: tableName);
+          ref.read(activeQrTableProvider.notifier).state = (
+            tableId: widget.tableId,
+            tableName: tableName,
+            branchId: branchId,
+          );
         });
 
         return _MenuBody(
