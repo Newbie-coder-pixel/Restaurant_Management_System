@@ -10,6 +10,7 @@ const _red = AppColors.accent;
 
 class CashierScreen extends ConsumerStatefulWidget {
   const CashierScreen({super.key});
+
   @override
   ConsumerState<CashierScreen> createState() => _CashierScreenState();
 }
@@ -42,15 +43,20 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     try {
       final res = await Supabase.instance.client
           .from('orders')
-          .select(
-              '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
+          .select('''
+            *,
+            restaurant_tables(table_number),
+            order_items(*)
+          ''')
           .eq('branch_id', _branchId!)
           .inFilter('status', ['created', 'preparing', 'ready', 'served'])
           .order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
-          _orders = (res as List).map((e) => OrderModel.fromJson(e)).toList();
+          _orders = (res as List)
+              .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
+              .toList();
           _isLoading = false;
         });
       }
@@ -67,7 +73,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          callback: (_) => _load())
+          callback: (_) => _load(),
+        )
         .subscribe();
   }
 
@@ -88,23 +95,30 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Pembayaran Tunai', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          title: const Text('Pembayaran Tunai',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _totalBox(order.totalAmount),
               const SizedBox(height: 16),
-              const Text('Uang Diterima', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600)),
+              const Text('Uang Diterima',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               TextField(
                 controller: cashController,
                 keyboardType: TextInputType.number,
                 autofocus: true,
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600),
                 decoration: InputDecoration(
                   prefixText: 'Rp ',
-                  prefixStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600),
+                  prefixStyle: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600),
                   hintText: '0',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   focusedBorder: OutlineInputBorder(
@@ -122,7 +136,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: _quickCash(order.totalAmount).map((nominal) => ActionChip(
-                  label: Text('Rp ${_formatNominal(nominal)}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                  label: Text('Rp ${_formatNominal(nominal)}',
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 11)),
                   backgroundColor: AppColors.primary.withValues(alpha: 0.08),
                   onPressed: () {
                     cashController.text = nominal.toStringAsFixed(0);
@@ -137,14 +152,17 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+              child: const Text('Batal',
+                  style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
             ),
             ElevatedButton(
               onPressed: change >= 0
                   ? () {
                       Navigator.pop(ctx);
                       _processPayment(order, 'cash',
-                          cashReceived: double.tryParse(cashController.text.replaceAll('.', '')) ?? 0,
+                          cashReceived: double.tryParse(
+                                  cashController.text.replaceAll('.', '')) ??
+                              0,
                           changeAmount: change);
                     }
                   : null,
@@ -153,7 +171,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('Proses Bayar', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              child: const Text('Proses Bayar',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -162,8 +181,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }
 
   // ─── NON-CASH PAYMENT ────────────────────────────────────────────────────
-  Future<void> _onNonCashPayment(
-      OrderModel order, String method) async {
+  Future<void> _onNonCashPayment(OrderModel order, String method) async {
     final config = _nonCashConfig(method);
     final refCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -173,8 +191,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(children: [
             Container(
               padding: const EdgeInsets.all(8),
@@ -182,8 +199,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(config.icon,
-                  color: AppColors.primary, size: 20),
+              child: Icon(config.icon, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 10),
             Text('Bayar ${config.label}',
@@ -200,8 +216,6 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               children: [
                 _totalBox(order.totalAmount),
                 const SizedBox(height: 16),
-
-                // Instruksi metode
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -228,8 +242,6 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-
-                // Input reference number
                 Text(config.refLabel,
                     style: TextStyle(
                         fontFamily: 'Poppins',
@@ -241,9 +253,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 if (config.refRequired)
                   const Text('* wajib diisi',
                       style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 11,
-                          color: _red)),
+                          fontFamily: 'Poppins', fontSize: 11, color: _red)),
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: refCtrl,
@@ -266,19 +276,17 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                         borderRadius: BorderRadius.circular(10)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(
-                          color: AppColors.primary, width: 2),
+                      borderSide:
+                          const BorderSide(color: AppColors.primary, width: 2),
                     ),
                     errorBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide:
-                          const BorderSide(color: _red, width: 1.5),
+                      borderSide: const BorderSide(color: _red, width: 1.5),
                     ),
                     suffixIcon: config.refRequired
-                        ? const Icon(Icons.tag, size: 18,
-                            color: AppColors.textHint)
-                        : const Icon(Icons.tag_outlined, size: 18,
-                            color: AppColors.textHint),
+                        ? const Icon(Icons.tag, size: 18, color: AppColors.textHint)
+                        : const Icon(Icons.tag_outlined,
+                            size: 18, color: AppColors.textHint),
                   ),
                   validator: config.refRequired
                       ? (v) => (v == null || v.trim().isEmpty)
@@ -294,8 +302,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Batal',
                   style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: AppColors.textSecondary)),
+                      fontFamily: 'Poppins', color: AppColors.textSecondary)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -315,8 +322,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               ),
               child: const Text('Konfirmasi Bayar',
                   style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600)),
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -850,7 +856,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // Header (sama seperti sebelumnya)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -874,8 +880,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               if (canCancel)
                 TextButton.icon(
                   onPressed: () => _onCancelOrder(order),
-                  icon: const Icon(Icons.cancel_outlined,
-                      size: 16, color: _red),
+                  icon: const Icon(Icons.cancel_outlined, size: 16, color: _red),
                   label: const Text('Batalkan',
                       style: TextStyle(
                           fontFamily: 'Poppins',
@@ -883,11 +888,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                           color: _red,
                           fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     backgroundColor: _red.withValues(alpha: 0.06),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
             ],
@@ -896,25 +899,20 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           if (!canCancel && order.status != OrderStatus.paid) ...[
             const SizedBox(height: 8),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.3)),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
               ),
               child: const Row(children: [
-                Icon(Icons.info_outline,
-                    size: 14, color: Colors.orange),
+                Icon(Icons.info_outline, size: 14, color: Colors.orange),
                 SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     'Order sudah siap/tersaji — tidak dapat dibatalkan.',
                     style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        color: Colors.orange),
+                        fontFamily: 'Poppins', fontSize: 11, color: Colors.orange),
                   ),
                 ),
               ]),
@@ -923,10 +921,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
           const SizedBox(height: 20),
 
-          // Rincian item
+          // Rincian Pesanan
           const Text('Rincian Pesanan',
-              style: TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           ...order.items.map((item) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -935,12 +932,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                   children: [
                     Row(children: [
                       Expanded(
-                        child: Text(
-                            '${item.menuItemName} x${item.quantity}',
+                        child: Text('${item.menuItemName} x${item.quantity}',
                             style: AppTextStyles.body),
                       ),
-                      Text(
-                          'Rp ${item.subtotal.toStringAsFixed(0)}',
+                      Text('Rp ${item.subtotal.toStringAsFixed(0)}',
                           style: AppTextStyles.body),
                     ]),
                     if (item.specialRequests != null &&
@@ -958,11 +953,12 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               )),
           const Divider(height: 24),
 
+          // Summary yang sekarang benar
           _summaryRow('Subtotal', order.subtotal),
           _summaryRow('PPN (11%)', order.taxAmount),
           if (order.discountAmount > 0)
-            _summaryRow('Diskon', -order.discountAmount,
-                color: AppColors.available),
+            _summaryRow('Diskon', -order.discountAmount, color: AppColors.available),
+
           const SizedBox(height: 8),
           Row(children: [
             const Text('TOTAL',
@@ -994,16 +990,12 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             mainAxisSpacing: 10,
             childAspectRatio: 2,
             children: [
-              _payBtn('Tunai', Icons.money, 'cash', order,
-                  isCash: true),
+              _payBtn('Tunai', Icons.money, 'cash', order, isCash: true),
               _payBtn('QRIS', Icons.qr_code_2, 'qris', order),
               _payBtn('Debit', Icons.credit_card, 'debit_card', order),
-              _payBtn('Kredit', Icons.credit_card_outlined,
-                  'credit_card', order),
-              _payBtn(
-                  'Transfer', Icons.account_balance, 'transfer', order),
-              _payBtn('Voucher', Icons.local_offer_outlined,
-                  'voucher', order),
+              _payBtn('Kredit', Icons.credit_card_outlined, 'credit_card', order),
+              _payBtn('Transfer', Icons.account_balance, 'transfer', order),
+              _payBtn('Voucher', Icons.local_offer_outlined, 'voucher', order),
             ],
           ),
         ],
@@ -1011,7 +1003,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     );
   }
 
-  // ─── SHARED WIDGETS ───────────────────────────────────────────────────────
+  // ─── SHARED WIDGETS (tetap sama) ─────────────────────────────────────────
   Widget _totalBox(double amount) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -1075,10 +1067,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
   Widget _buildStatusBadge(OrderStatus status) {
     final Map<OrderStatus, (String, Color)> map = {
-      OrderStatus.new_:      ('Baru', AppColors.orderNew),
+      OrderStatus.new_: ('Baru', AppColors.orderNew),
       OrderStatus.preparing: ('Sedang Dimasak', AppColors.orderPreparing),
-      OrderStatus.ready:     ('Siap Disajikan', AppColors.orderReady),
-      OrderStatus.served:    ('Sudah Tersaji', AppColors.primary),
+      OrderStatus.ready: ('Siap Disajikan', AppColors.orderReady),
+      OrderStatus.served: ('Sudah Tersaji', AppColors.primary),
     };
     final info = map[status];
     if (info == null) return const SizedBox.shrink();
@@ -1098,8 +1090,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     );
   }
 
-  Widget _summaryRow(String label, double amount, {Color? color}) =>
-      Padding(
+  Widget _summaryRow(String label, double amount, {Color? color}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [
           Text(label, style: AppTextStyles.bodySecondary),
@@ -1127,8 +1118,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
         icon: Icon(icon, size: 16),
         label: Text(label,
@@ -1139,10 +1129,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       );
 
   List<double> _quickCash(double total) {
-    final pecahan = [
-      10000.0, 20000.0, 50000.0,
-      100000.0, 200000.0, 500000.0
-    ];
+    final pecahan = [10000.0, 20000.0, 50000.0, 100000.0, 200000.0, 500000.0];
     final result = <double>[];
     for (final p in pecahan) {
       final rounded = (total / p).ceil() * p;

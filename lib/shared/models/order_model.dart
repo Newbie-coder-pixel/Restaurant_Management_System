@@ -13,24 +13,27 @@ extension OrderStatusExt on OrderStatus {
       case OrderStatus.paid:      return 'Lunas';
     }
   }
+
   static OrderStatus fromString(String s) {
     if (s == 'new') return OrderStatus.new_;
     return OrderStatus.values.firstWhere(
-      (e) => e.name == s, orElse: () => OrderStatus.new_);
+      (e) => e.name == s, 
+      orElse: () => OrderStatus.new_,
+    );
   }
 }
 
-// Map DB snake_case ke enum camelCase
 OrderSource _orderSourceFromString(String s) {
   const map = {
-    'dine_in':  OrderSource.dineIn,
-    'dineIn':   OrderSource.dineIn,
-    'online':   OrderSource.online,
+    'dine_in': OrderSource.dineIn,
+    'dineIn':  OrderSource.dineIn,
+    'online':  OrderSource.online,
     'takeaway': OrderSource.takeaway,
   };
   return map[s] ?? OrderSource.dineIn;
 }
 
+// ==================== ORDER ITEM (tidak diubah) ====================
 class OrderItem {
   final String id;
   final String orderId;
@@ -44,27 +47,38 @@ class OrderItem {
   final DateTime? sentToKitchenAt;
 
   const OrderItem({
-    required this.id, required this.orderId, required this.menuItemId,
-    required this.menuItemName, required this.quantity, required this.unitPrice,
-    required this.subtotal, required this.status,
-    this.specialRequests, this.sentToKitchenAt,
+    required this.id,
+    required this.orderId,
+    required this.menuItemId,
+    required this.menuItemName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.subtotal,
+    required this.status,
+    this.specialRequests,
+    this.sentToKitchenAt,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
-    id: j['id'], orderId: j['order_id'], menuItemId: j['menu_item_id'],
-    menuItemName: j['menu_items']?['name'] ?? '',
+    id: j['id'] ?? '',
+    orderId: j['order_id'] ?? '',
+    menuItemId: j['menu_item_id'] ?? '',
+    menuItemName: j['menu_item_name'] ?? j['menu_items']?['name'] ?? '',
     quantity: j['quantity'] ?? 1,
     unitPrice: (j['unit_price'] ?? 0).toDouble(),
     subtotal: (j['subtotal'] ?? 0).toDouble(),
     status: OrderItemStatus.values.firstWhere(
       (e) => e.name == (j['status'] ?? 'pending'),
-      orElse: () => OrderItemStatus.pending),
-    specialRequests: j['special_requests'],
+      orElse: () => OrderItemStatus.pending,
+    ),
+    specialRequests: j['special_requests'] ?? j['notes'],
     sentToKitchenAt: j['sent_to_kitchen_at'] != null
-        ? DateTime.parse(j['sent_to_kitchen_at']) : null,
+        ? DateTime.parse(j['sent_to_kitchen_at'])
+        : null,
   );
 }
 
+// ==================== ORDER MODEL (SUDAH DIPERBAIKI) ====================
 class OrderModel {
   final String id;
   final String branchId;
@@ -74,37 +88,51 @@ class OrderModel {
   final OrderStatus status;
   final OrderSource source;
   final String? customerName;
-  final double subtotal;
   final double discountAmount;
-  final double taxAmount;
-  final double totalAmount;
   final String? notes;
   final List<OrderItem> items;
   final DateTime createdAt;
 
+  // Field yang dihitung otomatis dari items
+  double get subtotal => items.fold(0.0, (sum, item) => sum + item.subtotal);
+  double get taxAmount => subtotal * 0.11;           // PPN 11%
+  double get totalAmount => subtotal + taxAmount - discountAmount;
+
   const OrderModel({
-    required this.id, required this.branchId, this.tableId, this.tableNumber,
-    required this.orderNumber, required this.status, required this.source,
-    this.customerName, required this.subtotal, required this.discountAmount,
-    required this.taxAmount, required this.totalAmount, this.notes,
-    this.items = const [], required this.createdAt,
+    required this.id,
+    required this.branchId,
+    this.tableId,
+    this.tableNumber,
+    required this.orderNumber,
+    required this.status,
+    required this.source,
+    this.customerName,
+    this.discountAmount = 0.0,
+    this.notes,
+    this.items = const [],
+    required this.createdAt,
   });
 
-  factory OrderModel.fromJson(Map<String, dynamic> j) => OrderModel(
-    id: j['id'], branchId: j['branch_id'], tableId: j['table_id'],
-    tableNumber: j['restaurant_tables']?['table_number'],
-    orderNumber: j['order_number'],
-    status: OrderStatusExt.fromString(j['status'] ?? 'new'),
-    source: _orderSourceFromString(j['source'] ?? 'dine_in'),
-    customerName: j['customer_name'],
-    subtotal: (j['subtotal'] ?? 0).toDouble(),
-    discountAmount: (j['discount_amount'] ?? 0).toDouble(),
-    taxAmount: (j['tax_amount'] ?? 0).toDouble(),
-    totalAmount: (j['total_amount'] ?? 0).toDouble(),
-    notes: j['notes'],
-    items: j['order_items'] != null
-        ? (j['order_items'] as List).map((i) => OrderItem.fromJson(i)).toList()
-        : [],
-    createdAt: DateTime.parse(j['created_at']),
-  );
+  factory OrderModel.fromJson(Map<String, dynamic> j) {
+    final itemsList = j['order_items'] != null
+        ? (j['order_items'] as List)
+            .map((i) => OrderItem.fromJson(i as Map<String, dynamic>))
+            .toList()
+        : <OrderItem>[];
+
+    return OrderModel(
+      id: j['id'] ?? '',
+      branchId: j['branch_id'] ?? '',
+      tableId: j['table_id'],
+      tableNumber: j['restaurant_tables']?['table_number'],
+      orderNumber: j['order_number'] ?? j['queue_number'] ?? 'UNKNOWN',
+      status: OrderStatusExt.fromString(j['status'] ?? 'new'),
+      source: _orderSourceFromString(j['source'] ?? 'dine_in'),
+      customerName: j['customer_name'],
+      discountAmount: (j['discount_amount'] ?? 0).toDouble(),
+      notes: j['notes'],
+      items: itemsList,
+      createdAt: DateTime.parse(j['created_at'] ?? DateTime.now().toIso8601String()),
+    );
+  }
 }
