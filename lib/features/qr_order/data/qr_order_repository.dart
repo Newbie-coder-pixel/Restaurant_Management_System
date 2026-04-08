@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/qr_order_model.dart';
 import '../providers/qr_cart_provider.dart';
 
@@ -17,43 +18,55 @@ class QrOrderRepository {
   }) async {
     final queueNumber = await _generateQueueNumber(branchId);
 
-    final orderData = {
-      'queue_number': queueNumber,
-      'order_number': queueNumber,           // ← FIX: mengatasi not-null constraint
-      'table_id': session.tableId,
-      'table_name': session.tableName ?? 'Meja ${session.tableId}',
-      'customer_name': session.customerName ?? 'Tamu',
-      'items': session.items
-          .map((i) => {
-                'menu_item_id': i.menuItem.id,
-                'menu_item_name': i.menuItem.name,
-                'price': i.menuItem.price,
-                'quantity': i.quantity,
-                if (i.notes != null && i.notes!.isNotEmpty) 'notes': i.notes,
-                if (i.menuItem.imageUrl != null)
-                  'image_url': i.menuItem.imageUrl,
-              })
-          .toList(),
-      'total_amount': session.totalAmount,
-      'status': QrOrderStatus.created.dbValue,
-      'payment_status': QrPaymentStatus.pending.dbValue,
-      'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
-      'branch_id': branchId,
-      'order_type': 'qr_order',
-      'created_at': DateTime.now().toIso8601String(),
-    };
-
     try {
-      debugPrint('🔄 Membuat order dengan queue_number: $queueNumber');
+      debugPrint('🔄 Membuat QR Order: $queueNumber | Table: ${session.tableId} | Items: ${session.items.length}');
 
-      final response = await _client
+      // 1. Insert ke tabel orders
+      final orderData = {
+        'queue_number': queueNumber,
+        'order_number': queueNumber,           // FIX: mengatasi not-null constraint
+        'table_id': session.tableId,
+        'table_name': session.tableName ?? 'Meja ${session.tableId}',
+        'customer_name': session.customerName ?? 'Tamu',
+        'total_amount': session.totalAmount,
+        'status': 'created',                   // ← Diubah sesuai permintaan
+        'payment_status': 'pending',
+        'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
+        'branch_id': branchId,
+        'order_type': 'qr_order',
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      final orderResponse = await _client
           .from('orders')
           .insert(orderData)
           .select()
           .single();
 
-      debugPrint('✅ Order berhasil dibuat! ID: ${response['id']}');
-      return QrOrderModel.fromMap(response);
+      final String orderId = orderResponse['id'] as String;
+
+      // 2. Insert ke tabel order_items (PENTING agar item muncul di Kasir)
+      if (session.items.isNotEmpty) {
+        final orderItemsData = session.items.map((cartItem) => {
+              'order_id': orderId,
+              'menu_item_id': cartItem.menuItem.id,
+              'menu_item_name': cartItem.menuItem.name,
+              'price': cartItem.menuItem.price,
+              'quantity': cartItem.quantity,
+              'subtotal': cartItem.subtotal,
+              if (cartItem.notes != null && cartItem.notes!.isNotEmpty)
+                'notes': cartItem.notes,
+            }).toList();
+
+        await _client.from('order_items').insert(orderItemsData);
+
+        debugPrint('✅ Berhasil menyimpan ${orderItemsData.length} item ke tabel order_items');
+      }
+
+      debugPrint('✅ Order berhasil dibuat! ID: $orderId | Queue: $queueNumber | Status: created');
+
+      // Return model
+      return QrOrderModel.fromMap(orderResponse);
     } catch (e, stack) {
       debugPrint('❌ Gagal create order: $e');
       debugPrint('Stack trace: $stack');

@@ -203,6 +203,7 @@ class _OrderPreviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+
           ...cart.items.take(3).map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
@@ -214,14 +215,35 @@ class _OrderPreviewCard extends StatelessWidget {
                   ],
                 ),
               )),
+
           if (cart.items.length > 3)
             Text('+${cart.items.length - 3} item lainnya', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-          Divider(color: colorScheme.outlineVariant, height: 20, thickness: 0.5),
+
+          const Divider(height: 24, thickness: 0.5),
+
+          // === TAMBAHAN: Breakdown Harga + PPN ===
+          Row(
+            children: [
+              Text('Subtotal', style: theme.textTheme.bodyMedium),
+              const Spacer(),
+              Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodyMedium),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text('PPN (11%)', style: theme.textTheme.bodyMedium),
+              const Spacer(),
+              Text(_formatPrice(cart.taxAmount), style: theme.textTheme.bodyMedium),
+            ],
+          ),
+          const Divider(height: 20, thickness: 0.5),
           Row(
             children: [
               Text('Total', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
               const Spacer(),
-              Text(_formatPrice(cart.totalAmount), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+              Text(_formatPrice(cart.totalAmount), 
+                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ],
           ),
         ],
