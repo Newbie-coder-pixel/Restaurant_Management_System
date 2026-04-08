@@ -77,6 +77,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     _subscribeRealtime();
   }
 
+// ... (bagian atas sama persis sampai _load())
+
 Future<void> _load() async {
   if (_branchId == null) {
     if (mounted) setState(() => _isLoading = false);
@@ -86,10 +88,8 @@ Future<void> _load() async {
   try {
     final ordRes = await Supabase.instance.client
         .from('orders')
-        .select(
-            '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
+        .select('*, restaurant_tables(table_number), order_items(*)')  // simplified
         .eq('branch_id', _branchId!)
-        // Perbaikan: tambahkan 'created'
         .inFilter('status', ['created', 'new', 'preparing', 'ready', 'served'])
         .order('created_at', ascending: false);
 
@@ -111,6 +111,8 @@ Future<void> _load() async {
     if (mounted) setState(() => _isLoading = false);
   }
 }
+
+// Sisanya (dari _loadHistory sampai akhir) tetap sama seperti kode kamu
 
   Future<void> _loadHistory() async {
     if (_branchId == null) return;

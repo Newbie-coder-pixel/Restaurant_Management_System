@@ -9,31 +9,46 @@ extension OrderStatusExt on OrderStatus {
       case OrderStatus.preparing: return 'Dimasak';
       case OrderStatus.ready:     return 'Siap';
       case OrderStatus.served:    return 'Disajikan';
-      case OrderStatus.cancelled: return 'Dibatal';
+      case OrderStatus.cancelled: return 'Dibatalkan';
       case OrderStatus.paid:      return 'Lunas';
     }
   }
 
+  /// Improved fromString - mendukung both 'created' (QR) dan 'new' (Internal Staff)
   static OrderStatus fromString(String s) {
-    if (s == 'new') return OrderStatus.new_;
-    return OrderStatus.values.firstWhere(
-      (e) => e.name == s, 
-      orElse: () => OrderStatus.new_,
-    );
+    final lower = s.toLowerCase().trim();
+
+    switch (lower) {
+      case 'new':
+      case 'created':           // QR Order tetap pakai 'created'
+        return OrderStatus.new_;
+      case 'preparing':
+        return OrderStatus.preparing;
+      case 'ready':
+        return OrderStatus.ready;
+      case 'served':
+        return OrderStatus.served;
+      case 'paid':
+        return OrderStatus.paid;
+      case 'cancelled':
+        return OrderStatus.cancelled;
+      default:
+        return OrderStatus.new_; // fallback
+    }
   }
 }
 
 OrderSource _orderSourceFromString(String s) {
   const map = {
     'dine_in': OrderSource.dineIn,
-    'dineIn':  OrderSource.dineIn,
-    'online':  OrderSource.online,
+    'dineIn': OrderSource.dineIn,
+    'online': OrderSource.online,
     'takeaway': OrderSource.takeaway,
   };
-  return map[s] ?? OrderSource.dineIn;
+  return map[s.toLowerCase()] ?? OrderSource.dineIn;
 }
 
-// ==================== ORDER ITEM (tidak diubah) ====================
+// ==================== ORDER ITEM ====================
 class OrderItem {
   final String id;
   final String orderId;
@@ -60,25 +75,25 @@ class OrderItem {
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
-    id: j['id'] ?? '',
-    orderId: j['order_id'] ?? '',
-    menuItemId: j['menu_item_id'] ?? '',
-    menuItemName: j['menu_item_name'] ?? j['menu_items']?['name'] ?? '',
-    quantity: j['quantity'] ?? 1,
-    unitPrice: (j['unit_price'] ?? 0).toDouble(),
-    subtotal: (j['subtotal'] ?? 0).toDouble(),
-    status: OrderItemStatus.values.firstWhere(
-      (e) => e.name == (j['status'] ?? 'pending'),
-      orElse: () => OrderItemStatus.pending,
-    ),
-    specialRequests: j['special_requests'] ?? j['notes'],
-    sentToKitchenAt: j['sent_to_kitchen_at'] != null
-        ? DateTime.parse(j['sent_to_kitchen_at'])
-        : null,
-  );
+        id: j['id'] ?? '',
+        orderId: j['order_id'] ?? '',
+        menuItemId: j['menu_item_id'] ?? '',
+        menuItemName: j['menu_item_name'] ?? j['menu_items']?['name'] ?? '',
+        quantity: j['quantity'] ?? 1,
+        unitPrice: (j['unit_price'] ?? 0).toDouble(),
+        subtotal: (j['subtotal'] ?? 0).toDouble(),
+        status: OrderItemStatus.values.firstWhere(
+          (e) => e.name == (j['status'] ?? 'pending'),
+          orElse: () => OrderItemStatus.pending,
+        ),
+        specialRequests: j['special_requests'] ?? j['notes'],
+        sentToKitchenAt: j['sent_to_kitchen_at'] != null
+            ? DateTime.parse(j['sent_to_kitchen_at'])
+            : null,
+      );
 }
 
-// ==================== ORDER MODEL (SUDAH DIPERBAIKI) ====================
+// ==================== ORDER MODEL ====================
 class OrderModel {
   final String id;
   final String branchId;
@@ -95,7 +110,7 @@ class OrderModel {
 
   // Field yang dihitung otomatis dari items
   double get subtotal => items.fold(0.0, (sum, item) => sum + item.subtotal);
-  double get taxAmount => subtotal * 0.11;           // PPN 11%
+  double get taxAmount => subtotal * 0.11; // PPN 11%
   double get totalAmount => subtotal + taxAmount - discountAmount;
 
   const OrderModel({
@@ -126,7 +141,7 @@ class OrderModel {
       tableId: j['table_id'],
       tableNumber: j['restaurant_tables']?['table_number'],
       orderNumber: j['order_number'] ?? j['queue_number'] ?? 'UNKNOWN',
-      status: OrderStatusExt.fromString(j['status'] ?? 'new'),
+      status: OrderStatusExt.fromString(j['status'] ?? 'created'),
       source: _orderSourceFromString(j['source'] ?? 'dine_in'),
       customerName: j['customer_name'],
       discountAmount: (j['discount_amount'] ?? 0).toDouble(),
