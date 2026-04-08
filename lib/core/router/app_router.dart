@@ -182,75 +182,76 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const CustomerResetPasswordScreen(),
       ),
 
-      // QR Order Routes
-      GoRoute(
-        path: '/qr/:tableId',
-        name: 'qrMenu',
-        pageBuilder: (context, state) {
-          final tableId = state.pathParameters['tableId']!;
-          return NoTransitionPage(
-            key: state.pageKey,
-            child: QrMenuScreen(tableId: tableId),
-          );
-        },
-        routes: [
-          GoRoute(
-            path: 'cart',
-            name: 'qrCart',
-            pageBuilder: (context, state) {
-              final tableId = state.pathParameters['tableId']!;
-              return MaterialPage(
-                key: state.pageKey,
-                child: QrCartScreen(tableId: tableId),
-              );
-            },
-          ),
-          GoRoute(
-            path: 'payment',
-            name: 'qrPayment',
-            pageBuilder: (context, state) {
-              final tableId = state.pathParameters['tableId']!;
-              return MaterialPage(
-                key: state.pageKey,
-                child: QrPaymentScreen(tableId: tableId),
-              );
-            },
-            routes: [
-              GoRoute(
-                path: 'qris',
-                name: 'qrQris',
-                pageBuilder: (context, state) {
-                  final tableId = state.pathParameters['tableId']!;
-                  final extra = state.extra as Map<String, dynamic>? ?? {};
-                  return MaterialPage(
-                    key: state.pageKey,
-                    child: QrQrisScreen(
-                      tableId: tableId,
-                      orderId: extra['orderId'] ?? '',
-                      totalAmount: (extra['totalAmount'] as num?)?.toDouble() ?? 0.0,
-                    ),
-                  );
-                },
+     // QR Order Routes
+GoRoute(
+  path: '/qr/:tableId',
+  name: 'qrMenu',
+  pageBuilder: (context, state) {
+    final tableId = state.pathParameters['tableId']!;
+    return NoTransitionPage(
+      key: state.pageKey,
+      child: QrMenuScreen(tableId: tableId),
+    );
+  },
+  routes: [
+    GoRoute(
+      path: 'cart',
+      name: 'qrCart',
+      pageBuilder: (context, state) {
+        final tableId = state.pathParameters['tableId']!;
+        return MaterialPage(
+          key: state.pageKey,
+          child: QrCartScreen(tableId: tableId),
+        );
+      },
+    ),
+    GoRoute(
+      path: 'payment',
+      name: 'qrPayment',
+      pageBuilder: (context, state) {
+        final tableId = state.pathParameters['tableId']!;
+        return MaterialPage(
+          key: state.pageKey,
+          child: QrPaymentScreen(tableId: tableId),
+        );
+      },
+      routes: [
+        GoRoute(
+          path: 'qris',
+          name: 'qrQris',
+          pageBuilder: (context, state) {
+            final tableId = state.pathParameters['tableId']!;
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            return MaterialPage(
+              key: state.pageKey,
+              child: QrQrisScreen(
+                tableId: tableId,
+                orderId: extra['orderId'] ?? '',
+                totalAmount: (extra['totalAmount'] as num?)?.toDouble() ?? 0.0,
               ),
-            ],
+            );
+          },
+        ),
+      ],
+    ),
+    // Perbaikan Route Tracker
+    GoRoute(
+      path: 'track/:orderId',
+      name: 'qrTrack',
+      pageBuilder: (context, state) {
+        final orderId = state.pathParameters['orderId']!;
+        final queueNumber = state.uri.queryParameters['queue'];
+        return MaterialPage(
+          key: state.pageKey,
+          child: QrOrderTrackerScreen(
+            orderId: orderId,
+            queueNumber: queueNumber,
           ),
-          GoRoute(
-            path: 'track/:orderId',
-            name: 'qrTrack',
-            pageBuilder: (context, state) {
-              final orderId = state.pathParameters['orderId']!;
-              final queueNumber = state.uri.queryParameters['queue'];
-              return MaterialPage(
-                key: state.pageKey,
-                child: QrOrderTrackerScreen(
-                  orderId: orderId,
-                  queueNumber: queueNumber,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
+        );
+      },
+    ),
+  ],
+),
 
       // Staff Routes
       GoRoute(path: AppRoutes.staffGateway, builder: (_, __) => const StaffGatewayScreen()),

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_flutter/qr_flutter.dart';           // ← Tambahan ini
-import 'package:supabase_flutter/supabase_flutter.dart'; // ← Tambahan ini
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
@@ -34,10 +34,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Branch ID tidak ditemukan. Silakan scan ulang QR meja.'),
-            backgroundColor: Colors.red,
-          ),
+          const SnackBar(content: Text('Branch ID tidak ditemukan. Silakan scan ulang QR meja.'), backgroundColor: Colors.red),
         );
       }
       return;
@@ -48,7 +45,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     try {
       final order = await repo.createOrder(session: cart, branchId: branchId);
 
-      // Update status menjadi 'paid' setelah order dibuat
+      // Update status menjadi 'paid'
       await Supabase.instance.client.from('orders').update({
         'status': 'paid',
         'payment_status': 'paid',
@@ -67,8 +64,9 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
             'tableId': widget.tableId,
           });
         } else {
-          // Bayar ke Kasir
+          // Bayar ke Kasir → Langsung ke Tracker
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Pesanan #${order.queueNumber} berhasil dibuat. Silakan bayar ke kasir.'),
