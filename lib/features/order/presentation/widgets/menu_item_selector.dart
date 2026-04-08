@@ -244,7 +244,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             'table_id': _selectedTableId,
             'order_number': _generateOrderNumber(),
             'status': 'new',
-            'source': _isTakeaway ? 'takeaway' : 'dineIn',
+            'source': _isTakeaway ? 'takeaway' : 'dine_in',
             'customer_name': _isTakeaway ? _nameCtrl.text.trim() : null,
             'customer_phone': _isTakeaway && _phoneCtrl.text.trim().isNotEmpty
                 ? _phoneCtrl.text.trim()
