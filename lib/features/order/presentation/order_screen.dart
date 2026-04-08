@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_drawer.dart';
 
 class OrderScreen extends ConsumerStatefulWidget {
   const OrderScreen({super.key});
+
   @override
   ConsumerState<OrderScreen> createState() => _OrderScreenState();
 }
@@ -27,7 +28,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   RealtimeChannel? _channel;
   String _historyFilter = 'all';
 
-  // track which order is currently being updated (untuk loading state)
+  // track which order is currently being updated
   String? _updatingOrderId;
 
   @override
@@ -48,6 +49,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       final staff = ref.read(currentStaffProvider);
       if (staff != null) {
         _branchId = staff.branchId;
+        debugPrint('Branch ID loaded: $_branchId');
         _initialized = true;
         _init();
       } else {
@@ -55,6 +57,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           if (next != null && !_initialized && mounted) {
             setState(() {
               _branchId = next.branchId;
+              debugPrint('Branch ID loaded from listener: $_branchId');
               _initialized = true;
             });
             _init();
@@ -77,123 +80,192 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     _subscribeRealtime();
   }
 
-// ... (bagian atas sama persis sampai _load())
-
-Future<void> _load() async {
-  if (_branchId == null) {
-    if (mounted) setState(() => _isLoading = false);
-    return;
-  }
-
-  try {
-    final ordRes = await Supabase.instance.client
-        .from('orders')
-        .select('*, restaurant_tables(table_number), order_items(*)')  // simplified
-        .eq('branch_id', _branchId!)
-        .inFilter('status', ['created', 'new', 'preparing', 'ready', 'served'])
-        .order('created_at', ascending: false);
-
-    final tblRes = await Supabase.instance.client
-        .from('restaurant_tables')
-        .select()
-        .eq('branch_id', _branchId!)
-        .order('table_number');
-
-    if (mounted) {
-      setState(() {
-        _orders = (ordRes as List).map((e) => OrderModel.fromJson(e)).toList();
-        _tables = (tblRes as List).map((e) => TableModel.fromJson(e)).toList();
-        _isLoading = false;
-      });
+  // ==================== LOAD ACTIVE ORDERS ====================
+  Future<void> _load() async {
+    if (_branchId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
     }
-  } catch (e) {
-    debugPrint('Error load orders: $e');
-    if (mounted) setState(() => _isLoading = false);
-  }
-}
 
-// Sisanya (dari _loadHistory sampai akhir) tetap sama seperti kode kamu
+    if (mounted) setState(() => _isLoading = true);
 
-  Future<void> _loadHistory() async {
-    if (_branchId == null) return;
-    setState(() => _isHistoryLoading = true);
     try {
-      var q = Supabase.instance.client
+      final activeStatuses = [
+        OrderStatus.created,
+        OrderStatus.new_,
+        OrderStatus.preparing,
+        OrderStatus.ready,
+        OrderStatus.served,
+      ].map((s) => s.dbValue).toList();
+
+      final ordRes = await Supabase.instance.client
           .from('orders')
-          .select(
-              '*, restaurant_tables(table_number), order_items(*, menu_items(name))')
-          .eq('branch_id', _branchId!);
-      if (_historyFilter == 'paid') {
-        q = q.eq('status', 'paid');
-      } else if (_historyFilter == 'cancelled') {
-        q = q.eq('status', 'cancelled');
-      } else {
-        q = q.inFilter('status', ['paid', 'cancelled', 'served']);
-      }
-      final res =
-          await q.order('created_at', ascending: false).limit(200);
+          .select('''
+            *,
+            restaurant_tables!orders_table_id_fkey(table_number),
+            order_items(*)
+          ''')
+          .eq('branch_id', _branchId!)
+          .inFilter('status', activeStatuses)
+          .order('created_at', ascending: false);
+
+      final tblRes = await Supabase.instance.client
+          .from('restaurant_tables')
+          .select()
+          .eq('branch_id', _branchId!)
+          .order('table_number');
+
       if (mounted) {
         setState(() {
-          _history = (res as List).cast<Map<String, dynamic>>();
+          _orders = (ordRes as List<dynamic>)
+              .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _tables = (tblRes as List<dynamic>)
+              .map((e) => TableModel.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('=== ERROR LOAD ORDERS ===');
+      debugPrint('Error: $e');
+      debugPrint('StackTrace: $stackTrace');
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memuat order aktif: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  // ==================== LOAD HISTORY ====================
+  Future<void> _loadHistory() async {
+    if (_branchId == null) return;
+
+    if (mounted) setState(() => _isHistoryLoading = true);
+
+    try {
+      var query = Supabase.instance.client
+          .from('orders')
+          .select('''
+            *,
+            restaurant_tables!orders_table_id_fkey(table_number),
+            order_items(*, menu_items(name))
+          ''')
+          .eq('branch_id', _branchId!);
+
+      if (_historyFilter == 'paid') {
+        query = query.eq('status', 'paid');
+      } else if (_historyFilter == 'cancelled') {
+        query = query.eq('status', 'cancelled');
+      } else {
+        query = query.inFilter('status', ['paid', 'cancelled', 'served']);
+      }
+
+      final res = await query.order('created_at', ascending: false).limit(200);
+
+      if (mounted) {
+        setState(() {
+          _history = (res as List<dynamic>).cast<Map<String, dynamic>>();
           _isHistoryLoading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error load history: $e');
       if (mounted) setState(() => _isHistoryLoading = false);
     }
   }
 
+  // ==================== REALTIME SUBSCRIPTION ====================
   void _subscribeRealtime() {
+    _channel?.unsubscribe();
+    _channel = null;
+
+    if (_branchId == null) return;
+
     _channel = Supabase.instance.client
-        .channel('order_realtime')
+        .channel('orders_realtime_${_branchId}')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          callback: (_) => _load())
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'branch_id',
+            value: _branchId!,
+          ),
+          callback: (_) {
+            if (mounted) _load();
+          },
+        )
         .subscribe();
   }
 
   // ─── STATUS HELPERS ──────────────────────────────────────────────────────
   Color _statusColor(OrderStatus s) {
     switch (s) {
-      case OrderStatus.new_:      return AppColors.orderNew;
-      case OrderStatus.preparing: return AppColors.orderPreparing;
-      case OrderStatus.ready:     return AppColors.orderReady;
-      case OrderStatus.served:    return AppColors.primary;
-      case OrderStatus.cancelled: return AppColors.textHint;
-      case OrderStatus.paid:      return AppColors.available;
+      case OrderStatus.new_:
       case OrderStatus.created:
-        throw UnimplementedError();
+        return AppColors.orderNew;
+      case OrderStatus.preparing:
+        return AppColors.orderPreparing;
+      case OrderStatus.ready:
+        return AppColors.orderReady;
+      case OrderStatus.served:
+        return AppColors.primary;
+      case OrderStatus.cancelled:
+        return AppColors.textHint;
+      case OrderStatus.paid:
+        return AppColors.available;
     }
   }
 
-  // next status yang valid
   OrderStatus? _nextStatus(OrderStatus current) {
     switch (current) {
-      case OrderStatus.new_:      return OrderStatus.preparing;
-      case OrderStatus.preparing: return OrderStatus.ready;
-      case OrderStatus.ready:     return OrderStatus.served;
-      default:                    return null;
+      case OrderStatus.new_:
+      case OrderStatus.created:
+        return OrderStatus.preparing;
+      case OrderStatus.preparing:
+        return OrderStatus.ready;
+      case OrderStatus.ready:
+        return OrderStatus.served;
+      default:
+        return null;
     }
   }
 
-  // label tombol update
   String _nextStatusLabel(OrderStatus current) {
     switch (current) {
-      case OrderStatus.new_:      return 'Mulai Masak';
-      case OrderStatus.preparing: return 'Tandai Siap';
-      case OrderStatus.ready:     return 'Tandai Tersaji';
-      default:                    return '';
+      case OrderStatus.new_:
+      case OrderStatus.created:
+        return 'Mulai Masak';
+      case OrderStatus.preparing:
+        return 'Tandai Siap';
+      case OrderStatus.ready:
+        return 'Tandai Tersaji';
+      default:
+        return '';
     }
   }
 
   IconData _nextStatusIcon(OrderStatus current) {
     switch (current) {
-      case OrderStatus.new_:      return Icons.soup_kitchen_outlined;
-      case OrderStatus.preparing: return Icons.check_circle_outline;
-      case OrderStatus.ready:     return Icons.room_service_outlined;
-      default:                    return Icons.arrow_forward;
+      case OrderStatus.new_:
+      case OrderStatus.created:
+        return Icons.soup_kitchen_outlined;
+      case OrderStatus.preparing:
+        return Icons.check_circle_outline;
+      case OrderStatus.ready:
+        return Icons.room_service_outlined;
+      default:
+        return Icons.arrow_forward;
     }
   }
 
@@ -202,12 +274,10 @@ Future<void> _load() async {
     final next = _nextStatus(order.status);
     if (next == null) return;
 
-    // Konfirmasi
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(children: [
           Container(
             padding: const EdgeInsets.all(6),
@@ -283,21 +353,23 @@ Future<void> _load() async {
     if (confirmed != true) return;
 
     setState(() => _updatingOrderId = order.id);
+
     try {
       final staff = ref.read(currentStaffProvider);
       await Supabase.instance.client.from('orders').update({
-        'status': next.name == 'new_' ? 'new' : next.name,
+        'status': next.dbValue,
         'staff_id': staff?.id,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', order.id);
 
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            'Order #${order.orderNumber} → ${next.label}'),
+        content: Text('Order #${order.orderNumber} → ${next.label}'),
         backgroundColor: _statusColor(next),
         duration: const Duration(seconds: 2),
       ));
+
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -313,19 +385,27 @@ Future<void> _load() async {
   // ─── HISTORY HELPERS ──────────────────────────────────────────────────────
   Color _historyStatusColor(String? s) {
     switch (s) {
-      case 'paid':      return const Color(0xFF4CAF50);
-      case 'cancelled': return const Color(0xFFE94560);
-      case 'served':    return const Color(0xFF2196F3);
-      default:          return AppColors.textHint;
+      case 'paid':
+        return const Color(0xFF4CAF50);
+      case 'cancelled':
+        return const Color(0xFFE94560);
+      case 'served':
+        return const Color(0xFF2196F3);
+      default:
+        return AppColors.textHint;
     }
   }
 
   String _historyStatusLabel(String? s) {
     switch (s) {
-      case 'paid':      return 'Lunas';
-      case 'cancelled': return 'Dibatalkan';
-      case 'served':    return 'Tersaji';
-      default:          return s ?? '-';
+      case 'paid':
+        return 'Lunas';
+      case 'cancelled':
+        return 'Dibatalkan';
+      case 'served':
+        return 'Tersaji';
+      default:
+        return s ?? '-';
     }
   }
 
@@ -374,18 +454,21 @@ Future<void> _load() async {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(controller: _tab, children: [
-              _buildActiveOrders(),
-              MenuItemSelector(
-                branchId: _branchId ?? '',
-                tables: _tables,
-                onOrderCreated: () {
-                  _load();
-                  _tab.animateTo(0);
-                },
-              ),
-              _buildHistory(),
-            ]),
+          : TabBarView(
+              controller: _tab,
+              children: [
+                _buildActiveOrders(),
+                MenuItemSelector(
+                  branchId: _branchId ?? '',
+                  tables: _tables,
+                  onOrderCreated: () {
+                    _load();
+                    _tab.animateTo(0);
+                  },
+                ),
+                _buildHistory(),
+              ],
+            ),
     );
   }
 
@@ -446,16 +529,14 @@ Future<void> _load() async {
               ],
             ]),
             subtitle: Row(children: [
-              // Status badge
               Container(
                 margin: const EdgeInsets.only(top: 3),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
-                  border:
-                      Border.all(color: color.withValues(alpha: 0.4)),
+                  border: Border.all(color: color.withValues(alpha: 0.4)),
                 ),
                 child: Text(o.status.label,
                     style: TextStyle(
@@ -476,10 +557,8 @@ Future<void> _load() async {
                   color: AppColors.accent),
             ),
             children: [
-              // ── Daftar item
               ...o.items.map((item) => OrderItemTile(item: item)),
 
-              // ── Notes order
               if (o.notes != null && o.notes!.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -490,8 +569,7 @@ Future<void> _load() async {
                       color: AppColors.reserved.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color:
-                              AppColors.reserved.withValues(alpha: 0.3)),
+                          color: AppColors.reserved.withValues(alpha: 0.3)),
                     ),
                     child: Row(children: [
                       const Icon(Icons.notes,
@@ -510,7 +588,6 @@ Future<void> _load() async {
 
               const Divider(height: 1),
 
-              // ── Tombol update status
               if (nextS != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -525,16 +602,14 @@ Future<void> _load() async {
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 10),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
                       icon: isUpdating
                           ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white))
+                                  strokeWidth: 2, color: Colors.white))
                           : Icon(_nextStatusIcon(o.status), size: 18),
                       label: Text(
                         isUpdating
@@ -548,7 +623,6 @@ Future<void> _load() async {
                   ),
                 )
               else
-                // Sudah served → info menunggu kasir
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   child: Container(
@@ -559,8 +633,7 @@ Future<void> _load() async {
                       color: AppColors.available.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: AppColors.available
-                              .withValues(alpha: 0.3)),
+                          color: AppColors.available.withValues(alpha: 0.3)),
                     ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -588,7 +661,6 @@ Future<void> _load() async {
   // ─── TAB: RIWAYAT ─────────────────────────────────────────────────────────
   Widget _buildHistory() {
     return Column(children: [
-      // Filter chips
       Container(
         color: Colors.white,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -625,7 +697,6 @@ Future<void> _load() async {
         ),
       ),
 
-      // List
       Expanded(
         child: _isHistoryLoading
             ? const Center(child: CircularProgressIndicator())
@@ -647,19 +718,14 @@ Future<void> _load() async {
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _history.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: 8),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
                       final o = _history[i];
                       final status = o['status'] as String?;
                       final total =
-                          (o['total_amount'] as num?)?.toDouble() ??
-                              0;
+                          (o['total_amount'] as num?)?.toDouble() ?? 0;
                       final statusColor = _historyStatusColor(status);
-
-                      // parse items untuk detail
-                      final rawItems =
-                          o['order_items'] as List? ?? [];
+                      final rawItems = o['order_items'] as List? ?? [];
 
                       return Card(
                         child: ExpansionTile(
@@ -668,8 +734,7 @@ Future<void> _load() async {
                             height: 44,
                             decoration: BoxDecoration(
                               color: statusColor.withValues(alpha: 0.1),
-                              borderRadius:
-                                  BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(Icons.receipt_long,
                                 color: statusColor, size: 22),
@@ -685,22 +750,17 @@ Future<void> _load() async {
                             style: AppTextStyles.caption,
                           ),
                           trailing: Column(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
-                            crossAxisAlignment:
-                                CrossAxisAlignment.end,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: statusColor
-                                      .withValues(alpha: 0.1),
-                                  borderRadius:
-                                      BorderRadius.circular(8),
+                                  color: statusColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                      color: statusColor
-                                          .withValues(alpha: 0.4)),
+                                      color: statusColor.withValues(alpha: 0.4)),
                                 ),
                                 child: Text(
                                   _historyStatusLabel(status),
@@ -721,7 +781,6 @@ Future<void> _load() async {
                               ),
                             ],
                           ),
-                          // ── Detail items di history
                           children: [
                             if (rawItems.isNotEmpty) ...[
                               const Divider(height: 1),
@@ -729,15 +788,12 @@ Future<void> _load() async {
                                 final name = (item['menu_items']
                                         as Map?)?['name'] as String? ??
                                     '-';
-                                final qty =
-                                    item['quantity'] as int? ?? 0;
+                                final qty = item['quantity'] as int? ?? 0;
                                 final sub =
-                                    (item['subtotal'] as num?)
-                                            ?.toDouble() ??
-                                        0;
+                                    (item['subtotal'] as num?)?.toDouble() ?? 0;
                                 final notes =
-                                    item['special_requests']
-                                        as String?;
+                                    item['special_requests'] as String?;
+
                                 return ListTile(
                                   dense: true,
                                   leading: Container(
@@ -746,32 +802,26 @@ Future<void> _load() async {
                                     decoration: BoxDecoration(
                                       color: AppColors.primary
                                           .withValues(alpha: 0.1),
-                                      borderRadius:
-                                          BorderRadius.circular(6),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Center(
                                       child: Text('$qty',
                                           style: const TextStyle(
                                               fontFamily: 'Poppins',
-                                              fontWeight:
-                                                  FontWeight.w700,
+                                              fontWeight: FontWeight.w700,
                                               fontSize: 12,
-                                              color:
-                                                  AppColors.primary)),
+                                              color: AppColors.primary)),
                                     ),
                                   ),
                                   title: Text(name,
                                       style: const TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontSize: 13)),
-                                  subtitle: notes != null &&
-                                          notes.isNotEmpty
+                                          fontFamily: 'Poppins', fontSize: 13)),
+                                  subtitle: notes != null && notes.isNotEmpty
                                       ? Text('⚡ $notes',
                                           style: const TextStyle(
                                               fontFamily: 'Poppins',
                                               fontSize: 11,
-                                              color:
-                                                  AppColors.reserved))
+                                              color: AppColors.reserved))
                                       : null,
                                   trailing: Text(
                                     'Rp ${sub.toStringAsFixed(0)}',
@@ -783,7 +833,6 @@ Future<void> _load() async {
                                 );
                               }),
                             ],
-                            // Ringkasan total
                             Padding(
                               padding: const EdgeInsets.fromLTRB(
                                   16, 4, 16, 12),
@@ -793,8 +842,7 @@ Future<void> _load() async {
                                     style: TextStyle(
                                         fontFamily: 'Poppins',
                                         fontSize: 13,
-                                        color:
-                                            AppColors.textSecondary)),
+                                        color: AppColors.textSecondary)),
                                 Text(
                                   'Rp ${total.toStringAsFixed(0)}',
                                   style: const TextStyle(
