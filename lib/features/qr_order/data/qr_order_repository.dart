@@ -19,6 +19,7 @@ class QrOrderRepository {
 
     final orderData = {
       'queue_number': queueNumber,
+      'order_number': queueNumber,           // ← FIX: mengatasi not-null constraint
       'table_id': session.tableId,
       'table_name': session.tableName ?? 'Meja ${session.tableId}',
       'customer_name': session.customerName ?? 'Tamu',
@@ -34,7 +35,7 @@ class QrOrderRepository {
               })
           .toList(),
       'total_amount': session.totalAmount,
-      'status': QrOrderStatus.created.dbValue,        // ← Diperbaiki
+      'status': QrOrderStatus.created.dbValue,
       'payment_status': QrPaymentStatus.pending.dbValue,
       'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
       'branch_id': branchId,
@@ -42,13 +43,22 @@ class QrOrderRepository {
       'created_at': DateTime.now().toIso8601String(),
     };
 
-    final response = await _client
-        .from('orders')
-        .insert(orderData)
-        .select()
-        .single();
+    try {
+      debugPrint('🔄 Membuat order dengan queue_number: $queueNumber');
 
-    return QrOrderModel.fromMap(response);
+      final response = await _client
+          .from('orders')
+          .insert(orderData)
+          .select()
+          .single();
+
+      debugPrint('✅ Order berhasil dibuat! ID: ${response['id']}');
+      return QrOrderModel.fromMap(response);
+    } catch (e, stack) {
+      debugPrint('❌ Gagal create order: $e');
+      debugPrint('Stack trace: $stack');
+      rethrow;
+    }
   }
 
   // ─── Realtime Stream ────────────────────────────────────────────────────────
@@ -150,7 +160,7 @@ class QrOrderRepository {
     } catch (e) {
       debugPrint('❌ ERROR fetchTableInfo: $e');
 
-      // Fallback
+      // Fallback tanpa join
       final tableRow = await _client
           .from('restaurant_tables')
           .select('*')
