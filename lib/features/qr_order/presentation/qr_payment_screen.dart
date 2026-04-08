@@ -45,13 +45,15 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     try {
       final order = await repo.createOrder(session: cart, branchId: branchId);
 
-      // Update status menjadi 'paid'
-      await Supabase.instance.client.from('orders').update({
-        'status': 'paid',
-        'payment_status': 'paid',
-        'payment_method': _selected == QrPaymentMethod.qris ? 'qris' : 'cash',
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', order.id);
+      // Untuk QRIS: update payment_method saja, status tetap 'created' sampai kasir konfirmasi
+      // Untuk Kasir: tidak ada update — order tetap 'created', kasir yang akan memproses pembayaran
+      if (_selected == QrPaymentMethod.qris) {
+        await Supabase.instance.client.from('orders').update({
+          'payment_method': 'qris',
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', order.id);
+      }
+      // Kasir: payment_method sudah di-set saat createOrder ('kasir'), tidak perlu update
 
       notifier.clearCart();
 
@@ -64,7 +66,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
             'tableId': widget.tableId,
           });
         } else {
-          // Bayar ke Kasir → Langsung ke Tracker
+          // Bayar ke Kasir → ke Tracker, status masih 'created' (menunggu kasir)
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
 
           ScaffoldMessenger.of(context).showSnackBar(

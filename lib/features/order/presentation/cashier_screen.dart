@@ -49,8 +49,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             order_items(*)
           ''')
           .eq('branch_id', _branchId!)
-          .inFilter('status', ['created', 'preparing', 'ready', 'served'])
-          .order('created_at', ascending: false);
+          .inFilter('status', ['created'])
+          .eq('payment_status', 'pending')        // hanya yang belum dibayar
+          .order('created_at', ascending: true);  // order lama duluan (FIFO)
 
       if (mounted) {
         setState(() {
@@ -644,8 +645,11 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }) async {
     final staff = ref.read(currentStaffProvider);
 
+    // Set status ke 'paid' → KDS menampilkan order ini untuk dimasak
+    // KDS lanjutkan: paid → preparing → ready → served
     await Supabase.instance.client.from('orders').update({
       'status': 'paid',
+      'payment_status': 'paid',
       'cashier_id': staff?.id,
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', order.id);

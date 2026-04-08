@@ -71,29 +71,30 @@ class _TrackerBody extends StatelessWidget {
 
   const _TrackerBody({required this.order});
 
+  // stepIndex dari model: created=0, paid=1, preparing=2, ready=3, served=4
   static const _steps = [
     (
       status: QrOrderStatus.created,
       label: 'Pesanan Masuk',
-      sublabel: 'Menunggu konfirmasi',
+      sublabel: 'Menunggu pembayaran di kasir',
       icon: Icons.hourglass_top_outlined,
     ),
     (
-      status: QrOrderStatus.preparing,
-      label: 'Dikonfirmasi',
-      sublabel: 'Pesanan diterima',
+      status: QrOrderStatus.paid,
+      label: 'Pembayaran Dikonfirmasi',
+      sublabel: 'Kasir telah memproses pembayaran',
       icon: Icons.check_circle_outline,
     ),
     (
       status: QrOrderStatus.preparing,
       label: 'Sedang Dimasak',
-      sublabel: 'Di dapur',
+      sublabel: 'Dapur sedang memproses',
       icon: Icons.outdoor_grill_outlined,
     ),
     (
       status: QrOrderStatus.ready,
       label: 'Siap Disajikan',
-      sublabel: 'Menuju mejamu',
+      sublabel: 'Pesanan sudah siap',
       icon: Icons.dining_outlined,
     ),
     (

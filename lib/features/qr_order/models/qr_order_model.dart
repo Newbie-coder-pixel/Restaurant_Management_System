@@ -1,60 +1,54 @@
 import 'package:flutter/foundation.dart';
 
 enum QrOrderStatus {
-  created,      // Pesanan Baru
-  preparing,
-  ready,
-  served,
-  cancelled,
-  paid;
+  created,      // 0 – Pesanan baru masuk, belum dibayar
+  paid,         // 1 – Sudah dibayar kasir, menunggu dapur
+  preparing,    // 2 – Dapur sedang masak
+  ready,        // 3 – Siap disajikan
+  served,       // 4 – Sudah disajikan
+  cancelled;    // -1
 
   String get label {
     switch (this) {
-      case QrOrderStatus.created:
-        return 'Pesanan Baru';
-      case QrOrderStatus.preparing:
-        return 'Sedang Dimasak';
-      case QrOrderStatus.ready:
-        return 'Siap Disajikan';
-      case QrOrderStatus.served:
-        return 'Sudah Disajikan';
-      case QrOrderStatus.cancelled:
-        return 'Dibatalkan';
-      case QrOrderStatus.paid:
-        return 'Sudah Dibayar';
+      case QrOrderStatus.created:   return 'Pesanan Baru';
+      case QrOrderStatus.paid:      return 'Sudah Dibayar';
+      case QrOrderStatus.preparing: return 'Sedang Dimasak';
+      case QrOrderStatus.ready:     return 'Siap Disajikan';
+      case QrOrderStatus.served:    return 'Sudah Disajikan';
+      case QrOrderStatus.cancelled: return 'Dibatalkan';
     }
   }
 
   String get emoji {
     switch (this) {
       case QrOrderStatus.created:   return '🆕';
+      case QrOrderStatus.paid:      return '💰';
       case QrOrderStatus.preparing: return '👨‍🍳';
       case QrOrderStatus.ready:     return '🍽️';
       case QrOrderStatus.served:    return '✅';
       case QrOrderStatus.cancelled: return '❌';
-      case QrOrderStatus.paid:      return '💰';
     }
   }
 
   int get stepIndex {
     switch (this) {
       case QrOrderStatus.created:   return 0;
-      case QrOrderStatus.preparing: return 1;
-      case QrOrderStatus.ready:     return 2;
-      case QrOrderStatus.served:    return 3;
+      case QrOrderStatus.paid:      return 1;
+      case QrOrderStatus.preparing: return 2;
+      case QrOrderStatus.ready:     return 3;
+      case QrOrderStatus.served:    return 4;
       case QrOrderStatus.cancelled: return -1;
-      case QrOrderStatus.paid:      return 4;
     }
   }
 
   double get progress {
     switch (this) {
       case QrOrderStatus.created:   return 0.0;
-      case QrOrderStatus.preparing: return 0.33;
-      case QrOrderStatus.ready:     return 0.66;
+      case QrOrderStatus.paid:      return 0.25;
+      case QrOrderStatus.preparing: return 0.50;
+      case QrOrderStatus.ready:     return 0.75;
       case QrOrderStatus.served:    return 1.0;
       case QrOrderStatus.cancelled: return 0.0;
-      case QrOrderStatus.paid:      return 1.0;
     }
   }
 
@@ -112,7 +106,7 @@ class QrOrderItemModel {
 @immutable
 class QrOrderModel {
   final String id;
-  final String orderNumber;      // ← Baru: order_number
+  final String orderNumber;
   final String queueNumber;
   final String tableId;
   final String tableName;
@@ -129,7 +123,7 @@ class QrOrderModel {
 
   const QrOrderModel({
     required this.id,
-    required this.orderNumber,       // ← Tambahan
+    required this.orderNumber,
     required this.queueNumber,
     required this.tableId,
     required this.tableName,
@@ -147,7 +141,7 @@ class QrOrderModel {
 
   factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
         id: map['id'] as String,
-        orderNumber: map['order_number'] as String,        // ← Tambahan
+        orderNumber: map['order_number'] as String,
         queueNumber: map['queue_number'] as String,
         tableId: map['table_id'] as String,
         tableName: map['table_name'] as String,
@@ -175,7 +169,7 @@ class QrOrderModel {
 
   Map<String, dynamic> toMap() => {
         'id': id,
-        'order_number': orderNumber,           // ← Tambahan
+        'order_number': orderNumber,
         'queue_number': queueNumber,
         'table_id': tableId,
         'table_name': tableName,
