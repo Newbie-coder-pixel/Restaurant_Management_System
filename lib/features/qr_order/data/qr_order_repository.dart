@@ -16,41 +16,38 @@ class QrOrderRepository {
   Future<QrOrderModel> createOrder({
     required QrOrderSession session,
     required String branchId,
-    String? notes, // ✅ FIX: tambah parameter notes
+    String? notes,
   }) async {
     final queueNumber = await _generateQueueNumber(branchId);
 
     try {
-      debugPrint('🔄 Membuat QR Order: $queueNumber | Table: ${session.tableId} | Items: ${session.items.length}');
+      debugPrint('🔄 Membuat QR Order: $queueNumber | Items: ${session.items.length}');
 
-      // 1. Insert ke tabel orders
-      final orderData = {
-        'queue_number': queueNumber,
-        'order_number': queueNumber,
-        'table_id': session.tableId,
-        'table_name': session.tableName ?? 'Meja ${session.tableId}',
-        'customer_name': session.customerName ?? 'Tamu',
-        'total_amount': session.totalAmount,
-        'status': 'created',
-        'payment_status': 'pending',
-        'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
-        'branch_id': branchId,
-        'order_type': 'qr_order',
-        'source': 'dine_in', // ✅ FIX: pakai dine_in bukan dineIn
-        if (notes != null && notes.isNotEmpty) 'notes': notes, // ✅ FIX: simpan notes
-        'created_at': DateTime.now().toIso8601String(),
-      };
-
+      // 1. Insert orders
       final orderResponse = await _client
           .from('orders')
-          .insert(orderData)
+          .insert({
+            'queue_number': queueNumber,
+            'order_number': queueNumber,
+            'table_id': session.tableId,
+            'table_name': session.tableName ?? 'Meja ${session.tableId}',
+            'customer_name': session.customerName ?? 'Tamu',
+            'total_amount': session.totalAmount,
+            'status': 'created',
+            'payment_status': 'pending',
+            'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
+            'branch_id': branchId,
+            'order_type': 'qr_order',
+            'source': 'dine_in',
+            if (notes != null && notes.isNotEmpty) 'notes': notes,
+            'created_at': DateTime.now().toIso8601String(),
+          })
           .select()
           .single();
 
       final String orderId = orderResponse['id'] as String;
 
-      // 2. Insert ke tabel order_items
-      // ✅ FIX: subtotal DIHAPUS karena GENERATED column di DB
+      // 2. Insert order_items — subtotal TIDAK di-insert (GENERATED column)
       if (session.items.isNotEmpty) {
         final orderItemsData = session.items.map((cartItem) {
           final itemData = <String, dynamic>{
@@ -59,9 +56,9 @@ class QrOrderRepository {
             'menu_item_name': cartItem.menuItem.name,
             'unit_price': cartItem.menuItem.price,
             'quantity': cartItem.quantity,
-            // subtotal tidak di-insert → dihitung otomatis oleh DB
+            // ❌ subtotal tidak di-insert → GENERATED column, dihitung otomatis DB
           };
-          // ✅ FIX: simpan notes per item (special_requests)
+          // ✅ notes per item disimpan ke special_requests
           if (cartItem.notes != null && cartItem.notes!.isNotEmpty) {
             itemData['special_requests'] = cartItem.notes;
           }
@@ -69,21 +66,27 @@ class QrOrderRepository {
         }).toList();
 
         await _client.from('order_items').insert(orderItemsData);
-
-        debugPrint('✅ Berhasil menyimpan ${orderItemsData.length} item ke tabel order_items');
+        debugPrint('✅ ${orderItemsData.length} items tersimpan');
       }
 
-      debugPrint('✅ Order berhasil dibuat! ID: $orderId | Queue: $queueNumber');
+      // ✅ FIX UTAMA: fetch ulang order BESERTA items setelah insert
+      // Response dari insert hanya berisi data orders, tidak include order_items
+      final fullOrder = await fetchOrder(orderId);
+      if (fullOrder != null) {
+        debugPrint('✅ Order dibuat: ${fullOrder.items.length} items, total ${fullOrder.totalAmount}');
+        return fullOrder;
+      }
 
-      return QrOrderModel.fromMap(orderResponse);
+      // Fallback jika fetch gagal
+      return QrOrderModel.fromMap(_normalizeOrderMap(orderResponse));
+
     } catch (e, stack) {
-      debugPrint('❌ Gagal create order: $e');
-      debugPrint('Stack trace: $stack');
+      debugPrint('❌ Gagal create order: $e\n$stack');
       rethrow;
     }
   }
 
-  // ── Watch Order (realtime) ─────────────────────────────────────────────────
+  // ── Watch Order realtime ───────────────────────────────────────────────────
   Stream<QrOrderModel> watchOrder(String orderId) {
     late StreamController<QrOrderModel> controller;
     RealtimeChannel? channel;
@@ -91,9 +94,7 @@ class QrOrderRepository {
     Future<void> fetchAndEmit() async {
       try {
         final order = await fetchOrder(orderId);
-        if (order != null && !controller.isClosed) {
-          controller.add(order);
-        }
+        if (order != null && !controller.isClosed) controller.add(order);
       } catch (e) {
         if (!controller.isClosed) controller.addError(e);
       }
@@ -102,7 +103,6 @@ class QrOrderRepository {
     controller = StreamController<QrOrderModel>(
       onListen: () async {
         await fetchAndEmit();
-
         channel = _client
             .channel('order_watch_$orderId')
             .onPostgresChanges(
@@ -138,7 +138,7 @@ class QrOrderRepository {
     return controller.stream;
   }
 
-  // ── Fetch Order (dengan items) ─────────────────────────────────────────────
+  // ── Fetch order + items ────────────────────────────────────────────────────
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     final response = await _client
         .from('orders')
@@ -152,7 +152,6 @@ class QrOrderRepository {
   Future<QrOrderModel?> fetchByQueueNumber(String queueNumber) async {
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
-
     final response = await _client
         .from('orders')
         .select('*, order_items(*)')
@@ -163,14 +162,16 @@ class QrOrderRepository {
     return QrOrderModel.fromMap(_normalizeOrderMap(response));
   }
 
-  // ── Normalize map ──────────────────────────────────────────────────────────
+  // ── Normalize: rename kolom DB agar cocok dengan model ────────────────────
   Map<String, dynamic> _normalizeOrderMap(Map<String, dynamic> raw) {
     final orderItems = (raw['order_items'] as List<dynamic>? ?? [])
         .map((e) {
           final item = Map<String, dynamic>.from(e as Map);
+          // DB: unit_price → model expects: price
           if (!item.containsKey('price') && item.containsKey('unit_price')) {
             item['price'] = item['unit_price'];
           }
+          // DB: special_requests → model expects: notes
           if (!item.containsKey('notes') && item.containsKey('special_requests')) {
             item['notes'] = item['special_requests'];
           }
@@ -178,21 +179,12 @@ class QrOrderRepository {
         })
         .toList();
 
-    return {
-      ...raw,
-      'items': orderItems,
-    };
+    return {...raw, 'items': orderItems};
   }
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
-    if (branchId.trim().isEmpty) {
-      debugPrint('❌ fetchMenuByBranch: branchId kosong!');
-      return [];
-    }
-
+    if (branchId.trim().isEmpty) return [];
     try {
-      debugPrint('🔄 Fetching menu for branch: $branchId');
-
       final items = await _client
           .from('menu_items')
           .select('''
@@ -204,48 +196,34 @@ class QrOrderRepository {
           .eq('branch_id', branchId)
           .eq('is_available', true)
           .order('sort_order', ascending: true);
-
-      debugPrint('✅ Berhasil fetch ${items.length} menu items');
       return List<Map<String, dynamic>>.from(items);
     } catch (e, stack) {
-      debugPrint('❌ ERROR di fetchMenuByBranch: $e');
-      debugPrint('Stack: $stack');
+      debugPrint('❌ ERROR fetchMenuByBranch: $e\n$stack');
       rethrow;
     }
   }
 
   Future<Map<String, dynamic>?> fetchTableInfo(String tableId) async {
     try {
-      final tableRow = await _client
+      final row = await _client
           .from('restaurant_tables')
           .select('*, branches(id, name)')
           .eq('id', tableId)
           .maybeSingle();
-
-      if (tableRow == null) {
-        debugPrint('⚠️ Table dengan ID $tableId tidak ditemukan');
-        return null;
-      }
-      debugPrint('✅ Table info ditemukan: ${tableRow['table_number']}');
-      return tableRow;
+      return row;
     } catch (e) {
-      debugPrint('❌ ERROR fetchTableInfo: $e');
-      final tableRow = await _client
+      final row = await _client
           .from('restaurant_tables')
           .select('*')
           .eq('id', tableId)
           .maybeSingle();
-      if (tableRow != null) {
-        return {...tableRow, 'branches': null};
-      }
-      return null;
+      return row != null ? {...row, 'branches': null} : null;
     }
   }
 
   Future<String> _generateQueueNumber(String branchId) async {
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
-
     try {
       final rows = await _client
           .from('orders')
@@ -256,32 +234,23 @@ class QrOrderRepository {
           .limit(1);
 
       if (rows.isEmpty) return 'A001';
-
       final lastQueue = rows.first['queue_number'] as String;
       final letter = lastQueue[0];
       final number = int.tryParse(lastQueue.substring(1)) ?? 0;
-
-      if (number < 999) {
-        return '$letter${(number + 1).toString().padLeft(3, '0')}';
-      } else {
-        final nextLetter = String.fromCharCode(letter.codeUnitAt(0) + 1);
-        return '${nextLetter}001';
-      }
+      if (number < 999) return '$letter${(number + 1).toString().padLeft(3, '0')}';
+      return '${String.fromCharCode(letter.codeUnitAt(0) + 1)}001';
     } catch (_) {
-      final rnd = Random().nextInt(999) + 1;
-      return 'A${rnd.toString().padLeft(3, '0')}';
+      return 'A${(Random().nextInt(999) + 1).toString().padLeft(3, '0')}';
     }
   }
 }
 
-// ── Providers ──────────────────────────────────────────────────────────────────
 final qrOrderRepositoryProvider = Provider<QrOrderRepository>((ref) {
   return QrOrderRepository(Supabase.instance.client);
 });
 
 class QrOrderCreationNotifier extends StateNotifier<AsyncValue<QrOrderModel?>> {
   final QrOrderRepository _repo;
-
   QrOrderCreationNotifier(this._repo) : super(const AsyncValue.data(null));
 
   Future<QrOrderModel?> submit({
@@ -291,11 +260,7 @@ class QrOrderCreationNotifier extends StateNotifier<AsyncValue<QrOrderModel?>> {
   }) async {
     state = const AsyncValue.loading();
     try {
-      final order = await _repo.createOrder(
-        session: session,
-        branchId: branchId,
-        notes: notes,
-      );
+      final order = await _repo.createOrder(session: session, branchId: branchId, notes: notes);
       state = AsyncValue.data(order);
       return order;
     } catch (e, st) {
@@ -314,6 +279,5 @@ final qrOrderCreationProvider =
 
 final qrOrderWatchProvider =
     StreamProvider.family<QrOrderModel, String>((ref, orderId) {
-  final repo = ref.read(qrOrderRepositoryProvider);
-  return repo.watchOrder(orderId);
+  return ref.read(qrOrderRepositoryProvider).watchOrder(orderId);
 });
