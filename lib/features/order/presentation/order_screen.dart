@@ -163,6 +163,8 @@ Future<void> _load() async {
       case OrderStatus.served:    return AppColors.primary;
       case OrderStatus.cancelled: return AppColors.textHint;
       case OrderStatus.paid:      return AppColors.available;
+      case OrderStatus.created:
+        throw UnimplementedError();
     }
   }
 

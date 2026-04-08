@@ -1,11 +1,14 @@
-enum OrderStatus { new_, preparing, ready, served, cancelled, paid }
+enum OrderStatus { new_, created, preparing, ready, served, cancelled, paid }
+
 enum OrderSource { dineIn, online, takeaway }
+
 enum OrderItemStatus { pending, preparing, ready, served, cancelled }
 
 extension OrderStatusExt on OrderStatus {
   String get label {
     switch (this) {
-      case OrderStatus.new_:      return 'Baru';
+      case OrderStatus.new_:      return 'Baru (Internal)';
+      case OrderStatus.created:   return 'Baru (QR)';
       case OrderStatus.preparing: return 'Dimasak';
       case OrderStatus.ready:     return 'Siap';
       case OrderStatus.served:    return 'Disajikan';
@@ -14,26 +17,26 @@ extension OrderStatusExt on OrderStatus {
     }
   }
 
-  /// Improved fromString - mendukung both 'created' (QR) dan 'new' (Internal Staff)
+  /// Nilai yang benar-benar disimpan ke database
+  String get dbValue {
+    switch (this) {
+      case OrderStatus.new_:    return 'new';
+      case OrderStatus.created: return 'created';
+      default:                  return name; // preparing, ready, dll.
+    }
+  }
+
   static OrderStatus fromString(String s) {
     final lower = s.toLowerCase().trim();
-
     switch (lower) {
-      case 'new':
-      case 'created':           // QR Order tetap pakai 'created'
-        return OrderStatus.new_;
-      case 'preparing':
-        return OrderStatus.preparing;
-      case 'ready':
-        return OrderStatus.ready;
-      case 'served':
-        return OrderStatus.served;
-      case 'paid':
-        return OrderStatus.paid;
-      case 'cancelled':
-        return OrderStatus.cancelled;
-      default:
-        return OrderStatus.new_; // fallback
+      case 'new':       return OrderStatus.new_;
+      case 'created':   return OrderStatus.created;
+      case 'preparing': return OrderStatus.preparing;
+      case 'ready':     return OrderStatus.ready;
+      case 'served':    return OrderStatus.served;
+      case 'paid':      return OrderStatus.paid;
+      case 'cancelled': return OrderStatus.cancelled;
+      default:          return OrderStatus.new_;
     }
   }
 }
