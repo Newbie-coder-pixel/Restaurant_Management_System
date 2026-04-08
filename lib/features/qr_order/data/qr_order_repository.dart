@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart'; // Untuk debugPrint
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/qr_order_model.dart';
@@ -11,7 +11,6 @@ class QrOrderRepository {
   QrOrderRepository(this._client);
 
   // ─── Create Order ──────────────────────────────────────────────────────────
-
   Future<QrOrderModel> createOrder({
     required QrOrderSession session,
     required String branchId,
@@ -35,8 +34,8 @@ class QrOrderRepository {
               })
           .toList(),
       'total_amount': session.totalAmount,
-      'status': QrOrderStatus.initial.dbValue,           // 'new'
-      'payment_status': QrPaymentStatus.pending.dbValue, // 'pending'
+      'status': QrOrderStatus.created.dbValue,        // ← Diperbaiki
+      'payment_status': QrPaymentStatus.pending.dbValue,
       'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
       'branch_id': branchId,
       'order_type': 'qr_order',
@@ -51,8 +50,8 @@ class QrOrderRepository {
 
     return QrOrderModel.fromMap(response);
   }
-  // ─── Realtime Stream ────────────────────────────────────────────────────────
 
+  // ─── Realtime Stream ────────────────────────────────────────────────────────
   Stream<QrOrderModel> watchOrder(String orderId) {
     return _client
         .from('orders')
@@ -65,7 +64,6 @@ class QrOrderRepository {
   }
 
   // ─── Fetch Single ───────────────────────────────────────────────────────────
-
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     final response = await _client
         .from('orders')
@@ -77,7 +75,6 @@ class QrOrderRepository {
   }
 
   // ─── Fetch by Queue Number ──────────────────────────────────────────────────
-
   Future<QrOrderModel?> fetchByQueueNumber(String queueNumber) async {
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
@@ -126,13 +123,7 @@ class QrOrderRepository {
 
       debugPrint('✅ Berhasil fetch ${items.length} menu items');
 
-      final itemList = List<Map<String, dynamic>>.from(items);
-
-      if (itemList.isEmpty) {
-        debugPrint('⚠️  Tidak ada menu yang tersedia untuk branch ini');
-      }
-
-      return itemList;
+      return List<Map<String, dynamic>>.from(items);
     } catch (e, stack) {
       debugPrint('❌ ERROR di fetchMenuByBranch: $e');
       debugPrint('Stack: $stack');
@@ -141,7 +132,6 @@ class QrOrderRepository {
   }
 
   // ─── Fetch Table Info ───────────────────────────────────────────────────────
-
   Future<Map<String, dynamic>?> fetchTableInfo(String tableId) async {
     try {
       final tableRow = await _client
@@ -160,7 +150,7 @@ class QrOrderRepository {
     } catch (e) {
       debugPrint('❌ ERROR fetchTableInfo: $e');
 
-      // Fallback tanpa join
+      // Fallback
       final tableRow = await _client
           .from('restaurant_tables')
           .select('*')
@@ -175,7 +165,6 @@ class QrOrderRepository {
   }
 
   // ─── Private: Generate Queue Number ────────────────────────────────────────
-
   Future<String> _generateQueueNumber(String branchId) async {
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
@@ -208,16 +197,12 @@ class QrOrderRepository {
   }
 }
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
-
+// ─── Providers ───────────────────────────────────────────────────────────────
 final qrOrderRepositoryProvider = Provider<QrOrderRepository>((ref) {
   return QrOrderRepository(Supabase.instance.client);
 });
 
-// ─── Order creation state ──────────────────────────────────────────────────
-
-class QrOrderCreationNotifier
-    extends StateNotifier<AsyncValue<QrOrderModel?>> {
+class QrOrderCreationNotifier extends StateNotifier<AsyncValue<QrOrderModel?>> {
   final QrOrderRepository _repo;
 
   QrOrderCreationNotifier(this._repo) : super(const AsyncValue.data(null));
@@ -247,8 +232,6 @@ final qrOrderCreationProvider =
     StateNotifierProvider<QrOrderCreationNotifier, AsyncValue<QrOrderModel?>>(
   (ref) => QrOrderCreationNotifier(ref.read(qrOrderRepositoryProvider)),
 );
-
-// ─── Realtime watch ────────────────────────────────────────────────────────
 
 final qrOrderWatchProvider =
     StreamProvider.family<QrOrderModel, String>((ref, orderId) {

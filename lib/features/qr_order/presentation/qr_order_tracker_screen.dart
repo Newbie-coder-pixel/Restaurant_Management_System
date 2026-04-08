@@ -73,7 +73,7 @@ class _TrackerBody extends StatelessWidget {
 
   static const _steps = [
     (
-      status: QrOrderStatus.initial,
+      status: QrOrderStatus.created,
       label: 'Pesanan Masuk',
       sublabel: 'Menunggu konfirmasi',
       icon: Icons.hourglass_top_outlined,

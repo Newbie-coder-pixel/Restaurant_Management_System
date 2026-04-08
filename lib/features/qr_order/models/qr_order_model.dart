@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 enum QrOrderStatus {
-  initial,      // menggantikan 'new' (karena 'new' adalah keyword)
+  created,      // ← Diganti dari 'new' (karena 'new' adalah keyword)
   preparing,
   ready,
   served,
@@ -10,7 +10,7 @@ enum QrOrderStatus {
 
   String get label {
     switch (this) {
-      case QrOrderStatus.initial:
+      case QrOrderStatus.created:
         return 'Pesanan Baru';
       case QrOrderStatus.preparing:
         return 'Sedang Dimasak';
@@ -27,7 +27,7 @@ enum QrOrderStatus {
 
   String get emoji {
     switch (this) {
-      case QrOrderStatus.initial:
+      case QrOrderStatus.created:
         return '🆕';
       case QrOrderStatus.preparing:
         return '👨‍🍳';
@@ -44,7 +44,7 @@ enum QrOrderStatus {
 
   int get stepIndex {
     switch (this) {
-      case QrOrderStatus.initial:
+      case QrOrderStatus.created:
         return 0;
       case QrOrderStatus.preparing:
         return 1;
@@ -61,7 +61,7 @@ enum QrOrderStatus {
 
   double get progress {
     switch (this) {
-      case QrOrderStatus.initial:
+      case QrOrderStatus.created:
         return 0.0;
       case QrOrderStatus.preparing:
         return 0.33;
@@ -76,7 +76,7 @@ enum QrOrderStatus {
     }
   }
 
-  String get dbValue => name;   // 'initial', 'preparing', dll.
+  String get dbValue => name;   // 'created', 'preparing', 'paid', dst.
 }
 
 enum QrPaymentStatus {
@@ -108,8 +108,7 @@ class QrOrderItemModel {
 
   double get subtotal => price * quantity;
 
-  factory QrOrderItemModel.fromMap(Map<String, dynamic> map) =>
-      QrOrderItemModel(
+  factory QrOrderItemModel.fromMap(Map<String, dynamic> map) => QrOrderItemModel(
         menuItemId: map['menu_item_id'] as String,
         menuItemName: map['menu_item_name'] as String,
         price: (map['price'] as num).toDouble(),
@@ -161,7 +160,8 @@ class QrOrderModel {
     this.branchId,
     this.notes,
   });
-factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
+
+  factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
         id: map['id'] as String,
         queueNumber: map['queue_number'] as String,
         tableId: map['table_id'] as String,
@@ -172,11 +172,11 @@ factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
             .toList(),
         totalAmount: (map['total_amount'] as num).toDouble(),
         status: QrOrderStatus.values.firstWhere(
-          (s) => s.name == (map['status'] as String).toLowerCase(),
-          orElse: () => QrOrderStatus.initial,
+          (s) => s.name.toLowerCase() == (map['status'] as String).toLowerCase(),
+          orElse: () => QrOrderStatus.created,   // default ke 'created'
         ),
         paymentStatus: QrPaymentStatus.values.firstWhere(
-          (s) => s.name == (map['payment_status'] as String).toLowerCase(),
+          (s) => s.name.toLowerCase() == (map['payment_status'] as String).toLowerCase(),
           orElse: () => QrPaymentStatus.pending,
         ),
         paymentMethod: map['payment_method'] as String,
@@ -205,7 +205,11 @@ factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
         if (notes != null) 'notes': notes,
       };
 
-  QrOrderModel copyWith({QrOrderStatus? status, QrPaymentStatus? paymentStatus}) =>
+  QrOrderModel copyWith({
+    QrOrderStatus? status,
+    QrPaymentStatus? paymentStatus,
+    DateTime? updatedAt,
+  }) =>
       QrOrderModel(
         id: id,
         queueNumber: queueNumber,
@@ -218,7 +222,7 @@ factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
         paymentStatus: paymentStatus ?? this.paymentStatus,
         paymentMethod: paymentMethod,
         createdAt: createdAt,
-        updatedAt: updatedAt,
+        updatedAt: updatedAt ?? this.updatedAt,
         branchId: branchId,
         notes: notes,
       );
