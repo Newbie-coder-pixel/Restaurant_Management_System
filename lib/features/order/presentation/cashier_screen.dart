@@ -41,21 +41,33 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     }
 
     try {
-      final res = await Supabase.instance.client
+      // Kasir logic:
+      // - QR Order   -> muncul saat 'created'  (bayar SEBELUM makan)
+      // - Staff Order -> muncul saat 'served'   (bayar SETELAH makan)
+      // Keduanya payment_status = 'pending'
+      final qrRes = await Supabase.instance.client
           .from('orders')
-          .select('''
-            *,
-            restaurant_tables(table_number),
-            order_items(*)
-          ''')
+          .select('*, restaurant_tables(table_number), order_items(*)')
           .eq('branch_id', _branchId!)
-          .inFilter('status', ['created'])
-          .eq('payment_status', 'pending')        // hanya yang belum dibayar
-          .order('created_at', ascending: true);  // order lama duluan (FIFO)
+          .eq('order_type', 'qr_order')
+          .eq('status', 'created')
+          .eq('payment_status', 'pending')
+          .order('created_at', ascending: true);
+
+      final staffRes = await Supabase.instance.client
+          .from('orders')
+          .select('*, restaurant_tables(table_number), order_items(*)')
+          .eq('branch_id', _branchId!)
+          .neq('order_type', 'qr_order')
+          .eq('status', 'served')
+          .eq('payment_status', 'pending')
+          .order('created_at', ascending: true);
+
+      final combined = [...(qrRes as List), ...(staffRes as List)];
 
       if (mounted) {
         setState(() {
-          _orders = (res as List)
+          _orders = combined
               .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
               .toList();
           _isLoading = false;
@@ -742,6 +754,12 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 itemBuilder: (_, i) {
                   final o = _orders[i];
                   final isSelected = _selected?.id == o.id;
+                  // Badge: QR Order vs Staff Order
+                  final isQrOrder = o.orderType == 'qr_order';
+                  final badgeColor = isQrOrder
+                      ? const Color(0xFF7C3AED)
+                      : AppColors.primary;
+
                   return GestureDetector(
                     onTap: () => setState(() => _selected = o),
                     child: AnimatedContainer(
@@ -754,48 +772,68 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                             : AppColors.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.border,
+                          color: isSelected ? AppColors.primary : AppColors.border,
                           width: isSelected ? 2 : 1,
                         ),
                       ),
                       child: Row(children: [
+                        // Avatar dengan warna sesuai tipe
                         Container(
-                          width: 42,
-                          height: 42,
+                          width: 42, height: 42,
                           decoration: BoxDecoration(
-                            color: AppColors.primary,
+                            color: badgeColor,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Center(
-                            child: Text(
-                              o.orderNumber.split('-').last,
-                              style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                  fontSize: 13),
-                            ),
-                          ),
+                          child: Center(child: Text(
+                            o.orderNumber.split('-').last,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white, fontSize: 13),
+                          )),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                o.tableNumber != null
-                                    ? 'Meja ${o.tableNumber}'
-                                    : o.customerName != null
-                                        ? 'Takeaway • ${o.customerName}'
-                                        : 'Takeaway',
-                                style: const TextStyle(
+                              Row(children: [
+                                Text(
+                                  o.tableNumber != null
+                                      ? 'Meja ${o.tableNumber}'
+                                      : o.customerName != null
+                                          ? 'Takeaway • ${o.customerName}'
+                                          : 'Takeaway',
+                                  style: const TextStyle(
                                     fontFamily: 'Poppins',
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14),
-                              ),
+                                    fontWeight: FontWeight.w600, fontSize: 14),
+                                ),
+                                const SizedBox(width: 6),
+                                // Badge QR / Staff
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: badgeColor.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: badgeColor.withValues(alpha: 0.35)),
+                                  ),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Icon(
+                                      isQrOrder
+                                          ? Icons.qr_code_scanner
+                                          : Icons.person_outline,
+                                      size: 9, color: badgeColor),
+                                    const SizedBox(width: 3),
+                                    Text(isQrOrder ? 'QR' : 'Staff',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins', fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: badgeColor)),
+                                  ]),
+                                ),
+                              ]),
                               Text(
                                 '${o.items.length} item • ${o.status.label}',
                                 style: AppTextStyles.caption,
@@ -806,10 +844,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                         Text(
                           'Rp ${o.totalAmount.toStringAsFixed(0)}',
                           style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: AppColors.accent),
+                            fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                            fontSize: 14, color: AppColors.accent),
                         ),
                       ]),
                     ),
