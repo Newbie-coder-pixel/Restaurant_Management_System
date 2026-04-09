@@ -42,9 +42,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
     try {
       // Kasir logic:
-      // - QR Order   -> muncul saat 'created'  (bayar SEBELUM makan)
-      // - Staff Order -> muncul saat 'served'   (bayar SETELAH makan)
-      // Keduanya payment_status = 'pending'
+      // - QR Order   -> muncul saat status 'created' + order_type 'qr_order' (bayar SEBELUM makan)
+      // - Staff Order -> muncul saat status 'served' + payment_status 'pending' (bayar SETELAH makan)
+      //   Catatan: QR order tidak akan pernah 'served' dengan payment_status 'pending'
+      //   karena QR order harus bayar dulu sebelum dimasak — aman filter by served saja untuk staff
       final qrRes = await Supabase.instance.client
           .from('orders')
           .select('*, restaurant_tables(table_number), order_items(*)')
@@ -54,11 +55,12 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           .eq('payment_status', 'pending')
           .order('created_at', ascending: true);
 
+      // Staff order: served + belum dibayar
+      // QR order tidak mungkin served dengan payment_status pending karena harus bayar dulu
       final staffRes = await Supabase.instance.client
           .from('orders')
           .select('*, restaurant_tables(table_number), order_items(*)')
           .eq('branch_id', _branchId!)
-          .neq('order_type', 'qr_order')
           .eq('status', 'served')
           .eq('payment_status', 'pending')
           .order('created_at', ascending: true);
@@ -657,10 +659,14 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }) async {
     final staff = ref.read(currentStaffProvider);
 
-    // Set status ke 'paid' → KDS menampilkan order ini untuk dimasak
-    // KDS lanjutkan: paid → preparing → ready → served
+    // Flow pembayaran:
+    // - QR Order ('created' → 'paid'): baru dimasak setelah bayar → masuk KDS
+    // - Staff Order ('served' → tetap 'served'): sudah makan, tinggal bayar → tidak masuk KDS lagi
+    final isQrOrder = order.orderType == 'qr_order';
+    final finalStatus = isQrOrder ? 'paid' : order.status.dbValue;
+
     await Supabase.instance.client.from('orders').update({
-      'status': 'paid',
+      'status': finalStatus,
       'payment_status': 'paid',
       'cashier_id': staff?.id,
       'updated_at': DateTime.now().toIso8601String(),

@@ -185,8 +185,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   // ── STATUS HELPERS ────────────────────────────────────────────────────────
-  bool _isQrOrder(OrderModel o) =>
-      o.orderType == 'qr_order' || o.status == OrderStatus.paid;
+  bool _isQrOrder(OrderModel o) => o.orderType == 'qr_order';
 
   Color _statusColor(OrderStatus s) {
     switch (s) {
@@ -206,18 +205,23 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     }
   }
 
-  // ✅ FIX: paid → preparing (QR order sudah bayar, staff bisa update ke masak)
+  // Flow status:
+  // Staff:  new_ → preparing → ready → served (→ kasir bayar)
+  // QR:     created → [kasir bayar] → paid → preparing → ready → served
+  // Order screen hanya untuk STAFF yang manage flow dapur
+  // QR order setelah 'paid' juga bisa di-update dari sini jika perlu
   OrderStatus? _nextStatus(OrderStatus current) {
     switch (current) {
-      case OrderStatus.new_:
-      case OrderStatus.created:
-      case OrderStatus.paid:      // ← FIX: paid juga bisa lanjut ke preparing
+      case OrderStatus.new_:      // staff order baru
+      case OrderStatus.paid:      // QR order sudah bayar, siap masak
         return OrderStatus.preparing;
       case OrderStatus.preparing:
         return OrderStatus.ready;
       case OrderStatus.ready:
         return OrderStatus.served;
-      default:
+      case OrderStatus.created:   // QR order belum bayar — tidak bisa di-update staff
+      case OrderStatus.served:    // sudah tersaji — tunggu kasir
+      case OrderStatus.cancelled:
         return null;
     }
   }
@@ -225,8 +229,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   String _nextStatusLabel(OrderStatus current) {
     switch (current) {
       case OrderStatus.new_:
-      case OrderStatus.created:
-      case OrderStatus.paid:      // ← FIX
+      case OrderStatus.paid:
         return 'Mulai Masak';
       case OrderStatus.preparing:
         return 'Tandai Siap';
@@ -240,8 +243,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   IconData _nextStatusIcon(OrderStatus current) {
     switch (current) {
       case OrderStatus.new_:
-      case OrderStatus.created:
-      case OrderStatus.paid:      // ← FIX
+      case OrderStatus.paid:
         return Icons.soup_kitchen_outlined;
       case OrderStatus.preparing:
         return Icons.check_circle_outline;
@@ -417,6 +419,69 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   // ── TAB: AKTIF ────────────────────────────────────────────────────────────
+  // Group order berdasarkan status dengan label kontekstual
+  // QR 'created'  = belum bayar, belum masuk dapur
+  // QR 'paid'     = sudah bayar, antri masak
+  // Staff 'new_'  = baru dibuat, antri masak
+  static const _groupOrder = [
+    'Menunggu Pembayaran',  // QR created — belum bayar
+    'Antri Masak',          // Staff new_ + QR paid — siap dimasak
+    'Sedang Dimasak',       // preparing
+    'Siap Disajikan',       // ready
+    'Sudah Tersaji',        // served — menunggu bayar (staff) atau selesai (QR)
+  ];
+
+  Map<String, List<OrderModel>> _groupOrders(List<OrderModel> orders) {
+    final groups = <String, List<OrderModel>>{
+      for (final g in _groupOrder) g: [],
+    };
+    for (final o in orders) {
+      switch (o.status) {
+        case OrderStatus.created:
+          groups['Menunggu Pembayaran']!.add(o);
+          break;
+        case OrderStatus.new_:
+        case OrderStatus.paid:
+          groups['Antri Masak']!.add(o);
+          break;
+        case OrderStatus.preparing:
+          groups['Sedang Dimasak']!.add(o);
+          break;
+        case OrderStatus.ready:
+          groups['Siap Disajikan']!.add(o);
+          break;
+        case OrderStatus.served:
+          groups['Sudah Tersaji']!.add(o);
+          break;
+        default:
+          break;
+      }
+    }
+    return groups;
+  }
+
+  Color _groupHeaderColor(String groupName) {
+    switch (groupName) {
+      case 'Menunggu Pembayaran': return const Color(0xFF7C3AED);  // ungu QR
+      case 'Antri Masak':         return AppColors.orderNew;
+      case 'Sedang Dimasak':      return AppColors.orderPreparing;
+      case 'Siap Disajikan':      return AppColors.orderReady;
+      case 'Sudah Tersaji':       return AppColors.primary;
+      default: return AppColors.textHint;
+    }
+  }
+
+  IconData _groupHeaderIcon(String groupName) {
+    switch (groupName) {
+      case 'Menunggu Pembayaran': return Icons.qr_code_scanner;
+      case 'Antri Masak':         return Icons.hourglass_top_outlined;
+      case 'Sedang Dimasak':      return Icons.outdoor_grill_outlined;
+      case 'Siap Disajikan':      return Icons.dining_outlined;
+      case 'Sudah Tersaji':       return Icons.check_circle_outline;
+      default: return Icons.list;
+    }
+  }
+
   Widget _buildActiveOrders() {
     if (_orders.isEmpty) {
       return const Center(
@@ -429,111 +494,169 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       );
     }
 
+    final grouped = _groupOrders(_orders);
+    // Hanya tampilkan group yang ada isinya
+    final activeGroups = grouped.entries.where((e) => e.value.isNotEmpty).toList();
+
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: _orders.length,
-      itemBuilder: (_, i) {
-        final o = _orders[i];
-        final color = _statusColor(o.status);
-        final nextS = _nextStatus(o.status);
-        final isUpdating = _updatingOrderId == o.id;
-        final isQr = _isQrOrder(o);
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: ExpansionTile(
-            leading: CircleAvatar(
-              backgroundColor: color.withValues(alpha: 0.15),
-              child: Text(o.orderNumber.split('-').last,
-                style: TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-                  color: color, fontSize: 12))),
-            title: Row(children: [
-              Text(
-                o.tableNumber != null ? 'Meja ${o.tableNumber}' : 'Takeaway',
-                style: const TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-              if (o.customerName != null) ...[
-                const SizedBox(width: 6),
-                Text('• ${o.customerName}', style: AppTextStyles.caption),
-              ],
-            ]),
-            subtitle: Row(children: [
-              // Status badge
-              Container(
-                margin: const EdgeInsets.only(top: 3),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: color.withValues(alpha: 0.4))),
-                child: Text(o.status.label,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      itemCount: activeGroups.fold<int>(0, (sum, e) => sum + 1 + e.value.length),
+      itemBuilder: (_, flatIdx) {
+        // Flatten groups + headers into single list
+        int cursor = 0;
+        for (final group in activeGroups) {
+          if (flatIdx == cursor) {
+            // Render group header
+            final color = _groupHeaderColor(group.key);
+            return Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 6),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8)),
+                  child: Icon(_groupHeaderIcon(group.key), size: 16, color: color)),
+                const SizedBox(width: 8),
+                Text(group.key,
                   style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 10,
-                    fontWeight: FontWeight.w600, color: color))),
-              const SizedBox(width: 6),
-              // ✅ Badge QR vs Staff
-              Container(
-                margin: const EdgeInsets.only(top: 3),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isQr
-                      ? const Color(0xFF7C3AED).withValues(alpha: 0.08)
-                      : AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isQr
-                        ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
-                        : AppColors.primary.withValues(alpha: 0.3))),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(
-                    isQr ? Icons.qr_code_scanner : Icons.person_outline,
-                    size: 9,
-                    color: isQr ? const Color(0xFF7C3AED) : AppColors.primary),
-                  const SizedBox(width: 3),
-                  Text(isQr ? 'QR' : 'Staff',
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                    fontSize: 13, color: color)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10)),
+                  child: Text('${group.value.length}',
                     style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: isQr ? const Color(0xFF7C3AED) : AppColors.primary)),
-                ])),
-              const SizedBox(width: 6),
-              Text('• ${o.items.length} item', style: AppTextStyles.caption),
-            ]),
-            trailing: Text('Rp ${o.totalAmount.toStringAsFixed(0)}',
-              style: const TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-                color: AppColors.accent)),
-            children: [
-              ...o.items.map((item) => OrderItemTile(item: item)),
+                      fontFamily: 'Poppins', fontSize: 11,
+                      fontWeight: FontWeight.w700, color: color))),
+                Expanded(child: Divider(
+                  color: color.withValues(alpha: 0.25),
+                  indent: 8)),
+              ]),
+            );
+          }
+          cursor++;
+          if (flatIdx < cursor + group.value.length) {
+            final o = group.value[flatIdx - cursor];
+            return _buildOrderCard(o);
+          }
+          cursor += group.value.length;
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
 
-              if (o.notes != null && o.notes!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Container(
+  Widget _buildOrderCard(OrderModel o) {
+    final color = _statusColor(o.status);
+    final nextS = _nextStatus(o.status);
+    final isUpdating = _updatingOrderId == o.id;
+    final isQr = _isQrOrder(o);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ExpansionTile(
+        leading: CircleAvatar(
+          backgroundColor: color.withValues(alpha: 0.15),
+          child: Text(o.orderNumber.split('-').last,
+            style: TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+              color: color, fontSize: 12))),
+        title: Row(children: [
+          Text(
+            o.tableNumber != null ? 'Meja ${o.tableNumber}' : 'Takeaway',
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+          if (o.customerName != null) ...[
+            const SizedBox(width: 6),
+            Text('• ${o.customerName}', style: AppTextStyles.caption),
+          ],
+        ]),
+        subtitle: Row(children: [
+          // Badge QR vs Staff
+          Container(
+            margin: const EdgeInsets.only(top: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: isQr
+                  ? const Color(0xFF7C3AED).withValues(alpha: 0.08)
+                  : AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: isQr
+                    ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+                    : AppColors.primary.withValues(alpha: 0.3))),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(
+                isQr ? Icons.qr_code_scanner : Icons.person_outline,
+                size: 9,
+                color: isQr ? const Color(0xFF7C3AED) : AppColors.primary),
+              const SizedBox(width: 3),
+              Text(isQr ? 'QR' : 'Staff',
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: isQr ? const Color(0xFF7C3AED) : AppColors.primary)),
+            ])),
+          const SizedBox(width: 6),
+          Text('• ${o.items.length} item', style: AppTextStyles.caption),
+        ]),
+        trailing: Text('Rp ${o.totalAmount.toStringAsFixed(0)}',
+          style: const TextStyle(
+            fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+            color: AppColors.accent)),
+        children: [
+          ...o.items.map((item) => OrderItemTile(item: item)),
+
+          if (o.notes != null && o.notes!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.reserved.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.reserved.withValues(alpha: 0.3))),
+                child: Row(children: [
+                  const Icon(Icons.notes, size: 14, color: AppColors.reserved),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(o.notes!,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 12,
+                      color: AppColors.reserved))),
+                ]))),
+
+          const Divider(height: 1),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: o.status == OrderStatus.created
+                // QR order belum bayar — staff tidak bisa update, tunggu customer bayar
+                ? Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppColors.reserved.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(8),
+                      color: const Color(0xFF7C3AED).withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: AppColors.reserved.withValues(alpha: 0.3))),
-                    child: Row(children: [
-                      const Icon(Icons.notes, size: 14, color: AppColors.reserved),
-                      const SizedBox(width: 6),
-                      Expanded(child: Text(o.notes!,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins', fontSize: 12,
-                          color: AppColors.reserved))),
-                    ]),
-                  )),
-
-              const Divider(height: 1),
-
-              // ✅ FIX: nextS tidak null untuk 'paid', jadi tombol aksi selalu muncul
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                child: nextS != null
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.25))),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.qr_code_scanner, size: 14,
+                          color: Color(0xFF7C3AED)),
+                        SizedBox(width: 8),
+                        Text('Menunggu customer bayar ke kasir',
+                          style: TextStyle(
+                            fontFamily: 'Poppins', fontSize: 12,
+                            color: Color(0xFF7C3AED),
+                            fontWeight: FontWeight.w500)),
+                      ]))
+                : nextS != null
                     ? SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -552,39 +675,57 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                           label: Text(
                             isUpdating ? 'Memperbarui...' : _nextStatusLabel(o.status),
                             style: const TextStyle(
-                              fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-                        ))
-                    // Sudah tersaji — selesai
-                    : Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.available.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppColors.available.withValues(alpha: 0.3))),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_circle_outline,
-                              size: 16, color: AppColors.available),
-                            SizedBox(width: 8),
-                            Text('Sudah Tersaji',
-                              style: TextStyle(
-                                fontFamily: 'Poppins', fontSize: 12,
-                                color: AppColors.available,
-                                fontWeight: FontWeight.w500)),
-                          ]),
-                      ),
-              ),
-            ],
+                              fontFamily: 'Poppins', fontWeight: FontWeight.w600))))
+                    : o.status == OrderStatus.served && o.orderType != 'qr_order'
+                        // Staff order tersaji — menunggu bayar di kasir
+                        ? Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.3))),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.point_of_sale_outlined,
+                                  size: 14, color: Colors.orange),
+                                SizedBox(width: 8),
+                                Text('Menunggu pembayaran di kasir',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins', fontSize: 12,
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.w500)),
+                              ]))
+                        // QR order served — selesai
+                        : Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.available.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AppColors.available.withValues(alpha: 0.3))),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.check_circle_outline,
+                                  size: 16, color: AppColors.available),
+                                SizedBox(width: 8),
+                                Text('Selesai',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins', fontSize: 12,
+                                    color: AppColors.available,
+                                    fontWeight: FontWeight.w500)),
+                              ])),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  // ── TAB: RIWAYAT ──────────────────────────────────────────────────────────
+    // ── TAB: RIWAYAT ──────────────────────────────────────────────────────────
   Widget _buildHistory() {
     return Column(children: [
       Container(
