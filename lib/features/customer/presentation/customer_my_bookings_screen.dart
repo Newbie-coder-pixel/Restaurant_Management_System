@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ── Provider booking milik user — JOIN branches ───────────────────
-// FIX: stream().eq() tidak support join, ganti ke FutureProvider
-// dengan manual refresh menggunakan StateProvider sebagai trigger
 final _refreshTriggerProvider = StateProvider<int>((ref) => 0);
 
 final _myBookingsProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  // Watch trigger supaya bisa di-refresh manual
   ref.watch(_refreshTriggerProvider);
 
   final user = Supabase.instance.client.auth.currentUser;
@@ -18,7 +16,7 @@ final _myBookingsProvider =
 
   final res = await Supabase.instance.client
       .from('bookings')
-     .select('*, branches(id, name, phone), restaurant_tables!bookings_table_id_fkey(table_number)')
+      .select('*, branches(id, name, phone), restaurant_tables!bookings_table_id_fkey(table_number)')
       .eq('customer_user_id', user.id)
       .order('booking_date', ascending: false);
 
@@ -35,6 +33,31 @@ final _branchesProvider =
       .order('name');
   return (res as List).cast<Map<String, dynamic>>();
 });
+
+// ── Validasi nomor telepon Indonesia ─────────────────────────────
+// Aturan: harus diawali 08 atau +628, panjang 10-13 digit angka
+String? _validatePhone(String phone) {
+  final cleaned = phone.replaceAll(RegExp(r'\s|-'), '');
+  if (cleaned.isEmpty) return 'Nomor HP wajib diisi';
+
+  // Harus angka saja (boleh diawali +62)
+  if (!RegExp(r'^(\+62|62|0)[0-9]+$').hasMatch(cleaned)) {
+    return 'Nomor HP hanya boleh berisi angka';
+  }
+
+  // Normalkan ke format 08xxx untuk cek panjang
+  String normalized = cleaned;
+  if (normalized.startsWith('+62')) normalized = '0${normalized.substring(3)}';
+  if (normalized.startsWith('62')) normalized = '0${normalized.substring(2)}';
+
+  if (!normalized.startsWith('08')) {
+    return 'Nomor HP harus diawali 08 (contoh: 081234567890)';
+  }
+  if (normalized.length < 10 || normalized.length > 13) {
+    return 'Nomor HP harus 10–13 digit';
+  }
+  return null; // valid
+}
 
 // ─────────────────────────────────────────────────────────────────
 // SCREEN UTAMA
@@ -101,7 +124,6 @@ class _CustomerMyBookingsScreenState
             _BookingForm(
               isDesktop: isDesktop,
               onSuccess: () {
-                // Refresh data booking lalu pindah ke tab Reservasi Saya
                 ref.read(_refreshTriggerProvider.notifier).state++;
                 _tabCtrl.animateTo(1);
               },
@@ -131,6 +153,9 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   final _phoneCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
+  // ── Error state untuk phone ──────────────────────────────────
+  String? _phoneError;
+
   String? _selectedBranchId;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -147,6 +172,12 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       _nameCtrl.text = name;
       _phoneCtrl.text = user.phone ?? '';
     }
+    // Live validate saat user mengetik
+    _phoneCtrl.addListener(() {
+      if (_phoneError != null) {
+        setState(() => _phoneError = _validatePhone(_phoneCtrl.text.trim()));
+      }
+    });
   }
 
   @override
@@ -219,8 +250,16 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     if (_selectedBranchId == null) { _err('Pilih cabang dulu'); return; }
     if (_selectedDate == null)     { _err('Pilih tanggal'); return; }
     if (_selectedTime == null)     { _err('Pilih jam kedatangan'); return; }
-    if (_nameCtrl.text.trim().isEmpty)  { _err('Nama wajib diisi'); return; }
-    if (_phoneCtrl.text.trim().isEmpty) { _err('Nomor HP wajib diisi'); return; }
+    if (_nameCtrl.text.trim().isEmpty) { _err('Nama wajib diisi'); return; }
+
+    // ── Validasi nomor HP ──────────────────────────────────────
+    final phoneErr = _validatePhone(_phoneCtrl.text.trim());
+    if (phoneErr != null) {
+      setState(() => _phoneError = phoneErr);
+      _err(phoneErr);
+      return;
+    }
+    setState(() => _phoneError = null);
 
     setState(() => _submitting = true);
     try {
@@ -229,14 +268,23 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       final timeStr = _formatTime(_selectedTime!);
       final notes   = _notesCtrl.text.trim();
 
-      // STEP 1: Insert booking dengan status 'pending' dulu
+      // Normalisasi nomor HP ke format 08xxx sebelum disimpan
+      final rawPhone = _phoneCtrl.text.trim();
+      String normalizedPhone = rawPhone.replaceAll(RegExp(r'\s|-'), '');
+      if (normalizedPhone.startsWith('+62')) {
+        normalizedPhone = '0${normalizedPhone.substring(3)}';
+      } else if (normalizedPhone.startsWith('62')) {
+        normalizedPhone = '0${normalizedPhone.substring(2)}';
+      }
+
+      // STEP 1: Insert booking
       final bookingRes = await Supabase.instance.client
           .from('bookings')
           .insert({
             'branch_id':        _selectedBranchId,
             'customer_user_id': user?.id,
             'customer_name':    _nameCtrl.text.trim(),
-            'customer_phone':   _phoneCtrl.text.trim(),
+            'customer_phone':   normalizedPhone,
             'guest_count':      _guestCount,
             'booking_date':     dateStr,
             'booking_time':     timeStr,
@@ -249,7 +297,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 
       final bookingId = bookingRes['id'] as String;
 
-      // STEP 2: Panggil RPC auto-assign meja — atomic di sisi database
+      // STEP 2: Panggil RPC auto-assign meja
       final result = await Supabase.instance.client.rpc(
         'assign_table_to_booking',
         params: {
@@ -267,10 +315,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       final tableNumber = result['table_number'] as String?;
 
       if (success) {
-        // Meja berhasil di-assign → tampilkan dialog sukses dengan nomor meja
         _showSuccess(tableNumber: tableNumber);
       } else {
-        // Semua meja penuh → customer masuk waitlist
         _showWaitlisted();
       }
     } catch (e) {
@@ -310,7 +356,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF1A1A2E))),
           const SizedBox(height: 8),
-          // Tampilkan nomor meja yang di-assign
           if (tableNumber != null) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -385,7 +430,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           const SizedBox(height: 8),
           const Text(
             'Semua meja sedang penuh untuk waktu tersebut.\n'
-            'Kamu sudah masuk daftar tunggu dan akan dihubungi staff jika ada meja tersedia.',
+            'Kamu sudah masuk daftar tunggu. Staff akan menghubungi nomor HP kamu jika ada meja tersedia.',
             textAlign: TextAlign.center,
             style: TextStyle(
                 fontFamily: 'Poppins',
@@ -404,7 +449,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 padding: const EdgeInsets.symmetric(vertical: 12)),
               onPressed: () {
                 Navigator.of(dialogCtx).pop();
-                widget.onSuccess(); // tetap refresh & pindah ke tab history
+                widget.onSuccess();
               },
               child: const Text('Mengerti',
                   style: TextStyle(
@@ -711,17 +756,70 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 size: 18, color: Color(0xFF6B7280)))),
     ]);
 
+  // ── Phone field dengan validasi ──────────────────────────────
   Widget _phoneField() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _sectionLabel('Nomor HP'),
       TextField(
         controller: _phoneCtrl,
+        // Hanya angka dan + di awal
         keyboardType: TextInputType.phone,
+        inputFormatters: [
+          // Izinkan angka, +, spasi, dan tanda hubung
+          FilteringTextInputFormatter.allow(RegExp(r'[\d+\s\-]')),
+        ],
         style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-        decoration: _inputDeco('081234567890',
-            const Icon(Icons.phone_outlined,
-                size: 18, color: Color(0xFF6B7280)))),
+        onChanged: (v) {
+          // Realtime: tampilkan error saat user mulai edit
+          setState(() => _phoneError = null);
+        },
+        onEditingComplete: () {
+          setState(() =>
+            _phoneError = _validatePhone(_phoneCtrl.text.trim()));
+        },
+        decoration: InputDecoration(
+          hintText: '081234567890',
+          hintStyle: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
+          prefixIcon: const Icon(Icons.phone_outlined,
+              size: 18, color: Color(0xFF6B7280)),
+          // Tampilkan error di bawah field
+          errorText: _phoneError,
+          errorStyle: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 11, color: Color(0xFFE94560)),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                  color: _phoneError != null
+                      ? const Color(0xFFE94560)
+                      : const Color(0xFFE5E7EB))),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                  color: _phoneError != null
+                      ? const Color(0xFFE94560)
+                      : const Color(0xFF0F3460),
+                  width: 1.5)),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
+      ),
+      // Helper text
+      const Padding(
+        padding: EdgeInsets.only(top: 4, left: 4),
+        child: Text(
+          'Format: 08xxxxxxxxxx (10–13 digit)',
+          style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              color: Color(0xFF9CA3AF)),
+        ),
+      ),
     ]);
 
   InputDecoration _inputDeco(String hint, Widget? prefix) => InputDecoration(
@@ -909,15 +1007,14 @@ class _BookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // FIX: ambil branch data dari hasil join (bukan stream terpisah)
-    final branchData = booking['branches'] as Map<String, dynamic>?;
-    final branchName = branchData?['name'] as String? ?? 'Restoran';
+    final branchData  = booking['branches'] as Map<String, dynamic>?;
+    final branchName  = branchData?['name'] as String? ?? 'Restoran';
     final branchPhone = branchData?['phone'] as String?;
 
-    final date   = _fmtDate(booking['booking_date'] as String?);
-    final time   = (booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
-    final guests = booking['guest_count'] ?? 1;
-    final notes  = booking['special_requests'] as String?;
+    final date    = _fmtDate(booking['booking_date'] as String?);
+    final time    = (booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
+    final guests  = booking['guest_count'] ?? 1;
+    final notes   = booking['special_requests'] as String?;
     final tableId = booking['table_id'] as String?;
 
     return Container(
@@ -1040,7 +1137,7 @@ class _BookingCard extends StatelessWidget {
                   ])),
               ],
 
-              // Info khusus waitlisted
+              // Info waitlisted — tampilkan nomor HP yang akan dihubungi
               if (_status == 'waitlisted') ...[
                 const SizedBox(height: 10),
                 Container(
@@ -1051,17 +1148,33 @@ class _BookingCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                         color: const Color(0xFF7C3AED).withValues(alpha: 0.3))),
-                  child: const Row(children: [
-                    Icon(Icons.hourglass_top_outlined,
+                  child: Row(children: [
+                    const Icon(Icons.hourglass_top_outlined,
                         size: 16, color: Color(0xFF7C3AED)),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'Kamu di daftar tunggu. Staff akan menghubungi jika ada meja tersedia.',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 12,
-                            color: Color(0xFF6D28D9)))),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Kamu di daftar tunggu. Staff akan menghubungi jika ada meja tersedia.',
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                color: Color(0xFF6D28D9))),
+                          // Tampilkan nomor HP yang disimpan
+                          if (booking['customer_phone'] != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              'Akan dihubungi via: ${booking['customer_phone']}',
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF7C3AED))),
+                          ],
+                        ],
+                      )),
                   ])),
               ],
 
