@@ -235,7 +235,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         return 'Tandai Siap';
       case OrderStatus.ready:
         return 'Tandai Tersaji';
-      default:
+      case OrderStatus.created:
+      case OrderStatus.served:
+      case OrderStatus.cancelled:
         return '';
     }
   }
@@ -249,7 +251,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         return Icons.check_circle_outline;
       case OrderStatus.ready:
         return Icons.room_service_outlined;
-      default:
+      case OrderStatus.created:
+      case OrderStatus.served:
+      case OrderStatus.cancelled:
         return Icons.arrow_forward;
     }
   }
