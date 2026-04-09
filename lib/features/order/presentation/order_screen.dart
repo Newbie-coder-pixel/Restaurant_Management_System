@@ -28,6 +28,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   RealtimeChannel? _channel;
   String _historyFilter = 'all';
   String? _updatingOrderId;
+  String _selectedGroup = ''; // group yang aktif di sidebar
 
   @override
   void initState() {
@@ -475,16 +476,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     }
   }
 
-  IconData _groupHeaderIcon(String groupName) {
-    switch (groupName) {
-      case 'Menunggu Pembayaran': return Icons.qr_code_scanner;
-      case 'Antri Masak':         return Icons.hourglass_top_outlined;
-      case 'Sedang Dimasak':      return Icons.outdoor_grill_outlined;
-      case 'Siap Disajikan':      return Icons.dining_outlined;
-      case 'Sudah Tersaji':       return Icons.check_circle_outline;
-      default: return Icons.list;
-    }
-  }
+
 
   Widget _buildActiveOrders() {
     if (_orders.isEmpty) {
@@ -499,60 +491,123 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     }
 
     final grouped = _groupOrders(_orders);
-    // Hanya tampilkan group yang ada isinya
     final activeGroups = grouped.entries.where((e) => e.value.isNotEmpty).toList();
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      itemCount: activeGroups.fold<int>(0, (sum, e) => sum + 1 + e.value.length),
-      itemBuilder: (_, flatIdx) {
-        // Flatten groups + headers into single list
-        int cursor = 0;
-        for (final group in activeGroups) {
-          if (flatIdx == cursor) {
-            // Render group header
-            final color = _groupHeaderColor(group.key);
-            return Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 6),
-              child: Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8)),
-                  child: Icon(_groupHeaderIcon(group.key), size: 16, color: color)),
-                const SizedBox(width: 8),
-                Text(group.key,
-                  style: TextStyle(
-                    fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-                    fontSize: 13, color: color)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(10)),
-                  child: Text('${group.value.length}',
-                    style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 11,
-                      fontWeight: FontWeight.w700, color: color))),
-                Expanded(child: Divider(
-                  color: color.withValues(alpha: 0.25),
-                  indent: 8)),
-              ]),
-            );
-          }
-          cursor++;
-          if (flatIdx < cursor + group.value.length) {
-            final o = group.value[flatIdx - cursor];
-            return _buildOrderCard(o);
-          }
-          cursor += group.value.length;
+    // Auto-select group pertama jika belum ada / group yang dipilih kosong
+    if (_selectedGroup.isEmpty ||
+        !activeGroups.any((e) => e.key == _selectedGroup)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && activeGroups.isNotEmpty) {
+          setState(() => _selectedGroup = activeGroups.first.key);
         }
-        return const SizedBox.shrink();
-      },
-    );
+      });
+    }
+
+    final currentOrders = grouped[_selectedGroup] ?? [];
+
+    return Row(children: [
+      // ── Sidebar kiri: daftar group ──────────────────────────────────────
+      Container(
+        width: 130,
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(right: BorderSide(color: AppColors.border, width: 1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header "KATEGORI"
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 8, 12),
+              child: Row(children: [
+                Expanded(
+                  child: Text('STATUS',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 1.2))),
+              ]),
+            ),
+
+            // List group
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 16),
+                children: activeGroups.map((entry) {
+                  final groupName = entry.key;
+                  final count = entry.value.length;
+                  final isSelected = _selectedGroup == groupName;
+                  final color = _groupHeaderColor(groupName);
+
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedGroup = groupName),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected ? color : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text(groupName,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 13,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                            )),
+                        ),
+                        // Badge count
+                        Container(
+                          width: 20, height: 20,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Colors.white.withValues(alpha: 0.25)
+                                : color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Text('$count',
+                              style: TextStyle(
+                                fontFamily: 'Poppins', fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: isSelected ? Colors.white : color))),
+                        ),
+                      ]),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // ── Konten kanan: list order dari group yang dipilih ────────────────
+      Expanded(
+        child: currentOrders.isEmpty
+            ? const Center(
+                child: Text('Tidak ada order',
+                  style: TextStyle(
+                    fontFamily: 'Poppins', color: AppColors.textSecondary)))
+            : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: currentOrders.length,
+                itemBuilder: (_, i) => _buildOrderCard(currentOrders[i]),
+              ),
+      ),
+    ]);
   }
+
 
   Widget _buildOrderCard(OrderModel o) {
     final color = _statusColor(o.status);
