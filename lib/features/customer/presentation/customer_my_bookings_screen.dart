@@ -18,7 +18,7 @@ final _myBookingsProvider =
 
   final res = await Supabase.instance.client
       .from('bookings')
-      .select('*, branches(id, name, phone)')
+      .select('*, branches(id, name, phone), restaurant_tables(table_number)')
       .eq('customer_user_id', user.id)
       .order('booking_date', ascending: false);
 
@@ -229,24 +229,50 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       final timeStr = _formatTime(_selectedTime!);
       final notes   = _notesCtrl.text.trim();
 
-      await Supabase.instance.client.from('bookings').insert({
-        'branch_id':        _selectedBranchId,
-        'customer_user_id': user?.id,
-        'customer_name':    _nameCtrl.text.trim(),
-        'customer_phone':   _phoneCtrl.text.trim(),
-        'guest_count':      _guestCount,
-        'booking_date':     dateStr,
-        'booking_time':     timeStr,
-        'status':           'confirmed',
-        'source':           'website',
-        if (notes.isNotEmpty) 'special_requests': notes,
-      });
+      // STEP 1: Insert booking dengan status 'pending' dulu
+      final bookingRes = await Supabase.instance.client
+          .from('bookings')
+          .insert({
+            'branch_id':        _selectedBranchId,
+            'customer_user_id': user?.id,
+            'customer_name':    _nameCtrl.text.trim(),
+            'customer_phone':   _phoneCtrl.text.trim(),
+            'guest_count':      _guestCount,
+            'booking_date':     dateStr,
+            'booking_time':     timeStr,
+            'status':           'pending',
+            'source':           'app',
+            if (notes.isNotEmpty) 'special_requests': notes,
+          })
+          .select('id')
+          .single();
+
+      final bookingId = bookingRes['id'] as String;
+
+      // STEP 2: Panggil RPC auto-assign meja — atomic di sisi database
+      final result = await Supabase.instance.client.rpc(
+        'assign_table_to_booking',
+        params: {
+          'p_booking_id':   bookingId,
+          'p_branch_id':    _selectedBranchId,
+          'p_guest_count':  _guestCount,
+          'p_booking_date': dateStr,
+          'p_booking_time': '$timeStr:00',
+        },
+      ) as Map<String, dynamic>;
 
       if (!mounted) return;
 
-      // FIX: Navigator.pop dulu SEBELUM onSuccess
-      // supaya tidak ada dialog yang masih nempel saat tab berpindah
-      _showSuccess();
+      final success     = result['success'] as bool;
+      final tableNumber = result['table_number'] as String?;
+
+      if (success) {
+        // Meja berhasil di-assign → tampilkan dialog sukses dengan nomor meja
+        _showSuccess(tableNumber: tableNumber);
+      } else {
+        // Semua meja penuh → customer masuk waitlist
+        _showWaitlisted();
+      }
     } catch (e) {
       _err('Gagal membuat reservasi: $e');
     } finally {
@@ -262,10 +288,10 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       behavior: SnackBarBehavior.floating));
   }
 
-  void _showSuccess() {
+  void _showSuccess({String? tableNumber}) {
     showDialog(
       context: context,
-      barrierDismissible: false, // user harus klik OK
+      barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20)),
@@ -284,6 +310,27 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF1A1A2E))),
           const SizedBox(height: 8),
+          // Tampilkan nomor meja yang di-assign
+          if (tableNumber != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.3))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.table_restaurant,
+                    size: 16, color: Color(0xFF4CAF50)),
+                const SizedBox(width: 6),
+                Text('Meja $tableNumber sudah disiapkan',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2E7D32))),
+              ])),
+          ],
           const Text(
             'Reservasi kamu sudah dikonfirmasi.\nCek tab "Reservasi Saya" untuk detailnya.',
             textAlign: TextAlign.center,
@@ -302,13 +349,64 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
                 padding: const EdgeInsets.symmetric(vertical: 12)),
-              // FIX: pakai dialogCtx bukan context untuk pop dialog
-              // lalu panggil onSuccess dari widget context (masih valid)
               onPressed: () {
                 Navigator.of(dialogCtx).pop();
                 widget.onSuccess();
               },
               child: const Text('OK',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600)),
+            )),
+        ]));
+  }
+
+  void _showWaitlisted() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 64, height: 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFF8E1), shape: BoxShape.circle),
+            child: const Icon(Icons.schedule,
+                color: Color(0xFFD97706), size: 36)),
+          const SizedBox(height: 16),
+          const Text('Masuk Waitlist',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A2E))),
+          const SizedBox(height: 8),
+          const Text(
+            'Semua meja sedang penuh untuk waktu tersebut.\n'
+            'Kamu sudah masuk daftar tunggu dan akan dihubungi staff jika ada meja tersedia.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: Color(0xFF6B7280))),
+        ]),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD97706),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(vertical: 12)),
+              onPressed: () {
+                Navigator.of(dialogCtx).pop();
+                widget.onSuccess(); // tetap refresh & pindah ke tab history
+              },
+              child: const Text('Mengerti',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w600)),
@@ -718,31 +816,38 @@ class _BookingCard extends StatelessWidget {
   String get _status => booking['status'] as String? ?? 'pending';
 
   Color get _color => switch (_status) {
-    'confirmed' => const Color(0xFF4CAF50),
-    'cancelled' => const Color(0xFFE94560),
-    'completed' => const Color(0xFF0F3460),
-    'no_show'   => Colors.orange,
-    _           => const Color(0xFFFF9800),
+    'confirmed'  => const Color(0xFF4CAF50),
+    'cancelled'  => const Color(0xFFE94560),
+    'completed'  => const Color(0xFF0F3460),
+    'no_show'    => Colors.orange,
+    'waitlisted' => const Color(0xFF7C3AED),
+    'seated'     => const Color(0xFF0891B2),
+    _            => const Color(0xFFFF9800),
   };
 
   String get _label => switch (_status) {
-    'confirmed' => 'Dikonfirmasi',
-    'cancelled' => 'Dibatalkan',
-    'completed' => 'Selesai',
-    'no_show'   => 'Tidak Hadir',
-    _           => 'Menunggu',
+    'confirmed'  => 'Dikonfirmasi',
+    'cancelled'  => 'Dibatalkan',
+    'completed'  => 'Selesai',
+    'no_show'    => 'Tidak Hadir',
+    'waitlisted' => 'Daftar Tunggu',
+    'seated'     => 'Sedang Makan',
+    _            => 'Menunggu',
   };
 
   IconData get _icon => switch (_status) {
-    'confirmed' => Icons.check_circle_outline,
-    'cancelled' => Icons.cancel_outlined,
-    'completed' => Icons.done_all,
-    'no_show'   => Icons.person_off_outlined,
-    _           => Icons.schedule,
+    'confirmed'  => Icons.check_circle_outline,
+    'cancelled'  => Icons.cancel_outlined,
+    'completed'  => Icons.done_all,
+    'no_show'    => Icons.person_off_outlined,
+    'waitlisted' => Icons.hourglass_top_outlined,
+    'seated'     => Icons.restaurant_outlined,
+    _            => Icons.schedule,
   };
 
   bool get _isActive =>
-      _status == 'pending' || _status == 'confirmed';
+      _status == 'pending' || _status == 'confirmed' ||
+      _status == 'waitlisted' || _status == 'seated';
 
   String _fmtDate(String? raw) {
     if (raw == null) return '-';
@@ -813,6 +918,7 @@ class _BookingCard extends StatelessWidget {
     final time   = (booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
     final guests = booking['guest_count'] ?? 1;
     final notes  = booking['special_requests'] as String?;
+    final tableId = booking['table_id'] as String?;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -902,6 +1008,61 @@ class _BookingCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   _row(Icons.note_outlined, 'Catatan', notes),
                 ],
+              ],
+
+              // Tampilkan nomor meja jika sudah di-assign
+              if (tableId != null && _status == 'confirmed') ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: const Color(0xFF4CAF50).withValues(alpha: 0.3))),
+                  child: Row(children: [
+                    const Icon(Icons.table_restaurant,
+                        size: 16, color: Color(0xFF4CAF50)),
+                    const SizedBox(width: 8),
+                    Builder(builder: (_) {
+                      final tableData = booking['restaurant_tables']
+                          as Map<String, dynamic>?;
+                      final num = tableData?['table_number'] as String?;
+                      return Text(
+                        num != null ? 'Meja $num sudah disiapkan' : 'Meja sudah disiapkan',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF2E7D32)));
+                    }),
+                  ])),
+              ],
+
+              // Info khusus waitlisted
+              if (_status == 'waitlisted') ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3E8FF),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.3))),
+                  child: const Row(children: [
+                    Icon(Icons.hourglass_top_outlined,
+                        size: 16, color: Color(0xFF7C3AED)),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Kamu di daftar tunggu. Staff akan menghubungi jika ada meja tersedia.',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            color: Color(0xFF6D28D9)))),
+                  ])),
               ],
 
               if (_isActive) ...[
