@@ -18,7 +18,7 @@ final _myBookingsProvider =
 
   final res = await Supabase.instance.client
       .from('bookings')
-      .select('*, branches(id, name, phone), restaurant_tables(table_number)')
+     .select('*, branches(id, name, phone), restaurant_tables!bookings_table_id_fkey(table_number)')
       .eq('customer_user_id', user.id)
       .order('booking_date', ascending: false);
 
