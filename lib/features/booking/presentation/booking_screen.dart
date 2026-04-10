@@ -95,7 +95,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
       final res = await Supabase.instance.client
           .from('bookings')
-          .select('*, restaurant_tables(table_number, capacity, floor_level)')
+          .select('*, restaurant_tables!bookings_table_id_fkey(table_number, capacity, floor_level)')
           .eq('branch_id', _branchId!)
           .eq('booking_date', dateStr)
           .order('booking_time');
@@ -170,7 +170,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       final today = _fmtDate(DateTime.now());
       var q = Supabase.instance.client
           .from('bookings')
-          .select('*, restaurant_tables(table_number)')
+          .select('*, restaurant_tables!bookings_table_id_fkey(table_number)')
           .eq('branch_id', _branchId!);
 
       if (_historyFilter == 'completed') {
