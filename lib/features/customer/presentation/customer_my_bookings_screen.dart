@@ -35,28 +35,22 @@ final _branchesProvider =
 });
 
 // ── Validasi nomor telepon Indonesia ─────────────────────────────
-// Aturan: harus diawali 08 atau +628, panjang 10-13 digit angka
 String? _validatePhone(String phone) {
   final cleaned = phone.replaceAll(RegExp(r'\s|-'), '');
   if (cleaned.isEmpty) return 'Nomor HP wajib diisi';
-
-  // Harus angka saja (boleh diawali +62)
   if (!RegExp(r'^(\+62|62|0)[0-9]+$').hasMatch(cleaned)) {
     return 'Nomor HP hanya boleh berisi angka';
   }
-
-  // Normalkan ke format 08xxx untuk cek panjang
   String normalized = cleaned;
   if (normalized.startsWith('+62')) normalized = '0${normalized.substring(3)}';
   if (normalized.startsWith('62')) normalized = '0${normalized.substring(2)}';
-
   if (!normalized.startsWith('08')) {
     return 'Nomor HP harus diawali 08 (contoh: 081234567890)';
   }
   if (normalized.length < 10 || normalized.length > 13) {
     return 'Nomor HP harus 10–13 digit';
   }
-  return null; // valid
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -74,17 +68,89 @@ class _CustomerMyBookingsScreenState
     extends ConsumerState<CustomerMyBookingsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
+  RealtimeChannel? _bookingChannel;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
+    _listenBookingChanges();
   }
 
   @override
   void dispose() {
+    _bookingChannel?.unsubscribe();
     _tabCtrl.dispose();
     super.dispose();
+  }
+
+  void _listenBookingChanges() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    _bookingChannel = Supabase.instance.client
+        .channel('booking-changes-${user.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'bookings',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'customer_user_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+            final newStatus = payload.newRecord['status'] as String?;
+            _showStatusNotification(newStatus);
+            ref.read(_refreshTriggerProvider.notifier).state++;
+          },
+        )
+        .subscribe();
+  }
+
+  void _showStatusNotification(String? status) {
+    if (!mounted) return;
+
+    final (String message, Color color, IconData icon) = switch (status) {
+      'confirmed' => (
+          '🎉 Reservasi kamu dikonfirmasi! Meja sudah disiapkan.',
+          const Color(0xFF4CAF50),
+          Icons.check_circle,
+        ),
+      'cancelled' => (
+          '❌ Reservasi kamu dibatalkan.',
+          const Color(0xFFE94560),
+          Icons.cancel,
+        ),
+      'waitlisted' => (
+          '⏳ Semua meja penuh, kamu masuk daftar tunggu.',
+          const Color(0xFF7C3AED),
+          Icons.hourglass_top,
+        ),
+      'seated' => (
+          '🍽️ Selamat datang! Silakan menuju meja kamu.',
+          const Color(0xFF0891B2),
+          Icons.restaurant,
+        ),
+      _ => ('Status reservasi diperbarui.', const Color(0xFF0F3460), Icons.info),
+    };
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        Icon(icon, color: Colors.white, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(message,
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w500))),
+      ]),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 
   @override
@@ -153,9 +219,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   final _phoneCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
-  // ── Error state untuk phone ──────────────────────────────────
   String? _phoneError;
-
   String? _selectedBranchId;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -172,7 +236,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       _nameCtrl.text = name;
       _phoneCtrl.text = user.phone ?? '';
     }
-    // Live validate saat user mengetik
     _phoneCtrl.addListener(() {
       if (_phoneError != null) {
         setState(() => _phoneError = _validatePhone(_phoneCtrl.text.trim()));
@@ -252,7 +315,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     if (_selectedTime == null)     { _err('Pilih jam kedatangan'); return; }
     if (_nameCtrl.text.trim().isEmpty) { _err('Nama wajib diisi'); return; }
 
-    // ── Validasi nomor HP ──────────────────────────────────────
     final phoneErr = _validatePhone(_phoneCtrl.text.trim());
     if (phoneErr != null) {
       setState(() => _phoneError = phoneErr);
@@ -268,7 +330,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       final timeStr = _formatTime(_selectedTime!);
       final notes   = _notesCtrl.text.trim();
 
-      // Normalisasi nomor HP ke format 08xxx sebelum disimpan
       final rawPhone = _phoneCtrl.text.trim();
       String normalizedPhone = rawPhone.replaceAll(RegExp(r'\s|-'), '');
       if (normalizedPhone.startsWith('+62')) {
@@ -277,7 +338,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         normalizedPhone = '0${normalizedPhone.substring(2)}';
       }
 
-      // STEP 1: Insert booking
       final bookingRes = await Supabase.instance.client
           .from('bookings')
           .insert({
@@ -297,7 +357,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 
       final bookingId = bookingRes['id'] as String;
 
-      // STEP 2: Panggil RPC auto-assign meja
       final result = await Supabase.instance.client.rpc(
         'assign_table_to_booking',
         params: {
@@ -339,8 +398,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       context: context,
       barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 64, height: 64,
@@ -363,7 +421,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               decoration: BoxDecoration(
                 color: const Color(0xFFE8F5E9),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.3))),
+                border: Border.all(
+                    color: const Color(0xFF4CAF50).withValues(alpha: 0.3))),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.table_restaurant,
                     size: 16, color: Color(0xFF4CAF50)),
@@ -380,9 +439,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             'Reservasi kamu sudah dikonfirmasi.\nCek tab "Reservasi Saya" untuk detailnya.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: Color(0xFF6B7280))),
+                fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF6B7280))),
         ]),
         actions: [
           SizedBox(
@@ -400,8 +457,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               },
               child: const Text('OK',
                   style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600)),
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             )),
         ]));
   }
@@ -411,8 +467,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       context: context,
       barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 64, height: 64,
@@ -433,9 +488,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             'Kamu sudah masuk daftar tunggu. Staff akan menghubungi nomor HP kamu jika ada meja tersedia.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: Color(0xFF6B7280))),
+                fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF6B7280))),
         ]),
         actions: [
           SizedBox(
@@ -453,8 +506,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               },
               child: const Text('Mengerti',
                   style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600)),
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             )),
         ]));
   }
@@ -498,7 +550,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                           fontFamily: 'Poppins', fontSize: 14)))).toList(),
                 onChanged: (v) => setState(() => _selectedBranchId = v)),
             const SizedBox(height: 20),
-
             if (widget.isDesktop)
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(child: _dateField(openTime, closeTime)),
@@ -511,11 +562,9 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               _timeField(openTime, closeTime),
             ],
             const SizedBox(height: 20),
-
             _sectionLabel('Jumlah Tamu'),
             _guestPicker(),
             const SizedBox(height: 20),
-
             if (widget.isDesktop)
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(child: _nameField()),
@@ -528,7 +577,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               _phoneField(),
             ],
             const SizedBox(height: 20),
-
             _sectionLabel('Catatan Khusus (opsional)'),
             TextField(
               controller: _notesCtrl,
@@ -537,7 +585,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               decoration: _inputDeco(
                   'Contoh: alergi kacang, kursi tinggi untuk bayi...', null)),
             const SizedBox(height: 28),
-
             GestureDetector(
               onTap: _submitting ? null : () => _submit(branches),
               child: Container(
@@ -719,8 +766,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE5E7EB))),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.people_outline,
-              size: 18, color: Color(0xFF6B7280)),
+          const Icon(Icons.people_outline, size: 18, color: Color(0xFF6B7280)),
           const SizedBox(width: 8),
           Text('$_guestCount orang',
               style: const TextStyle(
@@ -756,24 +802,18 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 size: 18, color: Color(0xFF6B7280)))),
     ]);
 
-  // ── Phone field dengan validasi ──────────────────────────────
   Widget _phoneField() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _sectionLabel('Nomor HP'),
       TextField(
         controller: _phoneCtrl,
-        // Hanya angka dan + di awal
         keyboardType: TextInputType.phone,
         inputFormatters: [
-          // Izinkan angka, +, spasi, dan tanda hubung
           FilteringTextInputFormatter.allow(RegExp(r'[\d+\s\-]')),
         ],
         style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-        onChanged: (v) {
-          // Realtime: tampilkan error saat user mulai edit
-          setState(() => _phoneError = null);
-        },
+        onChanged: (v) => setState(() => _phoneError = null),
         onEditingComplete: () {
           setState(() =>
             _phoneError = _validatePhone(_phoneCtrl.text.trim()));
@@ -784,7 +824,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
           prefixIcon: const Icon(Icons.phone_outlined,
               size: 18, color: Color(0xFF6B7280)),
-          // Tampilkan error di bawah field
           errorText: _phoneError,
           errorStyle: const TextStyle(
               fontFamily: 'Poppins', fontSize: 11, color: Color(0xFFE94560)),
@@ -809,7 +848,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
       ),
-      // Helper text
       const Padding(
         padding: EdgeInsets.only(top: 4, left: 4),
         child: Text(
@@ -817,9 +855,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 11,
-              color: Color(0xFF9CA3AF)),
-        ),
-      ),
+              color: Color(0xFF9CA3AF)))),
     ]);
 
   InputDecoration _inputDeco(String hint, Widget? prefix) => InputDecoration(
@@ -837,8 +873,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
     focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide:
-            const BorderSide(color: Color(0xFF0F3460), width: 1.5)),
+        borderSide: const BorderSide(color: Color(0xFF0F3460), width: 1.5)),
     contentPadding:
         const EdgeInsets.symmetric(horizontal: 16, vertical: 14));
 }
@@ -1026,7 +1061,6 @@ class _BookingCard extends StatelessWidget {
           color: Colors.black.withValues(alpha: 0.06),
           blurRadius: 10, offset: const Offset(0, 3))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header status
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           decoration: BoxDecoration(
@@ -1045,8 +1079,7 @@ class _BookingCard extends StatelessWidget {
             const Spacer(),
             if (_isActive)
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: _color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20)),
@@ -1064,8 +1097,6 @@ class _BookingCard extends StatelessWidget {
                           color: _color)),
                 ])),
           ])),
-
-        // Body
         Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -1078,7 +1109,6 @@ class _BookingCard extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF1A1A2E))),
               const SizedBox(height: 12),
-
               if (isDesktop)
                 Row(children: [
                   Expanded(child: Column(children: [
@@ -1106,13 +1136,10 @@ class _BookingCard extends StatelessWidget {
                   _row(Icons.note_outlined, 'Catatan', notes),
                 ],
               ],
-
-              // Tampilkan nomor meja jika sudah di-assign
               if (tableId != null && _status == 'confirmed') ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE8F5E9),
                     borderRadius: BorderRadius.circular(8),
@@ -1127,7 +1154,9 @@ class _BookingCard extends StatelessWidget {
                           as Map<String, dynamic>?;
                       final num = tableData?['table_number'] as String?;
                       return Text(
-                        num != null ? 'Meja $num sudah disiapkan' : 'Meja sudah disiapkan',
+                        num != null
+                            ? 'Meja $num sudah disiapkan'
+                            : 'Meja sudah disiapkan',
                         style: const TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 12,
@@ -1136,13 +1165,10 @@ class _BookingCard extends StatelessWidget {
                     }),
                   ])),
               ],
-
-              // Info waitlisted — tampilkan nomor HP yang akan dihubungi
               if (_status == 'waitlisted') ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3E8FF),
                     borderRadius: BorderRadius.circular(8),
@@ -1162,7 +1188,6 @@ class _BookingCard extends StatelessWidget {
                                 fontFamily: 'Poppins',
                                 fontSize: 12,
                                 color: Color(0xFF6D28D9))),
-                          // Tampilkan nomor HP yang disimpan
                           if (booking['customer_phone'] != null) ...[
                             const SizedBox(height: 4),
                             Text(
@@ -1177,7 +1202,6 @@ class _BookingCard extends StatelessWidget {
                       )),
                   ])),
               ],
-
               if (_isActive) ...[
                 const SizedBox(height: 16),
                 const Divider(height: 1),
@@ -1188,11 +1212,9 @@ class _BookingCard extends StatelessWidget {
                     color: const Color(0xFFFFF8E1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: const Color(0xFFFFCC02)
-                            .withValues(alpha: 0.4))),
+                        color: const Color(0xFFFFCC02).withValues(alpha: 0.4))),
                   child: const Row(children: [
-                    Icon(Icons.info_outline,
-                        size: 14, color: Color(0xFFD97706)),
+                    Icon(Icons.info_outline, size: 14, color: Color(0xFFD97706)),
                     SizedBox(width: 6),
                     Expanded(
                       child: Text(
