@@ -197,6 +197,20 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     }
   }
 
+  // ── Notif WA ke staff via Edge Function ──────────────────
+  Future<void> _notifyStaff(String bookingId) async {
+    try {
+      await Supabase.instance.client.functions.invoke(
+        'notify-staff',
+        body: {'booking_id': bookingId},
+      );
+      debugPrint('✅ Notif staff terkirim untuk booking $bookingId');
+    } catch (e) {
+      // Jangan crash app kalau notif gagal — cukup log
+      debugPrint('⚠️ Notif staff gagal: $e');
+    }
+  }
+
   String _fmtDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -312,13 +326,38 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       context: context,
       builder: (_) => AddBookingDialog(branchId: _branchId ?? ''),
     );
+
     if (result != null && _branchId != null) {
       try {
-        await Supabase.instance.client
+        // Insert booking ke Supabase
+        final inserted = await Supabase.instance.client
             .from('bookings')
-            .insert({...result, 'branch_id': _branchId});
+            .insert({...result, 'branch_id': _branchId})
+            .select()
+            .single();
+
+        // ── BARU: Kirim notif WA ke staff setelah booking berhasil disimpan ──
+        await _notifyStaff(inserted['id'] as String);
+
         await _load();
         await _loadDatesWithBooking();
+
+        // Tampilkan info DP jika ada
+        if (mounted) {
+          final depositAmount = result['deposit_amount'] as int? ?? 0;
+          final depositStatus = result['deposit_status'] as String? ?? 'not_required';
+
+          if (depositAmount > 0 && depositStatus == 'pending') {
+            _showDpReminderSnackbar(
+              customerName: result['customer_name'] as String? ?? '',
+              depositAmount: depositAmount,
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('✅ Booking berhasil disimpan'),
+                backgroundColor: Color(0xFF4CAF50)));
+          }
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -327,6 +366,30 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         }
       }
     }
+  }
+
+  void _showDpReminderSnackbar({
+    required String customerName,
+    required int depositAmount,
+  }) {
+    final formatted = depositAmount.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]}.',
+    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.payments_outlined, color: Colors.white, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '✅ Booking $customerName tersimpan. Tagih DP Rp $formatted sebelum kedatangan.',
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+          ),
+        ),
+      ]),
+      backgroundColor: const Color(0xFFE65100),
+      duration: const Duration(seconds: 5),
+    ));
   }
 
   Widget _buildReservasi() {
@@ -574,6 +637,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                       final tableNum =
                           tableInfo?['table_number']?.toString();
 
+                      // ── Info DP di history ──
+                      final depositAmount = b['deposit_amount'] as int? ?? 0;
+                      final depositStatus = b['deposit_status'] as String?;
+                      final showDpBadge = depositAmount > 0;
+
                       return Card(
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
@@ -606,9 +674,14 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                                         fontFamily: 'Poppins',
                                         fontSize: 10,
                                         color: AppColors.textHint)),
+                              // Badge DP
+                              if (showDpBadge) ...[
+                                const SizedBox(height: 4),
+                                _buildDpBadge(depositAmount, depositStatus),
+                              ],
                             ],
                           ),
-                          isThreeLine: b['confirmation_code'] != null,
+                          isThreeLine: true,
                           trailing: Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
@@ -627,6 +700,35 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                                     color: _historyStatusColor(status)))),
                         ));
                     }),
+      ),
+    ]);
+  }
+
+  Widget _buildDpBadge(int amount, String? status) {
+    final isPaid = status == 'paid' || status == 'applied';
+    final color = isPaid ? const Color(0xFF4CAF50) : const Color(0xFFFF9800);
+    final label = isPaid ? 'DP Lunas' : 'DP Belum Bayar';
+    final formatted = amount.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]}.',
+    );
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(isPaid ? Icons.check_circle_outline : Icons.pending_outlined,
+              size: 10, color: color),
+          const SizedBox(width: 3),
+          Text('$label • Rp $formatted',
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 10,
+                  fontWeight: FontWeight.w600, color: color)),
+        ]),
       ),
     ]);
   }

@@ -16,27 +16,45 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
   final _allergyCtrl = TextEditingController();
   final _notesCtrl   = TextEditingController();
 
+  // DP setting — bisa dijadikan config dari DB nanti
+  static const int _dpPerOrang = 150000;
+
   int _guests = 2;
   DateTime _date = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _time = const TimeOfDay(hour: 19, minute: 0);
 
-  // Auto-assign result
+  bool _requireDp = true; // default: DP diperlukan
+
   bool _isSearching = false;
   Map<String, dynamic>? _assignedTable;
   String? _assignError;
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _emailCtrl.dispose();
-    _allergyCtrl.dispose();
-    _notesCtrl.dispose();
-    super.dispose();
+  // ── Validasi waktu booking tidak kurang dari 2 jam dari sekarang ──
+  String? _validateBookingTime() {
+    final bookingDateTime = DateTime(
+      _date.year, _date.month, _date.day,
+      _time.hour, _time.minute,
+    );
+    final minAllowed = DateTime.now().add(const Duration(hours: 2));
+    if (bookingDateTime.isBefore(minAllowed)) {
+      return 'Booking minimal 2 jam sebelum waktu kedatangan.\nPilih waktu minimal ${_formatDateDisplay(minAllowed)} ${minAllowed.hour.toString().padLeft(2,'0')}:${minAllowed.minute.toString().padLeft(2,'0')}.';
+    }
+    return null;
   }
 
-  // ── Cari meja yang cocok untuk jumlah tamu + tanggal/waktu ───
+  int get _totalDp => _requireDp ? _dpPerOrang * _guests : 0;
+
   Future<void> _findAvailableTable() async {
+    // Validasi waktu dulu sebelum cari meja
+    final timeError = _validateBookingTime();
+    if (timeError != null) {
+      setState(() {
+        _assignError = timeError;
+        _assignedTable = null;
+      });
+      return;
+    }
+
     setState(() {
       _isSearching = true;
       _assignedTable = null;
@@ -47,14 +65,13 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
       final dateStr = _formatDate(_date);
       final timeStr = _formatTime(_time);
 
-      // 1. Ambil semua meja yang kapasitasnya cukup
       final tables = await Supabase.instance.client
           .from('restaurant_tables')
           .select()
           .eq('branch_id', widget.branchId)
           .gte('capacity', _guests)
           .eq('status', 'available')
-          .order('capacity'); // ambil meja terkecil yang muat (least waste)
+          .order('capacity');
 
       if ((tables as List).isEmpty) {
         setState(() {
@@ -64,7 +81,6 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
         return;
       }
 
-      // 2. Cek booking yang sudah ada di slot waktu yang sama (±1.5 jam)
       final existingBookings = await Supabase.instance.client
           .from('bookings')
           .select('table_id')
@@ -78,7 +94,6 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
           .where((id) => id != null)
           .toSet();
 
-      // 3. Pilih meja pertama yang belum di-booking
       final available = tables.where(
         (t) => !bookedTableIds.contains(t['id'])).toList();
 
@@ -108,14 +123,35 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
   String _formatTime(TimeOfDay t) =>
     '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}:00';
 
-  String _formatDateDisplay(DateTime d) => '${d.day}/${d.month}/${d.year}';
+  String _formatDateDisplay(DateTime d) =>
+    '${d.day}/${d.month}/${d.year}';
+
+  String _formatRupiah(int amount) {
+    final str = amount.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(str[i]);
+    }
+    return 'Rp ${buffer.toString()}';
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _allergyCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 700),
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 760),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -143,7 +179,6 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
             ]),
             const SizedBox(height: 20),
 
-            // ── Form (scrollable) ───────────────────────
             Flexible(child: SingleChildScrollView(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -151,6 +186,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                 // Nama
                 TextField(
                   controller: _nameCtrl,
+                  onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Nama Tamu *',
                     prefixIcon: Icon(Icons.person_outline)),
@@ -177,7 +213,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // ── Jumlah tamu (prominently shown) ─────
+                // ── Jumlah tamu ──────────────────────────
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -234,6 +270,27 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                   const SizedBox(width: 8),
                   Expanded(child: _timeTile()),
                 ]),
+                const SizedBox(height: 8),
+
+                // ── Peringatan cancel rule ───────────────
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF1976D2).withValues(alpha: 0.3))),
+                  child: const Row(children: [
+                    Icon(Icons.info_outline,
+                      size: 14, color: Color(0xFF1976D2)),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Booking minimal 2 jam sebelum kedatangan. Pembatalan < 2 jam dikenakan biaya.',
+                        style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 11,
+                          color: Color(0xFF1565C0)))),
+                  ]),
+                ),
                 const SizedBox(height: 16),
 
                 // ── Tombol cari meja ─────────────────────
@@ -307,9 +364,84 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
 
                 const SizedBox(height: 16),
                 const Divider(),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
 
-                // ── Alergi (prominent) ───────────────────
+                // ── Sistem DP ────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFFB300))),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Icon(Icons.payments_outlined,
+                          color: Color(0xFFE65100), size: 18),
+                        const SizedBox(width: 6),
+                        const Text('Uang Muka (DP)',
+                          style: TextStyle(
+                            fontFamily: 'Poppins', fontWeight: FontWeight.w600,
+                            fontSize: 14, color: Color(0xFFE65100))),
+                        const Spacer(),
+                        Switch.adaptive(
+                          value: _requireDp,
+                          activeThumbColor: const Color(0xFFE65100),
+                          activeTrackColor: const Color(0xFFE65100).withValues(alpha: 0.4),
+                          onChanged: (val) => setState(() => _requireDp = val),
+                        ),
+                      ]),
+                      const SizedBox(height: 8),
+                      if (_requireDp) ...[
+                        Row(children: [
+                          Expanded(child: _dpInfoRow(
+                            'DP per orang',
+                            _formatRupiah(_dpPerOrang))),
+                          const SizedBox(width: 12),
+                          Expanded(child: _dpInfoRow(
+                            'Jumlah tamu',
+                            '$_guests orang')),
+                        ]),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE65100),
+                            borderRadius: BorderRadius.circular(8)),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('Total DP: ',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins', fontSize: 13,
+                                  color: Colors.white)),
+                              Text(_formatRupiah(_totalDp),
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                                  fontSize: 16, color: Colors.white)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          '* DP diperhitungkan ke total tagihan saat makan.',
+                          style: TextStyle(
+                            fontFamily: 'Poppins', fontSize: 11,
+                            color: Color(0xFF795548))),
+                      ] else
+                        const Text(
+                          'Booking tanpa DP — berlaku aturan cancellation.',
+                          style: TextStyle(
+                            fontFamily: 'Poppins', fontSize: 12,
+                            color: Color(0xFF795548))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Alergi ───────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -334,8 +466,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                         maxLines: 2,
                         decoration: const InputDecoration(
                           hintText: 'Contoh: Alergi kacang, tidak makan babi, vegetarian...',
-                          hintStyle: TextStyle(
-                            fontFamily: 'Poppins', fontSize: 12),
+                          hintStyle: TextStyle(fontFamily: 'Poppins', fontSize: 12),
                           border: OutlineInputBorder(),
                           filled: true,
                           fillColor: Colors.white,
@@ -390,6 +521,19 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
       ),
     );
   }
+
+  Widget _dpInfoRow(String label, String value) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label,
+        style: const TextStyle(
+          fontFamily: 'Poppins', fontSize: 11, color: Color(0xFF795548))),
+      Text(value,
+        style: const TextStyle(
+          fontFamily: 'Poppins', fontWeight: FontWeight.w600,
+          fontSize: 13, color: Color(0xFFE65100))),
+    ],
+  );
 
   Widget _dateTile() => GestureDetector(
     onTap: () async {
@@ -463,7 +607,6 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
   void _submitBooking() {
     if (_assignedTable == null || _nameCtrl.text.trim().isEmpty) return;
 
-    // Gabung allergy + notes jadi special_requests
     final allergy = _allergyCtrl.text.trim();
     final notes   = _notesCtrl.text.trim();
     String? specialReq;
@@ -476,16 +619,20 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
     }
 
     Navigator.pop(context, {
-      'customer_name':   _nameCtrl.text.trim(),
-      'customer_phone':  _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-      'customer_email':  _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-      'guest_count':     _guests,
-      'table_id':        _assignedTable!['id'],
-      'booking_date':    _formatDate(_date),
-      'booking_time':    _formatTime(_time),
+      'customer_name':    _nameCtrl.text.trim(),
+      'customer_phone':   _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+      'customer_email':   _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      'guest_count':      _guests,
+      'table_id':         _assignedTable!['id'],
+      'booking_date':     _formatDate(_date),
+      'booking_time':     _formatTime(_time),
       'special_requests': specialReq,
-      'status':          'pending',
-      'source':          'app',
+      'status':           'pending',
+      'source':           'app',
+      // ── DP fields (baru) ──
+      'dp_per_orang':     _requireDp ? _dpPerOrang : 0,
+      'deposit_amount':   _totalDp,
+      'deposit_status':   _requireDp ? 'pending' : 'not_required',
     });
   }
 }
