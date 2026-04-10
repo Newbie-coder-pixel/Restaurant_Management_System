@@ -5,10 +5,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/config/app_config.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'core/services/notification_service.dart';
+import 'firebase_options.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 1. Firebase dulu
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // 2. Supabase
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
     anonKey: AppConfig.supabaseAnonKey,
@@ -17,18 +35,21 @@ void main() async {
     ),
   );
 
-  // Handle OAuth callback: Supabase mengirim ?code= sebagai query param
-  // di URL sebelum fragment (#). Kita perlu exchange code → session
-  // sebelum GoRouter membaca route-nya.
+  // 3. Listener notif setelah Supabase siap
+  Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+    if (event.session?.user != null) {
+      NotificationService.initialize();
+    }
+  });
+
+  // 4. Handle OAuth Web
   if (kIsWeb) {
     final uri = Uri.base;
     final code = uri.queryParameters['code'];
     if (code != null && code.isNotEmpty) {
       try {
         await Supabase.instance.client.auth.exchangeCodeForSession(code);
-      } catch (_) {
-        // Kalau gagal (code sudah expired dll), biarkan mengalir ke router
-      }
+      } catch (_) {}
     }
   }
 
@@ -45,14 +66,12 @@ class RestaurantApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Restaurant Management System',
       debugShowCheckedModeBanner: false,
-      // FIX 1: fontFamilyFallback agar emoji (👋 🍽️ dll) bisa dirender
-      // tanpa perlu download font tambahan — pakai emoji font bawaan OS
       theme: AppTheme.lightTheme.copyWith(
         textTheme: AppTheme.lightTheme.textTheme.apply(
           fontFamilyFallback: const [
-            'Apple Color Emoji',   // iOS / macOS
-            'Noto Color Emoji',    // Android
-            'Segoe UI Emoji',      // Windows
+            'Apple Color Emoji',
+            'Noto Color Emoji',
+            'Segoe UI Emoji',
           ],
         ),
       ),
