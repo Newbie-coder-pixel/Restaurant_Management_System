@@ -58,7 +58,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Ambil branchId langsung setiap didChangeDependencies
     final staff = ref.read(currentStaffProvider);
     if (staff != null && _branchId == null) {
       _branchId = staff.branchId;
@@ -75,24 +74,17 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   }
 
   Future<void> _load() async {
-    // Coba ambil branchId dari provider kalau masih null
     if (_branchId == null) {
       final staff = ref.read(currentStaffProvider);
       _branchId = staff?.branchId;
     }
-
     if (_branchId == null) {
-      debugPrint('DEBUG: branchId masih null, skip load');
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-
-    debugPrint('DEBUG: load booking branchId=$_branchId date=${_fmtDate(_selectedDay)}');
-
     if (mounted) setState(() => _isLoading = true);
     try {
       final dateStr = _fmtDate(_selectedDay);
-
       final res = await Supabase.instance.client
           .from('bookings')
           .select('*, restaurant_tables!bookings_table_id_fkey(table_number, capacity, floor_level)')
@@ -100,19 +92,15 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           .eq('booking_date', dateStr)
           .order('booking_time');
 
-      debugPrint('DEBUG: hasil query = ${(res as List).length} booking');
-
       if (mounted) {
-        final raw = (res).cast<Map<String, dynamic>>();
+        final raw = (res as List).cast<Map<String, dynamic>>();
         final models = raw.map((e) => BookingModel.fromJson(e)).toList();
-
         int confirmed = 0, pending = 0, seated = 0;
         for (final b in models) {
           if (b.status == BookingStatus.confirmed) confirmed++;
           if (b.status == BookingStatus.pending) pending++;
           if (b.status == BookingStatus.seated) seated++;
         }
-
         setState(() {
           _bookingsRaw = raw;
           _bookings = models;
@@ -123,7 +111,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         });
       }
     } catch (e) {
-      debugPrint('DEBUG: error load = $e');
+      debugPrint('error load = $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -134,11 +122,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       _branchId = staff?.branchId;
     }
     if (_branchId == null) return;
-
     try {
       final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
       final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-
       final res = await Supabase.instance.client
           .from('bookings')
           .select('booking_date')
@@ -146,15 +132,12 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           .gte('booking_date', _fmtDate(firstDay))
           .lte('booking_date', _fmtDate(lastDay))
           .inFilter('status', ['pending', 'confirmed', 'seated', 'waitlisted', 'completed']);
-
       if (mounted) {
-        final dates = (res as List)
-            .map((e) => e['booking_date'] as String)
-            .toSet();
+        final dates = (res as List).map((e) => e['booking_date'] as String).toSet();
         setState(() => _datesWithBooking = dates);
       }
     } catch (e) {
-      debugPrint('DEBUG: error loadDates = $e');
+      debugPrint('error loadDates = $e');
     }
   }
 
@@ -164,7 +147,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       _branchId = staff?.branchId;
     }
     if (_branchId == null) return;
-
     setState(() => _isHistoryLoading = true);
     try {
       final today = _fmtDate(DateTime.now());
@@ -174,14 +156,10 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           .eq('branch_id', _branchId!);
 
       if (_historyFilter == 'completed') {
-        // Hanya selesai
         q = q.eq('status', 'completed');
       } else if (_historyFilter == 'cancelled') {
-        // Dibatalkan atau no show
         q = q.inFilter('status', ['cancelled', 'no_show']);
       } else {
-        // Semua booking masa lalu (tanggal < hari ini)
-        // PERBAIKAN: tidak filter status, tampilkan semua masa lalu
         q = q.lt('booking_date', today);
       }
 
@@ -190,16 +168,14 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           .order('booking_time', ascending: false)
           .limit(200);
 
-      debugPrint('DEBUG: history = ${(res as List).length} item');
-
       if (mounted) {
         setState(() {
-          _history = (res).cast<Map<String, dynamic>>();
+          _history = (res as List).cast<Map<String, dynamic>>();
           _isHistoryLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('DEBUG: error history = $e');
+      debugPrint('error history = $e');
       if (mounted) setState(() => _isHistoryLoading = false);
     }
   }
@@ -249,14 +225,14 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   String _historyStatusLabel(String? s) {
     switch (s) {
-      case 'completed': return 'Selesai';
-      case 'cancelled': return 'Dibatalkan';
-      case 'no_show':   return 'Tidak Hadir';
-      case 'confirmed': return 'Konfirmasi';
-      case 'pending':   return 'Menunggu';
-      case 'seated':    return 'Duduk';
+      case 'completed':  return 'Selesai';
+      case 'cancelled':  return 'Dibatalkan';
+      case 'no_show':    return 'Tidak Hadir';
+      case 'confirmed':  return 'Konfirmasi';
+      case 'pending':    return 'Menunggu';
+      case 'seated':     return 'Duduk';
       case 'waitlisted': return 'Waitlist';
-      default:          return s ?? '-';
+      default:           return s ?? '-';
     }
   }
 
@@ -270,7 +246,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Watch provider agar rebuild kalau staff berubah
     final staff = ref.watch(currentStaffProvider);
     if (staff != null && _branchId == null) {
       _branchId = staff.branchId;
@@ -374,8 +349,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                 : null,
             contentPadding:
                 const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             filled: true,
             fillColor: Colors.white,
           ),
@@ -458,9 +432,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
             border: Border.all(color: color.withValues(alpha: 0.4))),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Container(
-              width: 8, height: 8,
-              decoration:
-                  BoxDecoration(color: color, shape: BoxShape.circle)),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
           const SizedBox(width: 6),
           Text('$count $label',
               style: TextStyle(
@@ -484,9 +458,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       try {
         await Supabase.instance.client
             .from('bookings')
-            .update({...result, 'updated_at': DateTime.now().toIso8601String()})
+            .update(
+                {...result, 'updated_at': DateTime.now().toIso8601String()})
             .eq('id', booking.id);
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('✅ Booking berhasil diperbarui'),
@@ -505,36 +479,67 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   }
 
   Widget _buildHistory() {
-    return Column(children: [
+    return Row(children: [
+      // ── Sidebar kiri ────────────────────────────────
       Container(
-        color: Colors.white,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            for (final f in [
-              ('all', 'Semua Lalu'),
-              ('completed', 'Selesai'),
-              ('cancelled', 'Dibatalkan'),
-            ])
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(f.$2,
-                      style: const TextStyle(
-                          fontFamily: 'Poppins', fontSize: 12)),
-                  selected: _historyFilter == f.$1,
-                  onSelected: (_) {
-                    setState(() {
-                      _historyFilter = f.$1;
-                      _history = [];
-                    });
-                    _loadHistory();
-                  },
-                  selectedColor: AppColors.accent.withValues(alpha: 0.15),
-                  checkmarkColor: AppColors.accent)),
-          ])),
+        width: 110,
+        color: const Color(0xFF1A1A2E),
+        child: Column(children: [
+          const SizedBox(height: 16),
+          for (final f in [
+            ('all', 'Semua', Icons.list_alt_rounded),
+            ('completed', 'Lunas', Icons.check_circle_outline),
+            ('cancelled', 'Dibatalkan', Icons.cancel_outlined),
+          ])
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _historyFilter = f.$1;
+                  _history = [];
+                });
+                _loadHistory();
+              },
+              child: Container(
+                width: double.infinity,
+                margin:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: _historyFilter == f.$1
+                      ? AppColors.accent.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: _historyFilter == f.$1
+                      ? Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.4))
+                      : null,
+                ),
+                child: Column(children: [
+                  Icon(f.$3,
+                      size: 20,
+                      color: _historyFilter == f.$1
+                          ? AppColors.accent
+                          : Colors.white54),
+                  const SizedBox(height: 6),
+                  Text(f.$2,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          fontWeight: _historyFilter == f.$1
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: _historyFilter == f.$1
+                              ? AppColors.accent
+                              : Colors.white54)),
+                ]),
+              ),
+            ),
+        ]),
       ),
+
+      // ── List history ─────────────────────────────────
       Expanded(
         child: _isHistoryLoading
             ? const Center(child: CircularProgressIndicator())
@@ -553,7 +558,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                       ],
                     ))
                 : ListView.separated(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(12),
                     itemCount: _history.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, i) {
@@ -564,34 +569,36 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                       final time = rawTime.length >= 5
                           ? rawTime.substring(0, 5)
                           : rawTime;
-                      final tableInfo = b['restaurant_tables']
-                          as Map<String, dynamic>?;
-                      final tableNum = tableInfo?['table_number']?.toString();
+                      final tableInfo =
+                          b['restaurant_tables'] as Map<String, dynamic>?;
+                      final tableNum =
+                          tableInfo?['table_number']?.toString();
 
                       return Card(
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                         child: ListTile(
                           leading: Container(
-                            width: 44,
-                            height: 44,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: _historyStatusColor(status)
                                   .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10)),
                             child: Icon(Icons.event_note,
                                 color: _historyStatusColor(status),
-                                size: 22)),
+                                size: 20)),
                           title: Text(b['customer_name'] ?? '-',
                               style: const TextStyle(
                                   fontFamily: 'Poppins',
-                                  fontWeight: FontWeight.w600)),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13)),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                  '$date • $time • ${b['guest_count'] ?? 1} orang'
-                                  '${tableNum != null ? ' • Meja $tableNum' : ''}',
+                                  '$date • $time • ${b['guest_count'] ?? 1} org'
+                                  '${tableNum != null ? ' • $tableNum' : ''}',
                                   style: AppTextStyles.caption),
                               if (b['confirmation_code'] != null)
                                 Text('# ${b['confirmation_code']}',
@@ -612,11 +619,10 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                               border: Border.all(
                                   color: _historyStatusColor(status)
                                       .withValues(alpha: 0.4))),
-                            child: Text(
-                                _historyStatusLabel(status),
+                            child: Text(_historyStatusLabel(status),
                                 style: TextStyle(
                                     fontFamily: 'Poppins',
-                                    fontSize: 11,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                     color: _historyStatusColor(status)))),
                         ));
@@ -648,9 +654,10 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
               return Positioned(
                 bottom: 4,
                 child: Container(
-                  width: 6, height: 6,
-                  decoration: const BoxDecoration(
-                      color: AppColors.accent, shape: BoxShape.circle)),
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                        color: AppColors.accent, shape: BoxShape.circle)),
               );
             }
             return null;
@@ -662,8 +669,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           todayDecoration: BoxDecoration(
               color: Color(0x99E94560), shape: BoxShape.circle),
           defaultTextStyle: TextStyle(fontFamily: 'Poppins'),
-          weekendTextStyle: TextStyle(
-              fontFamily: 'Poppins', color: AppColors.accent)),
+          weekendTextStyle:
+              TextStyle(fontFamily: 'Poppins', color: AppColors.accent)),
         headerStyle: const HeaderStyle(
           formatButtonVisible: false,
           titleCentered: true,
