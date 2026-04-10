@@ -42,6 +42,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   int _pendingCount = 0;
   int _seatedCount = 0;
 
+  // ── Realtime ──
+  RealtimeChannel? _realtimeChannel;
+
   @override
   void initState() {
     super.initState();
@@ -63,14 +66,109 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       _branchId = staff.branchId;
       _load();
       _loadDatesWithBooking();
+      _setupRealtime(_branchId!);
     }
   }
 
   @override
   void dispose() {
+    _realtimeChannel?.unsubscribe();
     _tab.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Setup realtime listener untuk branch ini ──────────────
+  void _setupRealtime(String branchId) {
+    _realtimeChannel?.unsubscribe();
+
+    _realtimeChannel = Supabase.instance.client
+        .channel('staff-bookings-$branchId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'bookings',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'branch_id',
+            value: branchId,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+            _load();
+            _loadDatesWithBooking();
+            _showRealtimeNotif(
+              icon: Icons.event_available,
+              message: '📅 Booking baru dari ${payload.newRecord['customer_name'] ?? 'pelanggan'}',
+              color: const Color(0xFF4CAF50),
+            );
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'bookings',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'branch_id',
+            value: branchId,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+            final newRecord      = payload.newRecord;
+            final oldRecord      = payload.oldRecord;
+            final newDepositStatus = newRecord['deposit_status'] as String?;
+            final oldDepositStatus = oldRecord['deposit_status'] as String?;
+            final customerName   = newRecord['customer_name'] as String? ?? 'Pelanggan';
+
+            _load();
+            if (_history.isNotEmpty) _loadHistory();
+
+            // Notif spesifik hanya saat deposit_status berubah
+            if (newDepositStatus != oldDepositStatus) {
+              if (newDepositStatus == 'uploaded') {
+                _showRealtimeNotif(
+                  icon: Icons.upload_file_outlined,
+                  message: '💳 $customerName mengirim bukti transfer DP. Harap verifikasi.',
+                  color: const Color(0xFF1976D2),
+                  duration: const Duration(seconds: 6),
+                );
+              } else if (newDepositStatus == 'paid') {
+                _showRealtimeNotif(
+                  icon: Icons.check_circle_outline,
+                  message: '✅ DP $customerName dikonfirmasi lunas.',
+                  color: const Color(0xFF4CAF50),
+                );
+              }
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  void _showRealtimeNotif({
+    required IconData icon,
+    required String message,
+    required Color color,
+    Duration duration = const Duration(seconds: 4),
+  }) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        Icon(icon, color: Colors.white, size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(message,
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500))),
+      ]),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      duration: duration,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 
   Future<void> _load() async {
