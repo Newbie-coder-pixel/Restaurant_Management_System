@@ -536,11 +536,16 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   Future<void> _showEditBooking(
       BookingModel booking, Map<String, dynamic>? tableData) async {
+    // Cari rawData untuk booking ini
+    final rawIdx = _bookings.indexOf(booking);
+    final rawItem = rawIdx >= 0 ? _bookingsRaw[rawIdx] : null;
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => EditBookingDialog(
         booking: booking,
         branchId: _branchId ?? '',
+        rawData: rawItem, // ← pass rawData untuk pre-fill nilai DP
       ),
     );
     if (result != null) {
@@ -731,9 +736,26 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   }
 
   Widget _buildDpBadge(int amount, String? status) {
-    final isPaid = status == 'paid' || status == 'applied';
-    final color = isPaid ? const Color(0xFF4CAF50) : const Color(0xFFFF9800);
-    final label = isPaid ? 'DP Lunas' : 'DP Belum Bayar';
+    final isPaid     = status == 'paid' || status == 'applied';
+    final isUploaded = status == 'uploaded';
+    final Color color;
+    final String label;
+    final IconData icon;
+
+    if (isPaid) {
+      color = const Color(0xFF4CAF50);
+      label = 'DP Lunas';
+      icon  = Icons.check_circle_outline;
+    } else if (isUploaded) {
+      color = const Color(0xFF1976D2);
+      label = 'Bukti Dikirim';
+      icon  = Icons.hourglass_top_outlined;
+    } else {
+      color = const Color(0xFFFF9800);
+      label = 'DP Belum Bayar';
+      icon  = Icons.pending_outlined;
+    }
+
     final formatted = amount.toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (m) => '${m[1]}.',
@@ -747,8 +769,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           border: Border.all(color: color.withValues(alpha: 0.4)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(isPaid ? Icons.check_circle_outline : Icons.pending_outlined,
-              size: 10, color: color),
+          Icon(icon, size: 10, color: color),
           const SizedBox(width: 3),
           Text('$label • Rp $formatted',
               style: TextStyle(
