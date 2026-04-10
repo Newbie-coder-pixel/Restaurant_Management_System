@@ -197,6 +197,29 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     }
   }
 
+  // ── Tandai DP sudah dibayar ─────────────────────────────────
+  Future<void> _markDpPaid(String bookingId) async {
+    try {
+      await Supabase.instance.client.from('bookings').update({
+        'deposit_status': 'paid',
+        'deposit_paid_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', bookingId);
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✅ DP berhasil ditandai lunas'),
+            backgroundColor: Color(0xFF4CAF50)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Gagal update DP: $e'),
+            backgroundColor: Colors.red));
+      }
+    }
+  }
+
   // ── Notif WA ke staff via Edge Function ──────────────────
   Future<void> _notifyStaff(String bookingId) async {
     try {
@@ -461,12 +484,15 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                           ? _bookingsRaw[rawIdx]['restaurant_tables']
                               as Map<String, dynamic>?
                           : null;
+                      final rawItem = rawIdx >= 0 ? _bookingsRaw[rawIdx] : null;
                       return BookingCard(
                         booking: b,
                         tableData: tableData,
+                        rawData: rawItem,
                         statusColor: _statusColor(b.status),
                         onStatusChange: (s) => _updateStatus(b.id, s),
                         onEdit: () => _showEditBooking(b, tableData),
+                        onMarkDpPaid: () => _markDpPaid(b.id),
                       );
                     }),
       ),

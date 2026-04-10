@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -941,10 +942,20 @@ class _BookingHistory extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────
 // KARTU BOOKING
 // ─────────────────────────────────────────────────────────────────
-class _BookingCard extends StatelessWidget {
+class _BookingCard extends StatefulWidget {
   final Map<String, dynamic> booking;
   final bool isDesktop;
   const _BookingCard({required this.booking, required this.isDesktop});
+
+  @override
+  State<_BookingCard> createState() => _BookingCardState();
+}
+
+class _BookingCardState extends State<_BookingCard> {
+  bool _uploadingProof = false;
+
+  Map<String, dynamic> get booking => widget.booking;
+  bool get isDesktop => widget.isDesktop;
 
   String get _status => booking['status'] as String? ?? 'pending';
 
@@ -1051,6 +1062,17 @@ class _BookingCard extends StatelessWidget {
     final guests  = booking['guest_count'] ?? 1;
     final notes   = booking['special_requests'] as String?;
     final tableId = booking['table_id'] as String?;
+
+    // ── Data DP ──
+    final depositAmount = booking['deposit_amount'] as int? ?? 0;
+    final depositStatus = booking['deposit_status'] as String? ?? 'not_required';
+    final dpPerOrang    = booking['dp_per_orang'] as int? ?? 0;
+    final depositNotes  = booking['deposit_notes'] as String?;
+    final depositPaidAt = booking['deposit_paid_at'] as String?;
+    final hasDeposit    = depositAmount > 0 && depositStatus != 'not_required';
+    final isDpPaid      = depositStatus == 'paid' || depositStatus == 'applied';
+    final isDpPending   = depositStatus == 'pending';
+    final isDpUploaded  = depositStatus == 'uploaded';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -1202,6 +1224,23 @@ class _BookingCard extends StatelessWidget {
                       )),
                   ])),
               ],
+              // ── Section DP untuk Customer ──────────────
+              if (hasDeposit) ...[
+                const SizedBox(height: 12),
+                _buildCustomerDpSection(
+                  context,
+                  depositAmount: depositAmount,
+                  depositStatus: depositStatus,
+                  dpPerOrang: dpPerOrang,
+                  depositNotes: depositNotes,
+                  depositPaidAt: depositPaidAt,
+                  isDpPaid: isDpPaid,
+                  isDpPending: isDpPending,
+                  isDpUploaded: isDpUploaded,
+                  bookingId: booking['id'] as String? ?? '',
+                ),
+              ],
+
               if (_isActive) ...[
                 const SizedBox(height: 16),
                 const Divider(height: 1),
@@ -1245,6 +1284,361 @@ class _BookingCard extends StatelessWidget {
               ],
             ])),
       ]));
+  }
+
+  // ── Helper: format rupiah ──
+  String _formatRupiah(int amount) {
+    final str = amount.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(str[i]);
+    }
+    return 'Rp ${buffer.toString()}';
+  }
+
+  String _formatDateTime(String raw) {
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      const months = [
+        '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+        'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      ];
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      return '${dt.day} ${months[dt.month]} ${dt.year}, $h:$m';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  // ── Upload bukti transfer ke Supabase Storage ──
+  Future<void> _uploadProof(BuildContext context, String bookingId) async {
+    try {
+      setState(() => _uploadingProof = true);
+
+      // Pilih gambar dari galeri atau kamera
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+        builder: (_) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            const Text('Pilih Sumber Foto',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15)),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: Color(0xFF0F3460)),
+              title: const Text('Galeri Foto',
+                  style: TextStyle(fontFamily: 'Poppins')),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined,
+                  color: Color(0xFF0F3460)),
+              title: const Text('Kamera',
+                  style: TextStyle(fontFamily: 'Poppins')),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            const SizedBox(height: 8),
+          ]),
+        ),
+      );
+
+      if (source == null || !context.mounted) {
+        setState(() => _uploadingProof = false);
+        return;
+      }
+
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+
+      if (picked == null || !context.mounted) {
+        setState(() => _uploadingProof = false);
+        return;
+      }
+
+      final Uint8List bytes = await picked.readAsBytes();
+      final ext = picked.name.split('.').last.toLowerCase();
+      final fileName = 'dp_proof_${bookingId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final path = 'booking-proofs/$fileName';
+
+      // Upload ke Supabase Storage bucket 'booking-proofs'
+      await Supabase.instance.client.storage
+          .from('booking-proofs')
+          .uploadBinary(path, bytes,
+              fileOptions: FileOptions(contentType: 'image/$ext', upsert: true));
+
+      // Update deposit_status → 'uploaded' dan simpan URL di deposit_notes
+      final publicUrl = Supabase.instance.client.storage
+          .from('booking-proofs')
+          .getPublicUrl(path);
+
+      await Supabase.instance.client
+          .from('bookings')
+          .update({
+            'deposit_status': 'uploaded',
+            'deposit_notes': 'Bukti transfer: $publicUrl',
+          })
+          .eq('id', bookingId);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Row(children: [
+          Icon(Icons.check_circle, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text('Bukti transfer berhasil dikirim! Menunggu konfirmasi staff.',
+              style: TextStyle(fontFamily: 'Poppins')),
+        ]),
+        backgroundColor: Color(0xFF1976D2),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 4),
+      ));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Gagal upload bukti: $e',
+            style: const TextStyle(fontFamily: 'Poppins')),
+        backgroundColor: const Color(0xFFE94560),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _uploadingProof = false);
+    }
+  }
+
+  // ── Widget section DP untuk customer ──
+  Widget _buildCustomerDpSection(
+    BuildContext context, {
+    required int depositAmount,
+    required String depositStatus,
+    required int dpPerOrang,
+    required String? depositNotes,
+    required String? depositPaidAt,
+    required bool isDpPaid,
+    required bool isDpPending,
+    required bool isDpUploaded,
+    required String bookingId,
+  }) {
+    final Color bgColor;
+    final Color borderColor;
+    final Color iconColor;
+    final Color labelColor;
+    final IconData statusIcon;
+    final String statusText;
+
+    if (isDpPaid) {
+      bgColor     = const Color(0xFFE8F5E9);
+      borderColor = const Color(0xFF4CAF50);
+      iconColor   = const Color(0xFF2E7D32);
+      labelColor  = const Color(0xFF2E7D32);
+      statusIcon  = Icons.check_circle_outline;
+      statusText  = 'DP Lunas ✓';
+    } else if (isDpUploaded) {
+      bgColor     = const Color(0xFFE3F2FD);
+      borderColor = const Color(0xFF1976D2);
+      iconColor   = const Color(0xFF1565C0);
+      labelColor  = const Color(0xFF1565C0);
+      statusIcon  = Icons.hourglass_top_outlined;
+      statusText  = 'Bukti Dikirim — Menunggu Konfirmasi';
+    } else {
+      bgColor     = const Color(0xFFFFF3E0);
+      borderColor = const Color(0xFFFFB300);
+      iconColor   = const Color(0xFFE65100);
+      labelColor  = const Color(0xFFE65100);
+      statusIcon  = Icons.payments_outlined;
+      statusText  = 'DP Belum Dibayar';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // Baris atas: ikon + label + nominal
+          Row(children: [
+            Icon(statusIcon, size: 16, color: iconColor),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(statusText,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: labelColor)),
+            ),
+            Text(
+              _formatRupiah(depositAmount),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: labelColor)),
+          ]),
+
+          // Rincian per orang
+          if (dpPerOrang > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+              '${_formatRupiah(dpPerOrang)} × ${depositAmount ~/ dpPerOrang} orang',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: labelColor.withValues(alpha: 0.7))),
+          ],
+
+          // Waktu konfirmasi jika sudah lunas
+          if (isDpPaid && depositPaidAt != null) ...[
+            const SizedBox(height: 4),
+            Row(children: [
+              Icon(Icons.schedule, size: 12, color: labelColor.withValues(alpha: 0.6)),
+              const SizedBox(width: 4),
+              Text(
+                'Dikonfirmasi: ${_formatDateTime(depositPaidAt)}',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: labelColor.withValues(alpha: 0.7))),
+            ]),
+          ],
+
+          // Catatan dari staff (jika bukan URL bukti)
+          if (depositNotes != null &&
+              depositNotes.isNotEmpty &&
+              !depositNotes.startsWith('Bukti transfer: http')) ...[
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(6)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, size: 12, color: labelColor),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(depositNotes,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: labelColor))),
+                ]),
+            ),
+          ],
+
+          // Info "bukti sudah dikirim"
+          if (isDpUploaded) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(6)),
+              child: const Row(children: [
+                Icon(Icons.access_time_outlined,
+                    size: 13, color: Color(0xFF1565C0)),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Bukti transfer sudah diterima. Staff sedang memverifikasi pembayaranmu.',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: Color(0xFF1565C0)))),
+              ]),
+            ),
+          ],
+
+          // Tombol upload bukti — hanya muncul saat pending (belum upload)
+          if (isDpPending) ...[
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Cara Bayar DP:',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: Color(0xFFE65100))),
+                  const SizedBox(height: 4),
+                  const Text(
+                    '1. Transfer ke rekening restoran\n'
+                    '2. Foto/screenshot bukti transfer\n'
+                    '3. Upload di tombol di bawah',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: Color(0xFF6B7280),
+                      height: 1.6)),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _uploadingProof
+                          ? null
+                          : () => _uploadProof(context, bookingId),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFE65100),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        textStyle: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      icon: _uploadingProof
+                          ? const SizedBox(
+                              width: 14, height: 14,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.upload_file_outlined, size: 16),
+                      label: Text(_uploadingProof
+                          ? 'Mengupload...'
+                          : 'Upload Bukti Transfer'),
+                    )),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _row(IconData icon, String label, String value) =>
