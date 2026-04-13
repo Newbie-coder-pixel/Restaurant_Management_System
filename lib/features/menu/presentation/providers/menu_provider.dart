@@ -245,4 +245,4 @@ final menuCountByCategoryProvider =
     counts[m.category] = (counts[m.category] ?? 0) + 1;
   }
   return counts;
-});
+}); 

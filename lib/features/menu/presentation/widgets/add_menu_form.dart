@@ -580,4 +580,4 @@ class _CategorySelector extends StatelessWidget {
       }).toList(),
     );
   }
-}
+} 

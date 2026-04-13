@@ -106,4 +106,4 @@ class Menu {
   @override
   String toString() =>
       'Menu(id: $id, name: $name, price: $price, isAvailable: $isAvailable)';
-}
+} 

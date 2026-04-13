@@ -184,5 +184,5 @@ class MenuServiceException implements Exception {
   const MenuServiceException(this.message);
 
   @override
-  String toString() => 'MenuServiceException: $message';
+  String toString() => 'MenuServiceException: $message'; 
 }
