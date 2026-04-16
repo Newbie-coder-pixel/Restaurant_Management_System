@@ -16,11 +16,12 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
   final _nameCtrl  = TextEditingController();
+  final _phoneCtrl = TextEditingController();
 
   @override
   void dispose() {
     _emailCtrl.dispose(); _passCtrl.dispose();
-    _nameCtrl.dispose();
+    _nameCtrl.dispose(); _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -106,6 +107,16 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     // Validasi lokal sebelum hit API
     if (_isSignUp && _nameCtrl.text.trim().isEmpty) {
       _err('Nama lengkap wajib diisi.'); return;
+    }
+    if (_isSignUp) {
+      final phone = _phoneCtrl.text.trim();
+      if (phone.isEmpty) { _err('Nomor telepon wajib diisi.'); return; }
+      // Validasi format nomor Indonesia: 08xx / +628xx / 628xx
+      final phoneRegex = RegExp(r'^(\+62|62|0)8[0-9]{8,11}$');
+      if (!phoneRegex.hasMatch(phone.replaceAll(RegExp(r'\s|-'), ''))) {
+        _err('Format nomor telepon tidak valid. Contoh: 08123456789 atau +6281234567890');
+        return;
+      }
     }
     if (email.isEmpty) { _err('Email wajib diisi.'); return; }
     // Validasi format email dasar
@@ -240,11 +251,35 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     setState(() => _loading = true);
     try {
       if (_isSignUp) {
-        await Supabase.instance.client.auth.signUp(
+        // Normalisasi nomor telepon ke format +62
+        String phone = _phoneCtrl.text.trim().replaceAll(RegExp(r'\s|-'), '');
+        if (phone.startsWith('0')) phone = '+62${phone.substring(1)}';
+        if (phone.startsWith('62') && !phone.startsWith('+')) phone = '+$phone';
+
+        final res = await Supabase.instance.client.auth.signUp(
           email: email,
           password: pass,
-          data: {'full_name': _nameCtrl.text.trim()},
+          data: {
+            'full_name': _nameCtrl.text.trim(),
+            'phone_number': phone,
+          },
         );
+        // Simpan nomor telepon ke tabel profiles / update user jika sudah ada
+        if (res.user != null) {
+          try {
+            await Supabase.instance.client
+                .from('customers')
+                .upsert({
+                  'id': res.user!.id,
+                  'full_name': _nameCtrl.text.trim(),
+                  'phone_number': phone,
+                  'email': email,
+                  'created_at': DateTime.now().toIso8601String(),
+                }, onConflict: 'id');
+          } catch (_) {
+            // Tabel customers mungkin belum ada, nomor tetap tersimpan di auth metadata
+          }
+        }
         if (mounted) {
           _info('Akun berhasil dibuat! Cek email untuk konfirmasi. 📧');
         }
@@ -584,6 +619,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       if (_isSignUp) ...[
         _field(ctrl: _nameCtrl, hint: 'Nama lengkap', icon: Icons.person_outline),
         const SizedBox(height: 10),
+        _phoneField(),
+        const SizedBox(height: 10),
       ],
       _field(ctrl: _emailCtrl, hint: 'Email',
         icon: Icons.email_outlined, type: TextInputType.emailAddress),
@@ -619,6 +656,30 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
             color: Color(0xFF0F3460), fontWeight: FontWeight.w500))),
     ]);
+
+  Widget _phoneField() => TextField(
+    controller: _phoneCtrl,
+    keyboardType: TextInputType.phone,
+    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+    decoration: InputDecoration(
+      hintText: 'Nomor telepon (contoh: 08123456789)',
+      hintStyle: const TextStyle(
+          fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
+      prefixIcon: const Icon(Icons.phone_outlined,
+          size: 18, color: Color(0xFF6B7280)),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF0F3460), width: 1.5)),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14)));
 
   Widget _socialBtn({
     required Widget icon, required String label, required VoidCallback onTap,
