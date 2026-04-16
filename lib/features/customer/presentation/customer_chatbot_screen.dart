@@ -138,7 +138,24 @@ Jawab dengan ramah, singkat, dan membantu.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Customer Chatbot')),
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text(
+          'Customer Support',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        centerTitle: false,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.grey[800],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey[200],
+          ),
+        ),
+      ),
       body: Column(
         children: [
           Expanded(child: _buildMessages()),
@@ -150,25 +167,153 @@ Jawab dengan ramah, singkat, dan membantu.
 
   Widget _buildMessages() => ListView.builder(
         controller: _scrollCtrl,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         itemCount: _messages.length,
         itemBuilder: (_, i) {
           final m = _messages[i];
-          return ListTile(
-            title: Text(m.content),
-            subtitle: Text(m.role),
+          final isUser = m.role == 'user';
+          
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!isUser) ...[
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.green[50],
+                    child: Icon(
+                      Icons.support_agent,
+                      size: 18,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isUser ? Colors.green[600] : Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(16),
+                        topRight: const Radius.circular(16),
+                        bottomLeft: isUser ? const Radius.circular(16) : const Radius.circular(4),
+                        bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(16),
+                      ),
+                      boxShadow: isUser
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: Colors.grey.withValues(alpha: 0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m.content,
+                          style: TextStyle(
+                            color: isUser ? Colors.white : Colors.grey[800],
+                            fontSize: 14,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatTime(m.timestamp),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isUser ? Colors.green[100] : Colors.grey[400],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (isUser) ...[
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.green[100],
+                    child: Icon(
+                      Icons.person,
+                      size: 18,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                ],
+              ],
+            ),
           );
         },
       );
 
-  Widget _buildInput() => Row(
+  Widget _buildInput() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: _msgCtrl,
-              onSubmitted: (_) => _send(),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: TextField(
+                controller: _msgCtrl,
+                onSubmitted: (_) => _send(),
+                decoration: InputDecoration(
+                  hintText: 'Tulis pesan...',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
             ),
           ),
-          IconButton(icon: const Icon(Icons.send), onPressed: _send),
+          const SizedBox(width: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.green[600],
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.send, color: Colors.white, size: 18),
+              onPressed: _isTyping ? null : _send,
+              padding: const EdgeInsets.all(12),
+            ),
+          ),
         ],
-      );
+      ),
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final msgDate = DateTime(time.year, time.month, time.day);
+
+    if (msgDate == today) {
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    } else {
+      return '${time.day}/${time.month} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    }
+  }
 }

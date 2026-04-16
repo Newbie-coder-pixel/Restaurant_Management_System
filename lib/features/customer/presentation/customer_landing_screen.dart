@@ -1,12 +1,12 @@
 // lib/features/customer/presentation/customer_landing_screen.dart
 //
-// CHANGES v3:
+// CHANGES v3 (fixed):
 // 1. Semua perubahan dari v2 dipertahankan
 // 2. Tambah fitur deteksi lokasi & cabang terdekat
-//    - LocationPermissionSheet (bottom sheet gaya Shopee/Tokopedia)
-//    - NearestBranchBanner di HomeTab (prompt → izin → hasil)
-//    - Fetch lat/lng dari Supabase jika kolom tersedia
-//    - Haversine distance calculation inline (tanpa package tambahan)
+// - LocationPermissionSheet (bottom sheet gaya Shopee/Tokopedia)
+// - NearestBranchBanner di HomeTab (prompt → izin → hasil)
+// - Fetch lat/lng dari Supabase jika kolom tersedia
+// - Haversine distance calculation inline (tanpa package tambahan)
 // 3. Branch model diperkaya: isOpen dihitung dari opening/closing_time
 
 import 'dart:math';
@@ -70,6 +70,7 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
+
     if (permission == LocationPermission.deniedForever ||
         permission == LocationPermission.denied) {
       state = _NearestDenied();
@@ -116,7 +117,11 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
       }
     }
 
-    state = _NearestLoaded(nearest!, minDist);
+    if (nearest != null) {
+      state = _NearestLoaded(nearest, minDist);
+    } else {
+      state = _NearestError('Tidak dapat menemukan cabang terdekat.');
+    }
   }
 
   void deny() => state = _NearestDenied();
@@ -166,12 +171,14 @@ class _CustomerLandingScreenState
 
     // Auto-detect jika permission sudah pernah diberikan
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
       final perm = await Geolocator.checkPermission();
       if ((perm == LocationPermission.always ||
               perm == LocationPermission.whileInUse) &&
           mounted) {
-        final branches =
-            ref.read(_customerBranchesProvider).valueOrNull ?? [];
+        final branchesAsync = ref.read(_customerBranchesProvider);
+        final branches = branchesAsync.valueOrNull ?? [];
         if (branches.isNotEmpty) {
           ref.read(_nearestBranchProvider.notifier).detect(branches);
         }
@@ -195,17 +202,20 @@ class _CustomerLandingScreenState
       loading: () => const Scaffold(
         backgroundColor: Color(0xFFF8F9FA),
         body: Center(
-            child: CircularProgressIndicator(color: Color(0xFFE94560)))),
+            child: CircularProgressIndicator(color: Color(0xFFE94560))),
+      ),
       error: (e, _) => CustomerLoginScreen(onLoginSuccess: () {}),
       data: (user) {
         if (user == null) return CustomerLoginScreen(onLoginSuccess: () {});
         return Scaffold(
           backgroundColor: const Color(0xFFF8F9FA),
           body: SafeArea(
-            child: Column(children: [
-              _buildTopBar(user),
-              Expanded(child: _buildBody()),
-            ]),
+            child: Column(
+              children: [
+                _buildTopBar(user),
+                Expanded(child: _buildBody()),
+              ],
+            ),
           ),
           bottomNavigationBar: _buildBottomNav(),
         );
@@ -257,23 +267,31 @@ class _CustomerLandingScreenState
         ),
       ),
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
-      child: Row(children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: const Color(0xFFE94560),
-          backgroundImage:
-              avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-          onBackgroundImageError:
-              avatarUrl.isNotEmpty ? (_, __) {} : null,
-          child: avatarUrl.isEmpty
-              ? Text(initial,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w700))
-              : null,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.3), width: 2),
+            ),
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFFE94560),
+              backgroundImage:
+                  avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+              onBackgroundImageError:
+                  avatarUrl.isNotEmpty ? (_, __) {} : null,
+              child: avatarUrl.isEmpty
+                  ? Text(initial,
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w700))
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -286,16 +304,25 @@ class _CustomerLandingScreenState
                 Text(
                   'Halo, $firstName 👋',
                   style: const TextStyle(
-                      color: Colors.white60, fontSize: 11),
+                      color: Colors.white70, fontSize: 11),
                 ),
-              ]),
-        ),
-        IconButton(
-          icon: const Icon(Icons.logout_rounded,
-              color: Colors.white54, size: 20),
-          onPressed: _confirmLogout,
-        ),
-      ]),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.logout_rounded,
+                  color: Colors.white70, size: 20),
+              onPressed: _confirmLogout,
+              padding: const EdgeInsets.all(8),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -304,7 +331,7 @@ class _CustomerLandingScreenState
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
+            borderRadius: BorderRadius.circular(24)),
         title: const Text('Keluar?',
             style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -315,7 +342,8 @@ class _CustomerLandingScreenState
             onPressed: () => Navigator.pop(context),
             child: const Text('Batal',
                 style:
-                    TextStyle(fontFamily: 'Poppins', color: Colors.grey))),
+                    TextStyle(fontFamily: 'Poppins', color: Colors.grey)),
+          ),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
@@ -325,7 +353,8 @@ class _CustomerLandingScreenState
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     color: Color(0xFFE94560),
-                    fontWeight: FontWeight.w700))),
+                    fontWeight: FontWeight.w700)),
+          ),
         ],
       ),
     );
@@ -333,32 +362,37 @@ class _CustomerLandingScreenState
 
   // ── BODY ─────────────────────────────────────────────────────
   Widget _buildBody() {
-    return Stack(children: [
-      Visibility(
-        visible: _tab == 0,
-        maintainState: true,
-        child: _HomeTab(onSwitchTab: switchTab)),
-      Visibility(
-        visible: _tab == 1,
-        maintainState: true,
-        child: const CustomerMyBookingsScreen()),
-      Visibility(
-        visible: _tab == 2,
-        maintainState: true,
-        child: const _EmbeddedOrderTracker()),
-      Visibility(
-        visible: _tab == 3,
-        maintainState: true,
-        child: const CustomerChatbotScreen()),
-    ]);
+    return Stack(
+      children: [
+        Visibility(
+          visible: _tab == 0,
+          maintainState: true,
+          child: _HomeTab(onSwitchTab: switchTab),
+        ),
+        Visibility(
+          visible: _tab == 1,
+          maintainState: true,
+          child: const CustomerMyBookingsScreen(),
+        ),
+        Visibility(
+          visible: _tab == 2,
+          maintainState: true,
+          child: const _EmbeddedOrderTracker(),
+        ),
+        Visibility(
+          visible: _tab == 3,
+          maintainState: true,
+          child: const CustomerChatbotScreen(),
+        ),
+      ],
+    );
   }
 
   // ── BOTTOM NAV ───────────────────────────────────────────────
   Widget _buildBottomNav() {
     const items = [
       (Icons.home_outlined, Icons.home_rounded, 'Beranda'),
-      (Icons.calendar_today_outlined, Icons.calendar_today_rounded,
-          'Booking'),
+      (Icons.calendar_today_outlined, Icons.calendar_today_rounded, 'Booking'),
       (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Pesanan'),
       (Icons.smart_toy_outlined, Icons.smart_toy_rounded, 'Chat AI'),
     ];
@@ -368,14 +402,14 @@ class _CustomerLandingScreenState
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, -2))
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -4))
         ],
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
           child: Row(
             children: List.generate(items.length, (i) {
               final (outline, filled, label) = items[i];
@@ -385,40 +419,55 @@ class _CustomerLandingScreenState
                   onTap: () => setState(() => _tab = i),
                   behavior: HitTestBehavior.opaque,
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
                       color: active
-                          ? const Color(0xFFE94560).withValues(alpha: 0.08)
+                          ? const Color(0xFFE94560).withValues(alpha: 0.1)
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(active ? filled : outline,
-                              color: active
-                                  ? const Color(0xFFE94560)
-                                  : const Color(0xFF9CA3AF),
-                              size: 22),
-                          const SizedBox(height: 3),
-                          Text(label,
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 10,
-                                  fontWeight: active
-                                      ? FontWeight.w700
-                                      : FontWeight.w400,
-                                  color: active
-                                      ? const Color(0xFFE94560)
-                                      : const Color(0xFF9CA3AF))),
-                        ]),
-                  )));
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(
+                            active ? filled : outline,
+                            key: ValueKey(active),
+                            color: active
+                                ? const Color(0xFFE94560)
+                                : const Color(0xFF9CA3AF),
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            fontWeight: active
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: active
+                                ? const Color(0xFFE94560)
+                                : const Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
             }),
-          ))));
+          ),
+        ),
+      ),
+    );
   }
 }
-
 // ════════════════════════════════════════════
 // EMBEDDED ORDER TRACKER
 // ════════════════════════════════════════════
@@ -527,96 +576,116 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
     return ListView(padding: const EdgeInsets.all(16), children: [
       if (_order != null)
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                    color: Color(0xFF1D9E75), shape: BoxShape.circle)),
-            const SizedBox(width: 4),
-            const Text('Live tracking aktif',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: Color(0xFF1D9E75))),
-          ]),
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1D9E75).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                        color: Color(0xFF1D9E75), shape: BoxShape.circle)),
+                const SizedBox(width: 6),
+                const Text('Live tracking aktif',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1D9E75))),
+              ],
+            ),
+          ),
         ),
 
       // Search box
       Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)
+                color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))
           ]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Masukkan Nomor Pesanan',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w700,
-                  fontSize: 14)),
-          const SizedBox(height: 4),
+                  fontSize: 16)),
+          const SizedBox(height: 6),
           const Text('Nomor pesanan ada di struk atau layar konfirmasi.',
               style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11, color: Colors.grey)),
-          const SizedBox(height: 10),
+                  fontFamily: 'Poppins', fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 16),
           Row(children: [
             Expanded(
-              child: TextField(
-                controller: _ctrl,
-                textCapitalization: TextCapitalization.characters,
-                onSubmitted: (_) => _search(),
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5),
-                decoration: InputDecoration(
-                  hintText: 'Contoh: WEB-20260327-1234',
-                  hintStyle: const TextStyle(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: TextField(
+                  controller: _ctrl,
+                  textCapitalization: TextCapitalization.characters,
+                  onSubmitted: (_) => _search(),
+                  style: const TextStyle(
                       fontFamily: 'Poppins',
-                      fontWeight: FontWeight.normal,
-                      color: Colors.grey,
-                      letterSpacing: 0),
-                  filled: true,
-                  fillColor: const Color(0xFFF3F4F6),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none)),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.2),
+                  decoration: const InputDecoration(
+                    hintText: 'Contoh: WEB-20260327-1234',
+                    hintStyle: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.normal,
+                        color: Colors.grey,
+                        letterSpacing: 0),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                ),
               )),
-            const SizedBox(width: 10),
-            ElevatedButton(
-              onPressed: _loading ? null : _search,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE94560),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(52, 52),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10))),
-              child: _loading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.search_rounded)),
+            const SizedBox(width: 12),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              child: ElevatedButton(
+                onPressed: _loading ? null : _search,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE94560),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(52, 52),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: _loading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2.5))
+                    : const Icon(Icons.search_rounded, size: 24)),
+            ),
           ]),
         ])),
 
       if (_error != null) ...[
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(12),
+            color: Colors.red.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: Colors.red.withValues(alpha: 0.2))),
           child: Row(children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 18),
-            const SizedBox(width: 10),
+            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(_error!,
                   style: const TextStyle(
@@ -627,21 +696,32 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
       ],
 
       if (_order != null) ...[
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         _OrderStatusCard(order: _order!, items: _items),
       ],
 
       if (_order == null && _error == null && !_loading) ...[
-        const SizedBox(height: 40),
-        const Center(
+        const SizedBox(height: 60),
+        Center(
           child: Column(children: [
-            Icon(Icons.receipt_long_outlined, size: 56, color: Colors.grey),
-            SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey[400]),
+            ),
+            const SizedBox(height: 16),
             Text(
               'Masukkan nomor pesanan di atas\nuntuk melihat status.',
+              textAlign: TextAlign.center,
               style: TextStyle(
-                  fontFamily: 'Poppins', color: Colors.grey, height: 1.6),
-              textAlign: TextAlign.center),
+                  fontFamily: 'Poppins', 
+                  fontSize: 14,
+                  color: Colors.grey[500], 
+                  height: 1.6),
+            ),
           ])),
       ],
     ]);
@@ -676,15 +756,14 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     if (ctx != null) {
       Scrollable.ensureVisible(
         ctx,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOutCubic,
       );
     } else {
-      // Fallback: scroll ke bawah jika key belum ter-render
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOutCubic,
       );
     }
   }
@@ -706,36 +785,43 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
             // ── Welcome banner
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0F3460).withValues(alpha: 0.2),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  )
+                ]),
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Selamat datang,',
                         style: TextStyle(
                             fontFamily: 'Poppins',
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontSize: 13)),
-                    const SizedBox(height: 4),
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 14)),
+                    const SizedBox(height: 6),
                     Text(displayName,
                         style: const TextStyle(
                             fontFamily: 'Poppins',
                             color: Colors.white,
-                            fontSize: 20,
+                            fontSize: 22,
                             fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     const Text('Apa yang ingin kamu lakukan hari ini?',
                         style: TextStyle(
                             fontFamily: 'Poppins',
-                            color: Colors.white60,
-                            fontSize: 12)),
+                            color: Colors.white70,
+                            fontSize: 13)),
                   ])),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // ── Nearest Branch Banner (NEW)
             branchesAsync.maybeWhen(
@@ -755,16 +841,33 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               ),
               orElse: () => const SizedBox.shrink(),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ── Quick Actions
-            const Text('Aksi Cepat',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: Color(0xFF1A1A2E))),
-            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Aksi Cepat',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        color: Color(0xFF1A1A2E))),
+                TextButton(
+                  onPressed: _scrollToBranches,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  child: const Text('Lihat Semua',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          color: Color(0xFFE94560),
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
             Row(children: [
               Expanded(
                 child: _ActionCard(
@@ -774,7 +877,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   color: const Color(0xFFE94560),
                   onTap: _scrollToBranches)),
             ]),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
             Row(children: [
               Expanded(
                 child: _ActionCard(
@@ -783,7 +886,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   subtitle: 'Reservasi sekarang',
                   color: const Color(0xFF0F3460),
                   onTap: () => onSwitchTab(1))),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: _ActionCard(
                   icon: Icons.receipt_long_rounded,
@@ -792,7 +895,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   color: const Color(0xFF1D9E75),
                   onTap: () => onSwitchTab(2))),
             ]),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
 
             // ── Cabang Kami
             Container(
@@ -801,52 +904,58 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                      fontSize: 18,
                       color: Color(0xFF1A1A2E)))),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             const Text('Pilih cabang untuk melihat menu & memesan',
                 style: TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 12,
+                    fontSize: 13,
                     color: Color(0xFF9CA3AF))),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
             branchesAsync.when(
               loading: () => const Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: EdgeInsets.all(32),
                   child: CircularProgressIndicator(
                       color: Color(0xFFE94560)))),
               error: (e, _) => Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.red.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
                   border:
                       Border.all(color: Colors.red.withValues(alpha: 0.2))),
                 child: const Row(children: [
-                  Icon(Icons.error_outline, color: Colors.red, size: 16),
-                  SizedBox(width: 8),
+                  Icon(Icons.error_outline, color: Colors.red, size: 18),
+                  SizedBox(width: 10),
                   Text('Gagal memuat cabang',
                       style: TextStyle(
                           fontFamily: 'Poppins',
-                          fontSize: 12,
+                          fontSize: 13,
                           color: Colors.red)),
                 ])),
               data: (branches) {
                 if (branches.isEmpty) {
                   return const Center(
-                    child: Text('Belum ada cabang aktif',
-                        style: TextStyle(
-                            fontFamily: 'Poppins', color: Colors.grey)));
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text('Belum ada cabang aktif',
+                          style: TextStyle(
+                              fontFamily: 'Poppins', color: Colors.grey)),
+                    ));
                 }
                 return Column(
                   children: branches
-                      .map((b) => _BranchCard(branch: b))
+                      .map((b) => Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _BranchCard(branch: b),
+                      ))
                       .toList());
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
           ]),
     );
   }
@@ -944,38 +1053,54 @@ class _PromptCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0F4FF),
-          border: Border.all(color: const Color(0xFFBFD0FF)),
-          borderRadius: BorderRadius.circular(12)),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFF0F4FF), Color(0xFFE8EEFF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(color: const Color(0xFFBFD0FF), width: 1.5),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F3460).withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            )
+          ]),
         child: Row(children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1A2E).withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10)),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12)),
             child: const Icon(Icons.location_on_rounded,
-                color: Color(0xFF0F3460), size: 20)),
-          const SizedBox(width: 12),
+                color: Colors.white, size: 22)),
+          const SizedBox(width: 14),
           const Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Temukan cabang terdekat',
                   style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                       color: Color(0xFF1A1A2E))),
-              SizedBox(height: 2),
+              SizedBox(height: 4),
               Text('Ketuk untuk aktifkan lokasi',
                   style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 11,
+                      fontSize: 12,
                       color: Color(0xFF6B7280))),
             ])),
-          const Icon(Icons.chevron_right, color: Color(0xFF0F3460), size: 20),
+          const Icon(Icons.chevron_right, color: Color(0xFF0F3460), size: 24),
         ]),
       ),
     );
@@ -988,24 +1113,29 @@ class _LoadingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F4FF),
-        borderRadius: BorderRadius.circular(12)),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF0F4FF), Color(0xFFE8EEFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16)),
       child: const Row(children: [
         SizedBox(
-          width: 18,
-          height: 18,
+          width: 22,
+          height: 22,
           child: CircularProgressIndicator(
-              strokeWidth: 2,
+              strokeWidth: 2.5,
               valueColor:
                   AlwaysStoppedAnimation(Color(0xFF0F3460)))),
-        SizedBox(width: 12),
+        SizedBox(width: 14),
         Text('Mencari cabang terdekat...',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 13,
-                color: Color(0xFF6B7280))),
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF0F3460))),
       ]),
     );
   }
@@ -1057,24 +1187,35 @@ class _ResultCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0F4FF),
-          border: Border.all(color: const Color(0xFFBFD0FF)),
-          borderRadius: BorderRadius.circular(12)),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFF0F4FF), Color(0xFFE8EEFF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(color: const Color(0xFFBFD0FF), width: 1.5),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F3460).withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            )
+          ]),
         child: Row(children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(12)),
             child: const Icon(Icons.store_rounded,
-                color: Colors.white, size: 18)),
-          const SizedBox(width: 12),
+                color: Colors.white, size: 20)),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
@@ -1082,50 +1223,50 @@ class _ResultCard extends StatelessWidget {
                   child: Text(name,
                       style: const TextStyle(
                           fontFamily: 'Poppins',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
                           color: Color(0xFF1A1A2E)),
                       overflow: TextOverflow.ellipsis)),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: isOpen
                         ? const Color(0xFFE8F5E9)
                         : const Color(0xFFFCE4EC),
-                    borderRadius: BorderRadius.circular(4)),
+                    borderRadius: BorderRadius.circular(6)),
                   child: Text(
                     isOpen ? 'Buka' : 'Tutup',
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: isOpen
                             ? const Color(0xFF2E7D32)
                             : const Color(0xFFC62828)))),
               ]),
-              const SizedBox(height: 3),
+              const SizedBox(height: 6),
               Row(children: [
                 const Icon(Icons.location_on_outlined,
-                    size: 12, color: Color(0xFF0F3460)),
-                const SizedBox(width: 3),
+                    size: 14, color: Color(0xFF0F3460)),
+                const SizedBox(width: 4),
                 Text(_formatDist(distanceKm),
                     style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF0F3460))),
                 if (address.isNotEmpty) ...[
-                  const SizedBox(width: 4),
-                  const Text('·',
+                  const SizedBox(width: 6),
+                  const Text('•',
                       style: TextStyle(color: Color(0xFF9CA3AF))),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(address,
                         style: const TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 11,
+                            fontSize: 12,
                             color: Color(0xFF9CA3AF)),
                         overflow: TextOverflow.ellipsis)),
                 ],
@@ -1134,12 +1275,15 @@ class _ResultCard extends StatelessWidget {
           const SizedBox(width: 8),
           Column(children: [
             const Icon(Icons.chevron_right,
-                color: Color(0xFF0F3460), size: 20),
-            const SizedBox(height: 4),
+                color: Color(0xFF0F3460), size: 22),
+            const SizedBox(height: 6),
             GestureDetector(
               onTap: onRefresh,
-              child: const Icon(Icons.refresh_rounded,
-                  color: Color(0xFF9CA3AF), size: 16)),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                child: const Icon(Icons.refresh_rounded,
+                    color: Color(0xFF9CA3AF), size: 18)),
+            ),
           ]),
         ]),
       ),
@@ -1155,28 +1299,35 @@ class _ErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.red.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.red.withValues(alpha: 0.2))),
       child: Row(children: [
-        const Icon(Icons.error_outline, color: Colors.red, size: 16),
-        const SizedBox(width: 8),
+        const Icon(Icons.error_outline, color: Colors.red, size: 20),
+        const SizedBox(width: 12),
         Expanded(
           child: Text(message,
               style: const TextStyle(
                   fontFamily: 'Poppins',
-                  fontSize: 12,
+                  fontSize: 13,
                   color: Colors.red))),
         GestureDetector(
           onTap: onRetry,
-          child: const Text('Coba lagi',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 12,
-                  color: Color(0xFF0F3460),
-                  fontWeight: FontWeight.w600))),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F3460).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text('Coba lagi',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: Color(0xFF0F3460),
+                    fontWeight: FontWeight.w600))),
+        ),
       ]),
     );
   }
@@ -1249,40 +1400,44 @@ class _LocationPermissionSheet extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       padding: EdgeInsets.fromLTRB(
-          24, 12, 24, MediaQuery.of(context).padding.bottom + 24),
+          24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Handle bar
           Container(
-            width: 40,
-            height: 4,
+            width: 48,
+            height: 5,
             decoration: BoxDecoration(
                 color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 24),
+                borderRadius: BorderRadius.circular(3))),
+          const SizedBox(height: 28),
 
           // Icon
           Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A1A2E).withValues(alpha: 0.06),
+            width: 80,
+            height: 80,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle),
             child: const Icon(Icons.location_on_rounded,
-                size: 36, color: Color(0xFF0F3460))),
-          const SizedBox(height: 18),
+                size: 40, color: Colors.white)),
+          const SizedBox(height: 20),
 
           // Judul
           const Text('Izinkan Akses Lokasi',
               style: TextStyle(
                   fontFamily: 'Poppins',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
                   color: Color(0xFF1A1A2E))),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
           // Deskripsi
           Text(
@@ -1290,18 +1445,20 @@ class _LocationPermissionSheet extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 13,
+                fontSize: 14,
                 color: Colors.grey[600],
                 height: 1.5)),
-          const SizedBox(height: 18),
+          const SizedBox(height: 22),
 
           // Benefit rows
           _benefitRow(Icons.store_rounded, 'Cabang terdekat dari posisi Anda'),
+          const SizedBox(height: 8),
           _benefitRow(Icons.access_time_rounded,
               'Info buka/tutup yang relevan'),
+          const SizedBox(height: 8),
           _benefitRow(Icons.navigation_rounded, 'Langsung navigasi ke cabang'),
 
-          const SizedBox(height: 22),
+          const SizedBox(height: 28),
 
           // Tombol Izinkan
           SizedBox(
@@ -1311,16 +1468,16 @@ class _LocationPermissionSheet extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1A1A2E),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(14)),
                 elevation: 0),
               child: const Text('Izinkan Akses Lokasi',
                   style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600)))),
-          const SizedBox(height: 8),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)))),
+          const SizedBox(height: 10),
 
           // Tombol Lewati
           SizedBox(
@@ -1330,22 +1487,24 @@ class _LocationPermissionSheet extends StatelessWidget {
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12))),
+                    borderRadius: BorderRadius.circular(14))),
               child: Text('Lewati',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 14,
                       color: Colors.grey[500],
-                      fontWeight: FontWeight.w500)))),
+                      fontWeight: FontWeight.w600)))),
+
+          const SizedBox(height: 12),
 
           // Privacy note
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.lock_outline, size: 11, color: Colors.grey[400]),
-            const SizedBox(width: 4),
+            Icon(Icons.lock_outline, size: 12, color: Colors.grey[400]),
+            const SizedBox(width: 6),
             Text('Lokasi hanya digunakan saat aplikasi terbuka',
                 style: TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 10,
+                    fontSize: 11,
                     color: Colors.grey[400])),
           ]),
         ],
@@ -1354,24 +1513,26 @@ class _LocationPermissionSheet extends StatelessWidget {
   }
 
   Widget _benefitRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E).withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(8)),
-          child: Icon(icon, size: 15, color: const Color(0xFF0F3460))),
-        const SizedBox(width: 12),
-        Text(text,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: Color(0xFF424242))),
-      ]),
-    );
+    return Row(children: [
+      Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, size: 18, color: Colors.white)),
+      const SizedBox(width: 14),
+      Text(text,
+          style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 13,
+              color: Color(0xFF424242),
+              fontWeight: FontWeight.w500)),
+    ]);
   }
 }
 
@@ -1412,33 +1573,33 @@ class _BranchCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('/customer/menu/${branch['id']}'),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2))
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4))
           ]),
         child: Column(children: [
           // Info baris
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
             child: Row(children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight),
-                  borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(14)),
                 child: const Icon(Icons.store_rounded,
-                    color: Colors.white, size: 22)),
-              const SizedBox(width: 14),
+                    color: Colors.white, size: 26)),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1449,47 +1610,47 @@ class _BranchCard extends StatelessWidget {
                               style: const TextStyle(
                                   fontFamily: 'Poppins',
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 14,
+                                  fontSize: 16,
                                   color: Color(0xFF1A1A2E)),
                               overflow: TextOverflow.ellipsis)),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: isOpen
                                 ? const Color(0xFFE8F5E9)
                                 : const Color(0xFFFCE4EC),
-                            borderRadius: BorderRadius.circular(4)),
+                            borderRadius: BorderRadius.circular(6)),
                           child: Text(
                             isOpen ? 'Buka' : 'Tutup',
                             style: TextStyle(
                                 fontFamily: 'Poppins',
-                                fontSize: 9,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 color: isOpen
                                     ? const Color(0xFF2E7D32)
                                     : const Color(0xFFC62828)))),
                       ]),
                       if (address.isNotEmpty) ...[
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 4),
                         Text(address,
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: Color(0xFF9CA3AF)),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis),
                       ],
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Row(children: [
                         const Icon(Icons.access_time_outlined,
-                            size: 12, color: Color(0xFF6B7280)),
-                        const SizedBox(width: 4),
+                            size: 14, color: Color(0xFF6B7280)),
+                        const SizedBox(width: 6),
                         Text('$open – $close WIB',
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: Color(0xFF6B7280))),
                       ]),
                     ])),
@@ -1502,13 +1663,13 @@ class _BranchCard extends StatelessWidget {
                 : null,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
                 color: isOpen
                     ? const Color(0xFFE94560)
                     : const Color(0xFFE5E7EB),
                 borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(14))),
+                    bottom: Radius.circular(20))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -1517,13 +1678,13 @@ class _BranchCard extends StatelessWidget {
                         ? Icons.restaurant_menu_rounded
                         : Icons.do_not_disturb_alt_outlined,
                     color: isOpen ? Colors.white : const Color(0xFF9CA3AF),
-                    size: 16),
-                  const SizedBox(width: 8),
+                    size: 18),
+                  const SizedBox(width: 10),
                   Text(
                     isOpen ? '🍽️ Pesan Sekarang' : 'Sedang Tutup',
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: isOpen
                             ? Colors.white
@@ -1551,33 +1712,46 @@ class _ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.all(16),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [color, color.withValues(alpha: 0.85)],
+        ),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-              color: color.withValues(alpha: 0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4))
+              color: color.withValues(alpha: 0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 6))
         ]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: Colors.white, size: 22),
-        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: Colors.white, size: 24),
+        ),
+        const SizedBox(height: 14),
         Text(label,
             style: const TextStyle(
                 fontFamily: 'Poppins',
                 color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 13)),
-        const SizedBox(height: 2),
+                fontWeight: FontWeight.w800,
+                fontSize: 15)),
+        const SizedBox(height: 4),
         Text(subtitle,
             style: TextStyle(
                 fontFamily: 'Poppins',
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 10)),
-      ])));
+                color: Colors.white.withValues(alpha: 0.85),
+                fontSize: 11)),
+      ])),
+  );
 }
 
 // ════════════════════════════════════════════
@@ -1624,13 +1798,13 @@ class _OrderStatusCard extends StatelessWidget {
     final notes = order['notes'] as String?;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)
+              color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))
         ]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -1642,51 +1816,51 @@ class _OrderStatusCard extends StatelessWidget {
                       style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w800,
-                          fontSize: 16)),
+                          fontSize: 18)),
                   if (customerName != null)
                     Text('Atas nama: $customerName',
                         style: const TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 12,
+                            fontSize: 13,
                             color: Colors.grey)),
                 ])),
           Container(
             padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20)),
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(24)),
             child: Text(statusLabel,
                 style: TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: statusColor))),
         ]),
         if (statusMsg.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(10)),
+              color: statusColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12)),
             child: Text(statusMsg,
                 style: TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 12,
+                    fontSize: 13,
                     color: statusColor,
                     height: 1.4))),
         ],
-        const Divider(height: 20),
+        const Divider(height: 24, thickness: 1),
         _StatusProgress(status: status),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         const Text('Item Pesanan',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
-                fontSize: 13)),
-        const SizedBox(height: 8),
+                fontSize: 15)),
+        const SizedBox(height: 12),
         ...items.map((item) {
           final name =
               (item['menu_items'] as Map?)?['name'] as String? ?? '-';
@@ -1694,59 +1868,78 @@ class _OrderStatusCard extends StatelessWidget {
           final sub = (item['subtotal'] as num?)?.toDouble() ?? 0;
           final special = item['special_requests'] as String?;
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Text('${qty}x ',
-                        style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey,
-                            fontSize: 12)),
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text('${qty}x',
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Color(0xFFE94560),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(name,
                           style: const TextStyle(
-                              fontFamily: 'Poppins', fontSize: 12))),
+                              fontFamily: 'Poppins', fontSize: 13))),
                     Text('Rp ${_fmt(sub)}',
                         style: const TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500)),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
                   ]),
                   if (special != null && special.isNotEmpty)
                     Padding(
                       padding:
-                          const EdgeInsets.only(left: 24, top: 2),
-                      child: Text('⚡ $special',
-                          style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 11,
-                              color: Color(0xFFD97706)))),
+                          const EdgeInsets.only(left: 40, top: 6),
+                      child: Row(children: [
+                        const Icon(Icons.edit_note,
+                            size: 12, color: Color(0xFFD97706)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(special,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 11,
+                                  color: Color(0xFFD97706))),
+                        ),
+                      ])),
                 ]));
         }),
         if (notes != null && notes.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(8)),
+              borderRadius: BorderRadius.circular(12)),
             child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.notes, size: 14, color: Colors.grey),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.notes, size: 16, color: Colors.grey),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(notes,
                         style: const TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 11,
+                            fontSize: 12,
                             color: Colors.grey))),
                 ])),
         ],
-        const Divider(height: 16),
+        const Divider(height: 24, thickness: 1),
         Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1754,21 +1947,34 @@ class _OrderStatusCard extends StatelessWidget {
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
-                      fontSize: 14)),
+                      fontSize: 16)),
               Text('Rp ${_fmt(total)}',
                   style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w800,
-                      fontSize: 15,
+                      fontSize: 18,
                       color: Color(0xFFE94560))),
             ]),
         if (status != 'paid' && status != 'cancelled') ...[
-          const SizedBox(height: 10),
-          const Text('💡 Pembayaran di kasir saat pesanan siap.',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 11,
-                  color: Colors.grey)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F4FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Row(children: [
+              Icon(Icons.info_outline, size: 14, color: Color(0xFF0F3460)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('💡 Pembayaran di kasir saat pesanan siap.',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: Color(0xFF0F3460))),
+              ),
+            ]),
+          ),
         ],
       ]));
   }
@@ -1798,19 +2004,26 @@ class _StatusProgress extends StatelessWidget {
 
     if (isCancelled) {
       return Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: const Row(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.cancel_outlined,
-                  color: Color(0xFFE94560), size: 18),
-              SizedBox(width: 6),
-              Text('Pesanan dibatalkan',
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.cancel_outlined,
+                    color: Color(0xFFE94560), size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Text('Pesanan dibatalkan',
                   style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 12,
+                      fontSize: 13,
                       color: Color(0xFFE94560),
-                      fontWeight: FontWeight.w600)),
+                      fontWeight: FontWeight.w700)),
             ]));
     }
 
@@ -1827,11 +2040,18 @@ class _StatusProgress extends StatelessWidget {
               child: Column(children: [
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
-                  width: isCurrent ? 24 : 20,
-                  height: isCurrent ? 24 : 20,
+                  width: isCurrent ? 32 : 24,
+                  height: isCurrent ? 32 : 24,
                   decoration: BoxDecoration(
+                    gradient: isActive
+                        ? const LinearGradient(
+                            colors: [Color(0xFFE94560), Color(0xFFC93550)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
                     color: isActive
-                        ? const Color(0xFFE94560)
+                        ? null
                         : const Color(0xFFE5E7EB),
                     shape: BoxShape.circle,
                     boxShadow: isCurrent
@@ -1839,34 +2059,43 @@ class _StatusProgress extends StatelessWidget {
                             BoxShadow(
                                 color: const Color(0xFFE94560)
                                     .withValues(alpha: 0.4),
-                                blurRadius: 8)
+                                blurRadius: 10,
+                                offset: const Offset(0, 2))
                           ]
                         : []),
                   child: isActive
                       ? const Icon(Icons.check,
-                          color: Colors.white, size: 12)
+                          color: Colors.white, size: 16)
                       : null),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(labels[idx],
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: isCurrent
                             ? FontWeight.w700
-                            : FontWeight.normal,
+                            : FontWeight.w500,
                         color: isActive
                             ? const Color(0xFFE94560)
-                            : Colors.grey),
+                            : Colors.grey[400]),
                     textAlign: TextAlign.center),
               ])),
             if (!isLast)
               Expanded(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
-                  height: 2,
-                  color: idx < currentIdx
-                      ? const Color(0xFFE94560)
-                      : const Color(0xFFE5E7EB))),
+                  height: 3,
+                  decoration: BoxDecoration(
+                    gradient: idx < currentIdx
+                        ? const LinearGradient(
+                            colors: [Color(0xFFE94560), Color(0xFFC93550)],
+                          )
+                        : null,
+                    color: idx < currentIdx
+                        ? null
+                        : const Color(0xFFE5E7EB),
+                  ),
+                )),
           ]));
       }).toList());
   }
