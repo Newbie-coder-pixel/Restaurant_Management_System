@@ -148,38 +148,38 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     switch (s) {
       case OrderStatus.new_:
       case OrderStatus.created:   return AppColors.orderNew;
-      case OrderStatus.paid:      return const Color(0xFF7C3AED);
       case OrderStatus.preparing: return AppColors.orderPreparing;
       case OrderStatus.ready:     return AppColors.orderReady;
       case OrderStatus.served:    return AppColors.primary;
       case OrderStatus.cancelled: return AppColors.textHint;
+      default:                    return AppColors.textHint;
     }
   }
 
   OrderStatus? _nextStatus(OrderStatus current) {
     switch (current) {
       case OrderStatus.new_:
-      case OrderStatus.paid:      return OrderStatus.preparing;
-      case OrderStatus.preparing: return OrderStatus.ready;
-      case OrderStatus.ready:     return OrderStatus.served;
-      default:                    return null;
+      case OrderStatus.created:    return OrderStatus.preparing;
+      case OrderStatus.preparing:  return OrderStatus.ready;
+      case OrderStatus.ready:      return OrderStatus.served;
+      default:                     return null;
     }
   }
 
   String _nextStatusLabel(OrderStatus current) {
     switch (current) {
       case OrderStatus.new_:
-      case OrderStatus.paid:      return 'Mulai Masak';
-      case OrderStatus.preparing: return 'Tandai Siap';
-      case OrderStatus.ready:     return 'Tandai Tersaji';
-      default:                    return '';
+      case OrderStatus.created:    return 'Mulai Masak';
+      case OrderStatus.preparing:  return 'Tandai Siap';
+      case OrderStatus.ready:      return '✓ Sudah Diantar';
+      default:                     return '';
     }
   }
 
   IconData _nextStatusIcon(OrderStatus current) {
     switch (current) {
       case OrderStatus.new_:
-      case OrderStatus.paid:      return Icons.soup_kitchen_outlined;
+      case OrderStatus.created:    return Icons.soup_kitchen_outlined;
       case OrderStatus.preparing: return Icons.check_circle_outline;
       case OrderStatus.ready:     return Icons.room_service_outlined;
       default:                    return Icons.arrow_forward;
@@ -229,6 +229,12 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       await Supabase.instance.client.from('orders').update({
         'status': next.dbValue, 'staff_id': staff?.id, 'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', order.id);
+
+      // Sync order_items status agar konsisten dengan orders
+      await Supabase.instance.client.from('order_items').update({
+        'status': next.dbValue,
+      }).eq('order_id', order.id);
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Order #${order.orderNumber} → ${next.label}'),
@@ -245,7 +251,6 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   // ── Group definitions ──────────────────────────────────────────────────────
   static const _groupDefs = [
-    _GroupDef('Menunggu Bayar',  Icons.hourglass_top_outlined,     Color(0xFF7C3AED)),
     _GroupDef('Antri Masak',     Icons.restaurant_menu_outlined,   Color(0xFFFF9800)),
     _GroupDef('Sedang Dimasak',  Icons.outdoor_grill_outlined,     Color(0xFFE53935)),
     _GroupDef('Siap Disajikan',  Icons.dining_outlined,            Color(0xFF43A047)),
@@ -256,9 +261,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     final groups = <String, List<OrderModel>>{for (final g in _groupDefs) g.name: []};
     for (final o in orders) {
       switch (o.status) {
-        case OrderStatus.created:   groups['Menunggu Bayar']!.add(o); break;
         case OrderStatus.new_:
-        case OrderStatus.paid:      groups['Antri Masak']!.add(o); break;
+        case OrderStatus.created:   groups['Antri Masak']!.add(o); break;
         case OrderStatus.preparing: groups['Sedang Dimasak']!.add(o); break;
         case OrderStatus.ready:     groups['Siap Disajikan']!.add(o); break;
         case OrderStatus.served:    groups['Sudah Tersaji']!.add(o); break;
@@ -567,24 +571,36 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           // Action button
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: o.status == OrderStatus.created
-                ? _infoChip(Icons.qr_code_scanner, 'Menunggu customer bayar ke kasir', const Color(0xFF7C3AED))
-                : nextS != null
+            child: nextS != null
                     ? SizedBox(
                         width: double.infinity,
+                        // Tombol "Sudah Diantar" (ready→served) tampil lebih besar & hijau terang
+                        // agar waiter mudah tap setelah antar ke meja
                         child: ElevatedButton.icon(
                           onPressed: isUpdating ? null : () => _updateOrderStatus(o),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _statusColor(nextS), foregroundColor: Colors.white,
+                            backgroundColor: o.status == OrderStatus.ready
+                                ? Colors.green.shade600
+                                : _statusColor(nextS),
+                            foregroundColor: Colors.white,
+                            elevation: o.status == OrderStatus.ready ? 3 : 0,
+                            shadowColor: o.status == OrderStatus.ready
+                                ? Colors.green.withValues(alpha: 0.4)
+                                : null,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(vertical: 10)),
+                            padding: EdgeInsets.symmetric(
+                              vertical: o.status == OrderStatus.ready ? 13 : 10)),
                           icon: isUpdating
                               ? const SizedBox(width: 16, height: 16,
                                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                               : Icon(_nextStatusIcon(o.status), size: 18),
-                          label: Text(isUpdating ? 'Memperbarui...' : _nextStatusLabel(o.status),
-                            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600))))
-                    : o.status == OrderStatus.served && !isQr
+                          label: Text(
+                            isUpdating ? 'Memperbarui...' : _nextStatusLabel(o.status),
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              fontSize: o.status == OrderStatus.ready ? 14 : 13))))
+                    : o.status == OrderStatus.served
                         ? _infoChip(Icons.point_of_sale_outlined, 'Menunggu pembayaran di kasir', Colors.orange)
                         : _infoChip(Icons.check_circle_outline, 'Selesai', AppColors.available),
           ),

@@ -18,7 +18,6 @@ import '../../features/customer/presentation/customer_reset_password_screen.dart
 
 import '../../features/qr_order/presentation/qr_menu_screen.dart';
 import '../../features/qr_order/presentation/qr_cart_screen.dart';
-import '../../features/qr_order/presentation/qr_payment_screen.dart';
 import '../../features/qr_order/presentation/qr_order_tracker_screen.dart';
 
 import '../models/staff_role.dart';
@@ -52,8 +51,6 @@ abstract class AppRoutes {
   // QR Order Routes
   static const qrMenu       = '/qr/:tableId';
   static const qrCart       = '/qr/:tableId/cart';
-  static const qrPayment    = '/qr/:tableId/payment';
-  static const qrQris       = '/qr/:tableId/payment/qris';
   static const qrTrack      = '/qr/:tableId/track/:orderId';
 }
 
@@ -204,35 +201,6 @@ GoRoute(
           child: QrCartScreen(tableId: tableId),
         );
       },
-    ),
-    GoRoute(
-      path: 'payment',
-      name: 'qrPayment',
-      pageBuilder: (context, state) {
-        final tableId = state.pathParameters['tableId']!;
-        return MaterialPage(
-          key: state.pageKey,
-          child: QrPaymentScreen(tableId: tableId),
-        );
-      },
-      routes: [
-        GoRoute(
-          path: 'qris',
-          name: 'qrQris',
-          pageBuilder: (context, state) {
-            final tableId = state.pathParameters['tableId']!;
-            final extra = state.extra as Map<String, dynamic>? ?? {};
-            return MaterialPage(
-              key: state.pageKey,
-              child: QrQrisScreen(
-                tableId: tableId,
-                orderId: extra['orderId'] ?? '',
-                totalAmount: (extra['totalAmount'] as num?)?.toDouble() ?? 0.0,
-              ),
-            );
-          },
-        ),
-      ],
     ),
     // Perbaikan Route Tracker
     GoRoute(

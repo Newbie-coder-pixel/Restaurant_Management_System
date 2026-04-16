@@ -14,6 +14,7 @@ class KDSScreen extends ConsumerStatefulWidget {
 
 class _KDSScreenState extends ConsumerState<KDSScreen> {
   List<OrderModel> _orders = [];
+  int _readyCount = 0; // [OPSI-B] jumlah order 'ready' menunggu waiter
   bool _isLoading = true;
   String? _branchId;
   RealtimeChannel? _channel;
@@ -52,6 +53,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       return;
     }
     try {
+      // ── 1. Order aktif dapur (new / created / preparing) ────────────────────
       final res = await Supabase.instance.client
           .from('orders')
           .select('''
@@ -63,12 +65,21 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             )
           ''')
           .eq('branch_id', _branchId!)
-          // 'new' = order internal waiter, 'paid' = QR sudah bayar, 'preparing' = dimasak
-          .inFilter('status', ['new', 'paid', 'preparing'])
+          // 'new' = order internal waiter, 'created' = QR order baru masuk, 'preparing' = sedang dimasak
+          .inFilter('status', ['new', 'created', 'preparing'])
           .order('created_at');
+
+      // ── 2. [OPSI-B] Hitung berapa order 'ready' yang belum diantar waiter ───
+      final readyRes = await Supabase.instance.client
+          .from('orders')
+          .select('id')
+          .eq('branch_id', _branchId!)
+          .eq('status', 'ready');
+
       if (mounted) {
         setState(() {
           _orders = (res as List).map((e) => OrderModel.fromJson(e)).toList();
+          _readyCount = (readyRes as List).length; // [OPSI-B]
           _isLoading = false;
         });
       }
@@ -119,13 +130,14 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       'status': 'ready',
       'prepared_at': DateTime.now().toIso8601String(),
     }).eq('order_id', orderId);
+    // [OPSI-B] Setelah ready, order hilang dari KDS dapur — waiter yang mark served
+    // lewat order_screen mereka (lihat: order_screen.dart _markServed)
   }
 
   bool _isNewOrder(OrderModel order) =>
-      order.status == OrderStatus.new_ || order.status == OrderStatus.paid;
+      order.status == OrderStatus.new_ || order.status == OrderStatus.created;
 
-  bool _isQrOrder(OrderModel order) =>
-      order.orderType == 'qr_order' || order.status == OrderStatus.paid;
+  bool _isQrOrder(OrderModel order) => order.orderType == 'qr_order';
 
   @override
   Widget build(BuildContext context) {
@@ -156,6 +168,26 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             )),
         ]),
         actions: [
+          // ── [OPSI-B] Badge: order ready menunggu waiter ─────────────────────
+          if (_readyCount > 0)
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.shade600,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.room_service_outlined, size: 13, color: Colors.white),
+                const SizedBox(width: 4),
+                Text('$_readyCount Siap Antar',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  )),
+              ]),
+            ),
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -175,24 +207,52 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             onPressed: _load),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _orders.isEmpty
-              ? _buildEmptyState(colorScheme)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 340,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 0.70,
+      body: Column(children: [
+        // ── [OPSI-B] Banner notifikasi untuk waiter ──────────────────────────
+        if (_readyCount > 0) _buildReadyBanner(colorScheme),
+        // ── Order list aktif dapur ────────────────────────────────────────────
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _orders.isEmpty
+                  ? _buildEmptyState(colorScheme)
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: GridView.builder(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 340,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 0.70,
+                        ),
+                        itemCount: _orders.length,
+                        itemBuilder: (_, i) => _buildKDSCard(_orders[i], colorScheme),
+                      ),
                     ),
-                    itemCount: _orders.length,
-                    itemBuilder: (_, i) => _buildKDSCard(_orders[i], colorScheme),
-                  ),
-                ),
+        ),
+      ]),
+    );
+  }
+
+  // ── [OPSI-B] Banner hijau: reminder ke waiter di layar dapur ──────────────
+  Widget _buildReadyBanner(ColorScheme colorScheme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: Colors.green.shade600,
+      child: Row(children: [
+        const Icon(Icons.room_service_outlined, color: Colors.white, size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            '$_readyCount order siap diantar — waiter, cek Order Screen!',
+            style: const TextStyle(
+              fontFamily: 'Poppins', color: Colors.white,
+              fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -329,7 +389,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
             children: order.items.map((item) {
-              // Ambil special_requests dari item
               final notes = item.specialRequests;
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -357,7 +416,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
                         style: TextStyle(
                           fontFamily: 'Poppins', fontWeight: FontWeight.w600,
                           color: colorScheme.onSurface, fontSize: 13)),
-                      // ✅ FIX: tampilkan notes/special_requests
                       if (notes != null && notes.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),

@@ -747,35 +747,99 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
 
 // ─── Tracker Actions ──────────────────────────────────────────────────────────
 
-class _TrackerActions extends StatelessWidget {
+class _TrackerActions extends StatefulWidget {
   final QrOrderModel order;
 
   const _TrackerActions({required this.order});
 
   @override
+  State<_TrackerActions> createState() => _TrackerActionsState();
+}
+
+class _TrackerActionsState extends State<_TrackerActions> {
+  bool _billRequested = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isServed = widget.order.status == QrOrderStatus.served;
+    final isPaid = widget.order.status == QrOrderStatus.paid;
 
     return Column(
       children: [
-        // Pesan lagi setelah lunas
-        if (order.status == QrOrderStatus.paid)
+        // ── Tombol Minta Bill (hanya saat served) ──────────────────────────
+        if (isServed) ...[
+          if (!_billRequested)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  setState(() => _billRequested = true);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Kasir sedang menyiapkan bill kamu!'),
+                      duration: Duration(seconds: 3),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: const Icon(Icons.receipt_outlined),
+                label: const Text(
+                  'Minta Bill',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.green.shade300),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle_outline,
+                      color: Colors.green.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Bill sudah diminta — kasir akan datang',
+                    style: TextStyle(
+                      color: Colors.green.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 10),
+        ],
+
+        // ── Pesan lagi setelah lunas ───────────────────────────────────────
+        if (isPaid) ...[
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () {
-                // Go back to menu for same table
-                context.go('/qr/${order.tableId}');
-              },
+              onPressed: () => context.go('/qr/${widget.order.tableId}'),
               icon: const Icon(Icons.add_shopping_cart_outlined),
               label: const Text('Pesan Lagi'),
             ),
           ),
+          const SizedBox(height: 10),
+        ],
 
-        const SizedBox(height: 10),
-
-        // Help info
+        // ── Help info ─────────────────────────────────────────────────────
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -784,8 +848,7 @@ class _TrackerActions extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.help_outline,
-                  size: 16, color: colorScheme.outline),
+              Icon(Icons.help_outline, size: 16, color: colorScheme.outline),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

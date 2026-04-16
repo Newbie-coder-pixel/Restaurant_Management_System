@@ -41,23 +41,11 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     }
 
     try {
-      // Kasir logic:
-      // - QR Order   -> muncul saat status 'created' + order_type 'qr_order' (bayar SEBELUM makan)
-      // - Staff Order -> muncul saat status 'served' + payment_status 'pending' (bayar SETELAH makan)
-      //   Catatan: QR order tidak akan pernah 'served' dengan payment_status 'pending'
-      //   karena QR order harus bayar dulu sebelum dimasak — aman filter by served saja untuk staff
-      final qrRes = await Supabase.instance.client
-          .from('orders')
-          .select('*, restaurant_tables(table_number), order_items(*)')
-          .eq('branch_id', _branchId!)
-          .eq('order_type', 'qr_order')
-          .eq('status', 'created')
-          .eq('payment_status', 'pending')
-          .order('created_at', ascending: true);
-
-      // Staff order: served + belum dibayar
-      // QR order tidak mungkin served dengan payment_status pending karena harus bayar dulu
-      final staffRes = await Supabase.instance.client
+      // Kasir logic (flow baru: bayar SETELAH makan untuk semua order type):
+      // - QR Order   -> muncul saat status 'served' + payment_status 'pending'
+      // - Staff Order -> muncul saat status 'served' + payment_status 'pending'
+      // Kedua tipe order sekarang bayar setelah makan, cukup 1 query.
+      final res = await Supabase.instance.client
           .from('orders')
           .select('*, restaurant_tables(table_number), order_items(*)')
           .eq('branch_id', _branchId!)
@@ -65,11 +53,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           .eq('payment_status', 'pending')
           .order('created_at', ascending: true);
 
-      final combined = [...(qrRes as List), ...(staffRes as List)];
-
       if (mounted) {
         setState(() {
-          _orders = combined
+          _orders = (res as List)
               .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
               .toList();
           _isLoading = false;
@@ -659,14 +645,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }) async {
     final staff = ref.read(currentStaffProvider);
 
-    // Flow pembayaran:
-    // - QR Order ('created' → 'paid'): baru dimasak setelah bayar → masuk KDS
-    // - Staff Order ('served' → tetap 'served'): sudah makan, tinggal bayar → tidak masuk KDS lagi
-    final isQrOrder = order.orderType == 'qr_order';
-    final finalStatus = isQrOrder ? 'paid' : order.status.dbValue;
-
+    // Flow pembayaran baru: semua order (QR maupun Staff) bayar setelah makan.
+    // Status selalu → 'paid' setelah pembayaran dikonfirmasi kasir.
     await Supabase.instance.client.from('orders').update({
-      'status': finalStatus,
+      'status': 'paid',
       'payment_status': 'paid',
       'cashier_id': staff?.id,
       'updated_at': DateTime.now().toIso8601String(),
