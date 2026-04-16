@@ -18,11 +18,18 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
   String? _selectedCategoryId;
   bool _loading = true;
   String _search = '';
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -63,97 +70,198 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F5),
-      body: Column(children: [
-        _buildHeader(),
-        _buildSearchBar(),
-        _buildCategoryChips(),
-        Expanded(child: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE94560)))
-          : _filteredItems.isEmpty
-              ? const Center(child: Text('Tidak ada menu',
-                  style: TextStyle(fontFamily: 'Poppins', color: Colors.grey)))
-              : GridView.builder(
-                  padding: EdgeInsets.fromLTRB(16, 8, 16,
-                    cart.isEmpty ? 16 : 100),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 200,
-                    childAspectRatio: 0.72,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12),
-                  itemCount: _filteredItems.length,
-                  itemBuilder: (_, i) => _MenuCard(
-                    item: _filteredItems[i],
-                    cartQty: cart.items
-                      .where((c) => c.menuItemId == _filteredItems[i]['id'])
-                      .fold(0, (s, c) => s + c.quantity),
-                    onAdd: () => ref.read(cartProvider.notifier).addItem(CartItem(
-                      menuItemId: _filteredItems[i]['id'],
-                      name: _filteredItems[i]['name'],
-                      price: (_filteredItems[i]['price'] as num).toDouble(),
-                      imageUrl: _filteredItems[i]['image_url'],
-                    )),
-                    onRemove: () => ref.read(cartProvider.notifier)
-                      .updateQuantity(_filteredItems[i]['id'],
-                        (cart.items.firstWhere(
-                          (c) => c.menuItemId == _filteredItems[i]['id'],
-                          orElse: () => CartItem(menuItemId: '', name: '', price: 0)).quantity) - 1),
-                  ))),
-        if (!cart.isEmpty)
-          CartBottomBar(
-            cart: cart,
-            onCheckout: () => context.go('/customer/checkout')),
-      ]),
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          _buildSliverHeader(),
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                _buildSearchBar(),
+                _buildCategoryChips(),
+              ],
+            ),
+          ),
+          _loading
+              ? const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator(color: Color(0xFFE94560))))
+              : _filteredItems.isEmpty
+                  ? SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.restaurant_menu_outlined, 
+                              size: 80, color: Colors.grey.shade300),
+                            const SizedBox(height: 16),
+                            Text('Tidak ada menu ditemukan',
+                              style: TextStyle(
+                                fontFamily: 'Poppins', 
+                                fontSize: 16,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 8),
+                            Text('Coba kata kunci lain atau pilih kategori berbeda',
+                              style: TextStyle(
+                                fontFamily: 'Poppins', 
+                                fontSize: 13,
+                                color: Colors.grey.shade400)),
+                          ],
+                        ),
+                      ))
+                  : SliverPadding(
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, 
+                        cart.isEmpty ? 100 : 120),
+                      sliver: SliverGrid(
+                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 180,
+                          childAspectRatio: 0.68,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 16),
+                        delegate: SliverChildBuilderDelegate(
+                          (_, i) => _MenuCard(
+                            item: _filteredItems[i],
+                            cartQty: cart.items
+                              .where((c) => c.menuItemId == _filteredItems[i]['id'])
+                              .fold(0, (s, c) => s + c.quantity),
+                            onAdd: () => ref.read(cartProvider.notifier).addItem(CartItem(
+                              menuItemId: _filteredItems[i]['id'],
+                              name: _filteredItems[i]['name'],
+                              price: (_filteredItems[i]['price'] as num).toDouble(),
+                              imageUrl: _filteredItems[i]['image_url'],
+                            )),
+                            onRemove: () => ref.read(cartProvider.notifier)
+                              .updateQuantity(_filteredItems[i]['id'],
+                                (cart.items.firstWhere(
+                                  (c) => c.menuItemId == _filteredItems[i]['id'],
+                                  orElse: () => CartItem(menuItemId: '', name: '', price: 0)).quantity) - 1),
+                          ),
+                          childCount: _filteredItems.length,
+                        ),
+                      ),
+                    ),
+        ],
+      ),
+      bottomNavigationBar: cart.isEmpty ? null : CartBottomBar(
+        cart: cart,
+        onCheckout: () => context.go('/customer/checkout')),
     );
   }
 
-  Widget _buildHeader() => Container(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)])),
-    padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 12, 16, 16),
-    child: Row(children: [
-      IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
-        onPressed: () => context.go('/customer')),
-      const Expanded(
-        child: Text('Menu', style: TextStyle(
-          fontFamily: 'Poppins', color: Colors.white,
-          fontSize: 18, fontWeight: FontWeight.w700),
-          textAlign: TextAlign.center)),
-      IconButton(
-        icon: const Icon(Icons.calendar_today_outlined, color: Colors.white60, size: 20),
-        tooltip: 'Booking meja',
-        // FIX: pakai context.push agar back button bisa kembali ke menu ini
-        onPressed: () => context.push('/customer/booking/${widget.branchId}')),
-    ]));
+  Widget _buildSliverHeader() => SliverAppBar(
+    expandedHeight: 120,
+    pinned: true,
+    floating: true,
+    backgroundColor: const Color(0xFF1A1A2E),
+    foregroundColor: Colors.white,
+    elevation: 0,
+    flexibleSpace: FlexibleSpaceBar(
+      title: const Text('Menu Restoran',
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontWeight: FontWeight.w600,
+          fontSize: 18)),
+      centerTitle: true,
+      background: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1A1A2E), Color(0xFF0F3460), Color(0xFF16213E)])),
+        child: SafeArea(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const Spacer(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.restaurant, color: Colors.white, size: 24)),
+                  const SizedBox(width: 12),
+                  const Text('RestaurantOS',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700)),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    ),
+    leading: IconButton(
+      icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+      onPressed: () => context.go('/customer'),
+    ),
+    actions: [
+      Container(
+        margin: const EdgeInsets.only(right: 12),
+        child: IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.calendar_today_outlined, 
+              color: Colors.white, size: 18)),
+          tooltip: 'Booking meja',
+          onPressed: () => context.push('/customer/booking/${widget.branchId}'),
+        ),
+      ),
+    ],
+  );
 
-  Widget _buildSearchBar() => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+  Widget _buildSearchBar() => Container(
+    margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
     child: TextField(
       onChanged: (v) => setState(() => _search = v),
       decoration: InputDecoration(
-        hintText: 'Cari menu...',
-        hintStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.grey),
-        prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
-        filled: true, fillColor: Colors.white,
+        hintText: 'Cari menu favoritmu...',
+        hintStyle: const TextStyle(
+          fontFamily: 'Poppins', 
+          fontSize: 14,
+          color: Color(0xFF9CA3AF)),
+        prefixIcon: const Icon(Icons.search_rounded, 
+          color: Color(0xFF9CA3AF), size: 20),
+        suffixIcon: _search.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                onPressed: () => setState(() => _search = ''),
+              )
+            : null,
+        filled: true, 
+        fillColor: Colors.white,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(vertical: 12)),
-      style: const TextStyle(fontFamily: 'Poppins')));
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFE94560), width: 2)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 14)),
+      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)));
 
   Widget _buildCategoryChips() => SizedBox(
-    height: 52,
+    height: 56,
     child: ListView.separated(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       itemCount: _categories.length + 1,
-      separatorBuilder: (_, __) => const SizedBox(width: 8),
+      separatorBuilder: (_, __) => const SizedBox(width: 10),
       itemBuilder: (_, i) {
         if (i == 0) {
-          return _chip('Semua', _selectedCategoryId == null,
+          return _chip('Semua Menu', _selectedCategoryId == null,
             () => setState(() => _selectedCategoryId = null));
         }
         final cat = _categories[i - 1];
@@ -165,18 +273,28 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
     GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFE94560) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: selected ? [BoxShadow(
-            color: const Color(0xFFE94560).withValues(alpha: 0.3),
-            blurRadius: 8)] : []),
-        child: Text(label, style: TextStyle(
-          fontFamily: 'Poppins', fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: selected ? Colors.white : const Color(0xFF6B7280)))));
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: selected ? Colors.transparent : const Color(0xFFE5E7EB),
+            width: 1.5),
+          boxShadow: selected ? [
+            BoxShadow(
+              color: const Color(0xFFE94560).withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 2))
+          ] : const [],
+        ),
+        child: Text(label, 
+          style: TextStyle(
+            fontFamily: 'Poppins', 
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : const Color(0xFF4B5563))),
+      ));
 }
 
 class _MenuCard extends StatelessWidget {
@@ -193,83 +311,200 @@ class _MenuCard extends StatelessWidget {
     final name = item['name'] as String;
     final desc = item['description'] as String? ?? '';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(
-          color: Colors.black.withValues(alpha: 0.05),
-          blurRadius: 8, offset: const Offset(0, 2))]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          height: 100,
-          decoration: const BoxDecoration(
-            color: Color(0xFFF3F4F6),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(14))),
-          child: item['image_url'] != null
-            ? ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                child: Image.network(item['image_url'], fit: BoxFit.cover,
-                  width: double.infinity))
-            : Center(child: Text(
-                _emoji(item['category_id']),
-                style: const TextStyle(fontSize: 36)))),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name, style: const TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-              fontSize: 12, color: Color(0xFF1A1A2E)),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (desc.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(desc, style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 10, color: Color(0xFF9CA3AF)),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-            ],
-            const SizedBox(height: 6),
-            Text('Rp ${_fmt(price)}',
-              style: const TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-                fontSize: 13, color: Color(0xFFE94560))),
-          ])),
-        const Spacer(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-          child: cartQty == 0
-            ? SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: onAdd,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE94560),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(30),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                    padding: EdgeInsets.zero),
-                  child: const Text('+ Tambah',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
-                      fontWeight: FontWeight.w600))))
-            : Row(children: [
-                _iqBtn(Icons.remove, onRemove),
-                Expanded(child: Text('$cartQty',
-                  style: const TextStyle(fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700, fontSize: 13),
-                  textAlign: TextAlign.center)),
-                _iqBtn(Icons.add, onAdd),
-              ])),
-      ]));
+    final s = cartQty > 0 ? 1.02 : 1.0;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      transform: Matrix4.identity()..scaleByDouble(s, s, s, 1.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4)),
+            if (cartQty > 0)
+              BoxShadow(
+                color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                blurRadius: 12,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  height: 120,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: item['image_url'] != null
+                    ? ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                        child: Image.network(
+                          item['image_url'], 
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                        ))
+                    : _buildPlaceholder(),
+                ),
+                if (cartQty > 0)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE94560),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 4,
+                          )
+                        ],
+                      ),
+                      child: Text('$cartQty',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, 
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', 
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13, 
+                      color: Color(0xFF1A1A2E)),
+                    maxLines: 1, 
+                    overflow: TextOverflow.ellipsis),
+                  if (desc.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(desc, 
+                      style: const TextStyle(
+                        fontFamily: 'Poppins', 
+                        fontSize: 10, 
+                        color: Color(0xFF9CA3AF)),
+                      maxLines: 1, 
+                      overflow: TextOverflow.ellipsis),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text('Rp${_fmt(price)}',
+                          style: const TextStyle(
+                            fontFamily: 'Poppins', 
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14, 
+                            color: Color(0xFFE94560))),
+                      ),
+                      if (cartQty == 0)
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: onAdd,
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE94560),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.add, 
+                                color: Colors.white, size: 18)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (cartQty > 0) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Row(
+                  children: [
+                    _iqBtn(Icons.remove, onRemove),
+                    Expanded(
+                      child: Text('$cartQty',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w700, 
+                          fontSize: 14,
+                          color: Color(0xFF1A1A2E)),
+                        textAlign: TextAlign.center)),
+                    _iqBtn(Icons.add, onAdd),
+                  ],
+                ),
+              ),
+            ] else
+              const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(_emoji(item['category_id']),
+            style: const TextStyle(fontSize: 32)),
+          const SizedBox(height: 4),
+          Text(_getCategoryName(item['category_id']),
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 10,
+              color: Color(0xFF9CA3AF)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+
+  String _getCategoryName(String? catId) {
+    if (catId == null) return 'Menu';
+    const names = ['Makanan', 'Nasi', 'Sayur', 'Sup', 'Minuman', 'Camilan', 'Dessert', 'Jus'];
+    return names[catId.hashCode.abs() % names.length];
   }
 
   Widget _iqBtn(IconData icon, VoidCallback onTap) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 28, height: 28,
+      width: 32, 
+      height: 32,
       decoration: BoxDecoration(
         color: const Color(0xFFE94560),
-        borderRadius: BorderRadius.circular(8)),
-      child: Icon(icon, color: Colors.white, size: 14)));
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE94560).withValues(alpha: 0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Icon(icon, color: Colors.white, size: 16)));
 
   String _fmt(double v) {
     final s = v.toStringAsFixed(0);
