@@ -1,20 +1,20 @@
 import 'package:flutter/foundation.dart';
 
 enum QrOrderStatus {
-  created,      // 0 – Pesanan baru masuk, belum dibayar
-  paid,         // 1 – Sudah dibayar kasir, menunggu dapur
-  preparing,    // 2 – Dapur sedang masak
-  ready,        // 3 – Siap disajikan
-  served,       // 4 – Sudah disajikan
+  created,      // 0 – Pesanan masuk, menunggu dapur
+  preparing,    // 1 – Dapur sedang masak
+  ready,        // 2 – Siap disajikan / diantar ke meja
+  served,       // 3 – Sudah disajikan, customer makan
+  paid,         // 4 – Sudah bayar, selesai
   cancelled;    // -1
 
   String get label {
     switch (this) {
-      case QrOrderStatus.created:   return 'Pesanan Baru';
-      case QrOrderStatus.paid:      return 'Sudah Dibayar';
+      case QrOrderStatus.created:   return 'Pesanan Masuk';
       case QrOrderStatus.preparing: return 'Sedang Dimasak';
       case QrOrderStatus.ready:     return 'Siap Disajikan';
-      case QrOrderStatus.served:    return 'Sudah Disajikan';
+      case QrOrderStatus.served:    return 'Sedang Makan';
+      case QrOrderStatus.paid:      return 'Selesai & Dibayar';
       case QrOrderStatus.cancelled: return 'Dibatalkan';
     }
   }
@@ -22,10 +22,10 @@ enum QrOrderStatus {
   String get emoji {
     switch (this) {
       case QrOrderStatus.created:   return '🆕';
-      case QrOrderStatus.paid:      return '💰';
       case QrOrderStatus.preparing: return '👨‍🍳';
       case QrOrderStatus.ready:     return '🍽️';
-      case QrOrderStatus.served:    return '✅';
+      case QrOrderStatus.served:    return '😋';
+      case QrOrderStatus.paid:      return '✅';
       case QrOrderStatus.cancelled: return '❌';
     }
   }
@@ -33,10 +33,10 @@ enum QrOrderStatus {
   int get stepIndex {
     switch (this) {
       case QrOrderStatus.created:   return 0;
-      case QrOrderStatus.paid:      return 1;
-      case QrOrderStatus.preparing: return 2;
-      case QrOrderStatus.ready:     return 3;
-      case QrOrderStatus.served:    return 4;
+      case QrOrderStatus.preparing: return 1;
+      case QrOrderStatus.ready:     return 2;
+      case QrOrderStatus.served:    return 3;
+      case QrOrderStatus.paid:      return 4;
       case QrOrderStatus.cancelled: return -1;
     }
   }
@@ -44,10 +44,10 @@ enum QrOrderStatus {
   double get progress {
     switch (this) {
       case QrOrderStatus.created:   return 0.0;
-      case QrOrderStatus.paid:      return 0.25;
-      case QrOrderStatus.preparing: return 0.50;
-      case QrOrderStatus.ready:     return 0.75;
-      case QrOrderStatus.served:    return 1.0;
+      case QrOrderStatus.preparing: return 0.25;
+      case QrOrderStatus.ready:     return 0.50;
+      case QrOrderStatus.served:    return 0.75;
+      case QrOrderStatus.paid:      return 1.0;
       case QrOrderStatus.cancelled: return 0.0;
     }
   }
@@ -211,5 +211,5 @@ class QrOrderModel {
       );
 
   bool get isActive =>
-      status != QrOrderStatus.served && status != QrOrderStatus.cancelled;
+      status != QrOrderStatus.paid && status != QrOrderStatus.cancelled;
 }

@@ -72,10 +72,11 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
             'tableId': widget.tableId,
           });
         } else {
+          // ✅ FLOW BARU: langsung ke tracker, bayar setelah makan
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Pesanan #${order.queueNumber} berhasil dibuat. Silakan bayar ke kasir.'),
+              content: Text('Pesanan #${order.queueNumber} dikirim ke dapur! Bayar ke kasir setelah makan.'),
               backgroundColor: Colors.green,
             ),
           );

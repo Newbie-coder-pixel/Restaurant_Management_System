@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/qr_cart_provider.dart';
+import '../data/qr_order_repository.dart';
 
 class QrCartScreen extends ConsumerStatefulWidget {
   final String tableId;
@@ -14,6 +15,7 @@ class QrCartScreen extends ConsumerStatefulWidget {
 class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   final _nameCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -21,11 +23,61 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     super.dispose();
   }
 
-  void _proceedToPayment() {
+  // ✅ FLOW BARU: langsung submit order dari cart, tidak perlu ke payment screen
+  Future<void> _confirmOrder() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+
     final notifier = ref.read(activeQrCartNotifierProvider);
     notifier.setCustomerInfo(name: _nameCtrl.text.trim());
-    context.push('/qr/${widget.tableId}/payment');
+
+    final cart = ref.read(activeQrCartProvider);
+    final branchId = cart.branchId.trim();
+
+    if (branchId.isEmpty) {
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Branch ID tidak ditemukan. Silakan scan ulang QR meja.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    final repo = ref.read(qrOrderRepositoryProvider);
+
+    try {
+      final order = await repo.createOrder(
+        session: cart,
+        branchId: branchId,
+      );
+
+      notifier.clearCart();
+
+      if (mounted) {
+        // ✅ Langsung ke tracker — customer nunggu dimasak, bayar nanti setelah makan
+        context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Pesanan #${order.queueNumber} berhasil dikirim ke dapur!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membuat pesanan: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   // ✅ FIX: dialog notes per item, langsung update ke notifier
@@ -198,7 +250,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _CartBottomBar(cart: cart, onProceed: _proceedToPayment),
+      bottomNavigationBar: _CartBottomBar(cart: cart, onProceed: _confirmOrder, isLoading: _isSubmitting),
     );
   }
 }
@@ -586,7 +638,8 @@ class _OrderSummaryCard extends StatelessWidget {
 class _CartBottomBar extends StatelessWidget {
   final QrOrderSession cart;
   final VoidCallback onProceed;
-  const _CartBottomBar({required this.cart, required this.onProceed});
+  final bool isLoading;
+  const _CartBottomBar({required this.cart, required this.onProceed, required this.isLoading});
 
   @override
   Widget build(BuildContext context) {
@@ -603,36 +656,49 @@ class _CartBottomBar extends StatelessWidget {
         width: double.infinity,
         height: 52,
         child: ElevatedButton(
-          onPressed: onProceed,
+          onPressed: isLoading ? null : onProceed,
           style: ElevatedButton.styleFrom(
             backgroundColor: colorScheme.primary,
             foregroundColor: colorScheme.onPrimary,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             elevation: 0,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.payment_outlined, size: 20),
-              const SizedBox(width: 8),
-              Text('Lanjut ke Pembayaran',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                      color: colorScheme.onPrimary, fontWeight: FontWeight.bold)),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: colorScheme.onPrimary.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(20),
+          child: isLoading
+              ? const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    ),
+                    SizedBox(width: 10),
+                    Text('Mengirim ke Dapur...'),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.send_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Pesan Sekarang',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                            color: colorScheme.onPrimary, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: colorScheme.onPrimary.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _formatPrice(cart.totalAmount),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onPrimary, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  _formatPrice(cart.totalAmount),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onPrimary, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

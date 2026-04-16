@@ -71,36 +71,36 @@ class _TrackerBody extends StatelessWidget {
 
   const _TrackerBody({required this.order});
 
-  // stepIndex dari model: created=0, paid=1, preparing=2, ready=3, served=4
+  // stepIndex dari model: created=0, preparing=1, ready=2, served=3, paid=4
   static const _steps = [
     (
       status: QrOrderStatus.created,
       label: 'Pesanan Masuk',
-      sublabel: 'Menunggu pembayaran di kasir',
+      sublabel: 'Pesanan diterima, menunggu dapur',
       icon: Icons.hourglass_top_outlined,
-    ),
-    (
-      status: QrOrderStatus.paid,
-      label: 'Pembayaran Dikonfirmasi',
-      sublabel: 'Kasir telah memproses pembayaran',
-      icon: Icons.check_circle_outline,
     ),
     (
       status: QrOrderStatus.preparing,
       label: 'Sedang Dimasak',
-      sublabel: 'Dapur sedang memproses',
+      sublabel: 'Dapur sedang memproses pesanan',
       icon: Icons.outdoor_grill_outlined,
     ),
     (
       status: QrOrderStatus.ready,
       label: 'Siap Disajikan',
-      sublabel: 'Pesanan sudah siap',
+      sublabel: 'Pesanan sudah siap, segera diantar',
       icon: Icons.dining_outlined,
     ),
     (
       status: QrOrderStatus.served,
-      label: 'Selesai',
-      sublabel: 'Selamat menikmati!',
+      label: 'Selamat Menikmati',
+      sublabel: 'Pesanan sudah ada di meja kamu',
+      icon: Icons.sentiment_very_satisfied_outlined,
+    ),
+    (
+      status: QrOrderStatus.paid,
+      label: 'Selesai & Lunas',
+      sublabel: 'Terima kasih sudah makan di sini!',
       icon: Icons.celebration_outlined,
     ),
   ];
@@ -208,7 +208,7 @@ class _QueueHeader extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: order.status == QrOrderStatus.cancelled
               ? [colorScheme.errorContainer, colorScheme.error.withValues(alpha: 0.3)]
-              : order.status == QrOrderStatus.served
+              : order.status == QrOrderStatus.paid
                   ? [Colors.green.shade400, Colors.green.shade600]
                   : [colorScheme.primary, colorScheme.primaryContainer],
         ),
@@ -568,7 +568,7 @@ class _PaymentStatusCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isPaid ? 'Sudah Dibayar' : 'Belum Dibayar',
+                  isPaid ? 'Sudah Dibayar' : 'Bayar Setelah Makan',
                   style: theme.textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: isPaid
@@ -579,7 +579,7 @@ class _PaymentStatusCard extends StatelessWidget {
                 Text(
                   isPaid
                       ? 'Pembayaran via $methodLabel dikonfirmasi'
-                      : 'Silakan bayar via $methodLabel',
+                      : 'Silakan bayar ke kasir setelah selesai makan',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: colorScheme.outline),
                 ),
@@ -759,8 +759,8 @@ class _TrackerActions extends StatelessWidget {
 
     return Column(
       children: [
-        // Scan again / new order
-        if (order.status == QrOrderStatus.served)
+        // Pesan lagi setelah lunas
+        if (order.status == QrOrderStatus.paid)
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
