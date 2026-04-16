@@ -61,47 +61,82 @@ class _CustomerOrderHistoryScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Pesan Ulang?',
-            style: TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.replay_outlined, color: Color(0xFFE94560), size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Text('Pesan Ulang?',
+                style: TextStyle(
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
+          ],
+        ),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('${validItems.length} item dari order ini akan ditambahkan ke cart.',
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-          const SizedBox(height: 8),
-          ...validItems.take(3).map((i) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(children: [
-              const Icon(Icons.circle, size: 6, color: Colors.grey),
-              const SizedBox(width: 8),
-              Text(
-                '${i['quantity']}x ${(i['menu_items'] as Map)['name']}',
-                style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 12, color: Colors.grey)),
-            ]))),
-          if (validItems.length > 3)
-            Text('... dan ${validItems.length - 3} item lainnya',
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: Colors.grey)),
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.4)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(children: [
+              ...validItems.take(3).map((i) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  Container(
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE94560).withValues(alpha: 0.5),
+                      shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '${i['quantity']}x ${(i['menu_items'] as Map)['name']}',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 12, color: Color(0xFF374151)),
+                  ),
+                ]))),
+              if (validItems.length > 3)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('+ ${validItems.length - 3} item lainnya',
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: Colors.grey)),
+                ),
+            ]),
+          )
         ]),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
             child: const Text('Batal',
                 style: TextStyle(
-                    fontFamily: 'Poppins', color: Colors.grey))),
+                    fontFamily: 'Poppins', fontSize: 14, color: Colors.grey))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFE94560),
               foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10))),
+                  borderRadius: BorderRadius.circular(12))),
             child: const Text('Pesan Lagi',
                 style: TextStyle(
-                    fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14))),
         ]));
 
     if (confirm != true || !mounted) return;
@@ -117,9 +152,16 @@ class _CustomerOrderHistoryScreenState
     }
 
     if (!mounted) return;
-    messenger.showSnackBar(const SnackBar(
-      content: Text('✅ Item ditambahkan ke cart!'),
-      backgroundColor: Color(0xFF1D9E75)));
+    messenger.showSnackBar(SnackBar(
+      content: const Row(children: [
+        Icon(Icons.check_circle, color: Colors.white, size: 20),
+        SizedBox(width: 12),
+        Expanded(child: Text('Item ditambahkan ke cart!')),
+      ]),
+      backgroundColor: const Color(0xFF1D9E75),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
     router.go('/customer/checkout');
   }
 
@@ -128,16 +170,19 @@ class _CustomerOrderHistoryScreenState
     final historyAsync = ref.watch(_orderHistoryProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F5),
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1A1A2E),
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 18),
           onPressed: () => context.go('/customer')),
         title: const Text('Riwayat Pesanan',
             style: TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                fontFamily: 'Poppins', 
+                fontWeight: FontWeight.w700,
+                fontSize: 20)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -145,19 +190,55 @@ class _CustomerOrderHistoryScreenState
         ],
       ),
       body: historyAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(color: Color(0xFFE94560)),
+              const SizedBox(height: 16),
+              Text('Memuat riwayat...',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: Colors.grey.shade600)),
+            ],
+          ),
+        ),
         error: (e, _) => Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 12),
-            Text('Gagal memuat: $e',
-                style: const TextStyle(
-                    fontFamily: 'Poppins', color: Colors.grey),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+            ),
+            const SizedBox(height: 20),
+            Text('Gagal memuat riwayat',
+                style: TextStyle(
+                    fontFamily: 'Poppins', 
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800),
                 textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(
+            const SizedBox(height: 8),
+            Text('$e',
+                style: TextStyle(
+                    fontFamily: 'Poppins', 
+                    fontSize: 13, 
+                    color: Colors.grey.shade600),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
               onPressed: () => ref.invalidate(_orderHistoryProvider),
-              child: const Text('Coba Lagi')),
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Coba Lagi'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE94560),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              )),
           ])),
         data: (orders) {
           if (orders.isEmpty) return _emptyState(context);
@@ -174,7 +255,7 @@ class _CustomerOrderHistoryScreenState
             Container(
               color: Colors.white,
               padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(children: [
@@ -190,31 +271,49 @@ class _CustomerOrderHistoryScreenState
                       padding: const EdgeInsets.only(right: 8),
                       child: FilterChip(
                         label: Text(f.$2,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins', fontSize: 12)),
+                            style: TextStyle(
+                                fontFamily: 'Poppins', 
+                                fontSize: 13,
+                                fontWeight: _filter == f.$1 ? FontWeight.w600 : FontWeight.normal)),
                         selected: _filter == f.$1,
                         onSelected: (_) =>
                             setState(() => _filter = f.$1),
+                        backgroundColor: Colors.grey.shade50,
                         selectedColor:
-                            const Color(0xFFE94560).withValues(alpha: 0.15),
-                        checkmarkColor: const Color(0xFFE94560))),
+                            const Color(0xFFE94560).withValues(alpha: 0.1),
+                        checkmarkColor: const Color(0xFFE94560),
+                        side: BorderSide(
+                          color: _filter == f.$1 ? const Color(0xFFE94560) : Colors.grey.shade300,
+                          width: 1,
+                        ))),
                 ])),
             ),
 
             // Count
             Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
+                  horizontal: 16, vertical: 12),
               child: Row(children: [
-                Text(
-                  filtered.isEmpty
-                      ? 'Tidak ada pesanan'
-                      : '${filtered.length} pesanan',
-                  style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 12,
-                      color: Colors.grey)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    filtered.isEmpty
+                        ? 'Tidak ada pesanan'
+                        : '${filtered.length} pesanan',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFE94560)),
+                  ),
+                ),
               ])),
+              
+            const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
 
             // List
             Expanded(
@@ -223,21 +322,22 @@ class _CustomerOrderHistoryScreenState
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.receipt_long_outlined,
-                              size: 48, color: Colors.grey),
-                          const SizedBox(height: 12),
+                          Icon(Icons.receipt_long_outlined,
+                              size: 64, color: Colors.grey.shade400),
+                          const SizedBox(height: 16),
                           Text(
                             'Tidak ada pesanan dengan status "$_filter"',
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontFamily: 'Poppins',
-                                color: Colors.grey),
+                                fontSize: 14,
+                                color: Colors.grey.shade600),
                             textAlign: TextAlign.center),
                         ]))
                   : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
                       itemCount: filtered.length,
                       separatorBuilder: (_, __) =>
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
                       itemBuilder: (_, i) => _OrderHistoryCard(
                         order: filtered[i],
                         onReorder: () =>
@@ -257,41 +357,41 @@ class _CustomerOrderHistoryScreenState
       padding: const EdgeInsets.all(32),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
-          width: 80, height: 80,
+          width: 100, height: 100,
           decoration: BoxDecoration(
             color: const Color(0xFFE94560).withValues(alpha: 0.08),
             shape: BoxShape.circle),
           child: const Icon(Icons.receipt_long_outlined,
-              color: Color(0xFFE94560), size: 38)),
-        const SizedBox(height: 20),
+              color: Color(0xFFE94560), size: 48)),
+        const SizedBox(height: 24),
         const Text('Belum Ada Pesanan',
             style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 17,
+                fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF1A1A2E))),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         const Text(
           'Mulai pesan makanan favoritmu sekarang!',
           textAlign: TextAlign.center,
           style: TextStyle(
               fontFamily: 'Poppins',
-              fontSize: 13,
+              fontSize: 14,
               color: Colors.grey)),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
         ElevatedButton.icon(
           onPressed: () => context.go('/customer'),
-          icon: const Icon(Icons.restaurant_menu_outlined, size: 18),
+          icon: const Icon(Icons.restaurant_menu_outlined, size: 20),
           label: const Text('Lihat Menu',
               style: TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 15)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFE94560),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(
-                horizontal: 24, vertical: 12),
+                horizontal: 32, vertical: 14),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)))),
+                borderRadius: BorderRadius.circular(16)))),
       ])));
 }
 
@@ -308,12 +408,12 @@ class _OrderHistoryCard extends StatelessWidget {
   });
 
   static const _statusColors = {
-    'new':       Color(0xFF6B7280),
-    'preparing': Color(0xFFD97706),
-    'ready':     Color(0xFF1D9E75),
-    'served':    Color(0xFF0F3460),
-    'paid':      Color(0xFF1D9E75),
-    'cancelled': Color(0xFFE94560),
+    'new':       Color(0xFF3B82F6),
+    'preparing': Color(0xFFF59E0B),
+    'ready':     Color(0xFF10B981),
+    'served':    Color(0xFF6366F1),
+    'paid':      Color(0xFF10B981),
+    'cancelled': Color(0xFFEF4444),
   };
   static const _statusLabels = {
     'new':       'Baru',
@@ -376,43 +476,52 @@ class _OrderHistoryCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [BoxShadow(
-          color: Colors.black.withValues(alpha: 0.05),
-          blurRadius: 8, offset: const Offset(0, 2))]),
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 12, offset: const Offset(0, 4))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Header
         Container(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.06),
+            color: statusColor.withValues(alpha: 0.08),
             borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(16))),
+                const BorderRadius.vertical(top: Radius.circular(20))),
           child: Row(children: [
-            Icon(statusIcon, color: statusColor, size: 16),
-            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(statusIcon, color: statusColor, size: 16),
+            ),
+            const SizedBox(width: 10),
             Text(statusLabel,
                 style: TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                     color: statusColor)),
             const Spacer(),
             // Live badge untuk order aktif
             if (_isActive)
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 2),
+                    horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(
+                  AnimatedContainer(
+                    duration: const Duration(seconds: 1),
                     width: 6, height: 6,
                     decoration: BoxDecoration(
-                        color: statusColor, shape: BoxShape.circle)),
-                  const SizedBox(width: 4),
-                  Text('Live',
+                        color: statusColor, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 6),
+                  Text('Aktif',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 10,
@@ -423,7 +532,7 @@ class _OrderHistoryCard extends StatelessWidget {
 
         // Body
         Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -434,41 +543,72 @@ class _OrderHistoryCard extends StatelessWidget {
                   style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: Color(0xFF1A1A2E))),
+                      fontSize: 15,
+                      color: Color(0xFF1F2937))),
               ),
-              Text('Rp ${_fmt(total)}',
-                  style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: Color(0xFFE94560))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text('Rp ${_fmt(total)}',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Color(0xFFE94560))),
+              ),
             ]),
-            const SizedBox(height: 4),
-            Text(
-              '$itemCount item • ${_fmtDate(order['created_at'] as String?)}',
-              style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 11,
-                  color: Colors.grey)),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.shopping_bag_outlined, size: 12, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text(
+                  '$itemCount item',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: Colors.grey.shade600)),
+                const SizedBox(width: 8),
+                Icon(Icons.access_time, size: 12, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    _fmtDate(order['created_at'] as String?),
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: Colors.grey.shade600)),
+                ),
+              ],
+            ),
 
             // Preview items
             if (rawItems.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                rawItems.take(2).map((i) {
-                  final m = (i as Map);
-                  return '${m['quantity']}x ${(m['menu_items'] as Map?)?['name'] ?? '-'}';
-                }).join(', ') + (rawItems.length > 2 ? '...' : ''),
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    color: Color(0xFF374151)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  rawItems.take(2).map((i) {
+                    final m = (i as Map);
+                    return '${m['quantity']}x ${(m['menu_items'] as Map?)?['name'] ?? '-'}';
+                  }).join(' • ') + (rawItems.length > 2 ? ' • +${rawItems.length - 2}' : ''),
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      color: Colors.grey.shade700),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+              ),
             ],
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             // Action buttons
             Row(children: [
               // Track — untuk order aktif
@@ -476,39 +616,40 @@ class _OrderHistoryCard extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: onTrack,
-                    icon: const Icon(Icons.gps_fixed_outlined,
-                        size: 14, color: Color(0xFF0F3460)),
+                    icon: const Icon(Icons.location_on_outlined,
+                        size: 16),
                     label: const Text('Lacak',
                         style: TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF0F3460))),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      side: const BorderSide(color: Color(0xFF0F3460)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      side: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
+                      foregroundColor: const Color(0xFF6366F1),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8))),
+                          borderRadius: BorderRadius.circular(12))),
                   )),
-              if (_isActive) const SizedBox(width: 10),
+              if (_isActive) const SizedBox(width: 12),
               // Reorder — untuk semua status kecuali cancelled
               if (!(_isPaid == false && status == 'cancelled') ||
                   _isPaid)
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: onReorder,
-                    icon: const Icon(Icons.replay_outlined, size: 14),
+                    icon: const Icon(Icons.replay_outlined, size: 16),
                     label: const Text('Pesan Lagi',
                         style: TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                       backgroundColor: const Color(0xFFE94560),
                       foregroundColor: Colors.white,
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8))),
+                          borderRadius: BorderRadius.circular(12))),
                   )),
             ]),
           ])),

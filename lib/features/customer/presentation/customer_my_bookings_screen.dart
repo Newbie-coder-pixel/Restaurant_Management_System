@@ -116,41 +116,43 @@ class _CustomerMyBookingsScreenState
     final (String message, Color color, IconData icon) = switch (status) {
       'confirmed' => (
           '🎉 Reservasi kamu dikonfirmasi! Meja sudah disiapkan.',
-          const Color(0xFF4CAF50),
+          const Color(0xFF10B981),
           Icons.check_circle,
         ),
       'cancelled' => (
           '❌ Reservasi kamu dibatalkan.',
-          const Color(0xFFE94560),
+          const Color(0xFFEF4444),
           Icons.cancel,
         ),
       'waitlisted' => (
           '⏳ Semua meja penuh, kamu masuk daftar tunggu.',
-          const Color(0xFF7C3AED),
+          const Color(0xFF8B5CF6),
           Icons.hourglass_top,
         ),
       'seated' => (
           '🍽️ Selamat datang! Silakan menuju meja kamu.',
-          const Color(0xFF0891B2),
+          const Color(0xFF06B6D4),
           Icons.restaurant,
         ),
-      _ => ('Status reservasi diperbarui.', const Color(0xFF0F3460), Icons.info),
+      _ => ('Status reservasi diperbarui.', const Color(0xFF3B82F6), Icons.info),
     };
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
         Icon(icon, color: Colors.white, size: 20),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: Text(message,
               style: const TextStyle(
                   fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w500))),
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13))),
       ]),
       backgroundColor: color,
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
     ));
   }
 
@@ -159,47 +161,60 @@ class _CustomerMyBookingsScreenState
     final screenW = MediaQuery.of(context).size.width;
     final isDesktop = screenW > 700;
 
-    return Column(children: [
-      Container(
-        color: Colors.white,
-        child: TabBar(
-          controller: _tabCtrl,
-          labelStyle: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              fontWeight: FontWeight.w600),
-          unselectedLabelStyle:
-              const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-          labelColor: const Color(0xFFE94560),
-          unselectedLabelColor: const Color(0xFF6B7280),
-          indicatorColor: const Color(0xFFE94560),
-          indicatorWeight: 2.5,
-          tabs: const [
-            Tab(
-                icon: Icon(Icons.add_circle_outline, size: 18),
-                text: 'Buat Reservasi'),
-            Tab(
-                icon: Icon(Icons.calendar_month_outlined, size: 18),
-                text: 'Reservasi Saya'),
-          ],
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Column(children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              )
+            ],
+          ),
+          child: TabBar(
+            controller: _tabCtrl,
+            labelStyle: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: FontWeight.w600),
+            unselectedLabelStyle:
+                const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+            labelColor: const Color(0xFFE94560),
+            unselectedLabelColor: const Color(0xFF64748B),
+            indicatorColor: const Color(0xFFE94560),
+            indicatorWeight: 3,
+            indicatorSize: TabBarIndicatorSize.label,
+            tabs: const [
+              Tab(
+                  icon: Icon(Icons.add_circle_outline, size: 20),
+                  text: 'Buat Reservasi'),
+              Tab(
+                  icon: Icon(Icons.calendar_month_outlined, size: 20),
+                  text: 'Reservasi Saya'),
+            ],
+          ),
         ),
-      ),
-      Expanded(
-        child: TabBarView(
-          controller: _tabCtrl,
-          children: [
-            _BookingForm(
-              isDesktop: isDesktop,
-              onSuccess: () {
-                ref.read(_refreshTriggerProvider.notifier).state++;
-                _tabCtrl.animateTo(1);
-              },
-            ),
-            _BookingHistory(isDesktop: isDesktop),
-          ],
+        Expanded(
+          child: TabBarView(
+            controller: _tabCtrl,
+            children: [
+              _BookingForm(
+                isDesktop: isDesktop,
+                onSuccess: () {
+                  ref.read(_refreshTriggerProvider.notifier).state++;
+                  _tabCtrl.animateTo(1);
+                },
+              ),
+              _BookingHistory(isDesktop: isDesktop),
+            ],
+          ),
         ),
-      ),
-    ]);
+      ]),
+    );
   }
 }
 
@@ -273,9 +288,10 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: Color(0xFF0F3460),
+            primary: Color(0xFFE94560),
             onPrimary: Colors.white,
-            surface: Colors.white)),
+            surface: Colors.white,
+            onSurface: Color(0xFF1E293B))),
         child: child!));
     if (picked != null && mounted) {
       setState(() => _selectedDate = picked);
@@ -294,7 +310,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: Color(0xFF0F3460),
+            primary: Color(0xFFE94560),
             onPrimary: Colors.white)),
         child: child!));
 
@@ -302,9 +318,10 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     if (picked.hour < openHour || picked.hour >= closeHour) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Jam harus antara $open – $close WIB',
-            style: const TextStyle(fontFamily: 'Poppins')),
-        backgroundColor: const Color(0xFFE94560),
-        behavior: SnackBarBehavior.floating));
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
       return;
     }
     setState(() => _selectedTime = picked);
@@ -389,9 +406,10 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   void _err(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(fontFamily: 'Poppins')),
-      backgroundColor: const Color(0xFFE94560),
-      behavior: SnackBarBehavior.floating));
+      content: Text(msg, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+      backgroundColor: const Color(0xFFEF4444),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
   }
 
   void _showSuccess({String? tableNumber}) {
@@ -399,67 +417,79 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       context: context,
       barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
-            width: 64, height: 64,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE8F5E9), shape: BoxShape.circle),
+            width: 72, height: 72,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD1FAE5), 
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                  blurRadius: 12,
+                )
+              ]),
             child: const Icon(Icons.check_circle,
-                color: Color(0xFF4CAF50), size: 36)),
-          const SizedBox(height: 16),
+                color: Color(0xFF10B981), size: 40)),
+          const SizedBox(height: 20),
           const Text('Reservasi Berhasil!',
               style: TextStyle(
                   fontFamily: 'Poppins',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A2E))),
-          const SizedBox(height: 8),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E293B))),
+          const SizedBox(height: 12),
           if (tableNumber != null) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: const Color(0xFF4CAF50).withValues(alpha: 0.3))),
+                    color: const Color(0xFF10B981).withValues(alpha: 0.3))),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.table_restaurant,
-                    size: 16, color: Color(0xFF4CAF50)),
-                const SizedBox(width: 6),
+                    size: 20, color: Color(0xFF059669)),
+                const SizedBox(width: 8),
                 Text('Meja $tableNumber sudah disiapkan',
                     style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF2E7D32))),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF059669))),
               ])),
           ],
           const Text(
             'Reservasi kamu sudah dikonfirmasi.\nCek tab "Reservasi Saya" untuk detailnya.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF6B7280))),
+                fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF64748B))),
         ]),
         actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F3460),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 12)),
-              onPressed: () {
-                Navigator.of(dialogCtx).pop();
-                widget.onSuccess();
-              },
-              child: const Text('OK',
-                  style: TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-            )),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE94560),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () {
+                  Navigator.of(dialogCtx).pop();
+                  widget.onSuccess();
+                },
+                child: const Text('OK',
+                    style: TextStyle(
+                        fontFamily: 'Poppins', 
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15)),
+              )),
+          ),
         ]));
   }
 
@@ -468,47 +498,59 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       context: context,
       barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
-            width: 64, height: 64,
-            decoration: const BoxDecoration(
-              color: Color(0xFFFFF8E1), shape: BoxShape.circle),
+            width: 72, height: 72,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7), 
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                  blurRadius: 12,
+                )
+              ]),
             child: const Icon(Icons.schedule,
-                color: Color(0xFFD97706), size: 36)),
-          const SizedBox(height: 16),
+                color: Color(0xFFD97706), size: 40)),
+          const SizedBox(height: 20),
           const Text('Masuk Waitlist',
               style: TextStyle(
                   fontFamily: 'Poppins',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A2E))),
-          const SizedBox(height: 8),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E293B))),
+          const SizedBox(height: 12),
           const Text(
             'Semua meja sedang penuh untuk waktu tersebut.\n'
             'Kamu sudah masuk daftar tunggu. Staff akan menghubungi nomor HP kamu jika ada meja tersedia.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF6B7280))),
+                fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF64748B))),
         ]),
         actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD97706),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 12)),
-              onPressed: () {
-                Navigator.of(dialogCtx).pop();
-                widget.onSuccess();
-              },
-              child: const Text('Mengerti',
-                  style: TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-            )),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF59E0B),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () {
+                  Navigator.of(dialogCtx).pop();
+                  widget.onSuccess();
+                },
+                child: const Text('Mengerti',
+                    style: TextStyle(
+                        fontFamily: 'Poppins', 
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15)),
+              )),
+          ),
         ]));
   }
 
@@ -517,8 +559,17 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     final branchesAsync = ref.watch(_branchesProvider);
 
     return branchesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFE94560))),
+      error: (e, _) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text('Error: $e',
+                  style: const TextStyle(fontFamily: 'Poppins', color: Color(0xFFEF4444))),
+            ],
+          )),
       data: (branches) {
         if (branches.length == 1 && _selectedBranchId == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -537,7 +588,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         Widget formContent = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _sectionLabel('Pilih Cabang'),
+            const SizedBox(height: 8),
+            _sectionLabel('Pilih Cabang', Icons.store_outlined),
             if (branches.length == 1)
               _infoChip(Icons.store, branches[0]['name'] as String)
             else
@@ -550,7 +602,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                       style: const TextStyle(
                           fontFamily: 'Poppins', fontSize: 14)))).toList(),
                 onChanged: (v) => setState(() => _selectedBranchId = v)),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             if (widget.isDesktop)
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(child: _dateField(openTime, closeTime)),
@@ -559,13 +611,13 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               ])
             else ...[
               _dateField(openTime, closeTime),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               _timeField(openTime, closeTime),
             ],
-            const SizedBox(height: 20),
-            _sectionLabel('Jumlah Tamu'),
+            const SizedBox(height: 24),
+            _sectionLabel('Jumlah Tamu', Icons.people_outline),
             _guestPicker(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             if (widget.isDesktop)
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(child: _nameField()),
@@ -574,89 +626,127 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               ])
             else ...[
               _nameField(),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               _phoneField(),
             ],
-            const SizedBox(height: 20),
-            _sectionLabel('Catatan Khusus (opsional)'),
+            const SizedBox(height: 24),
+            _sectionLabel('Catatan Khusus', Icons.note_add_outlined),
             TextField(
               controller: _notesCtrl,
               maxLines: 3,
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
               decoration: _inputDeco(
                   'Contoh: alergi kacang, kursi tinggi untuk bayi...', null)),
-            const SizedBox(height: 28),
-            GestureDetector(
-              onTap: _submitting ? null : () => _submit(branches),
-              child: Container(
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _submitting ? null : () => _submit(branches),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE94560),
+                foregroundColor: Colors.white,
+                elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [BoxShadow(
-                    color: const Color(0xFFE94560).withValues(alpha: 0.3),
-                    blurRadius: 12, offset: const Offset(0, 4))]),
-                child: Center(
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 22, height: 22,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.calendar_today,
-                              color: Colors.white, size: 18),
-                          SizedBox(width: 8),
-                          Text('Buat Reservasi',
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700)),
-                        ])))),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                textStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700),
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 24, height: 24,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2.5))
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.calendar_today, size: 20),
+                        SizedBox(width: 10),
+                        Text('Buat Reservasi'),
+                      ])),
             const SizedBox(height: 32),
           ],
         );
 
         if (widget.isDesktop) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: formContent)));
+          return Container(
+            color: const Color(0xFFF8FAFC),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(40),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 40,
+                        offset: const Offset(0, 8),
+                      )
+                    ],
+                  ),
+                  child: formContent))));
         }
-        return SingleChildScrollView(
-            padding: const EdgeInsets.all(20), child: formContent);
+        return Container(
+          color: const Color(0xFFF8FAFC),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  )
+                ],
+              ),
+              child: formContent)));
       },
     );
   }
 
-  Widget _sectionLabel(String label) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Text(label,
-        style: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF374151))));
+  Widget _sectionLabel(String label, IconData icon) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(children: [
+      Icon(icon, size: 18, color: const Color(0xFFE94560)),
+      const SizedBox(width: 8),
+      Text(label,
+          style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1E293B))),
+    ]));
 
   Widget _infoChip(IconData icon, String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     decoration: BoxDecoration(
-      color: const Color(0xFF0F3460).withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(12),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          const Color(0xFFE94560).withValues(alpha: 0.1),
+          const Color(0xFFE94560).withValues(alpha: 0.05),
+        ]),
+      borderRadius: BorderRadius.circular(14),
       border: Border.all(
-          color: const Color(0xFF0F3460).withValues(alpha: 0.2))),
+          color: const Color(0xFFE94560).withValues(alpha: 0.2))),
     child: Row(children: [
-      Icon(icon, size: 18, color: const Color(0xFF0F3460)),
-      const SizedBox(width: 10),
+      Icon(icon, size: 20, color: const Color(0xFFE94560)),
+      const SizedBox(width: 12),
       Text(label,
           style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF0F3460))),
+              color: Color(0xFFE94560))),
     ]));
 
   Widget _dropdown({
@@ -665,47 +755,49 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     required List<DropdownMenuItem<String>> items,
     required void Function(String?) onChanged,
   }) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14),
+    padding: const EdgeInsets.symmetric(horizontal: 16),
     decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE5E7EB))),
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: const Color(0xFFE2E8F0))),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<String>(
         value: value,
         isExpanded: true,
         hint: Text(hint,
             style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 14, color: Colors.grey)),
+                fontFamily: 'Poppins', fontSize: 14, color: Color(0xFF94A3B8))),
         items: items,
         onChanged: onChanged,
         style: const TextStyle(
             fontFamily: 'Poppins',
             fontSize: 14,
-            color: Color(0xFF1A1A2E)))));
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF1E293B)))));
 
   Widget _dateField(String open, String close) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Tanggal Kedatangan'),
+      _sectionLabel('Tanggal Kedatangan', Icons.calendar_today_outlined),
       GestureDetector(
         onTap: _pickDate,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
                 color: _selectedDate != null
-                    ? const Color(0xFF0F3460)
-                    : const Color(0xFFE5E7EB))),
+                    ? const Color(0xFFE94560)
+                    : const Color(0xFFE2E8F0),
+                width: _selectedDate != null ? 2 : 1)),
           child: Row(children: [
             Icon(Icons.calendar_today_outlined,
-                size: 18,
+                size: 20,
                 color: _selectedDate != null
-                    ? const Color(0xFF0F3460)
-                    : const Color(0xFF6B7280)),
-            const SizedBox(width: 10),
+                    ? const Color(0xFFE94560)
+                    : const Color(0xFF94A3B8)),
+            const SizedBox(width: 12),
             Text(
               _selectedDate != null
                   ? _formatDate(_selectedDate!)
@@ -713,100 +805,110 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 14,
+                  fontWeight: FontWeight.w500,
                   color: _selectedDate != null
-                      ? const Color(0xFF1A1A2E)
-                      : Colors.grey)),
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFF94A3B8))),
           ]))),
     ]);
 
   Widget _timeField(String open, String close) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Jam Kedatangan ($open – $close)'),
+      _sectionLabel('Jam Kedatangan', Icons.access_time_outlined),
       GestureDetector(
         onTap: () => _pickTime(open, close),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
                 color: _selectedTime != null
-                    ? const Color(0xFF0F3460)
-                    : const Color(0xFFE5E7EB))),
+                    ? const Color(0xFFE94560)
+                    : const Color(0xFFE2E8F0),
+                width: _selectedTime != null ? 2 : 1)),
           child: Row(children: [
             Icon(Icons.access_time_outlined,
-                size: 18,
+                size: 20,
                 color: _selectedTime != null
-                    ? const Color(0xFF0F3460)
-                    : const Color(0xFF6B7280)),
-            const SizedBox(width: 10),
-            Text(
-              _selectedTime != null
-                  ? '${_formatTime(_selectedTime!)} WIB'
-                  : 'Pilih jam',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  color: _selectedTime != null
-                      ? const Color(0xFF1A1A2E)
-                      : Colors.grey)),
+                    ? const Color(0xFFE94560)
+                    : const Color(0xFF94A3B8)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _selectedTime != null
+                    ? '${_formatTime(_selectedTime!)} WIB'
+                    : 'Pilih jam',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: _selectedTime != null
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFF94A3B8))),
+            ),
+            Text('$open – $close',
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8))),
           ]))),
     ]);
 
-  Widget _guestPicker() => Row(children: [
-    _counterBtn(Icons.remove, () {
-      if (_guestCount > 1) setState(() => _guestCount--);
-    }),
-    const SizedBox(width: 16),
-    Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB))),
+  Widget _guestPicker() => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: const Color(0xFFE2E8F0))),
+    child: Row(children: [
+      _counterBtn(Icons.remove, () {
+        if (_guestCount > 1) setState(() => _guestCount--);
+      }),
+      const SizedBox(width: 16),
+      Expanded(
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.people_outline, size: 18, color: Color(0xFF6B7280)),
-          const SizedBox(width: 8),
+          const Icon(Icons.people_outline, size: 20, color: Color(0xFF64748B)),
+          const SizedBox(width: 12),
           Text('$_guestCount orang',
               style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A2E))),
-        ]))),
-    const SizedBox(width: 16),
-    _counterBtn(Icons.add, () {
-      if (_guestCount < 20) setState(() => _guestCount++);
-    }),
-  ]);
+                  color: Color(0xFF1E293B))),
+        ])),
+      const SizedBox(width: 16),
+      _counterBtn(Icons.add, () {
+        if (_guestCount < 20) setState(() => _guestCount++);
+      }),
+    ]));
 
   Widget _counterBtn(IconData icon, VoidCallback onTap) => GestureDetector(
     onTap: onTap,
     child: Container(
       width: 44, height: 44,
       decoration: BoxDecoration(
-        color: const Color(0xFF0F3460),
+        color: const Color(0xFFE94560),
         borderRadius: BorderRadius.circular(12)),
-      child: Icon(icon, color: Colors.white, size: 20)));
+      child: Icon(icon, color: Colors.white, size: 22)));
 
   Widget _nameField() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Nama Lengkap'),
+      _sectionLabel('Nama Lengkap', Icons.person_outline),
       TextField(
         controller: _nameCtrl,
         style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
         decoration: _inputDeco('Nama sesuai identitas',
-            const Icon(Icons.person_outline,
-                size: 18, color: Color(0xFF6B7280)))),
+            const Icon(Icons.person_outline, size: 20, color: Color(0xFF94A3B8))),
+      ),
     ]);
 
   Widget _phoneField() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Nomor HP'),
+      _sectionLabel('Nomor HP', Icons.phone_outlined),
       TextField(
         controller: _phoneCtrl,
         keyboardType: TextInputType.phone,
@@ -822,61 +924,55 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         decoration: InputDecoration(
           hintText: '081234567890',
           hintStyle: const TextStyle(
-              fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
+              fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF94A3B8)),
           prefixIcon: const Icon(Icons.phone_outlined,
-              size: 18, color: Color(0xFF6B7280)),
+              size: 20, color: Color(0xFF94A3B8)),
           errorText: _phoneError,
           errorStyle: const TextStyle(
-              fontFamily: 'Poppins', fontSize: 11, color: Color(0xFFE94560)),
+              fontFamily: 'Poppins', fontSize: 11, color: Color(0xFFEF4444)),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: const Color(0xFFF8FAFC),
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                  color: _phoneError != null
-                      ? const Color(0xFFE94560)
-                      : const Color(0xFFE5E7EB))),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                  color: _phoneError != null
-                      ? const Color(0xFFE94560)
-                      : const Color(0xFF0F3460),
-                  width: 1.5)),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE94560), width: 2)),
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16)),
       ),
       const Padding(
-        padding: EdgeInsets.only(top: 4, left: 4),
+        padding: EdgeInsets.only(top: 8, left: 4),
         child: Text(
           'Format: 08xxxxxxxxxx (10–13 digit)',
           style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 11,
-              color: Color(0xFF9CA3AF)))),
+              color: Color(0xFF94A3B8))),
+      ),
     ]);
 
   InputDecoration _inputDeco(String hint, Widget? prefix) => InputDecoration(
     hintText: hint,
     hintStyle: const TextStyle(
-        fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
+        fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF94A3B8)),
     prefixIcon: prefix,
     filled: true,
-    fillColor: Colors.white,
+    fillColor: const Color(0xFFF8FAFC),
     border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none),
     enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none),
     focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF0F3460), width: 1.5)),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE94560), width: 2)),
     contentPadding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14));
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 16));
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -891,10 +987,17 @@ class _BookingHistory extends ConsumerWidget {
     final bookingsAsync = ref.watch(_myBookingsProvider);
 
     return bookingsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFE94560))),
       error: (e, _) => Center(
-          child: Text('Error: $e',
-              style: const TextStyle(fontFamily: 'Poppins'))),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text('Error: $e',
+                  style: const TextStyle(fontFamily: 'Poppins', color: Color(0xFFEF4444))),
+            ],
+          )),
       data: (bookings) {
         if (bookings.isEmpty) return _emptyState();
 
@@ -907,7 +1010,7 @@ class _BookingHistory extends ConsumerWidget {
         if (isDesktop) {
           return Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
+              constraints: const BoxConstraints(maxWidth: 720),
               child: content));
         }
         return content;
@@ -918,24 +1021,32 @@ class _BookingHistory extends ConsumerWidget {
   Widget _emptyState() => Center(
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        width: 80, height: 80,
+        width: 96, height: 96,
         decoration: BoxDecoration(
-          color: const Color(0xFFE94560).withValues(alpha: 0.08),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xFFE94560).withValues(alpha: 0.1),
+              const Color(0xFFE94560).withValues(alpha: 0.05),
+            ]),
           shape: BoxShape.circle),
         child: const Icon(Icons.calendar_today_outlined,
-            color: Color(0xFFE94560), size: 38)),
-      const SizedBox(height: 20),
+            color: Color(0xFFE94560), size: 44)),
+      const SizedBox(height: 24),
       const Text('Belum Ada Reservasi',
           style: TextStyle(
               fontFamily: 'Poppins',
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A2E))),
-      const SizedBox(height: 8),
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E293B))),
+      const SizedBox(height: 12),
       const Text('Buat reservasi di tab "Buat Reservasi".',
           textAlign: TextAlign.center,
           style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF6B7280))),
+              fontFamily: 'Poppins', 
+              fontSize: 14, 
+              color: Color(0xFF64748B))),
     ]));
 }
 
@@ -960,13 +1071,13 @@ class _BookingCardState extends State<_BookingCard> {
   String get _status => booking['status'] as String? ?? 'pending';
 
   Color get _color => switch (_status) {
-    'confirmed'  => const Color(0xFF4CAF50),
-    'cancelled'  => const Color(0xFFE94560),
-    'completed'  => const Color(0xFF0F3460),
-    'no_show'    => Colors.orange,
-    'waitlisted' => const Color(0xFF7C3AED),
-    'seated'     => const Color(0xFF0891B2),
-    _            => const Color(0xFFFF9800),
+    'confirmed'  => const Color(0xFF10B981),
+    'cancelled'  => const Color(0xFFEF4444),
+    'completed'  => const Color(0xFF3B82F6),
+    'no_show'    => const Color(0xFFF59E0B),
+    'waitlisted' => const Color(0xFF8B5CF6),
+    'seated'     => const Color(0xFF06B6D4),
+    _            => const Color(0xFFF59E0B),
   };
 
   String get _label => switch (_status) {
@@ -1007,12 +1118,13 @@ class _BookingCardState extends State<_BookingCard> {
 
   Future<void> _contactStaff(BuildContext context, String? phone) async {
     if (phone == null || phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text(
             'Nomor kontak cabang tidak tersedia. Silakan hubungi kami langsung.',
             style: TextStyle(fontFamily: 'Poppins')),
-        backgroundColor: Color(0xFF0F3460),
-        behavior: SnackBarBehavior.floating));
+        backgroundColor: const Color(0xFF3B82F6),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
       return;
     }
 
@@ -1045,8 +1157,9 @@ class _BookingCardState extends State<_BookingCard> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Tidak bisa membuka WhatsApp. No: $phone',
               style: const TextStyle(fontFamily: 'Poppins')),
-          backgroundColor: const Color(0xFF0F3460),
-          behavior: SnackBarBehavior.floating));
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
       }
     }
   }
@@ -1057,10 +1170,6 @@ class _BookingCardState extends State<_BookingCard> {
     final branchName  = branchData?['name'] as String? ?? 'Restoran';
     final branchPhone = branchData?['phone'] as String?;
 
-    final date    = _fmtDate(booking['booking_date'] as String?);
-    final time    = (booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
-    final guests  = booking['guest_count'] ?? 1;
-    final notes   = booking['special_requests'] as String?;
     final tableId = booking['table_id'] as String?;
 
     // ── Data DP ──
@@ -1075,158 +1184,110 @@ class _BookingCardState extends State<_BookingCard> {
     final isDpUploaded  = depositStatus == 'uploaded';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(
-          color: Colors.black.withValues(alpha: 0.06),
-          blurRadius: 10, offset: const Offset(0, 3))]),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4))
+        ],
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           decoration: BoxDecoration(
             color: _color.withValues(alpha: 0.08),
             borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(16))),
+                const BorderRadius.vertical(top: Radius.circular(20))),
           child: Row(children: [
-            Icon(_icon, color: _color, size: 18),
-            const SizedBox(width: 8),
+            Icon(_icon, color: _color, size: 20),
+            const SizedBox(width: 10),
             Text(_label,
                 style: TextStyle(
                     fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
                     color: _color)),
             const Spacer(),
             if (_isActive)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: _color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Container(
-                      width: 6, height: 6,
+                      width: 8, height: 8,
                       decoration: BoxDecoration(
                           color: _color, shape: BoxShape.circle)),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   Text('Live',
                       style: TextStyle(
                           fontFamily: 'Poppins',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
                           color: _color)),
                 ])),
           ])),
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(branchName,
-                  style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A2E))),
-              const SizedBox(height: 12),
-              if (isDesktop)
-                Row(children: [
-                  Expanded(child: Column(children: [
-                    _row(Icons.calendar_today_outlined, 'Tanggal', date),
-                    const SizedBox(height: 8),
-                    _row(Icons.access_time_outlined, 'Jam', '$time WIB'),
-                  ])),
-                  const SizedBox(width: 24),
-                  Expanded(child: Column(children: [
-                    _row(Icons.people_outline, 'Tamu', '$guests orang'),
-                    if (notes != null && notes.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _row(Icons.note_outlined, 'Catatan', notes),
-                    ],
-                  ])),
-                ])
-              else ...[
-                _row(Icons.calendar_today_outlined, 'Tanggal', date),
-                const SizedBox(height: 8),
-                _row(Icons.access_time_outlined, 'Jam', '$time WIB'),
-                const SizedBox(height: 8),
-                _row(Icons.people_outline, 'Tamu', '$guests orang'),
-                if (notes != null && notes.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _row(Icons.note_outlined, 'Catatan', notes),
-                ],
-              ],
-              if (tableId != null && _status == 'confirmed') ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE8F5E9),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: const Color(0xFF4CAF50).withValues(alpha: 0.3))),
-                  child: Row(children: [
-                    const Icon(Icons.table_restaurant,
-                        size: 16, color: Color(0xFF4CAF50)),
-                    const SizedBox(width: 8),
-                    Builder(builder: (_) {
-                      final tableData = booking['restaurant_tables']
-                          as Map<String, dynamic>?;
-                      final num = tableData?['table_number'] as String?;
-                      return Text(
-                        num != null
-                            ? 'Meja $num sudah disiapkan'
-                            : 'Meja sudah disiapkan',
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.store_outlined,
+                        size: 18, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(branchName,
                         style: const TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF2E7D32)));
-                    }),
-                  ])),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B))),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              if (isDesktop)
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(child: _infoGrid()),
+                  const SizedBox(width: 24),
+                  Expanded(child: _infoGrid2()),
+                ])
+              else
+                _infoGrid(),
+              if (tableId != null && _status == 'confirmed') ...[
+                const SizedBox(height: 16),
+                _infoBanner(
+                  icon: Icons.table_restaurant,
+                  text: 'Meja ${booking['restaurant_tables']?['table_number'] ?? ''} sudah disiapkan',
+                  color: const Color(0xFF10B981),
+                  bgColor: const Color(0xFFD1FAE5),
+                ),
               ],
               if (_status == 'waitlisted') ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3E8FF),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: const Color(0xFF7C3AED).withValues(alpha: 0.3))),
-                  child: Row(children: [
-                    const Icon(Icons.hourglass_top_outlined,
-                        size: 16, color: Color(0xFF7C3AED)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Kamu di daftar tunggu. Staff akan menghubungi jika ada meja tersedia.',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Color(0xFF6D28D9))),
-                          if (booking['customer_phone'] != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              'Akan dihubungi via: ${booking['customer_phone']}',
-                              style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF7C3AED))),
-                          ],
-                        ],
-                      )),
-                  ])),
+                const SizedBox(height: 16),
+                _infoBanner(
+                  icon: Icons.hourglass_top_outlined,
+                  text: 'Kamu di daftar tunggu. Staff akan menghubungi jika ada meja tersedia.\nAkan dihubungi via: ${booking['customer_phone']}',
+                  color: const Color(0xFF8B5CF6),
+                  bgColor: const Color(0xFFF3E8FF),
+                ),
               ],
               // ── Section DP untuk Customer ──────────────
               if (hasDeposit) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 _buildCustomerDpSection(
                   context,
                   depositAmount: depositAmount,
@@ -1242,49 +1303,115 @@ class _BookingCardState extends State<_BookingCard> {
               ],
 
               if (_isActive) ...[
+                const SizedBox(height: 20),
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
                 const SizedBox(height: 16),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8E1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: const Color(0xFFFFCC02).withValues(alpha: 0.4))),
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: const Row(children: [
-                    Icon(Icons.info_outline, size: 14, color: Color(0xFFD97706)),
-                    SizedBox(width: 6),
+                    Icon(Icons.info_outline, size: 16, color: Color(0xFFD97706)),
+                    SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Ingin mengubah atau membatalkan? Hubungi staff kami.',
                         style: TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 11,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                             color: Color(0xFFD97706)))),
                   ])),
-                const SizedBox(height: 10),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: () => _contactStaff(context, branchPhone),
                     icon: const Icon(Icons.chat_rounded,
-                        size: 18, color: Color(0xFF25D366)),
-                    label: const Text('Hubungi Kami',
+                        size: 20, color: Color(0xFF25D366)),
+                    label: const Text('Hubungi Kami via WhatsApp',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1A1A2E))),
+                            fontSize: 14,
+                            color: Color(0xFF1E293B))),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10))),
+                          borderRadius: BorderRadius.circular(14))),
                   )),
               ],
             ])),
       ]));
   }
+
+  Widget _infoGrid() {
+    final date   = _fmtDate(widget.booking['booking_date'] as String?);
+    final time   = (widget.booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
+    final guests = widget.booking['guest_count'] ?? 1;
+    return Column(children: [
+      _infoRow(Icons.calendar_today_outlined, 'Tanggal', date),
+      const SizedBox(height: 12),
+      _infoRow(Icons.access_time_outlined, 'Jam', '$time WIB'),
+      const SizedBox(height: 12),
+      _infoRow(Icons.people_outline, 'Tamu', '$guests orang'),
+    ]);
+  }
+
+  Widget _infoGrid2() => Column(children: [
+    if (widget.booking['special_requests'] != null &&
+        widget.booking['special_requests'].toString().isNotEmpty) ...[
+      _infoRow(Icons.note_outlined, 'Catatan', 
+          widget.booking['special_requests'].toString()),
+    ],
+  ]);
+
+  Widget _infoRow(IconData icon, String label, String value) =>
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 18, color: const Color(0xFF94A3B8)),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 70,
+          child: Text('$label:',
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B))),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(value,
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1E293B)))),
+      ]);
+
+  Widget _infoBanner({required IconData icon, required String text, required Color color, required Color bgColor}) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: color))),
+        ]),
+      );
 
   // ── Helper: format rupiah ──
   String _formatRupiah(int amount) {
@@ -1321,38 +1448,49 @@ class _BookingCardState extends State<_BookingCard> {
       final source = await showModalBottomSheet<ImageSource>(
         context: context,
         shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
         builder: (_) => SafeArea(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Container(
               width: 40, height: 4,
               decoration: BoxDecoration(
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(2)),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             const Text('Pilih Sumber Foto',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w700,
-                    fontSize: 15)),
+                    fontSize: 16,
+                    color: Color(0xFF1E293B))),
             const SizedBox(height: 8),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined,
-                  color: Color(0xFF0F3460)),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.photo_library_outlined,
+                    color: Color(0xFFE94560), size: 20)),
               title: const Text('Galeri Foto',
-                  style: TextStyle(fontFamily: 'Poppins')),
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500)),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt_outlined,
-                  color: Color(0xFF0F3460)),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.camera_alt_outlined,
+                    color: Color(0xFFE94560), size: 20)),
               title: const Text('Kamera',
-                  style: TextStyle(fontFamily: 'Poppins')),
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500)),
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
           ]),
         ),
       );
@@ -1400,24 +1538,26 @@ class _BookingCardState extends State<_BookingCard> {
           .eq('id', bookingId);
 
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Row(children: [
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Row(children: [
           Icon(Icons.check_circle, color: Colors.white, size: 18),
-          SizedBox(width: 8),
+          SizedBox(width: 10),
           Text('Bukti transfer berhasil dikirim! Menunggu konfirmasi staff.',
-              style: TextStyle(fontFamily: 'Poppins')),
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 13)),
         ]),
-        backgroundColor: Color(0xFF1976D2),
+        backgroundColor: const Color(0xFF3B82F6),
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 4),
+        duration: const Duration(seconds: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Gagal upload bukti: $e',
-            style: const TextStyle(fontFamily: 'Poppins')),
-        backgroundColor: const Color(0xFFE94560),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+        backgroundColor: const Color(0xFFEF4444),
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ));
     } finally {
       if (mounted) setState(() => _uploadingProof = false);
@@ -1445,34 +1585,34 @@ class _BookingCardState extends State<_BookingCard> {
     final String statusText;
 
     if (isDpPaid) {
-      bgColor     = const Color(0xFFE8F5E9);
-      borderColor = const Color(0xFF4CAF50);
-      iconColor   = const Color(0xFF2E7D32);
-      labelColor  = const Color(0xFF2E7D32);
+      bgColor     = const Color(0xFFD1FAE5);
+      borderColor = const Color(0xFF10B981);
+      iconColor   = const Color(0xFF059669);
+      labelColor  = const Color(0xFF059669);
       statusIcon  = Icons.check_circle_outline;
       statusText  = 'DP Lunas ✓';
     } else if (isDpUploaded) {
-      bgColor     = const Color(0xFFE3F2FD);
-      borderColor = const Color(0xFF1976D2);
-      iconColor   = const Color(0xFF1565C0);
-      labelColor  = const Color(0xFF1565C0);
+      bgColor     = const Color(0xFFDBEAFE);
+      borderColor = const Color(0xFF3B82F6);
+      iconColor   = const Color(0xFF2563EB);
+      labelColor  = const Color(0xFF2563EB);
       statusIcon  = Icons.hourglass_top_outlined;
       statusText  = 'Bukti Dikirim — Menunggu Konfirmasi';
     } else {
-      bgColor     = const Color(0xFFFFF3E0);
-      borderColor = const Color(0xFFFFB300);
-      iconColor   = const Color(0xFFE65100);
-      labelColor  = const Color(0xFFE65100);
+      bgColor     = const Color(0xFFFEF3C7);
+      borderColor = const Color(0xFFF59E0B);
+      iconColor   = const Color(0xFFD97706);
+      labelColor  = const Color(0xFFD97706);
       statusIcon  = Icons.payments_outlined;
       statusText  = 'DP Belum Dibayar';
     }
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor.withValues(alpha: 0.5), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1480,72 +1620,87 @@ class _BookingCardState extends State<_BookingCard> {
 
           // Baris atas: ikon + label + nominal
           Row(children: [
-            Icon(statusIcon, size: 16, color: iconColor),
-            const SizedBox(width: 6),
+            Icon(statusIcon, size: 18, color: iconColor),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(statusText,
                 style: TextStyle(
                   fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
                   color: labelColor)),
             ),
-            Text(
-              _formatRupiah(depositAmount),
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: labelColor)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(20)),
+              child: Text(
+                _formatRupiah(depositAmount),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: labelColor)),
+            ),
           ]),
 
           // Rincian per orang
           if (dpPerOrang > 0) ...[
-            const SizedBox(height: 2),
-            Text(
-              '${_formatRupiah(dpPerOrang)} × ${depositAmount ~/ dpPerOrang} orang',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                color: labelColor.withValues(alpha: 0.7))),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Text(
+                '${_formatRupiah(dpPerOrang)} × ${depositAmount ~/ dpPerOrang} orang',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: labelColor.withValues(alpha: 0.7))),
+            ),
           ],
 
           // Waktu konfirmasi jika sudah lunas
           if (isDpPaid && depositPaidAt != null) ...[
-            const SizedBox(height: 4),
-            Row(children: [
-              Icon(Icons.schedule, size: 12, color: labelColor.withValues(alpha: 0.6)),
-              const SizedBox(width: 4),
-              Text(
-                'Dikonfirmasi: ${_formatDateTime(depositPaidAt)}',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 11,
-                  color: labelColor.withValues(alpha: 0.7))),
-            ]),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Row(children: [
+                Icon(Icons.schedule, size: 14, color: labelColor.withValues(alpha: 0.6)),
+                const SizedBox(width: 6),
+                Text(
+                  'Dikonfirmasi: ${_formatDateTime(depositPaidAt)}',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: labelColor.withValues(alpha: 0.7))),
+              ]),
+            ),
           ],
 
           // Catatan dari staff (jika bukan URL bukti)
           if (depositNotes != null &&
               depositNotes.isNotEmpty &&
               !depositNotes.startsWith('Bukti transfer: http')) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(6)),
+                borderRadius: BorderRadius.circular(10)),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, size: 12, color: labelColor),
-                  const SizedBox(width: 5),
+                  Icon(Icons.info_outline, size: 14, color: labelColor),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(depositNotes,
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
+                        fontWeight: FontWeight.w500,
                         color: labelColor))),
                 ]),
             ),
@@ -1553,85 +1708,85 @@ class _BookingCardState extends State<_BookingCard> {
 
           // Info "bukti sudah dikirim"
           if (isDpUploaded) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(6)),
+                borderRadius: BorderRadius.circular(10)),
               child: const Row(children: [
                 Icon(Icons.access_time_outlined,
-                    size: 13, color: Color(0xFF1565C0)),
-                SizedBox(width: 6),
+                    size: 14, color: Color(0xFF2563EB)),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Bukti transfer sudah diterima. Staff sedang memverifikasi pembayaranmu.',
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: Color(0xFF1565C0)))),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF2563EB)))),
               ]),
             ),
           ],
 
           // Tombol upload bukti — hanya muncul saat pending (belum upload)
           if (isDpPending) ...[
-            const SizedBox(height: 10),
-            const Divider(height: 1),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: Color(0xFFFDE68A)),
+            const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(12)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Cara Bayar DP:',
+                    '📋 Cara Bayar DP:',
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                      color: Color(0xFFE65100))),
-                  const SizedBox(height: 4),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: Color(0xFFD97706))),
+                  const SizedBox(height: 8),
                   const Text(
-                    '1. Transfer ke rekening restoran\n'
-                    '2. Foto/screenshot bukti transfer\n'
-                    '3. Upload di tombol di bawah',
+                    '1. Transfer ke rekening restoran yang tertera\n'
+                    '2. Foto atau screenshot bukti transfer\n'
+                    '3. Upload bukti dengan tombol di bawah',
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: Color(0xFF6B7280),
+                      fontSize: 12,
+                      color: Color(0xFF78350F),
                       height: 1.6)),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _uploadingProof
-                          ? null
-                          : () => _uploadProof(context, bookingId),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE65100),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        textStyle: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600),
-                      ),
-                      icon: _uploadingProof
-                          ? const SizedBox(
-                              width: 14, height: 14,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : const Icon(Icons.upload_file_outlined, size: 16),
-                      label: Text(_uploadingProof
-                          ? 'Mengupload...'
-                          : 'Upload Bukti Transfer'),
-                    )),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _uploadingProof
+                        ? null
+                        : () => _uploadProof(context, bookingId),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD97706),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      textStyle: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700),
+                      minimumSize: const Size(double.infinity, 44),
+                    ),
+                    icon: _uploadingProof
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2.5))
+                        : const Icon(Icons.upload_file_outlined, size: 18),
+                    label: Text(_uploadingProof
+                        ? 'Mengupload...'
+                        : 'Upload Bukti Transfer'),
+                  ),
                 ],
               ),
             ),
@@ -1640,22 +1795,4 @@ class _BookingCardState extends State<_BookingCard> {
       ),
     );
   }
-
-  Widget _row(IconData icon, String label, String value) =>
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, size: 16, color: const Color(0xFF6B7280)),
-        const SizedBox(width: 8),
-        Text('$label: ',
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: Color(0xFF6B7280))),
-        Expanded(
-          child: Text(value,
-              style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A2E)))),
-      ]);
 }
