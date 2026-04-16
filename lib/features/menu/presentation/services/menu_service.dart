@@ -1,9 +1,9 @@
-// lib/features/menu/services/menu_service.dart
+// lib/features/menu/presentation/services/menu_service.dart
 
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/menu_model.dart';
+import '../../models/menu_model.dart';
 
 class MenuService {
   final SupabaseClient _client;
@@ -123,7 +123,7 @@ class MenuService {
               ),
             );
       } else {
-        throw MenuServiceException('Tipe file tidak didukung');
+        throw const MenuServiceException('Tipe file tidak didukung');
       }
 
       return _client.storage.from(_bucketName).getPublicUrl(filePath);

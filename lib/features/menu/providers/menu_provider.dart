@@ -3,7 +3,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/menu_model.dart';
-import '../services/menu_service.dart';
+import '../presentation/services/menu_service.dart';
 
 // ─── SERVICE PROVIDER ─────────────────────────────────────────────────────────
 
@@ -175,7 +175,7 @@ class MenuNotifier extends AsyncNotifier<List<Menu>> {
   Future<bool> deleteMenu(String id) async {
     final menu = state.valueOrNull?.firstWhere(
       (m) => m.id == id,
-      orElse: () => Menu(
+      orElse: () => const Menu(
         id: '',
         name: '',
         description: '',
@@ -245,4 +245,4 @@ final menuCountByCategoryProvider =
     counts[m.category] = (counts[m.category] ?? 0) + 1;
   }
   return counts;
-}); 
+});

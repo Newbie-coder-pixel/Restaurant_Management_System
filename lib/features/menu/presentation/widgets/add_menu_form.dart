@@ -36,8 +36,6 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
   String? _imageError;
 
   bool get _isEdit => widget.existingMenu != null;
-  bool get _hasNewImage =>
-      _selectedImageFile != null || _selectedImageBytes != null;
 
   @override
   void initState() {
@@ -213,7 +211,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
             width: 44,
             height: 4,
             decoration: BoxDecoration(
-              color: colorScheme.onSurface.withOpacity(0.2),
+              color: colorScheme.onSurface.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -257,7 +255,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     const SizedBox(height: 20),
 
                     // Name
-                    _FormLabel('Nama Menu'),
+                    const _FormLabel('Nama Menu'),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _nameCtrl,
@@ -271,7 +269,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     const SizedBox(height: 16),
 
                     // Description
-                    _FormLabel('Deskripsi'),
+                    const _FormLabel('Deskripsi'),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _descCtrl,
@@ -283,7 +281,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     const SizedBox(height: 16),
 
                     // Price
-                    _FormLabel('Harga'),
+                    const _FormLabel('Harga'),
                     const SizedBox(height: 6),
                     TextFormField(
                       controller: _priceCtrl,
@@ -306,7 +304,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     const SizedBox(height: 16),
 
                     // Category
-                    _FormLabel('Kategori'),
+                    const _FormLabel('Kategori'),
                     const SizedBox(height: 8),
                     _CategorySelector(
                       selected: _selectedCategory,
@@ -358,7 +356,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
       hintText: hint,
       filled: true,
       fillColor:
-          Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+          Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -448,12 +446,12 @@ class _ImagePickerSection extends StatelessWidget {
         height: 160,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest.withOpacity(0.4),
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: errorText != null
                 ? Colors.red
-                : colorScheme.outline.withOpacity(0.3),
+                : colorScheme.outline.withValues(alpha: 0.3),
             width: errorText != null ? 1.5 : 1,
           ),
         ),
@@ -475,7 +473,7 @@ class _EmptyImagePlaceholder extends StatelessWidget {
         Icon(
           Icons.add_photo_alternate_outlined,
           size: 40,
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
         ),
         const SizedBox(height: 8),
         Text(
@@ -491,7 +489,7 @@ class _EmptyImagePlaceholder extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             color:
-                Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
       ],
@@ -507,7 +505,7 @@ class _EditBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
+        color: Colors.black.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(20),
       ),
       child: const Row(
@@ -556,7 +554,7 @@ class _CategorySelector extends StatelessWidget {
             decoration: BoxDecoration(
               color: isSelected
                   ? colorScheme.primary
-                  : colorScheme.surfaceContainerHighest.withOpacity(0.6),
+                  : colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -580,4 +578,4 @@ class _CategorySelector extends StatelessWidget {
       }).toList(),
     );
   }
-} 
+}

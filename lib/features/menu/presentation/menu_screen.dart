@@ -91,7 +91,7 @@ class _MenuAppBar extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                colorScheme.primaryContainer.withOpacity(0.5),
+                colorScheme.primaryContainer.withValues(alpha: 0.5),
                 colorScheme.surface,
               ],
             ),
@@ -156,7 +156,7 @@ class _SearchFilterBar extends ConsumerWidget {
                       : const SizedBox.shrink(),
                 ),
                 filled: true,
-                fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -176,7 +176,7 @@ class _SearchFilterBar extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: filter.showAvailableOnly == true
                     ? colorScheme.primary
-                    : colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                    : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: IconButton(
@@ -248,7 +248,7 @@ class _CategoryTabs extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: isSelected
                     ? colorScheme.primary
-                    : colorScheme.surfaceContainerHighest.withOpacity(0.4),
+                    : colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Row(
@@ -271,8 +271,8 @@ class _CategoryTabs extends ConsumerWidget {
                         horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? colorScheme.onPrimary.withOpacity(0.25)
-                          : colorScheme.onSurface.withOpacity(0.12),
+                          ? colorScheme.onPrimary.withValues(alpha: 0.25)
+                          : colorScheme.onSurface.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -343,7 +343,7 @@ class _StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: RichText(
@@ -355,7 +355,7 @@ class _StatChip extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w800)),
             TextSpan(
                 text: ' $label',
-                style: TextStyle(color: color.withOpacity(0.8))),
+                style: TextStyle(color: color.withValues(alpha: 0.8))),
           ],
         ),
       ),
@@ -386,7 +386,7 @@ class _MenuGrid extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.error_outline,
-                size: 56, color: Colors.red.withOpacity(0.7)),
+                size: 56, color: Colors.red.withValues(alpha: 0.7)),
             const SizedBox(height: 12),
             Text('Gagal memuat menu',
                 style: Theme.of(context).textTheme.titleMedium),
@@ -397,7 +397,7 @@ class _MenuGrid extends ConsumerWidget {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withOpacity(0.5),
+                        .withValues(alpha: 0.5),
                   ),
               textAlign: TextAlign.center,
             ),
@@ -449,13 +449,13 @@ class _EmptyState extends StatelessWidget {
             width: 96,
             height: 96,
             decoration: BoxDecoration(
-              color: colorScheme.primaryContainer.withOpacity(0.4),
+              color: colorScheme.primaryContainer.withValues(alpha: 0.4),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.restaurant_menu,
               size: 48,
-              color: colorScheme.primary.withOpacity(0.6),
+              color: colorScheme.primary.withValues(alpha: 0.6),
             ),
           ),
           const SizedBox(height: 20),
@@ -471,7 +471,7 @@ class _EmptyState extends StatelessWidget {
             'Tambahkan menu pertama Anda\nuntuk mulai menerima pesanan.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: colorScheme.onSurface.withOpacity(0.55),
+              color: colorScheme.onSurface.withValues(alpha: 0.55),
               height: 1.5,
             ),
           ),
@@ -479,4 +479,4 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
-} 
+}

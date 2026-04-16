@@ -135,7 +135,7 @@ class _MenuCardState extends ConsumerState<MenuCard>
         ),
         child: Card(
           elevation: 2,
-          shadowColor: colorScheme.shadow.withOpacity(0.15),
+          shadowColor: colorScheme.shadow.withValues(alpha: 0.15),
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -183,7 +183,7 @@ class _MenuCardState extends ConsumerState<MenuCard>
                         child: Text(
                           menu.description,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurface.withOpacity(0.6),
+                            color: colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -273,7 +273,7 @@ class _MenuImage extends StatelessWidget {
               : _PlaceholderImage(),
           if (!isAvailable)
             Container(
-              color: Colors.black.withOpacity(0.45),
+              color: Colors.black.withValues(alpha: 0.45),
               child: const Center(
                 child: Icon(Icons.block, color: Colors.white54, size: 32),
               ),
@@ -288,11 +288,11 @@ class _PlaceholderImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Theme.of(context).colorScheme.surfaceVariant,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Icon(
         Icons.restaurant,
         size: 36,
-        color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
+        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
       ),
     );
   }
@@ -309,7 +309,7 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -317,7 +317,7 @@ class _StatusBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
-          color: color.withOpacity(0.9),
+          color: color.withValues(alpha: 0.9),
           letterSpacing: 0.3,
         ),
       ),
@@ -374,8 +374,8 @@ class _AvailabilityToggle extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
           color: isAvailable
-              ? Colors.green.withOpacity(0.1)
-              : Colors.red.withOpacity(0.1),
+              ? Colors.green.withValues(alpha: 0.1)
+              : Colors.red.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -408,4 +408,3 @@ class _AvailabilityToggle extends StatelessWidget {
     );
   }
 }
- 
