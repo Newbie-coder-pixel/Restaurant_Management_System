@@ -19,6 +19,37 @@ enum StaffRole {
     }
   }
 
+  String get accessDescription {
+    switch (this) {
+      case StaffRole.superadmin: return 'Akses penuh ke semua fitur & semua cabang';
+      case StaffRole.manager:    return 'Laporan, menu, inventori, staff, & operasional';
+      case StaffRole.cashier:    return 'Kasir, order, & lihat menu';
+      case StaffRole.waiter:     return 'Kelola order & lihat meja';
+      case StaffRole.kitchen:    return 'Kitchen Display System (KDS)';
+      case StaffRole.host:       return 'Manajemen meja & reservasi';
+    }
+  }
+
+  List<String> get accessFeatures {
+    switch (this) {
+      case StaffRole.superadmin:
+        return ['Laporan & Analitik', 'Manajemen Meja', 'Reservasi', 'Order',
+                'Kasir & Pembayaran', 'Dapur (KDS)', 'Menu', 'Inventori',
+                'Staff', 'Multi Cabang', 'AI Chatbot'];
+      case StaffRole.manager:
+        return ['Laporan & Analitik', 'Manajemen Meja', 'Reservasi', 'Order',
+                'Kasir & Pembayaran', 'Menu', 'Inventori', 'Staff', 'AI Chatbot'];
+      case StaffRole.cashier:
+        return ['Kasir & Pembayaran', 'Order', 'Menu'];
+      case StaffRole.waiter:
+        return ['Order', 'Manajemen Meja'];
+      case StaffRole.kitchen:
+        return ['Dapur (KDS)'];
+      case StaffRole.host:
+        return ['Manajemen Meja', 'Reservasi'];
+    }
+  }
+
   static StaffRole fromString(String value) {
     return StaffRole.values.firstWhere(
       (e) => e.name == value,

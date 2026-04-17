@@ -286,6 +286,50 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 )).toList(),
                 onChanged: (v) { if (v != null) ss(() => selectedRole = v); },
               ),
+              const SizedBox(height: 12),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: _roleColor(selectedRole).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: _roleColor(selectedRole).withValues(alpha: 0.3))),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.shield_outlined,
+                          size: 15, color: _roleColor(selectedRole)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(selectedRole.accessDescription,
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _roleColor(selectedRole))),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: selectedRole.accessFeatures.map((f) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: _roleColor(selectedRole).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Text(f,
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: _roleColor(selectedRole))),
+                      )).toList(),
+                    ),
+                  ],
+                ),
+              ),
               if (errorMsg != null) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -597,6 +641,50 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   ]),
                 )).toList(),
                 onChanged: (v) { if (v != null) ss(() => selectedRole = v); },
+              ),
+              const SizedBox(height: 12),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: _roleColor(selectedRole).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: _roleColor(selectedRole).withValues(alpha: 0.3))),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.shield_outlined,
+                          size: 15, color: _roleColor(selectedRole)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(selectedRole.accessDescription,
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _roleColor(selectedRole))),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: selectedRole.accessFeatures.map((f) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: _roleColor(selectedRole).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Text(f,
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: _roleColor(selectedRole))),
+                      )).toList(),
+                    ),
+                  ],
+                ),
               ),
               if (errorMsg != null) ...[
                 const SizedBox(height: 16),
