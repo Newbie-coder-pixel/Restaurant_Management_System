@@ -108,6 +108,33 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> {
     }
   }
 
+  // ── helper: konversi "HH:mm" ke menit dari tengah malam ─
+  int _toMinutes(String time) {
+    final parts = time.split(':');
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+  }
+
+  // ── helper: cek apakah dua shift overlap (support overnight) ─
+  // Overnight shift: endTime < startTime (misal 22:00 – 02:00)
+  bool _isOverlapping(String start1, String end1, String start2, String end2) {
+    final s1 = _toMinutes(start1);
+    final e1 = _toMinutes(end1);
+    final s2 = _toMinutes(start2);
+    final e2 = _toMinutes(end2);
+
+    // Normalisasi ke range [start, end) — overnight dikonversi ke end + 1440
+    final e1Norm = e1 <= s1 ? e1 + 1440 : e1; // overnight shift 1
+    final e2Norm = e2 <= s2 ? e2 + 1440 : e2; // overnight shift 2
+
+    // Cek overlap dengan mengecek kedua arah (shift 2 bisa mulai sebelum tengah malam)
+    // Cek normal
+    final overlap1 = s1 < e2Norm && s2 < e1Norm;
+    // Cek shift 2 yang mungkin overnight (geser s2 +1440 untuk cek wraparound)
+    final overlap2 = s1 < (e2Norm - 1440 + 1440) && (s2 + 1440) < e1Norm;
+
+    return overlap1 || (e2 <= s2 && overlap2);
+  }
+
   // ── tambah shift di hari tertentu ─────────────────────
   Future<void> _addShiftDialog(int day) async {
     String startTime = '08:00';
@@ -165,12 +192,19 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> {
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary, foregroundColor: Colors.white),
               onPressed: () {
-                // Validasi: tidak boleh duplikat di hari yang sama
+                // Validasi 1: start == end tidak boleh
+                if (startTime == endTime) {
+                  ss(() => errorMsg = 'Jam mulai dan selesai tidak boleh sama.');
+                  return;
+                }
+                // Validasi 2: cek overlap dengan shift yang sudah ada di hari ini
                 final existing = _shifts[day] ?? [];
-                final isDuplicate = existing.any(
-                    (s) => s.startTime == startTime && s.endTime == endTime);
-                if (isDuplicate) {
-                  ss(() => errorMsg = 'Shift dengan waktu ini sudah ada.');
+                final overlapping = existing.where((s) =>
+                    _isOverlapping(startTime, endTime, s.startTime, s.endTime));
+                if (overlapping.isNotEmpty) {
+                  final conflict = overlapping.first;
+                  ss(() => errorMsg =
+                      'Bertabrakan dengan shift ${conflict.startTime}–${conflict.endTime}.');
                   return;
                 }
                 Navigator.pop(ctx);
@@ -211,45 +245,72 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> {
     }
 
     setState(() => _isSaving = true);
-    int savedDays = 0;
 
-    try {
-      for (final day in _dirtyDays) {
-        // Hapus semua shift di hari ini dulu
+    final List<int> savedDays   = [];
+    final List<int> failedDays  = [];
+
+    for (final day in _dirtyDays.toList()) {
+      try {
+        // 1. Hapus shift lama di hari ini
         await Supabase.instance.client
             .from('staff_shifts')
             .delete()
             .eq('staff_id', widget.staff.id)
             .eq('day_of_week', day);
 
-        // Insert ulang yang baru
+        // 2. Insert shift baru (kalau ada)
         final shifts = _shifts[day] ?? [];
         if (shifts.isNotEmpty) {
           await Supabase.instance.client
               .from('staff_shifts')
               .insert(shifts.map((s) => s.toInsert()).toList());
         }
-        savedDays++;
-      }
 
-      _dirtyDays.clear();
-      // Reload untuk dapat ID terbaru
-      await _load();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('✅ Jadwal shift berhasil disimpan ($savedDays hari diperbarui)'),
-            backgroundColor: const Color(0xFF4CAF50)));
+        savedDays.add(day);
+      } catch (_) {
+        // Hari ini gagal — tandai tapi lanjut ke hari berikutnya
+        failedDays.add(day);
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal menyimpan: $e'),
-            backgroundColor: Colors.red));
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
     }
+
+    // Hapus hanya hari yang berhasil dari _dirtyDays
+    for (final day in savedDays) {
+      _dirtyDays.remove(day);
+    }
+
+    // Reload supaya ID dari DB masuk ke state
+    await _load();
+
+    if (mounted) {
+      if (failedDays.isEmpty) {
+        // Semua berhasil
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '✅ Jadwal shift berhasil disimpan (${savedDays.length} hari diperbarui)'),
+            backgroundColor: const Color(0xFF4CAF50)));
+      } else if (savedDays.isEmpty) {
+        // Semua gagal
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                '❌ Gagal menyimpan semua perubahan. Cek koneksi dan coba lagi.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4)));
+      } else {
+        // Sebagian berhasil, sebagian gagal
+        const dayNames = [
+          'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
+        ];
+        final failedNames = failedDays.map((d) => dayNames[d]).join(', ');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '⚠️ ${savedDays.length} hari berhasil disimpan.\n'
+                'Gagal: $failedNames — coba simpan ulang.'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5)));
+      }
+    }
+
+    if (mounted) setState(() => _isSaving = false);
   }
 
   // ── copy shift dari hari lain ──────────────────────────
@@ -289,15 +350,37 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> {
 
     if (selectedDay == null) return;
     final sourceShifts = _shifts[selectedDay]!;
+    final targetExisting = _shifts[targetDay] ?? [];
+
+    // Filter hanya shift yang tidak overlap dengan yang sudah ada di hari target
+    final nonOverlapping = sourceShifts.where((s) => !targetExisting.any(
+        (e) => _isOverlapping(s.startTime, s.endTime, e.startTime, e.endTime))).toList();
+    final skipped = sourceShifts.length - nonOverlapping.length;
+
+    if (nonOverlapping.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Semua shift dari hari itu bertabrakan dengan shift yang sudah ada.'),
+            backgroundColor: Colors.orange));
+      }
+      return;
+    }
+
     setState(() {
-      _shifts[targetDay] = sourceShifts.map((s) => StaffShift(
+      _shifts.putIfAbsent(targetDay, () => []).addAll(nonOverlapping.map((s) => StaffShift(
         staffId: widget.staff.id,
         dayOfWeek: targetDay,
         startTime: s.startTime,
         endTime: s.endTime,
-      )).toList();
+      )));
       _dirtyDays.add(targetDay);
     });
+
+    if (mounted && skipped > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$skipped shift dilewati karena bertabrakan dengan jadwal yang ada.'),
+          backgroundColor: Colors.orange));
+    }
   }
 
   // ── hitung total jam per minggu ────────────────────────

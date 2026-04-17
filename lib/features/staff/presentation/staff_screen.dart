@@ -6,7 +6,8 @@ import '../../../core/models/staff_role.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
-import 'staff_shift_screen.dart'; // <-- import shift screen
+import 'staff_shift_screen.dart';
+import 'staff_attendance_screen.dart';
 
 class StaffScreen extends ConsumerStatefulWidget {
   const StaffScreen({super.key});
@@ -259,8 +260,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<StaffRole>(
-                // ignore: deprecated_member_use
-                value: selectedRole,
+                initialValue: selectedRole,
                 decoration: const InputDecoration(labelText: 'Role'),
                 items: StaffRole.values.map((r) => DropdownMenuItem(
                   value: r,
@@ -371,7 +371,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
               subtitle: Text(
                   '${s.role.displayName}${s.phone != null ? ' • ${s.phone}' : ''}',
-                  style: AppTextStyles.caption)),
+                  style: AppTextStyles.caption),
+            ),
             const Divider(),
             // edit — hanya saat active
             if (s.isActive)
@@ -406,6 +407,30 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     context,
                     MaterialPageRoute(
                       builder: (_) => StaffShiftScreen(staff: s),
+                    ),
+                  );
+                }),
+            // lihat attendance
+            if (s.isActive)
+              ListTile(
+                leading: const Icon(Icons.fact_check_outlined,
+                    color: Color(0xFF4CAF50)),
+                title: const Text('Riwayat Absensi',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Color(0xFF4CAF50),
+                        fontWeight: FontWeight.w600)),
+                subtitle: const Text('Lihat & koreksi catatan kehadiran',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StaffAttendanceScreen(
+                        staff: s,
+                        branchId: _branchId ?? '',
+                      ),
                     ),
                   );
                 }),
@@ -460,7 +485,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── add staff ──────────────────────────────────────────
+  // ── add staff — FIXED: pakai edge function, bukan signUp ──
   Future<void> _showAddStaffDialog() async {
     final nameCtrl     = TextEditingController();
     final emailCtrl    = TextEditingController();
@@ -528,8 +553,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   keyboardType: TextInputType.phone),
               const SizedBox(height: 12),
               DropdownButtonFormField<StaffRole>(
-                // ignore: deprecated_member_use
-                value: selectedRole,
+                initialValue: selectedRole,
                 decoration: const InputDecoration(labelText: 'Role'),
                 items: StaffRole.values.map((r) => DropdownMenuItem(
                   value: r,
@@ -574,6 +598,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       final email = emailCtrl.text.trim().toLowerCase();
                       final pass  = passwordCtrl.text;
 
+                      // Validasi input
                       if (name.isEmpty) {
                         ss(() => errorMsg = 'Nama wajib diisi.');
                         return;
@@ -594,60 +619,29 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
                       ss(() { isLoading = true; errorMsg = null; });
 
-                      // ── step 1: cek duplikat ──
+                      // ── panggil edge function create-staff-user ──
+                      // Tidak pakai signUp supaya sesi manager tidak logout
                       try {
-                        final existing = await Supabase.instance.client
-                            .from('staff')
-                            .select('id')
-                            .eq('email', email)
-                            .maybeSingle();
-                        if (existing != null) {
-                          ss(() {
-                            isLoading = false;
-                            errorMsg = 'Email sudah terdaftar. Gunakan email lain.';
-                          });
+                        final res = await Supabase.instance.client.functions.invoke(
+                          'create-staff-user',
+                          body: {
+                            'email':     email,
+                            'password':  pass,
+                            'fullName':  name,
+                            'phone':     phoneCtrl.text.trim().isEmpty
+                                ? null
+                                : phoneCtrl.text.trim(),
+                            'role':      selectedRole.name,
+                            'branchId':  _branchId,
+                          },
+                        );
+
+                        if (res.status != 200) {
+                          final msg = (res.data as Map?)?['error']
+                              ?? 'Gagal menambahkan staff.';
+                          ss(() { isLoading = false; errorMsg = msg; });
                           return;
                         }
-                      } catch (e) {
-                        ss(() {
-                          isLoading = false;
-                          errorMsg = 'Gagal memeriksa email: $e';
-                        });
-                        return;
-                      }
-
-                      // ── step 2: buat auth user ──
-                      String? userId;
-                      try {
-                        final authRes = await Supabase.instance.client.auth
-                            .signUp(email: email, password: pass);
-                        userId = authRes.user?.id;
-                        if (userId == null) throw Exception('Gagal membuat akun auth.');
-                      } catch (e) {
-                        ss(() {
-                          isLoading = false;
-                          errorMsg = e.toString().contains('already registered')
-                              ? 'Email sudah terdaftar di sistem auth. Gunakan email lain.'
-                              : 'Gagal buat akun: $e';
-                        });
-                        return;
-                      }
-
-                      // ── step 3: insert staff row ──
-                      // Jika step ini gagal, auth user sudah terbuat.
-                      // Log error & tampilkan pesan yang jelas ke manager.
-                      try {
-                        await Supabase.instance.client.from('staff').insert({
-                          'user_id':   userId,
-                          'branch_id': _branchId,
-                          'full_name': name,
-                          'email':     email,
-                          'phone': phoneCtrl.text.trim().isEmpty
-                              ? null
-                              : phoneCtrl.text.trim(),
-                          'role':      selectedRole.name,
-                          'is_active': true,
-                        });
 
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
@@ -657,14 +651,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         }
                         await _load();
                       } catch (e) {
-                        // Auth user sudah terbuat tapi data staff gagal disimpan.
-                        // Tampilkan pesan khusus supaya manager tahu harus hubungi admin.
                         ss(() {
                           isLoading = false;
-                          errorMsg =
-                              'Akun berhasil dibuat tapi gagal simpan data staff.\n'
-                              'Hubungi admin untuk menyelesaikan pendaftaran.\n\n'
-                              'Detail: $e';
+                          errorMsg = 'Error: $e';
                         });
                       }
                     },
@@ -836,7 +825,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         children: [
-          // "Semua" chip
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Chip(
@@ -989,12 +977,11 @@ class _ShiftSummaryView extends StatefulWidget {
 }
 
 class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
-  // day_of_week: 0=Mon ... 6=Sun
   static const _days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
   Map<String, List<Map<String, dynamic>>> _shiftsByStaff = {};
   bool _isLoading = true;
-  int _selectedDay = DateTime.now().weekday - 1; // 0-based Mon
+  int _selectedDay = DateTime.now().weekday - 1;
 
   @override
   void initState() {
