@@ -17,21 +17,19 @@ class StaffScreen extends ConsumerStatefulWidget {
 
 class _StaffScreenState extends ConsumerState<StaffScreen>
     with SingleTickerProviderStateMixin {
-  // ── state ──────────────────────────────────────────────
+  // ── state (unchanged) ──────────────────────────────────────────────
   List<StaffMember> _staff = [];
   bool _isLoading = true;
   String? _branchId;
   bool _showArchived = false;
   bool _initialized = false;
 
-  // search
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
 
-  // tab
   late TabController _tabController;
 
-  // ── lifecycle ──────────────────────────────────────────
+  // ── lifecycle (unchanged) ──────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -68,7 +66,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     }
   }
 
-  // ── data ───────────────────────────────────────────────
+  // ── data (unchanged) ───────────────────────────────────────────────
   Future<void> _load() async {
     if (_branchId == null) {
       if (mounted) setState(() => _isLoading = false);
@@ -89,7 +87,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     }
   }
 
-  // ── helpers ────────────────────────────────────────────
+  // ── helpers (unchanged) ────────────────────────────────────────────
   Color _roleColor(StaffRole r) {
     switch (r) {
       case StaffRole.superadmin: return const Color(0xFF9C27B0);
@@ -112,13 +110,13 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         s.role.displayName.toLowerCase().contains(_searchQuery)).toList();
   }
 
-  // ── archive / restore ──────────────────────────────────
+  // ── archive / restore (unchanged) ──────────────────────────────────
   Future<void> _setActiveStatus(StaffMember s, bool active) async {
     final action = active ? 'mengaktifkan' : 'mengarsipkan';
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(active ? 'Aktifkan Staff' : 'Arsipkan Staff',
             style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: Text(
@@ -128,11 +126,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
+              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: active ? AppColors.available : Colors.orange,
-                  foregroundColor: Colors.white),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () => Navigator.pop(ctx, true),
               child: Text(active ? 'Aktifkan' : 'Arsipkan',
                   style: const TextStyle(fontFamily: 'Poppins'))),
@@ -149,17 +148,19 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           content: Text(active
               ? '✅ ${s.fullName} diaktifkan kembali'
               : '📦 ${s.fullName} diarsipkan'),
-          backgroundColor: active ? const Color(0xFF4CAF50) : Colors.orange));
+          backgroundColor: active ? const Color(0xFF4CAF50) : Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
     }
     await _load();
   }
 
-  // ── reset password ─────────────────────────────────────
+  // ── reset password (unchanged) ─────────────────────────────────────
   Future<void> _sendPasswordReset(StaffMember s) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Reset Password',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: Text(
@@ -168,10 +169,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
+              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Kirim Email', style: TextStyle(fontFamily: 'Poppins'))),
         ],
@@ -181,20 +184,24 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     try {
       await Supabase.instance.client.auth.resetPasswordForEmail(s.email);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('📧 Email reset password berhasil dikirim'),
-            backgroundColor: Color(0xFF2196F3)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('📧 Email reset password berhasil dikirim'),
+            backgroundColor: const Color(0xFF2196F3),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Gagal kirim email: $e'),
-            backgroundColor: Colors.red));
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
       }
     }
   }
 
-  // ── edit staff ─────────────────────────────────────────
+  // ── edit staff (unchanged logic, UI improved) ─────────────────────────
   Future<void> _showEditStaffDialog(StaffMember s) async {
     final nameCtrl  = TextEditingController(text: s.fullName);
     final phoneCtrl = TextEditingController(text: s.phone ?? '');
@@ -207,68 +214,72 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       barrierDismissible: false,
       builder: (_) => StatefulBuilder(
         builder: (ctx, ss) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Row(children: [
             CircleAvatar(
-              radius: 18,
+              radius: 20,
               backgroundColor: _roleColor(s.role).withValues(alpha: 0.15),
               child: Text(s.fullName[0].toUpperCase(),
                   style: TextStyle(fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700, color: _roleColor(s.role)))),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             const Expanded(
               child: Text('Edit Staff',
                   style: TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w700))),
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18))),
           ]),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              // email (read-only info)
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300)),
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200)),
                 child: Row(children: [
-                  const Icon(Icons.email_outlined, size: 16, color: Colors.grey),
-                  const SizedBox(width: 8),
+                  const Icon(Icons.email_outlined, size: 18, color: AppColors.textHint),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       const Text('Email (tidak bisa diubah)',
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: Colors.grey)),
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
                       Text(s.email,
-                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w500)),
                     ])),
-                ])),
-              const SizedBox(height: 14),
+                ]),
+              ),
+              const SizedBox(height: 20),
               TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                     labelText: 'Nama Lengkap *',
-                    prefixIcon: Icon(Icons.person_outline)),
+                    prefixIcon: const Icon(Icons.person_outline),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                 textCapitalization: TextCapitalization.words,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextField(
                 controller: phoneCtrl,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                     labelText: 'No. HP',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                    hintText: '08xx-xxxx-xxxx'),
+                    prefixIcon: const Icon(Icons.phone_outlined),
+                    hintText: '08xx-xxxx-xxxx',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                 keyboardType: TextInputType.phone,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               DropdownButtonFormField<StaffRole>(
                 initialValue: selectedRole,
-                decoration: const InputDecoration(labelText: 'Role'),
+                decoration: InputDecoration(
+                    labelText: 'Role',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                 items: StaffRole.values.map((r) => DropdownMenuItem(
                   value: r,
                   child: Row(children: [
-                    Container(width: 10, height: 10,
+                    Container(width: 12, height: 12,
                         decoration: BoxDecoration(
                             color: _roleColor(r), shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Text(r.displayName,
                         style: const TextStyle(fontFamily: 'Poppins')),
                   ]),
@@ -276,25 +287,27 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 onChanged: (v) { if (v != null) ss(() => selectedRole = v); },
               ),
               if (errorMsg != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                       color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(12)),
                   child: Text(errorMsg!,
                       style: const TextStyle(
-                          color: Colors.red, fontSize: 12, fontFamily: 'Poppins'))),
+                          color: Colors.red, fontSize: 13, fontFamily: 'Poppins'))),
               ],
             ]),
           ),
           actions: [
             TextButton(
                 onPressed: isLoading ? null : () => Navigator.pop(ctx),
-                child: const Text('Batal')),
+                child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: isLoading
                   ? null
                   : () async {
@@ -318,7 +331,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
                               content: Text('✅ Data $name berhasil diperbarui'),
-                              backgroundColor: const Color(0xFF4CAF50)));
+                              backgroundColor: const Color(0xFF4CAF50),
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
                         }
                         await _load();
                       } catch (e) {
@@ -330,7 +345,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     },
               child: isLoading
                   ? const SizedBox(
-                      width: 18, height: 18,
+                      width: 20, height: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                   : const Text('Simpan',
@@ -342,39 +357,41 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── bottom sheet options ───────────────────────────────
+  // ── bottom sheet options (UI improved) ───────────────────────────────
   void _showStaffOptions(StaffMember s) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(
                 width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
+                margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                     color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2))),
             // header
             ListTile(
               leading: CircleAvatar(
+                  radius: 24,
                   backgroundColor: _roleColor(s.role).withValues(alpha: 0.15),
                   child: Text(s.fullName[0].toUpperCase(),
                       style: TextStyle(fontFamily: 'Poppins',
                           fontWeight: FontWeight.w700,
+                          fontSize: 18,
                           color: _roleColor(s.role)))),
               title: Text(s.fullName,
                   style: const TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
               subtitle: Text(
                   '${s.role.displayName}${s.phone != null ? ' • ${s.phone}' : ''}',
                   style: AppTextStyles.caption),
             ),
-            const Divider(),
-            // edit — hanya saat active
+            const Divider(height: 0),
+            // edit
             if (s.isActive)
               ListTile(
                 leading: const Icon(Icons.edit_outlined, color: Color(0xFF2196F3)),
@@ -384,12 +401,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         color: Color(0xFF2196F3),
                         fontWeight: FontWeight.w600)),
                 subtitle: const Text('Ubah nama, no. HP, atau role',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showEditStaffDialog(s);
                 }),
-            // lihat shift
+            // shift
             if (s.isActive)
               ListTile(
                 leading: const Icon(Icons.calendar_month_outlined,
@@ -400,7 +417,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         color: Color(0xFF9C27B0),
                         fontWeight: FontWeight.w600)),
                 subtitle: const Text('Atur jadwal kerja mingguan',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
                   Navigator.push(
@@ -410,7 +427,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     ),
                   );
                 }),
-            // lihat attendance
+            // attendance
             if (s.isActive)
               ListTile(
                 leading: const Icon(Icons.fact_check_outlined,
@@ -421,7 +438,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         color: Color(0xFF4CAF50),
                         fontWeight: FontWeight.w600)),
                 subtitle: const Text('Lihat & koreksi catatan kehadiran',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
                   Navigator.push(
@@ -445,7 +462,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         color: Color(0xFF607D8B),
                         fontWeight: FontWeight.w600)),
                 subtitle: const Text('Kirim email reset ke staff',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _sendPasswordReset(s);
@@ -461,7 +478,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         color: Colors.orange,
                         fontWeight: FontWeight.w600)),
                 subtitle: const Text('Data tetap tersimpan, bisa diaktifkan kembali',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _setActiveStatus(s, false);
@@ -485,7 +502,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── add staff — FIXED: pakai edge function, bukan signUp ──
+  // ── add staff (unchanged logic, UI improved) ──────────────────────────
   Future<void> _showAddStaffDialog() async {
     final nameCtrl     = TextEditingController();
     final emailCtrl    = TextEditingController();
@@ -502,35 +519,44 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       barrierDismissible: false,
       builder: (_) => StatefulBuilder(
         builder: (ctx, ss) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Text('Tambah Staff',
-              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8)),
-                child: const Text(
-                    '💡 Email & password ini akan digunakan staff untuk login ke aplikasi.',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12))),
-              const SizedBox(height: 14),
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Row(children: [
+                  Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                        '💡 Email & password ini akan digunakan staff untuk login ke aplikasi.',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 20),
               TextField(
                   controller: nameCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                       labelText: 'Nama Lengkap *',
-                      prefixIcon: Icon(Icons.person_outline)),
+                      prefixIcon: const Icon(Icons.person_outline),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   textCapitalization: TextCapitalization.words),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextField(
                   controller: emailCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                       labelText: 'Email Login *',
                       hintText: 'contoh: budi@resto.com',
-                      prefixIcon: Icon(Icons.email_outlined)),
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   keyboardType: TextInputType.emailAddress),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextField(
                 controller: passwordCtrl,
                 obscureText: obscure,
@@ -542,26 +568,30 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         icon: Icon(obscure
                             ? Icons.visibility_off
                             : Icons.visibility),
-                        onPressed: () => ss(() => obscure = !obscure))),
+                        onPressed: () => ss(() => obscure = !obscure)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextField(
                   controller: phoneCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                       labelText: 'No. HP (opsional)',
-                      prefixIcon: Icon(Icons.phone_outlined)),
+                      prefixIcon: const Icon(Icons.phone_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   keyboardType: TextInputType.phone),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               DropdownButtonFormField<StaffRole>(
                 initialValue: selectedRole,
-                decoration: const InputDecoration(labelText: 'Role'),
+                decoration: InputDecoration(
+                    labelText: 'Role',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                 items: StaffRole.values.map((r) => DropdownMenuItem(
                   value: r,
                   child: Row(children: [
-                    Container(width: 10, height: 10,
+                    Container(width: 12, height: 12,
                         decoration: BoxDecoration(
                             color: _roleColor(r), shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Text(r.displayName,
                         style: const TextStyle(fontFamily: 'Poppins')),
                   ]),
@@ -569,16 +599,16 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 onChanged: (v) { if (v != null) ss(() => selectedRole = v); },
               ),
               if (errorMsg != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                       color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(12)),
                   child: Text(errorMsg!,
                       style: const TextStyle(
                           color: Colors.red,
-                          fontSize: 12,
+                          fontSize: 13,
                           fontFamily: 'Poppins'))),
               ],
             ]),
@@ -586,11 +616,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           actions: [
             TextButton(
                 onPressed: isLoading ? null : () => Navigator.pop(ctx),
-                child: const Text('Batal')),
+                child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: isLoading
                   ? null
                   : () async {
@@ -598,7 +629,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       final email = emailCtrl.text.trim().toLowerCase();
                       final pass  = passwordCtrl.text;
 
-                      // Validasi input
                       if (name.isEmpty) {
                         ss(() => errorMsg = 'Nama wajib diisi.');
                         return;
@@ -619,8 +649,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
                       ss(() { isLoading = true; errorMsg = null; });
 
-                      // ── panggil edge function create-staff-user ──
-                      // Tidak pakai signUp supaya sesi manager tidak logout
                       try {
                         final res = await Supabase.instance.client.functions.invoke(
                           'create-staff-user',
@@ -647,7 +675,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
                               content: Text('✅ Staff $name berhasil ditambahkan!'),
-                              backgroundColor: const Color(0xFF4CAF50)));
+                              backgroundColor: const Color(0xFF4CAF50),
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
                         }
                         await _load();
                       } catch (e) {
@@ -659,7 +689,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     },
               child: isLoading
                   ? const SizedBox(
-                      width: 18, height: 18,
+                      width: 20, height: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                   : const Text('Simpan',
@@ -671,7 +701,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── build ──────────────────────────────────────────────
+  // ── build (UI improved) ──────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -681,6 +711,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         title: Text(_showArchived ? 'Staff — Arsip' : 'Staff Management'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        elevation: 0,
         titleTextStyle: const TextStyle(
             fontFamily: 'Poppins',
             fontSize: 18,
@@ -703,16 +734,26 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       fontSize: 13))),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          indicatorColor: Colors.white,
-          labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
-          tabs: const [
-            Tab(text: 'Staff', icon: Icon(Icons.people_outline, size: 18)),
-            Tab(text: 'Rekap Shift', icon: Icon(Icons.calendar_today_outlined, size: 18)),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TabBar(
+              controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              indicator: const UnderlineTabIndicator(
+                borderSide: BorderSide(color: Colors.white, width: 2),
+                insets: EdgeInsets.symmetric(horizontal: 16),
+              ),
+              labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14),
+              unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+              tabs: const [
+                Tab(text: 'Staff', icon: Icon(Icons.people_outline, size: 18)),
+                Tab(text: 'Rekap Shift', icon: Icon(Icons.calendar_today_outlined, size: 18)),
+              ],
+            ),
+          ),
         ),
       ),
       floatingActionButton: _showArchived
@@ -720,6 +761,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           : FloatingActionButton.extended(
               onPressed: _showAddStaffDialog,
               backgroundColor: AppColors.accent,
+              elevation: 2,
               icon: const Icon(Icons.person_add, color: Colors.white),
               label: const Text('Tambah Staff',
                   style: TextStyle(
@@ -737,49 +779,48 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── TAB 1: daftar staff ────────────────────────────────
+  // ── TAB 1: daftar staff (UI improved) ────────────────────────────────
   Widget _buildStaffTab() {
     return Column(children: [
-      // archived banner
       if (_showArchived)
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           color: Colors.orange.shade50,
           child: const Row(children: [
-            Icon(Icons.archive_outlined, color: Colors.orange, size: 16),
-            SizedBox(width: 8),
+            Icon(Icons.archive_outlined, color: Colors.orange, size: 18),
+            SizedBox(width: 10),
             Expanded(
                 child: Text('Menampilkan staff yang diarsipkan',
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 12,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
                         color: Colors.orange))),
           ])),
-      // search bar
       Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: TextField(
           controller: _searchCtrl,
           decoration: InputDecoration(
             hintText: 'Cari nama, email, atau role...',
-            hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-            prefixIcon: const Icon(Icons.search, size: 20),
+            hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
+            prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textHint),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
                     icon: const Icon(Icons.clear, size: 18),
                     onPressed: () => _searchCtrl.clear())
                 : null,
-            contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
             filled: true,
             fillColor: Colors.white,
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.grey.shade200)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.primary)),
           ),
         ),
       ),
-      // summary chips
       if (!_isLoading && _staff.isNotEmpty) _buildRoleSummaryChips(),
-      // list
       Expanded(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -794,9 +835,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                 : _showArchived
                                     ? Icons.inventory_2_outlined
                                     : Icons.people_outline,
-                            size: 64,
+                            size: 72,
                             color: AppColors.textHint),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                         Text(
                             _searchQuery.isNotEmpty
                                 ? 'Tidak ada staff dengan kata kunci "$_searchQuery"'
@@ -805,8 +846,19 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                     : 'Belum ada staff',
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
+                                fontSize: 14,
                                 color: AppColors.textSecondary),
                             textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        if (!_showArchived && _searchQuery.isEmpty)
+                          ElevatedButton.icon(
+                            onPressed: _showAddStaffDialog,
+                            icon: const Icon(Icons.person_add),
+                            label: const Text('Tambah Staff Sekarang'),
+                            style: ElevatedButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
                       ],
                     ))
                 : _buildGroupedList(),
@@ -820,7 +872,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       counts[s.role] = (counts[s.role] ?? 0) + 1;
     }
     return SizedBox(
-      height: 38,
+      height: 42,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -829,9 +881,11 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
             padding: const EdgeInsets.only(right: 8),
             child: Chip(
               label: Text('Semua (${_staff.length})',
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w500)),
               backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-            )),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          ),
           ...StaffRole.values
               .where((r) => counts.containsKey(r))
               .map((r) => Padding(
@@ -839,12 +893,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     child: Chip(
                       avatar: CircleAvatar(
                           backgroundColor: _roleColor(r),
-                          radius: 6,
+                          radius: 8,
                           child: const SizedBox()),
                       label: Text('${r.displayName} (${counts[r]})',
-                          style: const TextStyle(
-                              fontFamily: 'Poppins', fontSize: 11)),
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                       backgroundColor: _roleColor(r).withValues(alpha: 0.08),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ))),
         ],
       ),
@@ -868,41 +922,46 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Row(children: [
                     Container(
-                        width: 12, height: 12,
+                        width: 10, height: 10,
                         decoration: BoxDecoration(
                             color: color, shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Text(role.displayName,
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.w700,
-                            fontSize: 14,
+                            fontSize: 15,
                             color: color)),
                     const SizedBox(width: 8),
                     Text('(${members.length})',
                         style: AppTextStyles.caption),
                   ])),
                 ...members.map((s) => Card(
-                      margin: const EdgeInsets.only(bottom: 8),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: 1,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(16)),
                       child: ListTile(
                         onTap: () => _showStaffOptions(s),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         leading: CircleAvatar(
+                            radius: 24,
                             backgroundColor:
                                 color.withValues(alpha: 0.15),
                             child: Text(s.fullName[0].toUpperCase(),
                                 style: TextStyle(
                                     fontFamily: 'Poppins',
                                     fontWeight: FontWeight.w700,
+                                    fontSize: 16,
                                     color: color))),
                         title: Text(s.fullName,
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w600)),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15)),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -911,14 +970,21 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                               Text(s.phone!,
                                   style: const TextStyle(
                                       fontFamily: 'Poppins',
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       color: AppColors.textHint)),
                           ],
                         ),
                         isThreeLine:
                             s.phone != null && s.phone!.isNotEmpty,
-                        trailing: const Icon(Icons.chevron_right,
-                            size: 20, color: AppColors.textSecondary),
+                        trailing: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.chevron_right,
+                              size: 18, color: AppColors.textSecondary),
+                        ),
                       ))),
                 const SizedBox(height: 8),
               ],
@@ -927,7 +993,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── TAB 2: rekap shift minggu ini ─────────────────────
+  // ── TAB 2: rekap shift minggu ini (UI improved) ─────────────────────
   Widget _buildShiftSummaryTab() {
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
@@ -937,16 +1003,21 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(Icons.calendar_month_outlined,
-                        size: 64, color: AppColors.textHint),
-                    const SizedBox(height: 12),
+                        size: 72, color: AppColors.textHint),
+                    const SizedBox(height: 16),
                     const Text('Belum ada staff aktif',
                         style: TextStyle(
                             fontFamily: 'Poppins',
+                            fontSize: 14,
                             color: AppColors.textSecondary)),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
                       onPressed: () => _tabController.animateTo(0),
-                      child: const Text('Tambah Staff Dulu'),
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Tambah Staff Dulu'),
+                      style: ElevatedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
                   ],
                 ))
@@ -959,7 +1030,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 }
 
 // ─────────────────────────────────────────────────────────
-// Shift Summary Widget (Tab 2 — rekap semua staff)
+// Shift Summary Widget (Tab 2 — rekap semua staff) — UI improved
 // ─────────────────────────────────────────────────────────
 class _ShiftSummaryView extends StatefulWidget {
   final List<StaffMember> staff;
@@ -1032,10 +1103,10 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      // day selector
+      // day selector with animation
       Container(
         color: AppColors.primary.withValues(alpha: 0.05),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: List.generate(7, (i) {
@@ -1045,14 +1116,15 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
               onTap: () => setState(() => _selectedDay = i),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                width: 40, height: 40,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppColors.primary
                       : isToday
                           ? AppColors.primary.withValues(alpha: 0.1)
                           : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   border: isToday && !isSelected
                       ? Border.all(color: AppColors.primary, width: 1.5)
                       : null,
@@ -1063,7 +1135,7 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
                     Text(_days[i],
                         style: TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 11,
+                            fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: isSelected ? Colors.white : AppColors.textSecondary)),
                   ],
@@ -1075,16 +1147,17 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
       ),
       // stats bar
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(children: [
-          const Icon(Icons.people_outline, size: 16, color: AppColors.textSecondary),
-          const SizedBox(width: 6),
+          const Icon(Icons.people_outline, size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: 8),
           Text(
               '${_staffOnSelectedDay.length} dari ${widget.staff.length} staff bertugas hari ${_days[_selectedDay]}',
               style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 12,
+                  fontFamily: 'Poppins', fontSize: 13,
                   color: AppColors.textSecondary)),
-        ])),
+        ]),
+      ),
       // list
       Expanded(
         child: _isLoading
@@ -1095,16 +1168,17 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Icon(Icons.event_busy_outlined,
-                            size: 56, color: AppColors.textHint),
-                        const SizedBox(height: 8),
+                            size: 64, color: AppColors.textHint),
+                        const SizedBox(height: 12),
                         Text('Tidak ada shift di hari ${_days[_selectedDay]}',
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
+                                fontSize: 14,
                                 color: AppColors.textSecondary)),
                       ],
                     ))
                 : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
                     itemCount: _staffOnSelectedDay.length,
                     itemBuilder: (_, i) {
                       final s = _staffOnSelectedDay[i];
@@ -1113,21 +1187,24 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
                           .toList();
                       final color = widget.roleColor(s.role);
                       return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        elevation: 1,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(16)),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                              horizontal: 16, vertical: 12),
                           child: Row(children: [
                             CircleAvatar(
+                                radius: 24,
                                 backgroundColor: color.withValues(alpha: 0.15),
                                 child: Text(s.fullName[0].toUpperCase(),
                                     style: TextStyle(
                                         fontFamily: 'Poppins',
                                         fontWeight: FontWeight.w700,
+                                        fontSize: 16,
                                         color: color))),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 16),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1135,18 +1212,28 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
                                   Text(s.fullName,
                                       style: const TextStyle(
                                           fontFamily: 'Poppins',
-                                          fontWeight: FontWeight.w600)),
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15)),
+                                  const SizedBox(height: 2),
                                   Text(s.role.displayName,
                                       style: TextStyle(
                                           fontFamily: 'Poppins',
-                                          fontSize: 11,
-                                          color: color)),
-                                  ...shifts.map((sh) => Text(
-                                      '🕐 ${_formatTime(sh['start_time'])} — ${_formatTime(sh['end_time'])}',
-                                      style: const TextStyle(
-                                          fontFamily: 'Poppins',
                                           fontSize: 12,
-                                          color: AppColors.textSecondary))),
+                                          color: color)),
+                                  const SizedBox(height: 6),
+                                  ...shifts.map((sh) => Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Row(children: [
+                                      const Icon(Icons.access_time, size: 14, color: AppColors.textHint),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                          '${_formatTime(sh['start_time'])} — ${_formatTime(sh['end_time'])}',
+                                          style: const TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 13,
+                                              color: AppColors.textSecondary)),
+                                    ]),
+                                  )),
                                 ],
                               ),
                             ),
