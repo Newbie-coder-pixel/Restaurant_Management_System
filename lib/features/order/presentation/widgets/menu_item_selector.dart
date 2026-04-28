@@ -255,8 +255,8 @@ void _removeFromCart(MenuItem item) => setState(() {
           items: [
             const DropdownMenuItem(value: null,
               child: Text('Takeaway', style: TextStyle(fontFamily: 'Poppins'))),
-            ...widget.tables.map((t) => DropdownMenuItem(value: t.id,
-              child: Text('Meja ${t.tableNumber} (${t.capacity} org) · ${t.status.label}',
+            ...widget.tables.where((t) => t.status == TableStatus.available).map((t) => DropdownMenuItem(value: t.id,
+              child: Text('Meja ${t.tableNumber} (${t.capacity} org)',
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)))),
           ],
           onChanged: (v) => setState(() {
