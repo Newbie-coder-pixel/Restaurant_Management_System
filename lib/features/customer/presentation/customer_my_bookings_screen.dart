@@ -391,26 +391,26 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     final openHour   = int.tryParse(openParts[0]) ?? 10;
     final closeHour  = int.tryParse(closeParts[0]) ?? 22;
 
-    final picked = await showTimePicker(
+    final now = DateTime.now();
+    final isToday = _selectedDate != null &&
+        _selectedDate!.year  == now.year &&
+        _selectedDate!.month == now.month &&
+        _selectedDate!.day   == now.day;
+
+    // Jam minimum: jika hari ini, pakai jam sekarang + 30 menit buffer
+    final minHour = isToday ? now.hour + (now.minute >= 30 ? 1 : 0) : openHour;
+
+    final picked = await showDialog<TimeOfDay>(
       context: context,
-      initialTime: TimeOfDay(hour: openHour, minute: 0),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFFE94560),
-            onPrimary: Colors.white)),
-        child: child!));
+      builder: (ctx) => _TimeSlotPickerDialog(
+        openHour:  openHour,
+        closeHour: closeHour,
+        minHour:   minHour,
+        selected:  _selectedTime,
+      ),
+    );
 
     if (picked == null || !mounted) return;
-    if (picked.hour < openHour || picked.hour >= closeHour) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Jam harus antara $open – $close WIB',
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-        backgroundColor: const Color(0xFFEF4444),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
-      return;
-    }
     setState(() => _selectedTime = picked);
   }
 
@@ -1880,6 +1880,184 @@ class _BookingCardState extends State<_BookingCard> {
           ],
         ],
       ),
+    );
+  }
+}
+// ─────────────────────────────────────────────────────────────────
+// CUSTOM TIME SLOT PICKER
+// ─────────────────────────────────────────────────────────────────
+class _TimeSlotPickerDialog extends StatefulWidget {
+  final int openHour;
+  final int closeHour;
+  final int minHour;
+  final TimeOfDay? selected;
+
+  const _TimeSlotPickerDialog({
+    required this.openHour,
+    required this.closeHour,
+    required this.minHour,
+    this.selected,
+  });
+
+  @override
+  State<_TimeSlotPickerDialog> createState() => _TimeSlotPickerDialogState();
+}
+
+class _TimeSlotPickerDialogState extends State<_TimeSlotPickerDialog> {
+  TimeOfDay? _picked;
+
+  @override
+  void initState() {
+    super.initState();
+    _picked = widget.selected;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = <int>[];
+    for (int h = widget.openHour; h < widget.closeHour; h++) {
+      slots.add(h);
+    }
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      title: const Text(
+        '🕐 Pilih Jam Kedatangan',
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+          color: Color(0xFF1E293B),
+        ),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Info jam tidak tersedia
+            if (widget.minHour > widget.openHour) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: const Color(0xFFFB923C).withValues(alpha: 0.4)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.info_outline,
+                      size: 14, color: Color(0xFFD97706)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Jam sebelum ${widget.minHour.toString().padLeft(2, '0')}:00 tidak tersedia hari ini',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: Color(0xFF92400E),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ],
+            // Grid jam
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 1.8,
+              ),
+              itemCount: slots.length,
+              itemBuilder: (ctx, i) {
+                final hour = slots[i];
+                final isDisabled = hour < widget.minHour;
+                final isSelected = _picked?.hour == hour;
+                final label =
+                    '${hour.toString().padLeft(2, '0')}:00';
+
+                return GestureDetector(
+                  onTap: isDisabled
+                      ? null
+                      : () => setState(() =>
+                          _picked = TimeOfDay(hour: hour, minute: 0)),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    decoration: BoxDecoration(
+                      color: isDisabled
+                          ? const Color(0xFFF1F5F9)
+                          : isSelected
+                              ? const Color(0xFFE94560)
+                              : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isDisabled
+                            ? const Color(0xFFE2E8F0)
+                            : isSelected
+                                ? const Color(0xFFE94560)
+                                : const Color(0xFFCBD5E1),
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: isDisabled
+                              ? const Color(0xFFCBD5E1)
+                              : isSelected
+                                  ? Colors.white
+                                  : const Color(0xFF334155),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Batal',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w600)),
+        ),
+        ElevatedButton(
+          onPressed: _picked == null
+              ? null
+              : () => Navigator.of(context).pop(_picked),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFE94560),
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: const Color(0xFFE2E8F0),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+            textStyle: const TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+          ),
+          child: const Text('Pilih'),
+        ),
+      ],
     );
   }
 }
