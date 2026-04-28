@@ -168,8 +168,9 @@ void _removeFromCart(MenuItem item) => setState(() {
         'status':         'new',
         'source':         _isTakeaway ? 'takeaway' : 'dine_in',
         'order_type':     'staff_order',
-        'customer_name':  _isTakeaway ? _nameCtrl.text.trim() : null,
-        'customer_phone': _isTakeaway && _phoneCtrl.text.trim().isNotEmpty
+        'customer_name':  _nameCtrl.text.trim().isNotEmpty
+            ? _nameCtrl.text.trim() : null,
+        'customer_phone': _phoneCtrl.text.trim().isNotEmpty
             ? _phoneCtrl.text.trim() : null,
         'discount_amount': 0,
       }).select().single();
@@ -254,18 +255,23 @@ void _removeFromCart(MenuItem item) => setState(() {
           ],
           onChanged: (v) => setState(() {
             _selectedTableId = v;
-            if (v != null) { _nameCtrl.clear(); _phoneCtrl.clear(); }
           }),
         ),
-        if (_isTakeaway) ...[
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(flex: 3, child: _field(_nameCtrl, 'Nama Pelanggan *', Icons.person_outline)),
-            const SizedBox(width: 8),
-            Expanded(flex: 2, child: _field(_phoneCtrl, 'No. HP (opsional)', Icons.phone_outlined,
-              keyboardType: TextInputType.phone)),
-          ]),
-        ],
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(flex: 3, child: _field(
+            _nameCtrl,
+            _isTakeaway ? 'Nama Pelanggan *' : 'Nama Tamu (opsional)',
+            Icons.person_outline,
+          )),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: _field(
+            _phoneCtrl,
+            'No. HP (opsional)',
+            Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+          )),
+        ]),
       ]),
     );
   }
