@@ -72,6 +72,22 @@ class QrOrderRepository {
       // ✅ FIX UTAMA: fetch ulang order BESERTA items setelah insert
       // Response dari insert hanya berisi data orders, tidak include order_items
       final fullOrder = await fetchOrder(orderId);
+
+      // ✅ Update status meja ke occupied setelah order berhasil dibuat
+      if (session.tableId.isNotEmpty) {
+        try {
+          await _client
+              .from('restaurant_tables')
+              .update({
+                'status': 'occupied',
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', session.tableId);
+          debugPrint('✅ Status meja ${session.tableName} diupdate ke occupied');
+        } catch (e) {
+          debugPrint('⚠️ Gagal update status meja: $e');
+        }
+      }
       if (fullOrder != null) {
         debugPrint('✅ Order dibuat: ${fullOrder.items.length} items, total ${fullOrder.totalAmount}');
         return fullOrder;
