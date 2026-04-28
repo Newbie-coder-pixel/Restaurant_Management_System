@@ -72,17 +72,21 @@ class QrOrderRepository {
       // 3. Update status meja SEGERA setelah insert — sebelum fetchOrder
       if (session.tableId.isNotEmpty) {
         try {
-          await _client
+          debugPrint('🔍 tableId yang akan diupdate: "${session.tableId}"');
+          final result = await _client
               .from('restaurant_tables')
               .update({
                 'status': 'occupied',
                 'updated_at': DateTime.now().toIso8601String(),
               })
-              .eq('id', session.tableId);
-          debugPrint('✅ Status meja ${session.tableName} diupdate ke occupied');
+              .eq('id', session.tableId)
+              .select();
+          debugPrint('✅ Update result: $result');
         } catch (e) {
           debugPrint('⚠️ Gagal update status meja: $e');
         }
+      } else {
+        debugPrint('⚠️ tableId kosong, skip update meja');
       }
 
       // 4. Fetch ulang order beserta items
@@ -156,9 +160,6 @@ class QrOrderRepository {
   }
 
   // ── Fetch order + items (DUA QUERY TERPISAH) ─────────────────────────────
-  // Join via PostgREST tidak bekerja untuk anon karena RLS branch_isolation,
-  // jadi fetch order dan order_items secara terpisah.
-
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     // Query 1: fetch order (tanpa join)
     final orderResp = await _client
