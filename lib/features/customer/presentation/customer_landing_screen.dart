@@ -251,7 +251,7 @@ class _CustomerLandingScreenState
 
   // ── TOP BAR ──────────────────────────────────────────────────
   Widget _buildTopBar(User user) {
-    const titles = ['Beranda', 'Booking Saya', 'Cek Pesanan', 'Chat AI'];
+    const titles = ['Beranda', 'Booking', 'Cek Pesanan', 'Chat AI'];
     final displayName = _displayName(user);
     final firstName = displayName.split(' ').first;
     final initial =
