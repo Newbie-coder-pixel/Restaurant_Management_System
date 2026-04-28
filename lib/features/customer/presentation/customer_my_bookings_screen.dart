@@ -1114,12 +1114,57 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 // ─────────────────────────────────────────────────────────────────
 // RIWAYAT BOOKING
 // ─────────────────────────────────────────────────────────────────
-class _BookingHistory extends ConsumerWidget {
+class _BookingHistory extends ConsumerStatefulWidget {
   final bool isDesktop;
   const _BookingHistory({required this.isDesktop});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_BookingHistory> createState() => _BookingHistoryState();
+}
+
+class _BookingHistoryState extends ConsumerState<_BookingHistory> {
+  // 'all' | 'active' | 'done' | 'cancelled'
+  String _filter = 'active';
+
+  static const _activeStatuses   = {'pending', 'confirmed', 'waitlisted', 'seated'};
+  static const _doneStatuses     = {'completed'};
+  static const _cancelledStatuses = {'cancelled', 'no_show'};
+
+  /// Booking lama (selesai/batal) > 30 hari disembunyikan otomatis
+  bool _isVisible(Map<String, dynamic> b) {
+    final status = b['status'] as String? ?? 'pending';
+    final isFinished = _doneStatuses.contains(status) || _cancelledStatuses.contains(status);
+    if (!isFinished) return true;
+    final raw = b['booking_date'] as String?;
+    if (raw == null) return false;
+    try {
+      final date = DateTime.parse(raw);
+      return DateTime.now().difference(date).inDays <= 30;
+    } catch (_) { return true; }
+  }
+
+  List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> all) {
+    final visible = all.where(_isVisible).toList();
+    switch (_filter) {
+      case 'active':    return visible.where((b) => _activeStatuses.contains(b['status'])).toList();
+      case 'done':      return visible.where((b) => _doneStatuses.contains(b['status'])).toList();
+      case 'cancelled': return visible.where((b) => _cancelledStatuses.contains(b['status'])).toList();
+      default:          return visible;
+    }
+  }
+
+  int _count(List<Map<String, dynamic>> all, String filter) {
+    final visible = all.where(_isVisible).toList();
+    switch (filter) {
+      case 'active':    return visible.where((b) => _activeStatuses.contains(b['status'])).length;
+      case 'done':      return visible.where((b) => _doneStatuses.contains(b['status'])).length;
+      case 'cancelled': return visible.where((b) => _cancelledStatuses.contains(b['status'])).length;
+      default:          return visible.length;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, ) {
     final bookingsAsync = ref.watch(_myBookingsProvider);
 
     return bookingsAsync.when(
@@ -1135,55 +1180,209 @@ class _BookingHistory extends ConsumerWidget {
             ],
           )),
       data: (bookings) {
-        if (bookings.isEmpty) return _emptyState();
+        final filtered = _applyFilter(bookings);
 
-        final content = ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: bookings.length,
-          itemBuilder: (_, i) =>
-              _BookingCard(booking: bookings[i], isDesktop: isDesktop));
+        return Column(
+          children: [
+            // ── Filter chips ──────────────────────────────────────
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                      label: 'Aktif',
+                      icon: Icons.radio_button_checked,
+                      color: const Color(0xFF10B981),
+                      count: _count(bookings, 'active'),
+                      selected: _filter == 'active',
+                      onTap: () => setState(() => _filter = 'active'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'Selesai',
+                      icon: Icons.done_all,
+                      color: const Color(0xFF3B82F6),
+                      count: _count(bookings, 'done'),
+                      selected: _filter == 'done',
+                      onTap: () => setState(() => _filter = 'done'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'Dibatalkan',
+                      icon: Icons.cancel_outlined,
+                      color: const Color(0xFFEF4444),
+                      count: _count(bookings, 'cancelled'),
+                      selected: _filter == 'cancelled',
+                      onTap: () => setState(() => _filter = 'cancelled'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'Semua',
+                      icon: Icons.list_alt_outlined,
+                      color: const Color(0xFF64748B),
+                      count: _count(bookings, 'all'),
+                      selected: _filter == 'all',
+                      onTap: () => setState(() => _filter = 'all'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFF1F5F9)),
 
-        if (isDesktop) {
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: content));
-        }
-        return content;
+            // ── Info banner untuk filter selesai/batal ────────────
+            if (_filter == 'done' || _filter == 'cancelled' || _filter == 'all')
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.info_outline, size: 14, color: Color(0xFF94A3B8)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Riwayat lebih dari 30 hari disembunyikan otomatis',
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 11,
+                        color: Color(0xFF94A3B8)),
+                    ),
+                  ),
+                ]),
+              ),
+
+            // ── List ─────────────────────────────────────────────
+            Expanded(
+              child: filtered.isEmpty
+                  ? _emptyState(_filter)
+                  : widget.isDesktop
+                      ? Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 720),
+                            child: _buildList(filtered)))
+                      : _buildList(filtered),
+            ),
+          ],
+        );
       },
     );
   }
 
-  Widget _emptyState() => Center(
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        width: 96, height: 96,
+  Widget _buildList(List<Map<String, dynamic>> items) => ListView.builder(
+    padding: const EdgeInsets.all(16),
+    itemCount: items.length,
+    itemBuilder: (_, i) => _BookingCard(booking: items[i], isDesktop: widget.isDesktop),
+  );
+
+  Widget _emptyState(String filter) {
+    final (icon, title, subtitle) = switch (filter) {
+      'active'    => (Icons.calendar_today_outlined,    'Tidak Ada Booking Aktif',   'Buat reservasi baru di tab "Buat Reservasi".'),
+      'done'      => (Icons.done_all,                   'Belum Ada Riwayat Selesai', 'Riwayat booking yang selesai akan muncul di sini.'),
+      'cancelled' => (Icons.cancel_outlined,            'Tidak Ada Yang Dibatalkan', 'Syukurlah, tidak ada booking yang dibatalkan 😊'),
+      _           => (Icons.calendar_today_outlined,    'Belum Ada Reservasi',       'Buat reservasi di tab "Buat Reservasi".'),
+    };
+    final color = switch (filter) {
+      'active'    => const Color(0xFF10B981),
+      'done'      => const Color(0xFF3B82F6),
+      'cancelled' => const Color(0xFFEF4444),
+      _           => const Color(0xFFE94560),
+    };
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 96, height: 96,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: [color.withValues(alpha: 0.12), color.withValues(alpha: 0.05)]),
+            shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 44)),
+        const SizedBox(height: 24),
+        Text(title,
+          style: const TextStyle(
+            fontFamily: 'Poppins', fontSize: 18,
+            fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Text(subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF64748B)))),
+      ]));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// FILTER CHIP WIDGET
+// ─────────────────────────────────────────────────────────────────
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFFE94560).withValues(alpha: 0.1),
-              const Color(0xFFE94560).withValues(alpha: 0.05),
-            ]),
-          shape: BoxShape.circle),
-        child: const Icon(Icons.calendar_today_outlined,
-            color: Color(0xFFE94560), size: 44)),
-      const SizedBox(height: 24),
-      const Text('Belum Ada Reservasi',
-          style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF1E293B))),
-      const SizedBox(height: 12),
-      const Text('Buat reservasi di tab "Buat Reservasi".',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-              fontFamily: 'Poppins', 
-              fontSize: 14, 
-              color: Color(0xFF64748B))),
-    ]));
+          color: selected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: selected ? color : const Color(0xFFE2E8F0),
+            width: selected ? 2 : 1,
+          ),
+          boxShadow: selected ? [
+            BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 2))
+          ] : [],
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 14,
+            color: selected ? Colors.white : color),
+          const SizedBox(width: 6),
+          Text(label,
+            style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : const Color(0xFF334155))),
+          if (count > 0) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.white.withValues(alpha: 0.3)
+                    : color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10)),
+              child: Text('$count',
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : color))),
+          ],
+        ]),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
