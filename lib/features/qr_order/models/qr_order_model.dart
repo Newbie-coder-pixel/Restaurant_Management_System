@@ -88,7 +88,7 @@ class QrOrderItemModel {
         menuItemId: map['menu_item_id'] as String,
         menuItemName: map['menu_item_name'] as String,
         // DB kolom: unit_price (bukan price)
-        price: ((map['unit_price'] ?? map['price']) as num).toDouble(),
+        price: (map['unit_price'] ?? map['price'] as num).toDouble(),
         quantity: map['quantity'] as int,
         // DB kolom: special_requests (bukan notes)
         notes: (map['special_requests'] ?? map['notes']) as String?,
@@ -148,7 +148,8 @@ class QrOrderModel {
         tableId: map['table_id'] as String,
         tableName: map['table_name'] as String,
         customerName: map['customer_name'] as String,
-        items: ((map['items'] ?? map['order_items']) as List<dynamic>? ?? [])
+        // FIX 1: prioritas order_items (relasi join) daripada items (jsonb kolom yg kosong)
+        items: ((map['order_items'] ?? map['items']) as List<dynamic>? ?? [])
             .map((e) => QrOrderItemModel.fromMap(e as Map<String, dynamic>))
             .toList(),
         totalAmount: (map['total_amount'] as num).toDouble(),
@@ -156,10 +157,15 @@ class QrOrderModel {
           (s) => s.name.toLowerCase() == (map['status'] as String).toLowerCase(),
           orElse: () => QrOrderStatus.created,
         ),
-        paymentStatus: QrPaymentStatus.values.firstWhere(
-          (s) => s.name.toLowerCase() == (map['payment_status'] as String).toLowerCase(),
-          orElse: () => QrPaymentStatus.pending,
-        ),
+        // FIX 2: DB pakai 'unpaid', enum kita pakai 'pending' — map keduanya
+        paymentStatus: () {
+          final raw = (map['payment_status'] as String? ?? 'pending').toLowerCase();
+          if (raw == 'unpaid') return QrPaymentStatus.pending;
+          return QrPaymentStatus.values.firstWhere(
+            (s) => s.name.toLowerCase() == raw,
+            orElse: () => QrPaymentStatus.pending,
+          );
+        }(),
         paymentMethod: map['payment_method'] as String,
         createdAt: DateTime.parse(map['created_at'] as String),
         updatedAt: map['updated_at'] != null
