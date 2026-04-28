@@ -70,22 +70,12 @@ class _CustomerMyBookingsScreenState
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
   RealtimeChannel? _bookingChannel;
-  bool _announcementShown = false;
-
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _listenBookingChanges();
-    _tabCtrl.addListener(_onTabChanged);
-  }
-
-  void _onTabChanged() {
-    // Hanya trigger saat tab "Buat Reservasi" (index 0) aktif
-    if (_tabCtrl.index == 0 && !_announcementShown) {
-      _announcementShown = true;
-      _showAnnouncement();
-    }
+    _showAnnouncement();
   }
 
   void _showAnnouncement() {
@@ -178,7 +168,6 @@ class _CustomerMyBookingsScreenState
   @override
   void dispose() {
     _bookingChannel?.unsubscribe();
-    _tabCtrl.removeListener(_onTabChanged);
     _tabCtrl.dispose();
     super.dispose();
   }
