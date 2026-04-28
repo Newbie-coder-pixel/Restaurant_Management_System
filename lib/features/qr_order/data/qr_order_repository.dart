@@ -162,14 +162,22 @@ class QrOrderRepository {
     return controller.stream;
   }
 
-  // ── Fetch order + items ────────────────────────────────────────────────────
+  // ── Fetch order + items ──────────────────────────────────────────────────
+  // Eksplisit kolom — TIDAK pakai * agar kolom jsonb 'items:[]' tidak konflik
+  static const _selectColumns =
+      'id, order_number, queue_number, table_id, table_name, '
+      'customer_name, total_amount, status, payment_status, '
+      'payment_method, created_at, updated_at, branch_id, notes, '
+      'order_items(id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests)';
+
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     final response = await _client
         .from('orders')
-        .select('*, order_items(*)')
+        .select(_selectColumns)
         .eq('id', orderId)
         .maybeSingle();
     if (response == null) return null;
+    debugPrint('📦 order_items dari DB: ${response["order_items"]}');
     return QrOrderModel.fromMap(_normalizeOrderMap(response));
   }
 
@@ -178,7 +186,7 @@ class QrOrderRepository {
     final startOfDay = DateTime(today.year, today.month, today.day);
     final response = await _client
         .from('orders')
-        .select('*, order_items(*)')
+        .select(_selectColumns)
         .eq('queue_number', queueNumber)
         .gte('created_at', startOfDay.toIso8601String())
         .maybeSingle();
@@ -188,22 +196,22 @@ class QrOrderRepository {
 
   // ── Normalize: rename kolom DB agar cocok dengan model ────────────────────
   Map<String, dynamic> _normalizeOrderMap(Map<String, dynamic> raw) {
-    final orderItems = (raw['order_items'] as List<dynamic>? ?? [])
-        .map((e) {
-          final item = Map<String, dynamic>.from(e as Map);
-          // DB: unit_price → model expects: price
-          if (!item.containsKey('price') && item.containsKey('unit_price')) {
-            item['price'] = item['unit_price'];
-          }
-          // DB: special_requests → model expects: notes
-          if (!item.containsKey('notes') && item.containsKey('special_requests')) {
-            item['notes'] = item['special_requests'];
-          }
-          return item;
-        })
-        .toList();
+    // Ambil dari relasi order_items (join), bukan kolom jsonb items yang kosong
+    final rawItems = raw['order_items'] as List<dynamic>? ?? [];
+    final orderItems = rawItems.map((e) {
+      final item = Map<String, dynamic>.from(e as Map);
+      item['price'] = item['unit_price'] ?? item['price'];
+      item['notes'] = item['special_requests'] ?? item['notes'];
+      return item;
+    }).toList();
 
-    return {...raw, 'items': orderItems};
+    debugPrint('📦 normalize: ${orderItems.length} items');
+
+    // Hapus kolom jsonb 'items' yang kosong, ganti dengan data dari relasi
+    final result = Map<String, dynamic>.from(raw);
+    result.remove('items');
+    result['items'] = orderItems;
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
