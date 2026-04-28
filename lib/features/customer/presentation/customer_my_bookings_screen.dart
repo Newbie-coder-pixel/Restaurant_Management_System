@@ -392,13 +392,16 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     final closeHour  = int.tryParse(closeParts[0]) ?? 22;
 
     final now = DateTime.now();
-    final isToday = _selectedDate != null &&
-        _selectedDate!.year  == now.year &&
-        _selectedDate!.month == now.month &&
-        _selectedDate!.day   == now.day;
+    // Jika tanggal belum dipilih atau tanggal = hari ini → pakai jam sekarang
+    final selectedOrToday = _selectedDate ?? now;
+    final isToday = selectedOrToday.year  == now.year &&
+                    selectedOrToday.month == now.month &&
+                    selectedOrToday.day   == now.day;
 
-    // Jam minimum: jika hari ini, pakai jam sekarang + 30 menit buffer
-    final minHour = isToday ? now.hour + (now.minute >= 30 ? 1 : 0) : openHour;
+    // Jam minimum: jika hari ini, jam sekarang + 30 menit buffer (selalu naik 1 jam jika menit > 0)
+    final minHour = isToday
+        ? now.hour + (now.minute > 0 ? 1 : 0)
+        : openHour;
 
     final picked = await showDialog<TimeOfDay>(
       context: context,
@@ -1919,55 +1922,96 @@ class _TimeSlotPickerDialogState extends State<_TimeSlotPickerDialog> {
       slots.add(h);
     }
 
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-      contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      title: const Text(
-        '🕐 Pilih Jam Kedatangan',
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
-          color: Color(0xFF1E293B),
-        ),
-      ),
-      content: SizedBox(
-        width: double.maxFinite,
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Info jam tidak tersedia
+            // Header
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.schedule_rounded,
+                    color: Color(0xFFE94560), size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Pilih Jam Kedatangan',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.close_rounded,
+                      size: 16, color: Color(0xFF64748B)),
+                ),
+              ),
+            ]),
+
+            const SizedBox(height: 14),
+
+            // Info banner jika ada jam yang dikunci
             if (widget.minHour > widget.openHour) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF7ED),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: const Color(0xFFFB923C).withValues(alpha: 0.4)),
+                      color: const Color(0xFFFB923C).withValues(alpha: 0.5)),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.info_outline,
-                      size: 14, color: Color(0xFFD97706)),
+                  const Icon(Icons.lock_clock_outlined,
+                      size: 15, color: Color(0xFFD97706)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Jam sebelum ${widget.minHour.toString().padLeft(2, '0')}:00 tidak tersedia hari ini',
                       style: const TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 11,
+                        fontSize: 11.5,
                         color: Color(0xFF92400E),
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 ]),
               ),
+              const SizedBox(height: 12),
             ],
-            // Grid jam
+
+            // Legend
+            const Row(children: [
+              _LegendDot(color: Color(0xFFE94560), label: 'Dipilih'),
+              SizedBox(width: 14),
+              _LegendDot(color: Color(0xFFF1F5F9), label: 'Tersedia', border: Color(0xFFCBD5E1)),
+              SizedBox(width: 14),
+              _LegendDot(color: Color(0xFFF8FAFC), label: 'Tidak tersedia', border: Color(0xFFE9EEF4), textColor: Color(0xFFCBD5E1)),
+            ]),
+
+            const SizedBox(height: 12),
+
+            // Grid
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -1975,89 +2019,168 @@ class _TimeSlotPickerDialogState extends State<_TimeSlotPickerDialog> {
                 crossAxisCount: 4,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
-                childAspectRatio: 1.8,
+                childAspectRatio: 1.7,
               ),
               itemCount: slots.length,
               itemBuilder: (ctx, i) {
                 final hour = slots[i];
                 final isDisabled = hour < widget.minHour;
                 final isSelected = _picked?.hour == hour;
-                final label =
-                    '${hour.toString().padLeft(2, '0')}:00';
+                final label = '${hour.toString().padLeft(2, '0')}:00';
 
                 return GestureDetector(
-                  onTap: isDisabled
-                      ? null
-                      : () => setState(() =>
-                          _picked = TimeOfDay(hour: hour, minute: 0)),
+                  onTap: isDisabled ? null : () => setState(
+                      () => _picked = TimeOfDay(hour: hour, minute: 0)),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     decoration: BoxDecoration(
-                      color: isDisabled
-                          ? const Color(0xFFF1F5F9)
-                          : isSelected
-                              ? const Color(0xFFE94560)
-                              : const Color(0xFFF8FAFC),
+                      color: isSelected
+                          ? const Color(0xFFE94560)
+                          : isDisabled
+                              ? const Color(0xFFF8FAFC)
+                              : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isDisabled
-                            ? const Color(0xFFE2E8F0)
-                            : isSelected
-                                ? const Color(0xFFE94560)
+                        color: isSelected
+                            ? const Color(0xFFE94560)
+                            : isDisabled
+                                ? const Color(0xFFE9EEF4)
                                 : const Color(0xFFCBD5E1),
                         width: isSelected ? 2 : 1,
                       ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFFE94560)
+                                    .withValues(alpha: 0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              )
+                            ]
+                          : [],
                     ),
-                    child: Center(
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 13,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: isDisabled
-                              ? const Color(0xFFCBD5E1)
-                              : isSelected
-                                  ? Colors.white
-                                  : const Color(0xFF334155),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Strikethrough line untuk disabled
+                        if (isDisabled)
+                          Positioned(
+                            left: 8,
+                            right: 8,
+                            child: Container(
+                              height: 1.5,
+                              color: const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isDisabled
+                                ? const Color(0xFFCBD5E1)
+                                : isSelected
+                                    ? Colors.white
+                                    : const Color(0xFF334155),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 );
               },
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 16),
+
+            // Bottom actions
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF64748B),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      textStyle: const TextStyle(
+                          fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+                    ),
+                    child: const Text('Batal'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: _picked == null
+                        ? null
+                        : () => Navigator.of(context).pop(_picked),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE94560),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFE2E8F0),
+                      disabledForegroundColor: const Color(0xFF94A3B8),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      textStyle: const TextStyle(
+                          fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+                    ),
+                    child: Text(_picked == null
+                        ? 'Pilih Jam'
+                        : 'Konfirmasi ${_picked!.hour.toString().padLeft(2, '0')}:00'),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Batal',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w600)),
-        ),
-        ElevatedButton(
-          onPressed: _picked == null
-              ? null
-              : () => Navigator.of(context).pop(_picked),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE94560),
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFFE2E8F0),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
-            textStyle: const TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700),
-          ),
-          child: const Text('Pilih'),
-        ),
-      ],
     );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  final Color? border;
+  final Color? textColor;
+
+  const _LegendDot({
+    required this.color,
+    required this.label,
+    this.border,
+    this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Container(
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(3),
+          border: border != null ? Border.all(color: border!) : null,
+        ),
+      ),
+      const SizedBox(width: 4),
+      Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 10,
+          color: textColor ?? const Color(0xFF64748B),
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ]);
   }
 }
