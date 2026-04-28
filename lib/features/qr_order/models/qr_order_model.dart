@@ -88,7 +88,7 @@ class QrOrderItemModel {
         menuItemId: map['menu_item_id'] as String,
         menuItemName: map['menu_item_name'] as String,
         // DB kolom: unit_price (bukan price)
-        price: (map['unit_price'] ?? map['price'] as num).toDouble(),
+        price: ((map['unit_price'] ?? map['price']) as num).toDouble(),
         quantity: map['quantity'] as int,
         // DB kolom: special_requests (bukan notes)
         notes: (map['special_requests'] ?? map['notes']) as String?,
