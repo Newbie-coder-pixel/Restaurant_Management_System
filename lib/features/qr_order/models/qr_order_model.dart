@@ -148,8 +148,8 @@ class QrOrderModel {
         tableId: map['table_id'] as String,
         tableName: map['table_name'] as String,
         customerName: map['customer_name'] as String,
-        // FIX 1: prioritas order_items (relasi join) daripada items (jsonb kolom yg kosong)
-        items: ((map['order_items'] ?? map['items']) as List<dynamic>? ?? [])
+        // order_items = hasil join dari Supabase (sudah di-normalize ke 'items' oleh repository)
+        items: ((map['items'] ?? map['order_items']) as List<dynamic>? ?? [])
             .map((e) => QrOrderItemModel.fromMap(e as Map<String, dynamic>))
             .toList(),
         totalAmount: (map['total_amount'] as num).toDouble(),

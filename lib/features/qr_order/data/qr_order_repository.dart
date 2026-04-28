@@ -195,7 +195,8 @@ class QrOrderRepository {
         })
         .toList();
 
-    return {...raw, 'items': orderItems};
+    // Simpan di KEDUA key agar model bisa nemuin pakai order_items atau items
+    return {...raw, 'order_items': orderItems, 'items': orderItems};
   }
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
