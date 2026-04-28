@@ -371,7 +371,7 @@ class _CustomerLandingScreenState
         ),
         Visibility(
           visible: _tab == 1,
-          maintainState: true,
+          maintainState: false,
           child: const CustomerMyBookingsScreen(),
         ),
         Visibility(
