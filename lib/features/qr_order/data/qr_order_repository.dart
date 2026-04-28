@@ -70,8 +70,16 @@ class QrOrderRepository {
       }
 
       // ✅ FIX UTAMA: fetch ulang order BESERTA items setelah insert
-      // Response dari insert hanya berisi data orders, tidak include order_items
-      final fullOrder = await fetchOrder(orderId);
+      // Delay supaya DB selesai commit order_items sebelum di-fetch
+      await Future.delayed(const Duration(milliseconds: 500));
+      QrOrderModel? fullOrder = await fetchOrder(orderId);
+
+      // Retry jika items masih kosong
+      if (fullOrder != null && fullOrder.items.isEmpty && session.items.isNotEmpty) {
+        debugPrint('⚠️ Items kosong, retry fetchOrder dalam 800ms...');
+        await Future.delayed(const Duration(milliseconds: 800));
+        fullOrder = await fetchOrder(orderId);
+      }
 
       // ✅ Update status meja ke occupied setelah order berhasil dibuat
       if (session.tableId.isNotEmpty) {
@@ -195,8 +203,7 @@ class QrOrderRepository {
         })
         .toList();
 
-    // Simpan di KEDUA key agar model bisa nemuin pakai order_items atau items
-    return {...raw, 'order_items': orderItems, 'items': orderItems};
+    return {...raw, 'items': orderItems};
   }
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
