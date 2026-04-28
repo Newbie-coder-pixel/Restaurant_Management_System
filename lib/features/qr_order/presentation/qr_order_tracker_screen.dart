@@ -586,10 +586,20 @@ class _PaymentStatusCard extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            _formatPrice(order.totalAmount),
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.bold),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _formatPrice(order.totalAmount),
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                'sudah termasuk PPN 11%',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: colorScheme.outline, fontSize: 10),
+              ),
+            ],
           ),
         ],
       ),
@@ -710,8 +720,32 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
                               ],
                             ),
                           )),
+                      const SizedBox(height: 10),
+                      Divider(height: 1, color: colorScheme.outlineVariant),
+                      // ── Subtotal, PPN, Total breakdown ──────────────────
                       Padding(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                        child: _PriceRow(
+                          label: 'Subtotal',
+                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal),
+                          theme: theme,
+                          colorScheme: colorScheme,
+                          formatPrice: _formatPrice,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+                        child: _PriceRow(
+                          label: 'PPN 11%',
+                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 0.11,
+                          theme: theme,
+                          colorScheme: colorScheme,
+                          formatPrice: _formatPrice,
+                          isNote: true,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
                         child: Row(
                           children: [
                             Text('Total',
@@ -742,6 +776,47 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
         .replaceAllMapped(
             RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
+  }
+}
+
+// ─── Price Row Helper ─────────────────────────────────────────────────────────
+
+class _PriceRow extends StatelessWidget {
+  final String label;
+  final double amount;
+  final ThemeData theme;
+  final ColorScheme colorScheme;
+  final String Function(double) formatPrice;
+  final bool isNote;
+
+  const _PriceRow({
+    required this.label,
+    required this.amount,
+    required this.theme,
+    required this.colorScheme,
+    required this.formatPrice,
+    this.isNote = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: isNote ? colorScheme.outline : colorScheme.onSurface,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          formatPrice(amount),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: isNote ? colorScheme.outline : colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
   }
 }
 
