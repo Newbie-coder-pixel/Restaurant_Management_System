@@ -70,17 +70,115 @@ class _CustomerMyBookingsScreenState
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
   RealtimeChannel? _bookingChannel;
+  bool _announcementShown = false;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _listenBookingChanges();
+    _tabCtrl.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    // Hanya trigger saat tab "Buat Reservasi" (index 0) aktif
+    if (_tabCtrl.index == 0 && !_announcementShown) {
+      _announcementShown = true;
+      _showAnnouncement();
+    }
+  }
+
+  void _showAnnouncement() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          title: const Row(
+            children: [
+              Text('⏰', style: TextStyle(fontSize: 28)),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Perhatian Penting',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFFB923C).withValues(alpha: 0.4),
+                    width: 1.5,
+                  ),
+                ),
+                child: const Text(
+                  '📌 Harap tiba minimal 30 menit sebelum jam reservasi yang kamu pilih.\n\n'
+                  'Keterlambatan lebih dari 15 menit dapat menyebabkan reservasi dibatalkan secara otomatis.',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    height: 1.6,
+                    color: Color(0xFF92400E),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE94560),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    textStyle: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  child: const Text('Saya Mengerti'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   @override
   void dispose() {
     _bookingChannel?.unsubscribe();
+    _tabCtrl.removeListener(_onTabChanged);
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -257,7 +355,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         setState(() => _phoneError = _validatePhone(_phoneCtrl.text.trim()));
       }
     });
-    _showAnnouncement();
   }
 
   @override
@@ -266,92 +363,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     _phoneCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
-  }
-
-  void _showAnnouncement() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-          title: const Row(
-            children: [
-              Text('⏰', style: TextStyle(fontSize: 28)),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Perhatian Penting',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: const Color(0xFFFB923C).withValues(alpha: 0.4),
-                    width: 1.5,
-                  ),
-                ),
-                child: const Text(
-                  '📌 Harap tiba minimal 30 menit sebelum jam reservasi yang kamu pilih.\n\n'
-                  'Keterlambatan lebih dari 15 menit dapat menyebabkan reservasi dibatalkan secara otomatis.',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    height: 1.6,
-                    color: Color(0xFF92400E),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE94560),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    textStyle: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                  child: const Text('Saya Mengerti'),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
   }
 
   String _formatDate(DateTime d) {
