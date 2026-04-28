@@ -149,9 +149,15 @@ void _removeFromCart(MenuItem item) => setState(() {
   // ── Submit ─────────────────────────────────────────────────────────────────
   Future<void> _submitOrder() async {
     if (_cart.isEmpty) return;
-    if (_isTakeaway && _nameCtrl.text.trim().isEmpty) {
+    if (_nameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nama pelanggan wajib diisi untuk takeaway.'),
+        content: Text('Nama pelanggan wajib diisi.'),
+        backgroundColor: AppColors.accent));
+      return;
+    }
+    if (_phoneCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Nomor telepon wajib diisi.'),
         backgroundColor: AppColors.accent));
       return;
     }
@@ -261,13 +267,13 @@ void _removeFromCart(MenuItem item) => setState(() {
         Row(children: [
           Expanded(flex: 3, child: _field(
             _nameCtrl,
-            _isTakeaway ? 'Nama Pelanggan *' : 'Nama Tamu (opsional)',
+            'Nama Pelanggan *',
             Icons.person_outline,
           )),
           const SizedBox(width: 8),
           Expanded(flex: 2, child: _field(
             _phoneCtrl,
-            'No. HP (opsional)',
+            'No. HP *',
             Icons.phone_outlined,
             keyboardType: TextInputType.phone,
           )),
