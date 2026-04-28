@@ -244,7 +244,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
                                 maxCrossAxisExtent: 200,
                                 crossAxisSpacing: 12,
                                 mainAxisSpacing: 12,
-                                childAspectRatio: 1.0,
+                                childAspectRatio: 0.85,
                               ),
                             itemCount: _filtered.length,
                             itemBuilder: (ctx, i) => TableCard(

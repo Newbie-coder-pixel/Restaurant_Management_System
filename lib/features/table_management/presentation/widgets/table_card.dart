@@ -23,6 +23,8 @@ class TableCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = table.status.color;
+    final isCleaning = table.status == TableStatus.cleaning;
+
     return GestureDetector(
       onTap: () => _showMenu(context),
       child: AnimatedContainer(
@@ -37,32 +39,125 @@ class TableCard extends StatelessWidget {
               blurRadius: 8, offset: const Offset(0, 3)),
           ],
         ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _buildTableIcon(),
-          const SizedBox(height: 8),
-          Text('Meja ${table.tableNumber}',
-            style: TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-              fontSize: 15, color: color)),
-          const SizedBox(height: 4),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
-            const SizedBox(width: 3),
-            Text('${table.capacity} orang',
-              style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
-          ]),
-          const SizedBox(height: 6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildTableIcon(),
+            const SizedBox(height: 8),
+            Text('Meja ${table.tableNumber}',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                fontSize: 15, color: color)),
+            const SizedBox(height: 4),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
+              const SizedBox(width: 3),
+              Text('${table.capacity} orang',
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
+            ]),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(12)),
+              child: Text(table.status.label,
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 10,
+                  fontWeight: FontWeight.w600, color: Colors.white)),
+            ),
+            if (isCleaning) ...[
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => _confirmCleaningDone(context),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4CAF50).withValues(alpha: 0.35),
+                        blurRadius: 6, offset: const Offset(0, 2)),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_rounded, size: 12, color: Colors.white),
+                      SizedBox(width: 4),
+                      Text('Siap Dipakai',
+                        style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 10,
+                          fontWeight: FontWeight.w700, color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmCleaningDone(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: color, borderRadius: BorderRadius.circular(12)),
-            child: Text(table.status.label,
-              style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 10,
-                fontWeight: FontWeight.w600, color: Colors.white)),
-          ),
+              color: const Color(0xFF4CAF50).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8)),
+            child: const Icon(Icons.cleaning_services_rounded,
+              color: Color(0xFF4CAF50), size: 20)),
+          const SizedBox(width: 10),
+          const Text('Meja Siap?',
+            style: TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
         ]),
+        content: RichText(
+          text: TextSpan(
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 13,
+              color: AppColors.textPrimary, height: 1.5),
+            children: [
+              const TextSpan(text: 'Tandai '),
+              TextSpan(
+                text: 'Meja ${table.tableNumber}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+              const TextSpan(text: ' sebagai '),
+              const TextSpan(
+                text: 'Tersedia',
+                style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
+              const TextSpan(text: '?\n\nPastikan meja sudah bersih dan siap untuk tamu berikutnya.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Belum',
+              style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary))),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onStatusChange(TableStatus.available);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            icon: const Icon(Icons.check_rounded, size: 16),
+            label: const Text('Ya, Siap!',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700))),
+        ],
       ),
     );
   }
