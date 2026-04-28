@@ -69,19 +69,7 @@ class QrOrderRepository {
         debugPrint('✅ ${orderItemsData.length} items tersimpan');
       }
 
-      // ✅ FIX UTAMA: fetch ulang order BESERTA items setelah insert
-      // Delay supaya DB selesai commit order_items sebelum di-fetch
-      await Future.delayed(const Duration(milliseconds: 500));
-      QrOrderModel? fullOrder = await fetchOrder(orderId);
-
-      // Retry jika items masih kosong
-      if (fullOrder != null && fullOrder.items.isEmpty && session.items.isNotEmpty) {
-        debugPrint('⚠️ Items kosong, retry fetchOrder dalam 800ms...');
-        await Future.delayed(const Duration(milliseconds: 800));
-        fullOrder = await fetchOrder(orderId);
-      }
-
-      // ✅ Update status meja ke occupied setelah order berhasil dibuat
+      // 3. Update status meja SEGERA setelah insert — sebelum fetchOrder
       if (session.tableId.isNotEmpty) {
         try {
           await _client
@@ -96,6 +84,11 @@ class QrOrderRepository {
           debugPrint('⚠️ Gagal update status meja: $e');
         }
       }
+
+      // 4. Fetch ulang order beserta items
+      await Future.delayed(const Duration(milliseconds: 500));
+      QrOrderModel? fullOrder = await fetchOrder(orderId);
+
       if (fullOrder != null) {
         debugPrint('✅ Order dibuat: ${fullOrder.items.length} items, total ${fullOrder.totalAmount}');
         return fullOrder;
