@@ -259,7 +259,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   Map<String, List<OrderModel>> _groupOrders(List<OrderModel> orders) {
     final groups = <String, List<OrderModel>>{for (final g in _groupDefs) g.name: []};
-    for (final o in orders) {
+    // Filter: hanya tampilkan order yang memiliki minimal 1 item
+    final validOrders = orders.where((o) => o.items.isNotEmpty).toList();
+    for (final o in validOrders) {
       switch (o.status) {
         case OrderStatus.new_:
         case OrderStatus.created:   groups['Antri Masak']!.add(o); break;
@@ -331,7 +333,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                 labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13),
                 unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                 tabs: [
-                  Tab(text: 'Aktif (${_orders.length})'),
+                  Tab(text: 'Aktif (${_orders.where((o) => o.items.isNotEmpty).length})'),
                   const Tab(text: 'Order Baru'),
                   const Tab(text: 'Riwayat'),
                 ],
@@ -362,7 +364,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     final grouped = _groupOrders(_orders);
     final activeGroups = _groupDefs.where((g) => (grouped[g.name] ?? []).isNotEmpty).toList();
 
-    if (_orders.isEmpty) {
+    final validOrderCount = _orders.where((o) => o.items.isNotEmpty).length;
+    if (validOrderCount == 0) {
       return const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textHint),
         SizedBox(height: 12),
