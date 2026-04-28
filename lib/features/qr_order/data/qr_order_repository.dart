@@ -102,7 +102,7 @@ class QrOrderRepository {
       }
 
       // Fallback jika fetch gagal
-      return QrOrderModel.fromMap(_normalizeOrderMap(orderResponse));
+      return QrOrderModel.fromMap(_normalizeOrderMap(orderResponse, const []));
 
     } catch (e, stack) {
       debugPrint('❌ Gagal create order: $e\n$stack');
@@ -162,42 +162,64 @@ class QrOrderRepository {
     return controller.stream;
   }
 
-  // ── Fetch order + items ──────────────────────────────────────────────────
-  // Eksplisit kolom — TIDAK pakai * agar kolom jsonb 'items:[]' tidak konflik
-  static const _selectColumns =
-      'id, order_number, queue_number, table_id, table_name, '
-      'customer_name, total_amount, status, payment_status, '
-      'payment_method, created_at, updated_at, branch_id, notes, '
-      'order_items(id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests)';
+  // ── Fetch order + items (DUA QUERY TERPISAH) ─────────────────────────────
+  // Join via PostgREST tidak bekerja untuk anon karena RLS branch_isolation,
+  // jadi fetch order dan order_items secara terpisah.
 
   Future<QrOrderModel?> fetchOrder(String orderId) async {
-    final response = await _client
+    // Query 1: fetch order (tanpa join)
+    final orderResp = await _client
         .from('orders')
-        .select(_selectColumns)
+        .select(
+          'id, order_number, queue_number, table_id, table_name, '
+          'customer_name, total_amount, status, payment_status, '
+          'payment_method, created_at, updated_at, branch_id, notes',
+        )
         .eq('id', orderId)
         .maybeSingle();
-    if (response == null) return null;
-    debugPrint('📦 order_items dari DB: ${response["order_items"]}');
-    return QrOrderModel.fromMap(_normalizeOrderMap(response));
+    if (orderResp == null) return null;
+
+    // Query 2: fetch order_items secara terpisah
+    final itemsResp = await _client
+        .from('order_items')
+        .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
+        .eq('order_id', orderId);
+
+    debugPrint('📦 fetchOrder items: ${itemsResp.length}');
+
+    final normalized = _normalizeOrderMap(orderResp, itemsResp);
+    return QrOrderModel.fromMap(normalized);
   }
 
   Future<QrOrderModel?> fetchByQueueNumber(String queueNumber) async {
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
-    final response = await _client
+
+    final orderResp = await _client
         .from('orders')
-        .select(_selectColumns)
+        .select(
+          'id, order_number, queue_number, table_id, table_name, '
+          'customer_name, total_amount, status, payment_status, '
+          'payment_method, created_at, updated_at, branch_id, notes',
+        )
         .eq('queue_number', queueNumber)
         .gte('created_at', startOfDay.toIso8601String())
         .maybeSingle();
-    if (response == null) return null;
-    return QrOrderModel.fromMap(_normalizeOrderMap(response));
+    if (orderResp == null) return null;
+
+    final itemsResp = await _client
+        .from('order_items')
+        .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
+        .eq('order_id', orderResp['id'] as String);
+
+    return QrOrderModel.fromMap(_normalizeOrderMap(orderResp, itemsResp));
   }
 
-  // ── Normalize: rename kolom DB agar cocok dengan model ────────────────────
-  Map<String, dynamic> _normalizeOrderMap(Map<String, dynamic> raw) {
-    // Ambil dari relasi order_items (join), bukan kolom jsonb items yang kosong
-    final rawItems = raw['order_items'] as List<dynamic>? ?? [];
+  // ── Normalize ─────────────────────────────────────────────────────────────
+  Map<String, dynamic> _normalizeOrderMap(
+    Map<String, dynamic> order,
+    List<dynamic> rawItems,
+  ) {
     final orderItems = rawItems.map((e) {
       final item = Map<String, dynamic>.from(e as Map);
       item['price'] = item['unit_price'] ?? item['price'];
@@ -205,13 +227,10 @@ class QrOrderRepository {
       return item;
     }).toList();
 
-    debugPrint('📦 normalize: ${orderItems.length} items');
-
-    // Hapus kolom jsonb 'items' yang kosong, ganti dengan data dari relasi
-    final result = Map<String, dynamic>.from(raw);
-    result.remove('items');
-    result['items'] = orderItems;
-    return result;
+    return {
+      ...order,
+      'items': orderItems,
+    };
   }
 
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
