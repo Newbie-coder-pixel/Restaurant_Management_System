@@ -275,7 +275,7 @@ class _CustomerCheckoutScreenState
           foregroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-            onPressed: () => context.pop()),
+            onPressed: () => context.canPop() ? context.pop() : context.go('/customer?tab=0')),
           title: const Text('Checkout',
               style: TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -319,7 +319,7 @@ class _CustomerCheckoutScreenState
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-          onPressed: () => context.pop()),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/customer?tab=0')),
         title: const Text('Checkout',
             style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
