@@ -324,11 +324,12 @@ class _CustomerOrderTrackerScreenState
     }
   }
 
+  // ── FIX 1: Tambah preparation_time_minutes di select ──────────────
   Future<void> _processOrderResult(Map<String, dynamic> order) async {
     try {
       final items = await Supabase.instance.client
           .from('order_items')
-          .select('*, menu_items(name)')
+          .select('*, menu_items(name, preparation_time_minutes)') // <-- FIXED
           .eq('order_id', order['id'])
           .order('created_at');
 
@@ -455,7 +456,7 @@ class _CustomerOrderTrackerScreenState
       padding: const EdgeInsets.all(20),
       physics: const BouncingScrollPhysics(),
       children: [
-        // Search box - enhanced with shadow and rounded corners
+        // Search box
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -546,7 +547,7 @@ class _CustomerOrderTrackerScreenState
           ),
         ),
 
-        // Error message - better styling
+        // Error message
         if (_error != null) ...[
           const SizedBox(height: 24),
           Container(
@@ -635,7 +636,7 @@ class _CustomerOrderTrackerScreenState
   );
 }
 
-// ── Order Status Card (Improved UI) ──────────────────────────────
+// ── Order Status Card ──────────────────────────────────────────────
 class _OrderStatusCard extends StatelessWidget {
   final Map<String, dynamic> order;
   final List<Map<String, dynamic>> items;
@@ -794,7 +795,9 @@ class _OrderStatusCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           ...items.map((item) {
-            final name    = (item['menu_items'] as Map?)?['name'] as String? ?? '-';
+            final name    = (item['menu_items'] as Map?)?['name'] as String?
+                          ?? item['menu_item_name'] as String? // fallback ke kolom order_items
+                          ?? '-';
             final qty     = item['quantity'] as int? ?? 1;
             final sub     = (item['subtotal'] as num?)?.toDouble() ?? 0;
             final special = item['special_requests'] as String?;
@@ -973,16 +976,25 @@ class _CustomerPrepTimeCard extends StatefulWidget {
 class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
   late final Future<PrepTimeResult?> _future;
 
+  // ── FIX 2: Pakai preparation_time_minutes dari join, bukan hardcoded 15 ──
   List<PrepTimeRequestItem> _buildRequestItems() {
     return widget.items.map((item) {
-      final name = (item['menu_items'] as Map?)?['name'] as String? ?? '-';
+      // Nama: dari join menu_items, fallback ke kolom menu_item_name di order_items
+      final name = (item['menu_items'] as Map?)?['name'] as String?
+                 ?? item['menu_item_name'] as String?
+                 ?? '-';
       final qty  = item['quantity'] as int? ?? 1;
       final special = item['special_requests'] as String?;
+
+      // Prep time: dari join menu_items, fallback ke 15 menit jika item sudah dihapus
+      final prepTime = (item['menu_items'] as Map?)?['preparation_time_minutes'] as int?
+                     ?? 15;
+
       return PrepTimeRequestItem(
-        menuItemName: name,
-        quantity: qty,
-        preparationTimeMinutes: 15, // default — lihat catatan
-        specialRequests: special,
+        menuItemName:           name,
+        quantity:               qty,
+        preparationTimeMinutes: prepTime, // <-- FIXED: pakai nilai asli dari DB
+        specialRequests:        special,
       );
     }).toList();
   }
@@ -1117,7 +1129,7 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
   }
 }
 
-// ── Progress Bar (Improved with smoother animation and better visuals) ──
+// ── Progress Bar ──────────────────────────────────────────────────
 class _StatusProgress extends StatelessWidget {
   final String status;
   const _StatusProgress({required this.status});
