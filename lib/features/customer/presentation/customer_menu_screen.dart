@@ -173,7 +173,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
     ),
     leading: IconButton(
       icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-      onPressed: () => context.canPop() ? context.pop() : context.go('/customer?tab=0'),
+      onPressed: () => context.go('/customer'),
     ),
     actions: [
       Container(
@@ -284,26 +284,26 @@ class _MenuCard extends StatelessWidget {
     final name = item['name'] as String;
     final desc = item['description'] as String? ?? '';
 
-    final s = cartQty > 0 ? 1.02 : 1.0;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      transform: Matrix4.diagonal3Values(s, s, 1.0),
-      transformAlignment: Alignment.center,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4)),
+          if (cartQty > 0)
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
+              color: const Color(0xFFE94560).withValues(alpha: 0.2),
+              blurRadius: 16,
               offset: const Offset(0, 4)),
-            if (cartQty > 0)
-              BoxShadow(
-                color: const Color(0xFFE94560).withValues(alpha: 0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 2)),
-          ],
+        ],
+      ),
+      child: Container(
+        decoration: const BoxDecoration(
+          borderRadius: BorderRadius.all(Radius.circular(20)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
