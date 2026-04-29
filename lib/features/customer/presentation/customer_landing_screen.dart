@@ -193,7 +193,10 @@ class _CustomerLandingScreenState
     super.dispose();
   }
 
-  void switchTab(int index) => _tabNotifier.value = index;
+  void switchTab(int index) {
+  _tabNotifier.value = index;
+  if (mounted) context.go('/customer?tab=$index');
+}
 
   @override
   Widget build(BuildContext context) {
@@ -433,7 +436,10 @@ class _CustomerLandingScreenState
               final active = _tab == i;
               return Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() => _tab = i),
+                 onTap: () {
+  setState(() => _tab = i);
+  context.go('/customer?tab=$i');
+},
                   behavior: HitTestBehavior.opaque,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
