@@ -325,7 +325,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             order_items(id, menu_item_name, quantity, unit_price, subtotal)
           ''')
           .eq('table_id', widget.table.id)
-          .inFilter('status', ['created', 'confirmed', 'preparing', 'ready', 'served'])
+          .inFilter('status', ['created', 'new', 'preparing', 'ready', 'served'])
           .order('created_at', ascending: false)
           .limit(1)
           .maybeSingle();
