@@ -169,33 +169,6 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [Color(0xFF1A1A2E), Color(0xFF0F3460), Color(0xFF16213E)])),
-        child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              const Spacer(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.restaurant, color: Colors.white, size: 24)),
-                  const SizedBox(width: 12),
-                  const Text('RestaurantOS',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700)),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
       ),
     ),
     leading: IconButton(
