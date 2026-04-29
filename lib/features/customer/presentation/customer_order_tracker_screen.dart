@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/cart_provider.dart';
+import '../../../core/services/prep_time_service.dart';
 
 // ── Order Success Screen ───────────────────────────────────────────
 class CustomerOrderSuccessScreen extends StatelessWidget {
@@ -773,6 +774,12 @@ class _OrderStatusCard extends StatelessWidget {
           // Progress indicator
           _StatusProgress(status: status),
 
+          // ── ML Estimasi Waktu (hanya saat new / preparing) ────────────
+          if (status == 'new' || status == 'preparing') ...[
+            const SizedBox(height: 16),
+            _CustomerPrepTimeCard(order: order, items: items),
+          ],
+
           const SizedBox(height: 24),
 
           // Items list
@@ -949,6 +956,164 @@ class _OrderStatusCard extends StatelessWidget {
       buffer.write(s[i]);
     }
     return buffer.toString();
+  }
+}
+
+// ── ML Prep Time Card (Customer) ─────────────────────────────────
+class _CustomerPrepTimeCard extends StatefulWidget {
+  final Map<String, dynamic> order;
+  final List<Map<String, dynamic>> items;
+
+  const _CustomerPrepTimeCard({required this.order, required this.items});
+
+  @override
+  State<_CustomerPrepTimeCard> createState() => _CustomerPrepTimeCardState();
+}
+
+class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
+  late final Future<PrepTimeResult?> _future;
+
+  List<PrepTimeRequestItem> _buildRequestItems() {
+    return widget.items.map((item) {
+      final name = (item['menu_items'] as Map?)?['name'] as String? ?? '-';
+      final qty  = item['quantity'] as int? ?? 1;
+      final special = item['special_requests'] as String?;
+      return PrepTimeRequestItem(
+        menuItemName: name,
+        quantity: qty,
+        preparationTimeMinutes: 15, // default — lihat catatan
+        specialRequests: special,
+      );
+    }).toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _future = PrepTimeService.predict(
+      items: _buildRequestItems(),
+      branchId: widget.order['branch_id'] as String? ?? '',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PrepTimeResult?>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F4FF),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF0F3460),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Menghitung estimasi waktu masak...',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: Color(0xFF0F3460),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final result = snap.data;
+        if (snap.hasError || result == null) return const SizedBox.shrink();
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFF7ED), Color(0xFFFFF1DC)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD97706).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.soup_kitchen_outlined,
+                    color: Color(0xFFD97706), size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Estimasi Waktu Masak',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: Color(0xFFB45309),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      PrepTimeService.formatEstimate(result.estimatedMinutes),
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFD97706),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD97706).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: const Color(0xFFD97706).withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.smart_toy_outlined,
+                        size: 11, color: Color(0xFFD97706)),
+                    SizedBox(width: 3),
+                    Text(
+                      'AI',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFD97706),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
