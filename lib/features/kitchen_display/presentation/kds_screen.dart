@@ -14,7 +14,7 @@ class KDSScreen extends ConsumerStatefulWidget {
 
 class _KDSScreenState extends ConsumerState<KDSScreen> {
   List<OrderModel> _orders = [];
-  int _readyCount = 0; // [OPSI-B] jumlah order 'ready' menunggu waiter
+  int _readyCount = 0;
   bool _isLoading = true;
   String? _branchId;
   RealtimeChannel? _channel;
@@ -53,7 +53,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       return;
     }
     try {
-      // ── 1. Order aktif dapur (new / created / preparing) ────────────────────
       final res = await Supabase.instance.client
           .from('orders')
           .select('''
@@ -65,11 +64,9 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             )
           ''')
           .eq('branch_id', _branchId!)
-          // 'new' = order internal waiter, 'created' = QR order baru masuk, 'preparing' = sedang dimasak
           .inFilter('status', ['new', 'created', 'preparing'])
           .order('created_at');
 
-      // ── 2. [OPSI-B] Hitung berapa order 'ready' yang belum diantar waiter ───
       final readyRes = await Supabase.instance.client
           .from('orders')
           .select('id')
@@ -79,7 +76,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       if (mounted) {
         setState(() {
           _orders = (res as List).map((e) => OrderModel.fromJson(e)).toList();
-          _readyCount = (readyRes as List).length; // [OPSI-B]
+          _readyCount = (readyRes as List).length;
           _isLoading = false;
         });
       }
@@ -114,24 +111,36 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     super.dispose();
   }
 
+  // ── FIX: Tambah sent_to_kitchen_at saat dapur mulai masak ─────────────────
   Future<void> _markPreparing(String orderId) async {
+    final now = DateTime.now().toIso8601String();
+
+    // Update status order + catat waktu mulai masak
     await Supabase.instance.client.from('orders').update({
-      'status': 'preparing',
-      'updated_at': DateTime.now().toIso8601String(),
+      'status':     'preparing',
+      'updated_at': now,
     }).eq('id', orderId);
+
+    // Catat sent_to_kitchen_at di semua order_items milik order ini
+    // Ini adalah titik awal pengukuran actual_prep_time untuk training data ML
+    await Supabase.instance.client.from('order_items').update({
+      'sent_to_kitchen_at': now,
+    }).eq('order_id', orderId);
   }
 
   Future<void> _markReady(String orderId) async {
+    final now = DateTime.now().toIso8601String();
+
     await Supabase.instance.client.from('orders').update({
-      'status': 'ready',
-      'updated_at': DateTime.now().toIso8601String(),
+      'status':     'ready',
+      'updated_at': now,
     }).eq('id', orderId);
+
+    // prepared_at sudah ada sebelumnya, tetap diisi
     await Supabase.instance.client.from('order_items').update({
-      'status': 'ready',
-      'prepared_at': DateTime.now().toIso8601String(),
+      'status':      'ready',
+      'prepared_at': now,
     }).eq('order_id', orderId);
-    // [OPSI-B] Setelah ready, order hilang dari KDS dapur — waiter yang mark served
-    // lewat order_screen mereka (lihat: order_screen.dart _markServed)
   }
 
   bool _isNewOrder(OrderModel order) =>
@@ -168,7 +177,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             )),
         ]),
         actions: [
-          // ── [OPSI-B] Badge: order ready menunggu waiter ─────────────────────
           if (_readyCount > 0)
             Container(
               margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -208,9 +216,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
         ],
       ),
       body: Column(children: [
-        // ── [OPSI-B] Banner notifikasi untuk waiter ──────────────────────────
         if (_readyCount > 0) _buildReadyBanner(colorScheme),
-        // ── Order list aktif dapur ────────────────────────────────────────────
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -235,7 +241,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     );
   }
 
-  // ── [OPSI-B] Banner hijau: reminder ke waiter di layar dapur ──────────────
   Widget _buildReadyBanner(ColorScheme colorScheme) {
     return Container(
       width: double.infinity,
@@ -331,7 +336,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           ]),
         ),
 
-        // ── Sub-header: badge tipe order + status ────────────────────────────
+        // ── Sub-header ───────────────────────────────────────────────────────
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
@@ -340,7 +345,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               bottom: BorderSide(color: colorScheme.outlineVariant, width: 0.5)),
           ),
           child: Row(children: [
-            // Badge: QR Order atau Staff Order
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
@@ -368,7 +372,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               ]),
             ),
             const Spacer(),
-            // Status pill
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
@@ -398,7 +401,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: colorScheme.outlineVariant, width: 0.8)),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  // Quantity badge
                   Container(
                     width: 30, height: 30,
                     decoration: BoxDecoration(
