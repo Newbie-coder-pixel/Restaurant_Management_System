@@ -41,11 +41,23 @@ extension OrderStatusExt on OrderStatus {
   }
 }
 
+// ✅ TAMBAHAN: Extension untuk OrderSource
+extension OrderSourceExt on OrderSource {
+  /// Nilai yang benar-benar disimpan ke database (snake_case)
+  String get dbValue {
+    switch (this) {
+      case OrderSource.dineIn:   return 'dine_in';
+      case OrderSource.online:   return 'online';
+      case OrderSource.takeaway: return 'takeaway';
+    }
+  }
+}
+
 OrderSource _orderSourceFromString(String s) {
   const map = {
     'dine_in': OrderSource.dineIn,
-    'dineIn': OrderSource.dineIn,
-    'online': OrderSource.online,
+    'dinein':  OrderSource.dineIn, // ✅ FIX: lowercase agar cocok setelah toLowerCase()
+    'online':  OrderSource.online,
     'takeaway': OrderSource.takeaway,
   };
   return map[s.toLowerCase()] ?? OrderSource.dineIn;
@@ -105,7 +117,7 @@ class OrderModel {
   final String orderNumber;
   final OrderStatus status;
   final OrderSource source;
-  final String? orderType; 
+  final String? orderType;
   final String? customerName;
   final double discountAmount;
   final String? notes;
@@ -125,7 +137,7 @@ class OrderModel {
     required this.orderNumber,
     required this.status,
     required this.source,
-    this.orderType, 
+    this.orderType,
     this.customerName,
     this.discountAmount = 0.0,
     this.notes,
@@ -148,7 +160,7 @@ class OrderModel {
       orderNumber: j['order_number'] ?? j['queue_number'] ?? 'UNKNOWN',
       status: OrderStatusExt.fromString(j['status'] ?? 'created'),
       source: _orderSourceFromString(j['source'] ?? 'dine_in'),
-      orderType: j['order_type'] as String?, 
+      orderType: j['order_type'] as String?,
       customerName: j['customer_name'],
       discountAmount: (j['discount_amount'] ?? 0).toDouble(),
       notes: j['notes'],

@@ -69,7 +69,6 @@ class _CustomerCheckoutScreenState
                   fontSize: 16)),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Ringkasan
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -183,31 +182,27 @@ class _CustomerCheckoutScreenState
       final orderRes = await Supabase.instance.client
           .from('orders')
           .insert({
-            'branch_id':       cart.branchId,
-            'order_number':    _generateOrderNumber(),
-            'status':          'new',
-            'source':          _orderType == 'dine_in' ? 'dineIn' : 'takeaway', // webApp customer order
-            'customer_name':   _nameCtrl.text.trim(),
-            'customer_phone':  _phoneCtrl.text.trim().isEmpty
+            'branch_id':        cart.branchId,
+            'order_number':     _generateOrderNumber(),
+            'status':           'new',
+            'source':           _orderType == 'dine_in' ? 'dine_in' : 'takeaway', // ✅ FIX: was 'dineIn', now 'dine_in'
+            'customer_name':    _nameCtrl.text.trim(),
+            'customer_phone':   _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
-            // FIX: simpan customer_user_id supaya bisa filter di history
             'customer_user_id': user?.id,
-            'subtotal':        cart.subtotal,
-            'tax_amount':      cart.tax,
-            'discount_amount': 0,
-            'total_amount':    cart.total,
-            'notes':           _buildOrderNotes(),
+            'subtotal':         cart.subtotal,
+            'tax_amount':       cart.tax,
+            'discount_amount':  0,
+            'total_amount':     cart.total,
+            'notes':            _buildOrderNotes(),
           })
           .select()
           .single();
 
       final orderId = orderRes['id'] as String;
 
-      // FIX: gunakan menuItemId langsung (UUID), bukan lookup by name
-      // cart_provider sudah menyimpan menuItemId yang benar
       final orderItems = ref.read(cartProvider).items.map((item) => {
         'order_id':     orderId,
-        // FIX: pastikan menu_item_id valid — kalau kosong skip
         'menu_item_id': item.menuItemId,
         'quantity':     item.quantity,
         'unit_price':   item.price,
@@ -252,7 +247,6 @@ class _CustomerCheckoutScreenState
     return parts.isEmpty ? null : parts.join(' | ');
   }
 
-  // FIX: exact match table_number, bukan ilike
   Future<void> _markTableOccupied(
       String branchId, String tableNumber) async {
     try {
@@ -260,7 +254,7 @@ class _CustomerCheckoutScreenState
           .from('restaurant_tables')
           .select('id')
           .eq('branch_id', branchId)
-          .eq('table_number', tableNumber) // FIX: exact match
+          .eq('table_number', tableNumber)
           .limit(1);
       if ((tables as List).isNotEmpty) {
         await Supabase.instance.client
@@ -335,7 +329,6 @@ class _CustomerCheckoutScreenState
         title: const Text('Checkout',
             style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        // Badge item count di appbar
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16),
