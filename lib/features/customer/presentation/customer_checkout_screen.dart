@@ -153,6 +153,18 @@ class _CustomerCheckoutScreenState
       return;
     }
 
+    // Validasi nomor HP jika diisi
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isNotEmpty) {
+      final phoneRegex = RegExp(r'^08[0-9]{8,11}$');
+      if (!phoneRegex.hasMatch(phone)) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Format nomor HP tidak valid. Contoh: 08123456789'),
+          backgroundColor: Colors.red));
+        return;
+      }
+    }
+
     // Simpan notes per item ke provider
     for (final entry in _itemNotesCtrls.entries) {
       ref.read(cartProvider.notifier).updateNotes(
@@ -174,7 +186,7 @@ class _CustomerCheckoutScreenState
             'branch_id':       cart.branchId,
             'order_number':    _generateOrderNumber(),
             'status':          'new',
-            'source':          _orderType == 'dine_in' ? 'dineIn' : 'takeaway',
+            'source':          _orderType == 'dine_in' ? 'dineIn' : 'takeaway', // webApp customer order
             'customer_name':   _nameCtrl.text.trim(),
             'customer_phone':  _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
@@ -363,8 +375,7 @@ class _CustomerCheckoutScreenState
           _section('Informasi Pemesan', [
             _field('Nama kamu *', _nameCtrl, Icons.person_outline),
             const SizedBox(height: 10),
-            _field('No. HP (opsional)', _phoneCtrl, Icons.phone_outlined,
-                keyboardType: TextInputType.phone),
+            _phoneField(),
             if (_orderType == 'dine_in') ...[
               const SizedBox(height: 10),
               _field('Nomor meja', _tableCtrl,
@@ -520,6 +531,65 @@ class _CustomerCheckoutScreenState
       const SizedBox(height: 12),
       ...children,
     ]));
+
+  Widget _phoneField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _phoneCtrl,
+          keyboardType: TextInputType.phone,
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            hintText: 'Contoh: 08123456789',
+            hintStyle: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
+            prefixIcon: const Icon(Icons.phone_outlined, size: 18, color: Colors.grey),
+            suffixIcon: _phoneCtrl.text.trim().isNotEmpty
+                ? Icon(
+                    _isValidPhone(_phoneCtrl.text.trim())
+                        ? Icons.check_circle
+                        : Icons.cancel,
+                    size: 18,
+                    color: _isValidPhone(_phoneCtrl.text.trim())
+                        ? Colors.green
+                        : Colors.red,
+                  )
+                : null,
+            filled: true,
+            fillColor: const Color(0xFFF9F9F9),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: _phoneCtrl.text.trim().isNotEmpty && !_isValidPhone(_phoneCtrl.text.trim())
+                    ? const BorderSide(color: Colors.red, width: 1.5)
+                    : BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 10)),
+        ),
+        if (_phoneCtrl.text.trim().isNotEmpty && !_isValidPhone(_phoneCtrl.text.trim())) ...[
+          const SizedBox(height: 4),
+          const Padding(
+            padding: EdgeInsets.only(left: 4),
+            child: Text(
+              'Format: 08xxxxxxxxxx (10–13 digit)',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: Colors.red),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  bool _isValidPhone(String phone) {
+    return RegExp(r'^08[0-9]{8,11}$').hasMatch(phone);
+  }
 
   Widget _field(String hint, TextEditingController ctrl, IconData icon,
       {int maxLines = 1, TextInputType? keyboardType}) =>
