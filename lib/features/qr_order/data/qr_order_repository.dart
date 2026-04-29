@@ -56,9 +56,7 @@ class QrOrderRepository {
             'menu_item_name': cartItem.menuItem.name,
             'unit_price': cartItem.menuItem.price,
             'quantity': cartItem.quantity,
-            // ❌ subtotal tidak di-insert → GENERATED column, dihitung otomatis DB
           };
-          // ✅ notes per item disimpan ke special_requests
           if (cartItem.notes != null && cartItem.notes!.isNotEmpty) {
             itemData['special_requests'] = cartItem.notes;
           }
@@ -69,19 +67,40 @@ class QrOrderRepository {
         debugPrint('✅ ${orderItemsData.length} items tersimpan');
       }
 
-      // 3. Update status meja SEGERA setelah insert — sebelum fetchOrder
+      // 3. Update status meja SEGERA setelah insert
       if (session.tableId.isNotEmpty) {
         try {
           debugPrint('🔍 tableId yang akan diupdate: "${session.tableId}"');
-          final result = await _client
+
+          // Cek dulu apakah meja ada dan status saat ini
+          final checkResult = await _client
               .from('restaurant_tables')
-              .update({
-                'status': 'occupied',
-                'updated_at': DateTime.now().toIso8601String(),
-              })
+              .select('id, status')
               .eq('id', session.tableId)
-              .select();
-          debugPrint('✅ Update result: $result');
+              .maybeSingle();
+          debugPrint('🔍 Meja ditemukan: $checkResult');
+
+          if (checkResult != null) {
+            // ✅ FIX: hapus .select() dari update — ini penyebab return []
+            await _client
+                .from('restaurant_tables')
+                .update({
+                  'status': 'occupied',
+                  'updated_at': DateTime.now().toIso8601String(),
+                })
+                .eq('id', session.tableId);
+            debugPrint('✅ Update selesai');
+
+            // Verifikasi dengan query terpisah
+            final verify = await _client
+                .from('restaurant_tables')
+                .select('id, status')
+                .eq('id', session.tableId)
+                .maybeSingle();
+            debugPrint('✅ Status meja setelah update: ${verify?['status']}');
+          } else {
+            debugPrint('⚠️ Meja tidak ditemukan dengan id: ${session.tableId}');
+          }
         } catch (e) {
           debugPrint('⚠️ Gagal update status meja: $e');
         }
@@ -161,7 +180,6 @@ class QrOrderRepository {
 
   // ── Fetch order + items (DUA QUERY TERPISAH) ─────────────────────────────
   Future<QrOrderModel?> fetchOrder(String orderId) async {
-    // Query 1: fetch order (tanpa join)
     final orderResp = await _client
         .from('orders')
         .select(
@@ -173,7 +191,6 @@ class QrOrderRepository {
         .maybeSingle();
     if (orderResp == null) return null;
 
-    // Query 2: fetch order_items secara terpisah
     final itemsResp = await _client
         .from('order_items')
         .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
