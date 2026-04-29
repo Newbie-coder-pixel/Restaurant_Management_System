@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/cart_provider.dart';
-import 'widgets/cart_bottom_bar.dart';
 
 class CustomerMenuScreen extends ConsumerStatefulWidget {
   final String branchId;
@@ -69,6 +68,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: CustomScrollView(
@@ -92,27 +92,27 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.restaurant_menu_outlined, 
+                            Icon(Icons.restaurant_menu_outlined,
                               size: 80, color: Colors.grey.shade300),
                             const SizedBox(height: 16),
                             Text('Tidak ada menu ditemukan',
                               style: TextStyle(
-                                fontFamily: 'Poppins', 
+                                fontFamily: 'Poppins',
                                 fontSize: 16,
                                 color: Colors.grey.shade600,
                                 fontWeight: FontWeight.w500)),
                             const SizedBox(height: 8),
                             Text('Coba kata kunci lain atau pilih kategori berbeda',
                               style: TextStyle(
-                                fontFamily: 'Poppins', 
+                                fontFamily: 'Poppins',
                                 fontSize: 13,
                                 color: Colors.grey.shade400)),
                           ],
                         ),
                       ))
                   : SliverPadding(
-                      padding: EdgeInsets.fromLTRB(16, 8, 16, 
-                        cart.isEmpty ? 100 : 120),
+                      padding: EdgeInsets.fromLTRB(16, 8, 16,
+                        cart.isEmpty ? 100 : 140),
                       sliver: SliverGrid(
                         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: 180,
@@ -120,33 +120,46 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 16),
                         delegate: SliverChildBuilderDelegate(
-                          (_, i) => _MenuCard(
-                            item: _filteredItems[i],
-                            cartQty: cart.items
-                              .where((c) => c.menuItemId == _filteredItems[i]['id'])
-                              .fold(0, (s, c) => s + c.quantity),
-                            onAdd: () => ref.read(cartProvider.notifier).addItem(CartItem(
-                              menuItemId: _filteredItems[i]['id'],
-                              name: _filteredItems[i]['name'],
-                              price: (_filteredItems[i]['price'] as num).toDouble(),
-                              imageUrl: _filteredItems[i]['image_url'],
-                            )),
-                            onRemove: () => ref.read(cartProvider.notifier)
-                              .updateQuantity(_filteredItems[i]['id'],
-                                (cart.items.firstWhere(
-                                  (c) => c.menuItemId == _filteredItems[i]['id'],
-                                  orElse: () => CartItem(menuItemId: '', name: '', price: 0)).quantity) - 1),
-                          ),
+                          (_, i) {
+                            final item = _filteredItems[i];
+                            final qty = cart.items
+                              .where((c) => c.menuItemId == item['id'])
+                              .fold(0, (s, c) => s + c.quantity);
+                            return _MenuCard(
+                              item: item,
+                              cartQty: qty,
+                              onAdd: () {
+                                ref.read(cartProvider.notifier).setBranch(
+                                  widget.branchId, '');
+                                ref.read(cartProvider.notifier).addItem(CartItem(
+                                  menuItemId: item['id'],
+                                  name: item['name'],
+                                  price: (item['price'] as num).toDouble(),
+                                  imageUrl: item['image_url'],
+                                ));
+                              },
+                              onRemove: () {
+                                final currentQty = cart.items
+                                  .where((c) => c.menuItemId == item['id'])
+                                  .fold(0, (s, c) => s + c.quantity);
+                                ref.read(cartProvider.notifier)
+                                  .updateQuantity(item['id'], currentQty - 1);
+                              },
+                            );
+                          },
                           childCount: _filteredItems.length,
                         ),
                       ),
                     ),
         ],
       ),
-      bottomNavigationBar: CartBottomBar(
-        cart: cart,
-        show: !cart.isEmpty,
-        onCheckout: () => context.go('/customer/checkout')),
+      // ✅ Pakai floatingActionButton seperti QR screen — aman, tidak crash saat null
+      floatingActionButton: cart.isEmpty
+          ? null
+          : _CartFab(
+              cart: cart,
+              onCheckout: () => context.go('/customer/checkout'),
+            ),
     );
   }
 
@@ -174,7 +187,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
     ),
     leading: IconButton(
       icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-      onPressed: () => context.go('/customer'),
+      onPressed: () => context.canPop() ? context.pop() : context.go('/customer?tab=0'),
     ),
     actions: [
       Container(
@@ -185,7 +198,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.calendar_today_outlined, 
+            child: const Icon(Icons.calendar_today_outlined,
               color: Colors.white, size: 18)),
           tooltip: 'Booking meja',
           onPressed: () => context.push('/customer/booking/${widget.branchId}'),
@@ -201,10 +214,10 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
       decoration: InputDecoration(
         hintText: 'Cari menu favoritmu...',
         hintStyle: const TextStyle(
-          fontFamily: 'Poppins', 
+          fontFamily: 'Poppins',
           fontSize: 14,
           color: Color(0xFF9CA3AF)),
-        prefixIcon: const Icon(Icons.search_rounded, 
+        prefixIcon: const Icon(Icons.search_rounded,
           color: Color(0xFF9CA3AF), size: 20),
         suffixIcon: _search.isNotEmpty
             ? IconButton(
@@ -212,7 +225,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                 onPressed: () => setState(() => _search = ''),
               )
             : null,
-        filled: true, 
+        filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -262,15 +275,89 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
               offset: const Offset(0, 2))
           ] : const [],
         ),
-        child: Text(label, 
+        child: Text(label,
           style: TextStyle(
-            fontFamily: 'Poppins', 
+            fontFamily: 'Poppins',
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: selected ? Colors.white : const Color(0xFF4B5563))),
       ));
 }
 
+// ── Cart FAB — sama polanya dengan QR screen ──────────────────────
+class _CartFab extends StatelessWidget {
+  final CartState cart;
+  final VoidCallback onCheckout;
+  const _CartFab({required this.cart, required this.onCheckout});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onCheckout,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1A1A2E).withValues(alpha: 0.35),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
+          ]),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Stack(children: [
+            const Icon(Icons.shopping_cart_outlined,
+              color: Colors.white, size: 22),
+            Positioned(
+              top: -2, right: -2,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE94560), shape: BoxShape.circle),
+                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                child: Text('${cart.itemCount}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ]),
+          const SizedBox(width: 10),
+          const Text('Keranjang',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14)),
+          const SizedBox(width: 8),
+          Container(width: 1, height: 16,
+            color: Colors.white.withValues(alpha: 0.4)),
+          const SizedBox(width: 8),
+          Text(_fmt(cart.total),
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14)),
+        ]),
+      ),
+    );
+  }
+
+  String _fmt(double v) {
+    final s = v.toStringAsFixed(0);
+    final buffer = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(s[i]);
+    }
+    return 'Rp $buffer';
+  }
+}
+
+// ── Menu Card ─────────────────────────────────────────────────────
 class _MenuCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final int cartQty;
@@ -285,149 +372,143 @@ class _MenuCard extends StatelessWidget {
     final name = item['name'] as String;
     final desc = item['description'] as String? ?? '';
 
-    return Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
-            if (cartQty > 0)
-              BoxShadow(
-                color: const Color(0xFFE94560).withValues(alpha: 0.15),
-                blurRadius: 14,
-                offset: const Offset(0, 3)),
-          ],
+    // ✅ Tidak ada transform — pakai border seperti QR screen
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: cartQty > 0
+            ? const Color(0xFFE94560)
+            : const Color(0xFFE5E7EB),
+          width: cartQty > 0 ? 1.5 : 1.0,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                Container(
-                  height: 120,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  child: item['image_url'] != null
-                    ? ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                        child: Image.network(
-                          item['image_url'], 
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
-                        ))
-                    : _buildPlaceholder(),
+        boxShadow: [
+          BoxShadow(
+            color: cartQty > 0
+              ? const Color(0xFFE94560).withValues(alpha: 0.12)
+              : Colors.black.withValues(alpha: 0.06),
+            blurRadius: cartQty > 0 ? 14 : 12,
+            offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              Container(
+                height: 120,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-                if (cartQty > 0)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE94560),
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 4,
-                          )
-                        ],
-                      ),
-                      child: Text('$cartQty',
+                child: item['image_url'] != null
+                  ? ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      child: Image.network(
+                        item['image_url'],
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                      ))
+                  : _buildPlaceholder(),
+              ),
+              if (cartQty > 0)
+                Positioned(
+                  top: 8, right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE94560),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('$cartQty',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+                  ),
+                ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: Color(0xFF1A1A2E)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+                if (desc.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(desc,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 10,
+                      color: Color(0xFF9CA3AF)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                ],
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text('Rp${_fmt(price)}',
                         style: const TextStyle(
                           fontFamily: 'Poppins',
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700)),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: Color(0xFFE94560))),
                     ),
-                  ),
+                    if (cartQty == 0)
+                      GestureDetector(
+                        onTap: onAdd,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE94560),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.add,
+                            color: Colors.white, size: 18)),
+                      ),
+                  ],
+                ),
               ],
             ),
+          ),
+          if (cartQty > 0) ...[
+            const SizedBox(height: 8),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Row(
                 children: [
-                  Text(name, 
-                    style: const TextStyle(
-                      fontFamily: 'Poppins', 
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13, 
-                      color: Color(0xFF1A1A2E)),
-                    maxLines: 1, 
-                    overflow: TextOverflow.ellipsis),
-                  if (desc.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(desc, 
+                  _iqBtn(Icons.remove, onRemove),
+                  Expanded(
+                    child: Text('$cartQty',
                       style: const TextStyle(
-                        fontFamily: 'Poppins', 
-                        fontSize: 10, 
-                        color: Color(0xFF9CA3AF)),
-                      maxLines: 1, 
-                      overflow: TextOverflow.ellipsis),
-                  ],
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text('Rp${_fmt(price)}',
-                          style: const TextStyle(
-                            fontFamily: 'Poppins', 
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14, 
-                            color: Color(0xFFE94560))),
-                      ),
-                      if (cartQty == 0)
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: onAdd,
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE94560),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(Icons.add, 
-                                color: Colors.white, size: 18)),
-                          ),
-                        ),
-                    ],
-                  ),
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Color(0xFF1A1A2E)),
+                      textAlign: TextAlign.center)),
+                  _iqBtn(Icons.add, onAdd),
                 ],
               ),
             ),
-            if (cartQty > 0) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: Row(
-                  children: [
-                    _iqBtn(Icons.remove, onRemove),
-                    Expanded(
-                      child: Text('$cartQty',
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700, 
-                          fontSize: 14,
-                          color: Color(0xFF1A1A2E)),
-                        textAlign: TextAlign.center)),
-                    _iqBtn(Icons.add, onAdd),
-                  ],
-                ),
-              ),
-            ] else
-              const SizedBox(height: 12),
-          ],
-        ),
+          ] else
+            const SizedBox(height: 12),
+        ],
+      ),
     );
   }
 
@@ -460,18 +541,11 @@ class _MenuCard extends StatelessWidget {
   Widget _iqBtn(IconData icon, VoidCallback onTap) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 32, 
+      width: 32,
       height: 32,
       decoration: BoxDecoration(
         color: const Color(0xFFE94560),
         borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFE94560).withValues(alpha: 0.3),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          )
-        ],
       ),
       child: Icon(icon, color: Colors.white, size: 16)));
 
