@@ -190,10 +190,7 @@ class _CustomerCheckoutScreenState
             'customer_phone':   _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
             'customer_user_id': user?.id,
-            'subtotal':         cart.subtotal,
-            'tax_amount':       cart.tax,
             'discount_amount':  0,
-            'total_amount':     cart.total,
             'notes':            _buildOrderNotes(),
           })
           .select()
