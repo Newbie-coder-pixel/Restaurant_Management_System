@@ -173,7 +173,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
     ),
     leading: IconButton(
       icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-      onPressed: () => context.go('/customer'),
+      onPressed: () => context.canPop() ? context.pop() : context.go('/customer?tab=0'),
     ),
     actions: [
       Container(

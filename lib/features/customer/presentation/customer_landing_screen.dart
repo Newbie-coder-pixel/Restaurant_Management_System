@@ -19,6 +19,8 @@ import 'customer_login_screen.dart';
 import 'customer_my_bookings_screen.dart';
 import 'customer_chatbot_screen.dart';
 import '../providers/customer_auth_provider.dart';
+import '../providers/cart_provider.dart';
+import 'widgets/cart_bottom_bar.dart';
 
 // ── Provider cabang aktif ─────────────────────────────────────────
 final _customerBranchesProvider =
@@ -193,10 +195,7 @@ class _CustomerLandingScreenState
     super.dispose();
   }
 
-  void switchTab(int index) {
-    _tabNotifier.value = index;
-    if (mounted) context.go('/customer?tab=$index');
-  }
+  void switchTab(int index) => _tabNotifier.value = index;
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +228,7 @@ class _CustomerLandingScreenState
     }
 
     // Ada user → tampilkan landing normal
+    final cart = ref.watch(cartProvider);
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
@@ -239,7 +239,17 @@ class _CustomerLandingScreenState
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!cart.isEmpty && _tab == 0)
+            CartBottomBar(
+              cart: cart,
+              onCheckout: () => context.go('/customer/checkout'),
+            ),
+          _buildBottomNav(),
+        ],
+      ),
     );
   }
 
@@ -436,10 +446,7 @@ class _CustomerLandingScreenState
               final active = _tab == i;
               return Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() => _tab = i);
-                    context.go('/customer?tab=$i');
-                  },
+                  onTap: () => setState(() => _tab = i),
                   behavior: HitTestBehavior.opaque,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
@@ -1594,7 +1601,7 @@ class _BranchCard extends StatelessWidget {
     final isOpen = _isOpen();
 
     return GestureDetector(
-      onTap: () => context.push('/customer/menu/${branch['id']}'),
+      onTap: () => context.go('/customer/menu/${branch['id']}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
@@ -1682,7 +1689,7 @@ class _BranchCard extends StatelessWidget {
           // Tombol Pesan Sekarang — full width di bawah
           GestureDetector(
             onTap: isOpen
-                ? () => context.push('/customer/menu/${branch['id']}')
+                ? () => context.go('/customer/menu/${branch['id']}')
                 : null,
             child: Container(
               width: double.infinity,
