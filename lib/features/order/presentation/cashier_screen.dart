@@ -49,8 +49,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     .from('orders')
     .select('*, restaurant_tables(table_number), order_items(*)')
     .eq('branch_id', _branchId!)
-    .eq('status', 'served')
-    .inFilter('payment_status', ['pending', 'unpaid'])
+    .inFilter('status', ['ready', 'served'])
+.inFilter('payment_status', ['pending', 'unpaid'])
     .order('created_at', ascending: true);
 
       if (mounted) {
