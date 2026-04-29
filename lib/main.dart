@@ -9,6 +9,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/notification_service.dart';
 import 'firebase_options.dart';
+import 'dart:js_interop';
+
+@JS('window.history.replaceState')
+external void _replaceState(JSAny? data, String title, String url);
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -47,9 +51,20 @@ void main() async {
     final uri = Uri.base;
     final code = uri.queryParameters['code'];
     if (code != null && code.isNotEmpty) {
-      try {
-        await Supabase.instance.client.auth.exchangeCodeForSession(code);
-      } catch (_) {}
+      // Hanya exchange code kalau belum ada session aktif.
+      // OAuth code hanya bisa dipakai SEKALI — kalau di-exchange ulang
+      // saat refresh akan error dan session tidak ter-restore.
+      final existingSession = Supabase.instance.client.auth.currentSession;
+      if (existingSession == null) {
+        try {
+          await Supabase.instance.client.auth.exchangeCodeForSession(code);
+        } catch (_) {}
+      }
+
+      // Bersihkan URL dari ?code= supaya saat refresh berikutnya
+      // tidak ada ?code= lagi dan tidak masuk blok ini lagi
+      final fragment = uri.fragment.isNotEmpty ? '#${uri.fragment}' : '#/customer';
+      _replaceState(null, '', '/$fragment');
     }
   }
 
