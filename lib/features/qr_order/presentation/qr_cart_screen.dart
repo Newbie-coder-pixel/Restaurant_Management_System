@@ -23,7 +23,6 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     super.dispose();
   }
 
-  // ✅ FLOW BARU: langsung submit order dari cart, tidak perlu ke payment screen
   Future<void> _confirmOrder() async {
     if (!_formKey.currentState!.validate()) return;
     if (_isSubmitting) return;
@@ -35,6 +34,17 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
     final cart = ref.read(activeQrCartProvider);
     final branchId = cart.branchId.trim();
+
+    // ✅ FIX: gunakan widget.tableId sebagai sumber utama tableId
+    // activeQrTableProvider bisa kosong jika user langsung buka cart
+    final activeTable = ref.read(activeQrTableProvider);
+    final tableId = activeTable.tableId.isNotEmpty
+        ? activeTable.tableId
+        : widget.tableId;
+
+    debugPrint('🔍 [CartScreen] tableId dari activeQrTableProvider: "${activeTable.tableId}"');
+    debugPrint('🔍 [CartScreen] tableId dari widget: "${widget.tableId}"');
+    debugPrint('🔍 [CartScreen] tableId yang akan dipakai: "$tableId"');
 
     if (branchId.isEmpty) {
       setState(() => _isSubmitting = false);
@@ -49,18 +59,33 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       return;
     }
 
+    if (tableId.isEmpty) {
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Table ID tidak ditemukan. Silakan scan ulang QR meja.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     final repo = ref.read(qrOrderRepositoryProvider);
 
     try {
+      // ✅ FIX: pastikan session yang dikirim pakai tableId yang benar
+      final correctedSession = cart.copyWith(tableId: tableId);
+
       final order = await repo.createOrder(
-        session: cart,
+        session: correctedSession,
         branchId: branchId,
       );
 
       notifier.clearCart();
 
       if (mounted) {
-        // ✅ Langsung ke tracker — customer nunggu dimasak, bayar nanti setelah makan
         context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -80,7 +105,6 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     }
   }
 
-  // ✅ FIX: dialog notes per item, langsung update ke notifier
   Future<void> _showNotesDialog(QrCartItem item) async {
     final notifier = ref.read(activeQrCartNotifierProvider);
     final ctrl = TextEditingController(text: item.notes ?? '');
@@ -119,7 +143,6 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              // ✅ Simpan notes ke cart notifier — akan dikirim ke DB saat order dibuat
               notifier.updateNotes(item.menuItem.id, ctrl.text.trim());
               Navigator.pop(ctx);
             },
@@ -223,7 +246,6 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                     onAdd: () => notifier.addItem(item.menuItem),
                     onRemove: () => notifier.removeItem(item.menuItem.id),
                     onDelete: () => notifier.deleteItem(item.menuItem.id),
-                    // ✅ FIX: sambungkan ke dialog notes yang benar
                     onEditNotes: () => _showNotesDialog(item),
                   );
                 },
@@ -256,13 +278,12 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 }
 
 // ─── Cart Item Tile ───────────────────────────────────────────────────────────
-
 class _CartItemTile extends StatelessWidget {
   final QrCartItem item;
   final VoidCallback onAdd;
   final VoidCallback onRemove;
   final VoidCallback onDelete;
-  final VoidCallback onEditNotes; // ✅ FIX: tambah callback notes
+  final VoidCallback onEditNotes;
 
   const _CartItemTile({
     required this.item,
@@ -305,7 +326,6 @@ class _CartItemTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  // Image
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
@@ -329,8 +349,6 @@ class _CartItemTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // Info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,8 +367,6 @@ class _CartItemTile extends StatelessWidget {
                       ],
                     ),
                   ),
-
-                  // Qty + Subtotal
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -383,8 +399,6 @@ class _CartItemTile extends StatelessWidget {
                   ),
                 ],
               ),
-
-              // ✅ FIX: notes section — tampil & bisa diedit, tersimpan ke notifier
               const SizedBox(height: 8),
               GestureDetector(
                 onTap: onEditNotes,
@@ -476,7 +490,6 @@ class _SmallQtyBtn extends StatelessWidget {
 }
 
 // ─── Customer Info Card ───────────────────────────────────────────────────────
-
 class _CustomerInfoCard extends StatelessWidget {
   final TextEditingController nameCtrl;
   final String tableName;
@@ -543,7 +556,6 @@ class _CustomerInfoCard extends StatelessWidget {
 }
 
 // ─── Order Summary Card ───────────────────────────────────────────────────────
-
 class _OrderSummaryCard extends StatelessWidget {
   final QrOrderSession cart;
   const _OrderSummaryCard({required this.cart});
@@ -634,7 +646,6 @@ class _OrderSummaryCard extends StatelessWidget {
 }
 
 // ─── Bottom Bar ───────────────────────────────────────────────────────────────
-
 class _CartBottomBar extends StatelessWidget {
   final QrOrderSession cart;
   final VoidCallback onProceed;
