@@ -21,6 +21,25 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   // ── ML state ────────────────────────────────────────────────────────────────
   int?  _estimatedMinutes;
   bool  _isFetchingEstimate = false;
+  List<QrCartItem> _lastCartItems = [];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final cart = ref.read(activeQrCartProvider);
+    final cartChanged = cart.items.length != _lastCartItems.length ||
+        (cart.items.isNotEmpty && !List.generate(cart.items.length, (i) =>
+          i < _lastCartItems.length &&
+          cart.items[i].menuItem.id == _lastCartItems[i].menuItem.id &&
+          cart.items[i].quantity   == _lastCartItems[i].quantity &&
+          cart.items[i].notes      == _lastCartItems[i].notes
+        ).every((e) => e));
+
+    if (cartChanged && !_isFetchingEstimate) {
+      _lastCartItems = List.from(cart.items);
+      _fetchEstimate(cart);
+    }
+  }
 
   @override
   void dispose() {
@@ -181,11 +200,6 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     final notifier = ref.read(activeQrCartNotifierProvider);
     final theme    = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
-    // Fetch estimasi saat cart berubah
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_isFetchingEstimate) _fetchEstimate(cart);
-    });
 
     if (cart.isEmpty) {
       return Scaffold(
