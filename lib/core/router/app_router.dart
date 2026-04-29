@@ -72,7 +72,15 @@ String _defaultRouteForRole(StaffRole role) {
 
 class _AuthChangeNotifier extends ChangeNotifier {
   _AuthChangeNotifier(this._ref) {
-    _sub = _ref.listen<AuthState>(authStateProvider, (_, __) => notifyListeners());
+    _sub = _ref.listen<AuthState>(authStateProvider, (prev, next) {
+      // Hanya notify kalau isLoading berubah dari true ke false
+      // supaya tidak trigger redirect saat masih loading
+      if (prev?.isLoading == true && next.isLoading == false) {
+        notifyListeners();
+      } else if (prev?.staff != next.staff) {
+        notifyListeners();
+      }
+    });
   }
   final Ref _ref;
   late final ProviderSubscription _sub;
@@ -84,12 +92,24 @@ class _AuthChangeNotifier extends ChangeNotifier {
   }
 }
 
+// Helper untuk ambil initial location dari URL browser saat web
+String _getInitialLocation() {
+  if (kIsWeb) {
+    final uri = Uri.base;
+    final path = uri.fragment.isNotEmpty
+        ? '/${uri.fragment}'
+        : uri.path;
+    if (path.isNotEmpty && path != '/') return path;
+  }
+  return AppRoutes.customer;
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final notifier = _AuthChangeNotifier(ref);
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
-    initialLocation: AppRoutes.customer,
+    initialLocation: _getInitialLocation(),
     debugLogDiagnostics: true,
     refreshListenable: notifier,
     redirect: (context, state) {
@@ -100,14 +120,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final fullPath = state.uri.path;
 
       bool isQrRoute(String path) => path.startsWith('/qr/') || path == '/qr';
-      bool isCustomerRoute(String path) => path.startsWith('/customer/') || path == '/customer';
+      bool isCustomerRoute(String path) =>
+          path.startsWith('/customer') || path == '/customer';
 
-      if (isCustomerRoute(loc) || isCustomerRoute(fullPath) || isQrRoute(loc) || isQrRoute(fullPath)) {
+      // Customer & QR routes: selalu bebas, tidak perlu auth
+      if (isCustomerRoute(loc) || isCustomerRoute(fullPath) ||
+          isQrRoute(loc) || isQrRoute(fullPath)) {
         return null;
       }
 
+      // Staff gateway bebas diakses
       if (loc == AppRoutes.staffGateway) return null;
 
+      // Tangani password recovery link
       if (kIsWeb) {
         final uri = Uri.base;
         final type = uri.queryParameters['type'];
@@ -116,16 +141,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         }
       }
 
+      // Kalau masih loading auth, jangan redirect dulu
+      if (authState.isLoading) return null;
+
+      // Web: belum login → ke customer
       if (kIsWeb && !isLoggedIn && loc != AppRoutes.login) {
         return AppRoutes.customer;
       }
 
+      // Non-web: belum login → ke login
       if (!isLoggedIn && loc != AppRoutes.login) {
         return AppRoutes.login;
       }
 
-      if (isLoggedIn && authState.isLoading) return null;
-
+      // Sudah login tapi di halaman login → ke halaman sesuai role
       if (isLoggedIn && loc == AppRoutes.login) {
         final s = authState.staff;
         if (s != null) return _defaultRouteForRole(s.role);
@@ -179,47 +208,46 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const CustomerResetPasswordScreen(),
       ),
 
-     // QR Order Routes
-GoRoute(
-  path: '/qr/:tableId',
-  name: 'qrMenu',
-  pageBuilder: (context, state) {
-    final tableId = state.pathParameters['tableId']!;
-    return NoTransitionPage(
-      key: state.pageKey,
-      child: QrMenuScreen(tableId: tableId),
-    );
-  },
-  routes: [
-    GoRoute(
-      path: 'cart',
-      name: 'qrCart',
-      pageBuilder: (context, state) {
-        final tableId = state.pathParameters['tableId']!;
-        return MaterialPage(
-          key: state.pageKey,
-          child: QrCartScreen(tableId: tableId),
-        );
-      },
-    ),
-    // Perbaikan Route Tracker
-    GoRoute(
-      path: 'track/:orderId',
-      name: 'qrTrack',
-      pageBuilder: (context, state) {
-        final orderId = state.pathParameters['orderId']!;
-        final queueNumber = state.uri.queryParameters['queue'];
-        return MaterialPage(
-          key: state.pageKey,
-          child: QrOrderTrackerScreen(
-            orderId: orderId,
-            queueNumber: queueNumber,
+      // QR Order Routes
+      GoRoute(
+        path: '/qr/:tableId',
+        name: 'qrMenu',
+        pageBuilder: (context, state) {
+          final tableId = state.pathParameters['tableId']!;
+          return NoTransitionPage(
+            key: state.pageKey,
+            child: QrMenuScreen(tableId: tableId),
+          );
+        },
+        routes: [
+          GoRoute(
+            path: 'cart',
+            name: 'qrCart',
+            pageBuilder: (context, state) {
+              final tableId = state.pathParameters['tableId']!;
+              return MaterialPage(
+                key: state.pageKey,
+                child: QrCartScreen(tableId: tableId),
+              );
+            },
           ),
-        );
-      },
-    ),
-  ],
-),
+          GoRoute(
+            path: 'track/:orderId',
+            name: 'qrTrack',
+            pageBuilder: (context, state) {
+              final orderId = state.pathParameters['orderId']!;
+              final queueNumber = state.uri.queryParameters['queue'];
+              return MaterialPage(
+                key: state.pageKey,
+                child: QrOrderTrackerScreen(
+                  orderId: orderId,
+                  queueNumber: queueNumber,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
 
       // Staff Routes
       GoRoute(path: AppRoutes.staffGateway, builder: (_, __) => const StaffGatewayScreen()),
