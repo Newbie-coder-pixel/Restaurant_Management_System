@@ -159,6 +159,7 @@ class _CustomerLandingScreenState
     extends ConsumerState<CustomerLandingScreen> {
   late int _tab;
   late final ValueNotifier<int> _tabNotifier;
+  User? _cachedUser; // cache user terakhir supaya tidak flash ke login saat refresh
 
   @override
   void initState() {
@@ -198,28 +199,44 @@ class _CustomerLandingScreenState
   Widget build(BuildContext context) {
     final userAsync = ref.watch(customerUserProvider);
 
-    return userAsync.when(
-      loading: () => const Scaffold(
+    // Simpan user valid ke cache supaya tidak hilang saat loading/refresh
+    userAsync.whenData((u) {
+      if (u != null) _cachedUser = u;
+    });
+
+    // Pakai data terbaru, fallback ke cache saat loading/error
+    final User? user = userAsync.maybeWhen(
+      data: (u) => u,
+      orElse: () => _cachedUser,
+    );
+
+    // Belum ada data sama sekali dan masih loading → spinner
+    if (user == null && userAsync.isLoading) {
+      return const Scaffold(
         backgroundColor: Color(0xFFF8F9FA),
         body: Center(
-            child: CircularProgressIndicator(color: Color(0xFFE94560))),
+          child: CircularProgressIndicator(color: Color(0xFFE94560)),
+        ),
+      );
+    }
+
+    // Sudah selesai load, memang tidak ada user → login screen
+    if (user == null) {
+      return CustomerLoginScreen(onLoginSuccess: () {});
+    }
+
+    // Ada user → tampilkan landing normal
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildTopBar(user),
+            Expanded(child: _buildBody()),
+          ],
+        ),
       ),
-      error: (e, _) => CustomerLoginScreen(onLoginSuccess: () {}),
-      data: (user) {
-        if (user == null) return CustomerLoginScreen(onLoginSuccess: () {});
-        return Scaffold(
-          backgroundColor: const Color(0xFFF8F9FA),
-          body: SafeArea(
-            child: Column(
-              children: [
-                _buildTopBar(user),
-                Expanded(child: _buildBody()),
-              ],
-            ),
-          ),
-          bottomNavigationBar: _buildBottomNav(),
-        );
-      },
+      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
