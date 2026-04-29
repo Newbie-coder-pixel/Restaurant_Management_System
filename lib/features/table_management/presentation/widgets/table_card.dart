@@ -227,7 +227,7 @@ class _BookingDetail {
     customerPhone: j['customer_phone'],
     customerEmail: j['customer_email'],
     bookingDate: j['booking_date'] ?? '-',
-    bookingTime: (j['booking_time'] as String? ?? '-').substring(0, 5), // HH:mm
+    bookingTime: (j['booking_time'] as String? ?? '-').substring(0, 5),
     guestCount: j['guest_count'] ?? 1,
     durationMinutes: j['duration_minutes'] ?? 90,
     specialRequests: j['special_requests'],
@@ -314,9 +314,16 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
   Future<void> _fetchOrder() async {
     setState(() => _loadingOrder = true);
     try {
+      // ✅ FIX: fetch order beserta order_items sekaligus
       final res = await Supabase.instance.client
           .from('orders')
-          .select()
+          .select('''
+            id, order_number, queue_number, customer_name, customer_phone,
+            status, payment_status, payment_method,
+            subtotal, discount_amount, tax_amount, total_amount,
+            notes, created_at,
+            order_items(id, menu_item_name, quantity, unit_price, subtotal)
+          ''')
           .eq('table_id', widget.table.id)
           .inFilter('status', ['created', 'confirmed', 'preparing', 'ready', 'served'])
           .order('created_at', ascending: false)
@@ -324,12 +331,32 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           .maybeSingle();
 
       if (mounted) {
-        setState(() {
-          _order = res != null ? _OrderDetail.fromJson(res) : null;
-          _loadingOrder = false;
-        });
+        if (res != null) {
+          // ✅ Normalize items dari order_items join
+          final rawItems = (res['order_items'] as List<dynamic>? ?? []);
+          final normalizedItems = rawItems.map((item) => {
+            'name': item['menu_item_name'] ?? '-',
+            'quantity': item['quantity'] ?? 1,
+            'unit_price': item['unit_price'] ?? 0,
+            'price': item['unit_price'] ?? 0,
+          }).toList();
+
+          final orderMap = Map<String, dynamic>.from(res);
+          orderMap['items'] = normalizedItems;
+
+          setState(() {
+            _order = _OrderDetail.fromJson(orderMap);
+            _loadingOrder = false;
+          });
+        } else {
+          setState(() {
+            _order = null;
+            _loadingOrder = false;
+          });
+        }
       }
     } catch (e) {
+      debugPrint('❌ Error fetch order: $e');
       if (mounted) setState(() => _loadingOrder = false);
     }
   }
@@ -337,7 +364,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
   Future<void> _fetchBooking() async {
     setState(() => _loadingBooking = true);
     try {
-      // Ambil booking yang masih aktif (confirmed/pending) untuk meja ini, hari ini
       final today = DateTime.now().toIso8601String().substring(0, 10);
       final res = await Supabase.instance.client
           .from('bookings')
@@ -467,6 +493,11 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
         : const Color(0xFFE94560);
     final payLabel = o.paymentStatus == 'paid' ? 'Lunas' : 'Belum Bayar';
 
+    // ✅ FIX: konversi UTC ke WIB (UTC+7)
+    final wibTime = o.createdAt.toUtc().add(const Duration(hours: 7));
+    final jamMasuk =
+        '${wibTime.hour.toString().padLeft(2, '0')}:${wibTime.minute.toString().padLeft(2, '0')} WIB';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -500,15 +531,14 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           ]),
           const SizedBox(height: 12),
 
-          // ── Info customer ──
+          // ✅ Nama pemesan
           if (o.customerName != null && o.customerName!.isNotEmpty)
-            _detailRow(Icons.person_rounded, 'Customer', o.customerName!),
+            _detailRow(Icons.person_rounded, 'Pemesan', o.customerName!),
           if (o.customerPhone != null && o.customerPhone!.isNotEmpty)
             _detailRow(Icons.phone_rounded, 'No. HP', o.customerPhone!),
 
-          // ── Waktu order ──
-          _detailRow(Icons.access_time_rounded, 'Masuk',
-            '${o.createdAt.hour.toString().padLeft(2, '0')}:${o.createdAt.minute.toString().padLeft(2, '0')}'),
+          // ✅ Jam mulai memesan (WIB)
+          _detailRow(Icons.access_time_rounded, 'Mulai Pesan', jamMasuk),
 
           const Divider(height: 16),
 
@@ -523,8 +553,8 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             ]),
             const SizedBox(height: 6),
             ...o.items.take(3).map((item) {
-              final name = item['name'] ?? item['menu_name'] ?? '-';
-              final qty = item['quantity'] ?? item['qty'] ?? 1;
+              final name = item['name'] ?? item['menu_item_name'] ?? '-';
+              final qty = item['quantity'] ?? 1;
               final price = (item['price'] ?? item['unit_price'] ?? 0).toDouble();
               return Padding(
                 padding: const EdgeInsets.only(left: 22, bottom: 4),
@@ -662,7 +692,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Judul seksi ──
           Row(children: [
             Icon(Icons.event_seat_rounded, color: color, size: 16),
             const SizedBox(width: 6),
@@ -687,7 +716,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           ]),
           const SizedBox(height: 12),
 
-          // ── Nama customer ──
           _detailRow(Icons.person_rounded, 'Nama', b.customerName),
           if (b.customerPhone != null)
             _detailRow(Icons.phone_rounded, 'No. HP', b.customerPhone!),
@@ -696,12 +724,10 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
 
           const Divider(height: 16),
 
-          // ── Waktu & tamu ──
           _detailRow(Icons.calendar_today_rounded, 'Tanggal', _formatDate(b.bookingDate)),
           _detailRow(Icons.access_time_rounded, 'Jam', '${b.bookingTime} (${b.durationMinutes} menit)'),
           _detailRow(Icons.people_rounded, 'Jumlah Tamu', '${b.guestCount} orang'),
 
-          // ── Special request ──
           if (b.specialRequests != null && b.specialRequests!.isNotEmpty) ...[
             const Divider(height: 16),
             _detailRow(Icons.note_rounded, 'Catatan', b.specialRequests!),
@@ -738,7 +764,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
     );
   }
 
-  /// Format "2025-04-28" → "Senin, 28 Apr 2025"
   String _formatDate(String raw) {
     try {
       final dt = DateTime.parse(raw);
