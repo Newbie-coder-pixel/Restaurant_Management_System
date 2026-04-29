@@ -53,7 +53,6 @@ class _CustomerCheckoutScreenState
     return 'WEB-$date-$rand';
   }
 
-  // ── Konfirmasi sebelum submit ──────────────────────────────────
   Future<bool> _showConfirmDialog(CartState cart) async {
     final result = await showDialog<bool>(
       context: context,
@@ -137,7 +136,6 @@ class _CustomerCheckoutScreenState
   Future<void> _placeOrder() async {
     final cart = ref.read(cartProvider);
 
-    // Guard: cart kosong
     if (cart.isEmpty || cart.branchId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Cart kosong, tambahkan menu terlebih dahulu.'),
@@ -152,7 +150,6 @@ class _CustomerCheckoutScreenState
       return;
     }
 
-    // Validasi nomor HP jika diisi
     final phone = _phoneCtrl.text.trim();
     if (phone.isNotEmpty) {
       final phoneRegex = RegExp(r'^08[0-9]{8,11}$');
@@ -164,14 +161,12 @@ class _CustomerCheckoutScreenState
       }
     }
 
-    // Simpan notes per item ke provider
     for (final entry in _itemNotesCtrls.entries) {
       ref.read(cartProvider.notifier).updateNotes(
           entry.key,
           entry.value.text.trim().isEmpty ? null : entry.value.text.trim());
     }
 
-    // Konfirmasi dulu
     final confirmed = await _showConfirmDialog(cart);
     if (!confirmed || !mounted) return;
 
@@ -185,7 +180,7 @@ class _CustomerCheckoutScreenState
             'branch_id':        cart.branchId,
             'order_number':     _generateOrderNumber(),
             'status':           'new',
-            'source':           _orderType == 'dine_in' ? 'dine_in' : 'takeaway', // ✅ FIX: was 'dineIn', now 'dine_in'
+            'source':           _orderType == 'dine_in' ? 'dine_in' : 'takeaway', // ✅ FIX: dine_in bukan dineIn
             'customer_name':    _nameCtrl.text.trim(),
             'customer_phone':   _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
@@ -203,7 +198,7 @@ class _CustomerCheckoutScreenState
         'menu_item_id': item.menuItemId,
         'quantity':     item.quantity,
         'unit_price':   item.price,
-        'subtotal':     item.subtotal,
+        // ✅ FIX: subtotal dihapus — generated column (quantity * unit_price)
         'status':       'pending',
         if (item.notes != null && item.notes!.isNotEmpty)
           'special_requests': item.notes,
@@ -213,7 +208,6 @@ class _CustomerCheckoutScreenState
 
       await Supabase.instance.client.from('order_items').insert(orderItems);
 
-      // Update table status kalau dine in dan ada nomor meja
       if (_orderType == 'dine_in' && _tableCtrl.text.trim().isNotEmpty) {
         await _markTableOccupied(cart.branchId!, _tableCtrl.text.trim());
       }
@@ -269,7 +263,6 @@ class _CustomerCheckoutScreenState
     final cart = ref.watch(cartProvider);
     _syncItemNotesControllers(cart.items);
 
-    // Guard: redirect kalau cart kosong
     if (cart.isEmpty) {
       return Scaffold(
         backgroundColor: const Color(0xFFFAF8F5),
@@ -285,8 +278,7 @@ class _CustomerCheckoutScreenState
         ),
         body: Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.shopping_cart_outlined,
-                size: 64, color: Colors.grey),
+            const Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             const Text('Cart kamu kosong',
                 style: TextStyle(
@@ -297,9 +289,7 @@ class _CustomerCheckoutScreenState
             const SizedBox(height: 8),
             const Text('Tambahkan menu terlebih dahulu',
                 style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    color: Colors.grey)),
+                    fontFamily: 'Poppins', fontSize: 13, color: Colors.grey)),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () => context.go('/customer'),
@@ -334,8 +324,7 @@ class _CustomerCheckoutScreenState
               color: const Color(0xFFE94560),
               borderRadius: BorderRadius.circular(12)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.shopping_cart_outlined,
-                  color: Colors.white, size: 14),
+              const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 14),
               const SizedBox(width: 4),
               Text('${cart.itemCount}',
                   style: const TextStyle(
@@ -349,7 +338,6 @@ class _CustomerCheckoutScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Tipe pesanan
           _section('Tipe Pesanan', [
             Row(children: [
               Expanded(child: _typeBtn(
@@ -361,7 +349,6 @@ class _CustomerCheckoutScreenState
           ]),
           const SizedBox(height: 16),
 
-          // ── Info pemesan
           _section('Informasi Pemesan', [
             _field('Nama kamu *', _nameCtrl, Icons.person_outline),
             const SizedBox(height: 10),
@@ -378,7 +365,6 @@ class _CustomerCheckoutScreenState
           ]),
           const SizedBox(height: 16),
 
-          // ── Ringkasan pesanan
           _section('Ringkasan Pesanan', [
             ...cart.items.map((item) => _buildItemRow(item)),
             const Divider(height: 20),
@@ -416,7 +402,6 @@ class _CustomerCheckoutScreenState
           ]),
           const SizedBox(height: 24),
 
-          // ── Tombol pesan
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -485,11 +470,8 @@ class _CustomerCheckoutScreenState
             decoration: InputDecoration(
               hintText: 'Catatan untuk item ini (contoh: tidak pedas...)',
               hintStyle: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 11,
-                  color: Colors.grey),
-              prefixIcon: const Icon(Icons.edit_note,
-                  size: 16, color: Colors.grey),
+                  fontFamily: 'Poppins', fontSize: 11, color: Colors.grey),
+              prefixIcon: const Icon(Icons.edit_note, size: 16, color: Colors.grey),
               filled: true,
               fillColor: const Color(0xFFF3F4F6),
               border: OutlineInputBorder(
@@ -554,22 +536,22 @@ class _CustomerCheckoutScreenState
                 borderSide: BorderSide.none),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: _phoneCtrl.text.trim().isNotEmpty && !_isValidPhone(_phoneCtrl.text.trim())
+                borderSide: _phoneCtrl.text.trim().isNotEmpty &&
+                        !_isValidPhone(_phoneCtrl.text.trim())
                     ? const BorderSide(color: Colors.red, width: 1.5)
                     : BorderSide.none),
             contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12, vertical: 10)),
         ),
-        if (_phoneCtrl.text.trim().isNotEmpty && !_isValidPhone(_phoneCtrl.text.trim())) ...[
+        if (_phoneCtrl.text.trim().isNotEmpty &&
+            !_isValidPhone(_phoneCtrl.text.trim())) ...[
           const SizedBox(height: 4),
           const Padding(
             padding: EdgeInsets.only(left: 4),
             child: Text(
               'Format: 08xxxxxxxxxx (10–13 digit)',
               style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 11,
-                  color: Colors.red),
+                  fontFamily: 'Poppins', fontSize: 11, color: Colors.red),
             ),
           ),
         ],
@@ -630,14 +612,10 @@ class _CustomerCheckoutScreenState
     children: [
       Text(label,
           style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              color: Color(0xFF6B7280))),
+              fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF6B7280))),
       Text('Rp $value',
           style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              color: Color(0xFF1A1A2E))),
+              fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF1A1A2E))),
     ]);
 
   String _fmt(double v) {
