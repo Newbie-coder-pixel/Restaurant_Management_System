@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/models/menu_model.dart';
 import '../../../../shared/models/table_model.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/services/prep_time_service.dart'; // ← ML Service
 
 class MenuItemSelector extends StatefulWidget {
   final String branchId;
@@ -23,8 +24,8 @@ class MenuItemSelector extends StatefulWidget {
 
 class _MenuItemSelectorState extends State<MenuItemSelector> {
   List<MenuCategory> _categories = [];
-  List<MenuItem> _allItems = [];
-  String? _selectedCatId;   // null = semua
+  List<MenuItem> _allItems       = [];
+  String? _selectedCatId;
   String? _selectedTableId;
 
   final Map<String, _CartEntry> _cart = {};
@@ -33,6 +34,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
 
   bool _isLoading    = true;
   bool _isSubmitting = false;
+
+  // ── ML state ────────────────────────────────────────────────────────────────
+  int?  _estimatedMinutes;   // hasil prediksi ML
+  bool  _isFetchingEstimate  = false;
 
   // ── Load data ──────────────────────────────────────────────────────────────
   @override
@@ -57,10 +62,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         .eq('branch_id', widget.branchId).eq('is_available', true).order('name');
     if (mounted) {
       setState(() {
-        _categories   = (catRes  as List).map((e) => MenuCategory.fromJson(e)).toList();
-        _allItems     = (itemRes as List).map((e) => MenuItem.fromJson(e)).toList();
-        _selectedCatId = null; // default: semua
-        _isLoading    = false;
+        _categories    = (catRes  as List).map((e) => MenuCategory.fromJson(e)).toList();
+        _allItems      = (itemRes as List).map((e) => MenuItem.fromJson(e)).toList();
+        _selectedCatId = null;
+        _isLoading     = false;
       });
     }
   }
@@ -79,16 +84,54 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     return a + item.price * e.value.qty;
   });
 
- void _addToCart(MenuItem item) => setState(() {
-  if (_cart.containsKey(item.id)) { _cart[item.id]!.qty++; }
-  else { _cart[item.id] = _CartEntry(qty: 1, notes: ''); }
-});
+  void _addToCart(MenuItem item) {
+    setState(() {
+      if (_cart.containsKey(item.id)) { _cart[item.id]!.qty++; }
+      else { _cart[item.id] = _CartEntry(qty: 1, notes: ''); }
+    });
+    _fetchEstimate(); // ← update estimasi setiap cart berubah
+  }
 
-void _removeFromCart(MenuItem item) => setState(() {
-  if (!_cart.containsKey(item.id)) { return; }
-  if (_cart[item.id]!.qty <= 1) { _cart.remove(item.id); }
-  else { _cart[item.id]!.qty--; }
-});
+  void _removeFromCart(MenuItem item) {
+    setState(() {
+      if (!_cart.containsKey(item.id)) return;
+      if (_cart[item.id]!.qty <= 1) { _cart.remove(item.id); }
+      else { _cart[item.id]!.qty--; }
+    });
+    _fetchEstimate(); // ← update estimasi setiap cart berubah
+  }
+
+  // ── ML: Fetch estimasi waktu ───────────────────────────────────────────────
+  Future<void> _fetchEstimate() async {
+    if (_cart.isEmpty) {
+      setState(() => _estimatedMinutes = null);
+      return;
+    }
+
+    setState(() => _isFetchingEstimate = true);
+
+    final items = _cart.entries.map((e) {
+      final menu = _allItems.firstWhere((m) => m.id == e.key);
+      return PrepTimeRequestItem(
+        menuItemName:           menu.name,
+        quantity:               e.value.qty,
+        preparationTimeMinutes: menu.preparationTimeMinutes,
+        specialRequests:        e.value.notes.isNotEmpty ? e.value.notes : null,
+      );
+    }).toList();
+
+    final result = await PrepTimeService.predict(
+      items:    items,
+      branchId: widget.branchId,
+    );
+
+    if (mounted) {
+      setState(() {
+        _estimatedMinutes  = result?.estimatedMinutes;
+        _isFetchingEstimate = false;
+      });
+    }
+  }
 
   // ── Notes dialog ───────────────────────────────────────────────────────────
   Future<void> _showNotesDialog(MenuItem item) async {
@@ -136,6 +179,7 @@ void _removeFromCart(MenuItem item) => setState(() {
             onPressed: () {
               setState(() { if (_cart.containsKey(item.id)) _cart[item.id]!.notes = ctrl.text.trim(); });
               Navigator.pop(ctx);
+              _fetchEstimate(); // ← update estimasi setelah notes berubah
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary, foregroundColor: Colors.white,
@@ -174,26 +218,23 @@ void _removeFromCart(MenuItem item) => setState(() {
         'status':         'new',
         'source':         _isTakeaway ? 'takeaway' : 'dine_in',
         'order_type':     'staff_order',
-        'customer_name':  _nameCtrl.text.trim().isNotEmpty
-            ? _nameCtrl.text.trim() : null,
-        'customer_phone': _phoneCtrl.text.trim().isNotEmpty
-            ? _phoneCtrl.text.trim() : null,
+        'customer_name':  _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : null,
+        'customer_phone': _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
         'discount_amount': 0,
       }).select().single();
 
       final orderId = orderRes['id'] as String;
 
-      // subtotal TIDAK di-insert → GENERATED column di DB
       await Supabase.instance.client.from('order_items').insert(
         _cart.entries.map((e) {
           final m = _allItems.firstWhere((x) => x.id == e.key);
           return {
-            'order_id':      orderId,
-            'menu_item_id':  m.id,
+            'order_id':       orderId,
+            'menu_item_id':   m.id,
             'menu_item_name': m.name,
-            'quantity':      e.value.qty,
-            'unit_price':    m.price,
-            'status':        'pending',
+            'quantity':       e.value.qty,
+            'unit_price':     m.price,
+            'status':         'pending',
             if (e.value.notes.isNotEmpty) 'special_requests': e.value.notes,
           };
         }).toList(),
@@ -205,10 +246,22 @@ void _removeFromCart(MenuItem item) => setState(() {
       }
 
       if (mounted) {
-        setState(() { _cart.clear(); _nameCtrl.clear(); _phoneCtrl.clear(); _isSubmitting = false; });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('✅ Order berhasil dikirim ke dapur!'),
-          backgroundColor: Color(0xFF43A047)));
+        // Tampilkan snackbar dengan estimasi waktu jika tersedia
+        final estimasiText = _estimatedMinutes != null
+            ? ' Estimasi siap: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
+            : '';
+        setState(() {
+          _cart.clear();
+          _nameCtrl.clear();
+          _phoneCtrl.clear();
+          _estimatedMinutes = null;
+          _isSubmitting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('✅ Order berhasil dikirim ke dapur!$estimasiText'),
+          backgroundColor: const Color(0xFF43A047),
+          duration: const Duration(seconds: 4),
+        ));
         widget.onOrderCreated();
       }
     } catch (e) {
@@ -234,7 +287,7 @@ void _removeFromCart(MenuItem item) => setState(() {
     ]);
   }
 
-  // ── Header (pilih meja + takeaway fields) ─────────────────────────────────
+  // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       color: AppColors.surface,
@@ -255,28 +308,19 @@ void _removeFromCart(MenuItem item) => setState(() {
           items: [
             const DropdownMenuItem(value: null,
               child: Text('Takeaway', style: TextStyle(fontFamily: 'Poppins'))),
-            ...widget.tables.where((t) => t.status == TableStatus.available).map((t) => DropdownMenuItem(value: t.id,
-              child: Text('Meja ${t.tableNumber} (${t.capacity} org)',
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)))),
+            ...widget.tables.where((t) => t.status == TableStatus.available).map((t) =>
+              DropdownMenuItem(value: t.id,
+                child: Text('Meja ${t.tableNumber} (${t.capacity} org)',
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)))),
           ],
-          onChanged: (v) => setState(() {
-            _selectedTableId = v;
-          }),
+          onChanged: (v) => setState(() => _selectedTableId = v),
         ),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(flex: 3, child: _field(
-            _nameCtrl,
-            'Nama Pelanggan *',
-            Icons.person_outline,
-          )),
+          Expanded(flex: 3, child: _field(_nameCtrl, 'Nama Pelanggan *', Icons.person_outline)),
           const SizedBox(width: 8),
-          Expanded(flex: 2, child: _field(
-            _phoneCtrl,
-            'No. HP *',
-            Icons.phone_outlined,
-            keyboardType: TextInputType.phone,
-          )),
+          Expanded(flex: 2, child: _field(_phoneCtrl, 'No. HP *', Icons.phone_outlined,
+            keyboardType: TextInputType.phone)),
         ]),
       ]),
     );
@@ -330,8 +374,8 @@ void _removeFromCart(MenuItem item) => setState(() {
         decoration: BoxDecoration(
           color: sel ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          border: sel ? null : Border.all(color: Colors.transparent),
-          boxShadow: sel ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.25), blurRadius: 6, offset: const Offset(0, 2))] : null,
+          boxShadow: sel ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.25),
+            blurRadius: 6, offset: const Offset(0, 2))] : null,
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, size: 20, color: sel ? Colors.white : AppColors.textSecondary),
@@ -383,16 +427,13 @@ void _removeFromCart(MenuItem item) => setState(() {
         border: Border.all(
           color: inCart ? AppColors.primary.withValues(alpha: 0.25) : AppColors.border.withValues(alpha: 0.5),
           width: inCart ? 1.5 : 1),
-        boxShadow: [BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 4, offset: const Offset(0, 1))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // ── Row utama ───────────────────────────────────────────────────
           Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            // Info kiri
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(item.name, style: const TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
@@ -401,6 +442,20 @@ void _removeFromCart(MenuItem item) => setState(() {
                 Text('Rp ${item.price.toStringAsFixed(0)}', style: const TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w700,
                   fontSize: 13, color: AppColors.accent)),
+                // ── Badge prep time ──────────────────────────────────────
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.timer_outlined, size: 11, color: Colors.orange.shade700),
+                    const SizedBox(width: 3),
+                    Text('${item.preparationTimeMinutes} mnt', style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 10,
+                      color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
+                  ])),
                 if (inCart) ...[
                   const SizedBox(width: 8),
                   Container(
@@ -409,18 +464,13 @@ void _removeFromCart(MenuItem item) => setState(() {
                       color: AppColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(6)),
                     child: Text('= Rp ${(item.price * qty).toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins', fontSize: 11,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
                         fontWeight: FontWeight.w600, color: AppColors.primary))),
                 ],
               ]),
             ])),
-
             const SizedBox(width: 12),
-
-            // Kontrol kanan
             if (!inCart)
-              // Tombol Tambah
               ElevatedButton.icon(
                 onPressed: () => _addToCart(item),
                 style: ElevatedButton.styleFrom(
@@ -433,7 +483,6 @@ void _removeFromCart(MenuItem item) => setState(() {
                 label: const Text('Tambah',
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600)))
             else
-              // Qty stepper
               Container(
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.08),
@@ -441,16 +490,12 @@ void _removeFromCart(MenuItem item) => setState(() {
                   border: Border.all(color: AppColors.primary.withValues(alpha: 0.2))),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   _qtyBtn(Icons.remove_rounded, () => _removeFromCart(item)),
-                  SizedBox(
-                    width: 32,
-                    child: Center(child: Text('$qty', style: const TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w800,
-                      fontSize: 15, color: AppColors.primary)))),
+                  SizedBox(width: 32, child: Center(child: Text('$qty', style: const TextStyle(
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                    fontSize: 15, color: AppColors.primary)))),
                   _qtyBtn(Icons.add_rounded, () => _addToCart(item)),
                 ])),
           ]),
-
-          // ── Notes inline (hanya muncul jika item di cart) ───────────────
           if (inCart) ...[
             const SizedBox(height: 8),
             GestureDetector(
@@ -460,24 +505,17 @@ void _removeFromCart(MenuItem item) => setState(() {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: hasNotes
-                      ? Colors.amber.withValues(alpha: 0.08)
-                      : Colors.grey.withValues(alpha: 0.05),
+                  color: hasNotes ? Colors.amber.withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: hasNotes
-                        ? Colors.amber.withValues(alpha: 0.35)
-                        : Colors.grey.withValues(alpha: 0.2))),
+                    color: hasNotes ? Colors.amber.withValues(alpha: 0.35) : Colors.grey.withValues(alpha: 0.2))),
                 child: Row(children: [
-                  Icon(
-                    hasNotes ? Icons.edit_note : Icons.note_add_outlined,
-                    size: 15,
-                    color: hasNotes ? Colors.amber.shade700 : AppColors.textHint),
+                  Icon(hasNotes ? Icons.edit_note : Icons.note_add_outlined,
+                    size: 15, color: hasNotes ? Colors.amber.shade700 : AppColors.textHint),
                   const SizedBox(width: 8),
                   Expanded(child: Text(
                     hasNotes ? entry!.notes : 'Tambah catatan (tidak pedas, tanpa bawang...)',
-                    style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 12,
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
                       color: hasNotes ? Colors.amber.shade800 : AppColors.textHint,
                       fontStyle: hasNotes ? FontStyle.normal : FontStyle.italic),
                     overflow: TextOverflow.ellipsis, maxLines: 2)),
@@ -508,7 +546,7 @@ void _removeFromCart(MenuItem item) => setState(() {
     );
   }
 
-  // ── Cart bar ───────────────────────────────────────────────────────────────
+  // ── Cart bar (dengan estimasi ML) ──────────────────────────────────────────
   Widget _buildCartBar() {
     return Container(
       decoration: BoxDecoration(
@@ -517,36 +555,68 @@ void _removeFromCart(MenuItem item) => setState(() {
           color: AppColors.primary.withValues(alpha: 0.3),
           blurRadius: 16, offset: const Offset(0, -4))],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(children: [
-        // Badge
-        Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(10)),
-          child: Center(child: Text('$_cartTotal', style: const TextStyle(
-            fontFamily: 'Poppins', fontWeight: FontWeight.w800, color: Colors.white, fontSize: 14)))),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('item dipilih', style: TextStyle(
-            fontFamily: 'Poppins', color: Colors.white60, fontSize: 11)),
-          Text('Rp ${_cartPrice.toStringAsFixed(0)}', style: const TextStyle(
-            fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 15)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+
+        // ── Baris estimasi ML ──────────────────────────────────────────────
+        if (_isFetchingEstimate || _estimatedMinutes != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.2))),
+              child: Row(children: [
+                const Icon(Icons.schedule_rounded, size: 16, color: Colors.white),
+                const SizedBox(width: 8),
+                const Text('Estimasi siap masak:',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70)),
+                const SizedBox(width: 6),
+                if (_isFetchingEstimate)
+                  const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                else
+                  Text(
+                    PrepTimeService.formatEstimate(_estimatedMinutes!),
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 13,
+                      fontWeight: FontWeight.w700, color: Colors.white)),
+              ]),
+            ),
+          ),
+
+        // ── Baris cart utama ───────────────────────────────────────────────
+        Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(10)),
+            child: Center(child: Text('$_cartTotal', style: const TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w800, color: Colors.white, fontSize: 14)))),
+          const SizedBox(width: 10),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('item dipilih', style: TextStyle(
+              fontFamily: 'Poppins', color: Colors.white60, fontSize: 11)),
+            Text('Rp ${_cartPrice.toStringAsFixed(0)}', style: const TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 15)),
+          ]),
+          const Spacer(),
+          ElevatedButton.icon(
+            onPressed: _isSubmitting ? null : _submitOrder,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent, foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            icon: _isSubmitting
+                ? const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.send_rounded, size: 16),
+            label: Text(_isSubmitting ? 'Mengirim...' : 'Kirim ke Dapur',
+              style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13))),
         ]),
-        const Spacer(),
-        // Kirim button
-        ElevatedButton.icon(
-          onPressed: _isSubmitting ? null : _submitOrder,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accent, foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          icon: _isSubmitting
-              ? const SizedBox(width: 14, height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.send_rounded, size: 16),
-          label: Text(_isSubmitting ? 'Mengirim...' : 'Kirim ke Dapur',
-            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13))),
       ]),
     );
   }
