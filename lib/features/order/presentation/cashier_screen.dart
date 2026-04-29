@@ -46,12 +46,12 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       // - Staff Order -> muncul saat status 'served' + payment_status 'pending'
       // Kedua tipe order sekarang bayar setelah makan, cukup 1 query.
       final res = await Supabase.instance.client
-          .from('orders')
-          .select('*, restaurant_tables(table_number), order_items(*)')
-          .eq('branch_id', _branchId!)
-          .eq('status', 'served')
-          .eq('payment_status', 'pending')
-          .order('created_at', ascending: true);
+    .from('orders')
+    .select('*, restaurant_tables(table_number), order_items(*)')
+    .eq('branch_id', _branchId!)
+    .eq('status', 'served')
+    .inFilter('payment_status', ['pending', 'unpaid'])
+    .order('created_at', ascending: true);
 
       if (mounted) {
         setState(() {
