@@ -287,7 +287,8 @@ class _MenuCard extends StatelessWidget {
     final s = cartQty > 0 ? 1.02 : 1.0;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      transform: Matrix4.identity()..scaleByDouble(s, s, s, 1.0),
+      transform: Matrix4.diagonal3Values(s, s, 1.0),
+      transformAlignment: Alignment.center,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
