@@ -44,7 +44,9 @@ class PrepTimeResult {
 // ── Service ───────────────────────────────────────────────────────────────────
 class PrepTimeService {
   // Ganti URL ini saat deploy ke production
-  static const String _baseUrl = 'http://localhost:8000';
+  static const String _baseUrl = kIsWeb
+    ? 'https://restaurant-ml-api-production.up.railway.app'
+    : 'http://localhost:8000';
 
   /// Prediksi waktu masak berdasarkan items order yang dipilih.
   ///
