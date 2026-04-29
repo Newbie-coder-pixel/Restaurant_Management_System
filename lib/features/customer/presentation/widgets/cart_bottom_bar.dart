@@ -4,10 +4,13 @@ import '../../../customer/providers/cart_provider.dart';
 class CartBottomBar extends StatelessWidget {
   final CartState cart;
   final VoidCallback onCheckout;
-  const CartBottomBar({super.key, required this.cart, required this.onCheckout});
+  final bool show;
+  const CartBottomBar({super.key, required this.cart, required this.onCheckout, this.show = true});
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    if (!show) return const SizedBox.shrink();
+    return Container(
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
     decoration: BoxDecoration(
       color: const Color(0xFF1A1A2E),
@@ -47,6 +50,8 @@ class CartBottomBar extends StatelessWidget {
         child: const Text('Checkout →',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700))),
     ]));
+
+  }
 
   String _fmt(double v) {
     final s = v.toStringAsFixed(0);

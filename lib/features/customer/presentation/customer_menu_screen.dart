@@ -143,8 +143,9 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                     ),
         ],
       ),
-      bottomNavigationBar: cart.isEmpty ? null : CartBottomBar(
+      bottomNavigationBar: CartBottomBar(
         cart: cart,
+        show: !cart.isEmpty,
         onCheckout: () => context.go('/customer/checkout')),
     );
   }
@@ -284,26 +285,21 @@ class _MenuCard extends StatelessWidget {
     final name = item['name'] as String;
     final desc = item['description'] as String? ?? '';
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4)),
-          if (cartQty > 0)
+    return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
             BoxShadow(
-              color: const Color(0xFFE94560).withValues(alpha: 0.2),
-              blurRadius: 16,
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
               offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Container(
-        decoration: const BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(20)),
+            if (cartQty > 0)
+              BoxShadow(
+                color: const Color(0xFFE94560).withValues(alpha: 0.15),
+                blurRadius: 14,
+                offset: const Offset(0, 3)),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -432,7 +428,6 @@ class _MenuCard extends StatelessWidget {
               const SizedBox(height: 12),
           ],
         ),
-      ),
     );
   }
 
