@@ -55,6 +55,8 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
         imageUrl: row['image_url'] as String?,
         isAvailable: row['is_available'] as bool? ?? true,
         sortOrder: row['sort_order'] as int? ?? 0,
+        // ✅ FIX: petakan preparation_time_minutes dari Supabase ke MenuItem
+        preparationTimeMinutes: row['preparation_time_minutes'] as int? ?? 15,
       );
     }).toList();
   }
@@ -62,7 +64,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
   Map<String, List<MenuItem>> _groupByCategory(List<MenuItem> items) {
     final map = <String, List<MenuItem>>{};
     for (final item in items) {
-      map.putIfAbsent(item.categoryName, () => []).add(item);   // ← Ditambahkan kurung kurawal
+      map.putIfAbsent(item.categoryName, () => []).add(item);
     }
     return map;
   }

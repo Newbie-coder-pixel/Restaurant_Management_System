@@ -10,6 +10,7 @@ class MenuItem {
   final String? imageUrl;
   final bool isAvailable;
   final int sortOrder;
+  final int preparationTimeMinutes; // ← TAMBAHAN untuk ML
 
   const MenuItem({
     required this.id,
@@ -21,6 +22,7 @@ class MenuItem {
     this.imageUrl,
     this.isAvailable = true,
     this.sortOrder = 0,
+    this.preparationTimeMinutes = 15, // default 15 menit
   });
 }
 
@@ -80,19 +82,13 @@ class QrOrderSession {
         paymentMethod: paymentMethod ?? this.paymentMethod,
       );
 
-  // === TAMBAHAN PERHITUNGAN PPN ===
   double get subtotal => items.fold(0, (sum, item) => sum + item.subtotal);
-  
-  double get taxAmount => subtotal * 0.11;           // PPN 11%
-  
-  // Total yang harus dibayar customer (sudah termasuk PPN)
+  double get taxAmount => subtotal * 0.11;
   double get totalAmount => subtotal + taxAmount;
-
   int get totalItems => items.fold(0, (sum, item) => sum + item.quantity);
   bool get isEmpty => items.isEmpty;
 }
 
-// Notifier (tidak diubah)
 class QrCartNotifier extends StateNotifier<QrOrderSession> {
   QrCartNotifier({
     required String tableId,
@@ -104,13 +100,12 @@ class QrCartNotifier extends StateNotifier<QrOrderSession> {
           branchId: branchId,
         ));
 
-  // ... semua method addItem, removeItem, dll tetap sama seperti kode asli kamu ...
   void addItem(MenuItem item) {
     final existing = state.items.indexWhere((i) => i.menuItem.id == item.id);
     if (existing >= 0) {
       final updated = List<QrCartItem>.from(state.items);
-      updated[existing] = updated[existing]
-          .copyWith(quantity: updated[existing].quantity + 1);
+      updated[existing] =
+          updated[existing].copyWith(quantity: updated[existing].quantity + 1);
       state = state.copyWith(items: updated);
     } else {
       state = state.copyWith(
@@ -120,7 +115,8 @@ class QrCartNotifier extends StateNotifier<QrOrderSession> {
   }
 
   void removeItem(String menuItemId) {
-    final existing = state.items.indexWhere((i) => i.menuItem.id == menuItemId);
+    final existing =
+        state.items.indexWhere((i) => i.menuItem.id == menuItemId);
     if (existing < 0) return;
     final current = state.items[existing];
     if (current.quantity > 1) {
@@ -129,14 +125,16 @@ class QrCartNotifier extends StateNotifier<QrOrderSession> {
       state = state.copyWith(items: updated);
     } else {
       state = state.copyWith(
-        items: state.items.where((i) => i.menuItem.id != menuItemId).toList(),
+        items:
+            state.items.where((i) => i.menuItem.id != menuItemId).toList(),
       );
     }
   }
 
   void deleteItem(String menuItemId) {
     state = state.copyWith(
-      items: state.items.where((i) => i.menuItem.id != menuItemId).toList(),
+      items:
+          state.items.where((i) => i.menuItem.id != menuItemId).toList(),
     );
   }
 
@@ -165,14 +163,14 @@ class QrCartNotifier extends StateNotifier<QrOrderSession> {
   }
 
   int quantityOf(String menuItemId) {
-    final idx = state.items.indexWhere((i) => i.menuItem.id == menuItemId);
+    final idx =
+        state.items.indexWhere((i) => i.menuItem.id == menuItemId);
     return idx >= 0 ? state.items[idx].quantity : 0;
   }
 }
 
-// Providers (tetap sama)
-final qrCartProvider = StateNotifierProvider.family<QrCartNotifier, QrOrderSession,
-    ({String tableId, String? tableName, String branchId})>(
+final qrCartProvider = StateNotifierProvider.family<QrCartNotifier,
+    QrOrderSession, ({String tableId, String? tableName, String branchId})>(
   (ref, arg) => QrCartNotifier(
     tableId: arg.tableId,
     tableName: arg.tableName,
@@ -180,7 +178,8 @@ final qrCartProvider = StateNotifierProvider.family<QrCartNotifier, QrOrderSessi
   ),
 );
 
-final activeQrTableProvider = StateProvider<({String tableId, String? tableName, String branchId})>(
+final activeQrTableProvider =
+    StateProvider<({String tableId, String? tableName, String branchId})>(
   (ref) => (tableId: '', tableName: null, branchId: ''),
 );
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../data/qr_order_repository.dart';
 import '../models/qr_order_model.dart';
+import '../../../core/services/prep_time_service.dart'; // ← ML Service
 
 class QrOrderTrackerScreen extends ConsumerWidget {
   final String orderId;
@@ -71,7 +72,6 @@ class _TrackerBody extends StatelessWidget {
 
   const _TrackerBody({required this.order});
 
-  // stepIndex dari model: created=0, preparing=1, ready=2, served=3, paid=4
   static const _steps = [
     (
       status: QrOrderStatus.created,
@@ -119,6 +119,18 @@ class _TrackerBody extends StatelessWidget {
           SliverToBoxAdapter(
             child: _QueueHeader(order: order),
           ),
+
+          // ── ML Estimasi Waktu ──────────────────────────────────────────
+          // Hanya tampil saat order aktif (created / preparing)
+          if (!isCancelled &&
+              (order.status == QrOrderStatus.created ||
+                  order.status == QrOrderStatus.preparing))
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _PrepTimeCard(order: order),
+              ),
+            ),
 
           // ── Cancelled Banner ─────────────────────────────────────────────
           if (isCancelled)
@@ -184,6 +196,179 @@ class _TrackerBody extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── ML Prep Time Card ────────────────────────────────────────────────────────
+
+class _PrepTimeCard extends StatefulWidget {
+  final QrOrderModel order;
+
+  const _PrepTimeCard({required this.order});
+
+  @override
+  State<_PrepTimeCard> createState() => _PrepTimeCardState();
+}
+
+class _PrepTimeCardState extends State<_PrepTimeCard> {
+  late final Future<PrepTimeResult?> _future;
+
+  /// Konversi QrOrderItemModel → PrepTimeRequestItem untuk ML API.
+  /// preparation_time_minutes di-default 15 karena QrOrderItemModel
+  /// tidak menyimpan field ini. Akan lebih akurat setelah data real tersedia.
+  List<PrepTimeRequestItem> _buildRequestItems() {
+    return widget.order.items
+        .map((item) => PrepTimeRequestItem(
+              menuItemName: item.menuItemName,
+              quantity: item.quantity,
+              preparationTimeMinutes: 15, // default — lihat catatan di bawah
+              specialRequests: item.notes,
+            ))
+        .toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _future = PrepTimeService.predict(
+      items: _buildRequestItems(),
+      branchId: widget.order.branchId ?? '',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            cs.primaryContainer.withValues(alpha: 0.7),
+            cs.secondaryContainer.withValues(alpha: 0.5),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: cs.primary.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: FutureBuilder<PrepTimeResult?>(
+        future: _future,
+        builder: (context, snap) {
+          // Loading
+          if (snap.connectionState == ConnectionState.waiting) {
+            return Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: cs.primary),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Menghitung estimasi waktu...',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: cs.onPrimaryContainer),
+                ),
+              ],
+            );
+          }
+
+          // Error atau null
+          final result = snap.data;
+          if (snap.hasError || result == null) {
+            return Row(
+              children: [
+                Icon(Icons.access_time_outlined,
+                    color: cs.outline, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  'Estimasi waktu tidak tersedia',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: cs.outline),
+                ),
+              ],
+            );
+          }
+
+          // Sukses
+          return Row(
+            children: [
+              // Icon
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.soup_kitchen_outlined,
+                    color: cs.primary, size: 22),
+              ),
+              const SizedBox(width: 14),
+
+              // Teks estimasi
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Estimasi Waktu Masak',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: cs.onPrimaryContainer
+                            .withValues(alpha: 0.75),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      PrepTimeService.formatEstimate(
+                          result.estimatedMinutes),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Badge AI
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: cs.primary.withValues(alpha: 0.3), width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.smart_toy_outlined,
+                        size: 12, color: cs.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      'AI',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -466,7 +651,6 @@ class _StatusStepper extends StatelessWidget {
                       ),
                     ),
 
-                    // Connector line (except last)
                     const SizedBox(width: 12),
 
                     Expanded(
@@ -718,8 +902,7 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
                                   style: theme.textTheme.bodySmall,
                                 ),
                               ],
-                            ),
-                          )),
+                            ))),
                       const SizedBox(height: 10),
                       Divider(height: 1, color: colorScheme.outlineVariant),
                       // ── Subtotal, PPN, Total breakdown ──────────────────
