@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/order_model.dart';
 import '../../../shared/models/table_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import 'widgets/order_item_tile.dart';
 import 'widgets/menu_item_selector.dart';
@@ -40,6 +41,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   bool _initialized = false;
+  bool _isSuperAdmin = false;
 
   @override
   void didChangeDependencies() {
@@ -47,13 +49,18 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     if (!_initialized) {
       final staff = ref.read(currentStaffProvider);
       if (staff != null) {
-        _branchId = staff.branchId;
+        _isSuperAdmin = staff.role == StaffRole.superadmin;
+        _branchId = _isSuperAdmin ? null : staff.branchId;
         _initialized = true;
         _init();
       } else {
         ref.listenManual(currentStaffProvider, (_, next) {
           if (next != null && !_initialized && mounted) {
-            setState(() { _branchId = next.branchId; _initialized = true; });
+            setState(() {
+              _isSuperAdmin = next.role == StaffRole.superadmin;
+              _branchId = _isSuperAdmin ? null : next.branchId;
+              _initialized = true;
+            });
             _init();
           }
         });
@@ -75,21 +82,26 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   Future<void> _load() async {
-    if (_branchId == null) { if (mounted) setState(() => _isLoading = false); return; }
+    // Superadmin bisa lihat semua branch, role lain harus punya branchId
+    if (!_isSuperAdmin && _branchId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
     if (mounted) setState(() => _isLoading = true);
     try {
       final activeStatuses = ['new', 'created', 'paid', 'preparing', 'ready', 'served'];
-      final ordRes = await Supabase.instance.client
+      var ordQuery = Supabase.instance.client
           .from('orders')
           .select('*, restaurant_tables!orders_table_id_fkey(table_number), order_items(*)')
-          .eq('branch_id', _branchId!)
-          .inFilter('status', activeStatuses)
-          .order('created_at', ascending: false);
-      final tblRes = await Supabase.instance.client
+          .inFilter('status', activeStatuses);
+      if (!_isSuperAdmin) ordQuery = ordQuery.eq('branch_id', _branchId!);
+      final ordRes = await ordQuery.order('created_at', ascending: false);
+
+      var tblQuery = Supabase.instance.client
           .from('restaurant_tables')
-          .select()
-          .eq('branch_id', _branchId!)
-          .order('table_number');
+          .select();
+      if (!_isSuperAdmin) tblQuery = tblQuery.eq('branch_id', _branchId!);
+      final tblRes = await tblQuery.order('table_number');
       if (mounted) {
         setState(() {
           _orders = (ordRes as List).map((e) => OrderModel.fromJson(e)).toList();
@@ -104,13 +116,13 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   Future<void> _loadHistory() async {
-    if (_branchId == null) return;
+    if (!_isSuperAdmin && _branchId == null) return;
     if (mounted) setState(() => _isHistoryLoading = true);
     try {
       var query = Supabase.instance.client
           .from('orders')
-          .select('*, restaurant_tables!orders_table_id_fkey(table_number), order_items(*, menu_items(name))')
-          .eq('branch_id', _branchId!);
+          .select('*, restaurant_tables!orders_table_id_fkey(table_number), order_items(*, menu_items(name))');
+      if (!_isSuperAdmin) query = query.eq('branch_id', _branchId!);
       if (_historyFilter == 'paid') {
         query = query.inFilter('status', ['paid', 'served']);
       } else if (_historyFilter == 'cancelled') {
@@ -132,14 +144,25 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   void _subscribeRealtime() {
     _channel?.unsubscribe();
-    if (_branchId == null) return;
-    _channel = Supabase.instance.client
-        .channel('orders_realtime_$_branchId')
+    if (!_isSuperAdmin && _branchId == null) return;
+
+    final channelName = _isSuperAdmin ? 'orders_realtime_all' : 'orders_realtime_$_branchId';
+
+    var channelBuilder = Supabase.instance.client
+        .channel(channelName)
         .onPostgresChanges(
-          event: PostgresChangeEvent.all, schema: 'public', table: 'orders',
-          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'branch_id', value: _branchId!),
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'orders',
+          filter: _isSuperAdmin
+              ? null
+              : PostgresChangeFilter(
+                  type: PostgresChangeFilterType.eq,
+                  column: 'branch_id',
+                  value: _branchId!),
           callback: (_) { if (mounted) _load(); },
-        ).subscribe();
+        );
+    _channel = channelBuilder.subscribe();
   }
 
   bool _isQrOrder(OrderModel o) => o.orderType == 'qr_order';
@@ -317,9 +340,20 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                   Builder(builder: (ctx) => IconButton(
                     icon: const Icon(Icons.menu, color: Colors.white),
                     onPressed: () => Scaffold.of(ctx).openDrawer())),
-                  const Expanded(child: Text('Order Management',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
-                      fontWeight: FontWeight.w600, color: Colors.white))),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Order Management',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                            fontWeight: FontWeight.w600, color: Colors.white)),
+                        if (_isSuperAdmin)
+                          const Text('Semua Cabang',
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                              color: Colors.white60)),
+                      ],
+                    ),
+                  ),
                   IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _load),
                 ]),
               ),
