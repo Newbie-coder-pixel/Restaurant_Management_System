@@ -190,6 +190,15 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       order.status == OrderStatus.new_ || order.status == OrderStatus.created;
 
   bool _isQrOrder(OrderModel order) => order.orderType == 'qr_order';
+  bool _isAppOrder(OrderModel order) =>
+      order.orderType == 'app_order' || order.orderType == 'takeaway';
+
+  String _orderSourceLabel(OrderModel order) {
+    if (_isQrOrder(order)) return 'QR Order';
+    if (order.orderType == 'app_order') return 'App Order';
+    if (order.orderType == 'takeaway') return 'App Order (Bawa Pulang)';
+    return 'Staff Order';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -348,8 +357,23 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   }
 
   Widget _buildKDSCard(OrderModel order, ColorScheme colorScheme) {
-    final isNew = _isNewOrder(order);
-    final isQr = _isQrOrder(order);
+    final isNew     = _isNewOrder(order);
+    final isQr      = _isQrOrder(order);
+    final isApp     = _isAppOrder(order);
+    final label     = _orderSourceLabel(order);
+
+    // Warna per tipe: QR=ungu, App=hijau teal, Staff=biru
+    final Color badgeColor = isQr
+        ? const Color(0xFF7C3AED)
+        : isApp
+            ? const Color(0xFF0F9D58)
+            : AppColors.primary;
+
+    final IconData badgeIcon = isQr
+        ? Icons.qr_code_scanner
+        : isApp
+            ? Icons.smartphone_outlined
+            : Icons.person_outline;
 
     final Color statusColor = isNew
         ? (isQr ? const Color(0xFF7C3AED) : AppColors.orderNew)
@@ -409,27 +433,19 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               decoration: BoxDecoration(
-                color: isQr
-                    ? const Color(0xFF7C3AED).withValues(alpha: 0.10)
-                    : AppColors.primary.withValues(alpha: 0.10),
+                color: badgeColor.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: isQr
-                      ? const Color(0xFF7C3AED).withValues(alpha: 0.4)
-                      : AppColors.primary.withValues(alpha: 0.4)),
+                border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(
-                  isQr ? Icons.qr_code_scanner : Icons.person_outline,
-                  size: 11,
-                  color: isQr ? const Color(0xFF7C3AED) : AppColors.primary),
+                Icon(badgeIcon, size: 11, color: badgeColor),
                 const SizedBox(width: 4),
                 Text(
-                  isQr ? 'QR Order' : 'Staff Order',
+                  label,
                   style: TextStyle(
                     fontFamily: 'Poppins', fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: isQr ? const Color(0xFF7C3AED) : AppColors.primary)),
+                    color: badgeColor)),
               ]),
             ),
             const Spacer(),

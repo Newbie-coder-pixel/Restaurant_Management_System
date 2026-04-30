@@ -245,7 +245,7 @@ class _CustomerCheckoutScreenState
             'order_number':     _generateOrderNumber(),
             'status':           'new',
             'source':           _orderType == 'dine_in' ? 'dine_in' : 'takeaway',
-            'order_type':       _orderType == 'dine_in' ? 'dine_in' : 'takeaway',
+            'order_type':       _orderType == 'dine_in' ? 'app_order' : 'takeaway',
             'customer_name':    _nameCtrl.text.trim(),
             'customer_phone':   _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
@@ -312,6 +312,7 @@ class _CustomerCheckoutScreenState
     }
     return parts.isEmpty ? null : parts.join(' | ');
   }
+
 
 
   @override
