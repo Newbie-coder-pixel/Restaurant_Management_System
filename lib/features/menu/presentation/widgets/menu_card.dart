@@ -4,10 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../shared/models/menu_model.dart';
 import '../../providers/menu_provider.dart';
+import '../../../auth/providers/auth_provider.dart';
 import 'add_menu_form.dart';
-
-// Harus sama dengan yang di menu_screen.dart
-const String _activeBranchId = '27fb221d-e59c-464a-86fc-9c7f19627beb';
 
 class MenuCard extends ConsumerStatefulWidget {
   final MenuItem menu;
@@ -69,13 +67,14 @@ class _MenuCardState extends ConsumerState<MenuCard>
   }
 
   void _handleEdit() {
+    final branchId = ref.read(currentBranchIdProvider) ?? '';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AddMenuForm(
         existingMenu: widget.menu,
-        branchId: _activeBranchId,
+        branchId: branchId,
       ),
     );
   }
@@ -107,7 +106,6 @@ class _MenuCardState extends ConsumerState<MenuCard>
     );
   }
 
-  // Karena MenuItem tidak punya status enum, kita derive dari isAvailable
   Color get _statusColor =>
       widget.menu.isAvailable ? Colors.green : Colors.red;
 

@@ -5,19 +5,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/menu_provider.dart';
 import 'widgets/menu_card.dart';
 import 'widgets/add_menu_form.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 
-// Ganti dengan branch ID yang aktif / sedang dikelola admin.
-// Idealnya ini diambil dari auth/session provider.
-const String _activeBranchId = '27fb221d-e59c-464a-86fc-9c7f19627beb';
-
-class MenuScreen extends ConsumerStatefulWidget {
+class MenuScreen extends ConsumerWidget {
   const MenuScreen({super.key});
 
   @override
-  ConsumerState<MenuScreen> createState() => _MenuScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final branchId = ref.watch(currentBranchIdProvider) ?? '';
+
+    return _MenuScreenContent(branchId: branchId);
+  }
 }
 
-class _MenuScreenState extends ConsumerState<MenuScreen> {
+class _MenuScreenContent extends ConsumerStatefulWidget {
+  final String branchId;
+  const _MenuScreenContent({required this.branchId});
+
+  @override
+  ConsumerState<_MenuScreenContent> createState() => _MenuScreenContentState();
+}
+
+class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
   final _searchCtrl = TextEditingController();
 
   @override
@@ -31,7 +40,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const AddMenuForm(branchId: _activeBranchId),
+      builder: (_) => AddMenuForm(branchId: widget.branchId),
     );
   }
 
@@ -46,7 +55,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         body: Column(
           children: [
             _SearchFilterBar(searchCtrl: _searchCtrl),
-            const _CategoryTabs(),
+            _CategoryTabs(branchId: widget.branchId),
             const _StatsRow(),
             const Expanded(child: _MenuGrid()),
           ],
@@ -210,16 +219,15 @@ class _SearchFilterBar extends ConsumerWidget {
 // ─── CATEGORY TABS ────────────────────────────────────────────────────────────
 
 class _CategoryTabs extends ConsumerWidget {
-  const _CategoryTabs();
+  final String branchId;
+  const _CategoryTabs({required this.branchId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final filter = ref.watch(menuFilterProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Ambil kategori dari database berdasarkan branch aktif
-    final categoriesAsync =
-        ref.watch(menuCategoriesProvider(_activeBranchId));
+    final categoriesAsync = ref.watch(menuCategoriesProvider(branchId));
     final counts = ref.watch(menuCountByCategoryProvider);
     final totalCount = counts.values.fold(0, (a, b) => a + b);
 
@@ -232,10 +240,9 @@ class _CategoryTabs extends ConsumerWidget {
           return ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: categories.length + 1, // +1 untuk "Semua"
+            itemCount: categories.length + 1,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
-              // Item pertama = "Semua"
               if (i == 0) {
                 final isSelected = filter.categoryId == null;
                 return _categoryChip(
@@ -308,8 +315,7 @@ class _CategoryTabs extends ConsumerWidget {
             ),
             const SizedBox(width: 4),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(
                 color: isSelected
                     ? colorScheme.onPrimary.withValues(alpha: 0.25)
