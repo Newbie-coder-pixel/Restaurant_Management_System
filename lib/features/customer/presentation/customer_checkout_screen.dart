@@ -224,6 +224,20 @@ class _CustomerCheckoutScreenState
     try {
       final user = Supabase.instance.client.auth.currentUser;
 
+      // Cari table_id dari meja yang dipilih
+      String? selectedTableId;
+      if (_orderType == 'dine_in' && _selectedTableNumber != null) {
+        final found = _availableTables.firstWhere(
+          (t) => t['table_number'] == _selectedTableNumber,
+          orElse: () => {},
+        );
+        selectedTableId = found['id'] as String?;
+      }
+
+      final subtotal   = cart.total;
+      final taxAmount  = subtotal * 0.11;
+      final totalAmount = subtotal + taxAmount;
+
       final orderRes = await Supabase.instance.client
           .from('orders')
           .insert({
@@ -231,11 +245,18 @@ class _CustomerCheckoutScreenState
             'order_number':     _generateOrderNumber(),
             'status':           'new',
             'source':           _orderType == 'dine_in' ? 'dine_in' : 'takeaway',
+            'order_type':       _orderType == 'dine_in' ? 'dine_in' : 'takeaway',
             'customer_name':    _nameCtrl.text.trim(),
             'customer_phone':   _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
             'customer_user_id': user?.id,
+            'table_id':         selectedTableId,
+            'table_name':       _selectedTableNumber,
+            'subtotal':         subtotal,
+            'tax_amount':       taxAmount,
+            'total_amount':     totalAmount,
             'discount_amount':  0,
+            'payment_status':   'unpaid',
             'notes':            _buildOrderNotes(),
           })
           .select()
@@ -249,6 +270,7 @@ class _CustomerCheckoutScreenState
         'menu_item_name':  item.name,
         'quantity':        item.quantity,
         'unit_price':      item.price,
+        'subtotal':        item.price * item.quantity,
         'status':          'pending',
         if (item.notes != null && item.notes!.isNotEmpty)
           'special_requests': item.notes,
@@ -258,8 +280,11 @@ class _CustomerCheckoutScreenState
 
       await Supabase.instance.client.from('order_items').insert(orderItems);
 
-      if (_orderType == 'dine_in' && _selectedTableNumber != null) {
-        await _markTableOccupied(cart.branchId!, _selectedTableNumber!);
+      if (_orderType == 'dine_in' && selectedTableId != null) {
+        await Supabase.instance.client
+            .from('restaurant_tables')
+            .update({'status': 'occupied'})
+            .eq('id', selectedTableId);
       }
 
       ref.read(cartProvider.notifier).clear();
@@ -288,25 +313,6 @@ class _CustomerCheckoutScreenState
     return parts.isEmpty ? null : parts.join(' | ');
   }
 
-  Future<void> _markTableOccupied(
-      String branchId, String tableNumber) async {
-    try {
-      final tables = await Supabase.instance.client
-          .from('restaurant_tables')
-          .select('id')
-          .eq('branch_id', branchId)
-          .eq('table_number', tableNumber)
-          .limit(1);
-      if ((tables as List).isNotEmpty) {
-        await Supabase.instance.client
-            .from('restaurant_tables')
-            .update({'status': 'occupied'})
-            .eq('id', tables.first['id']);
-      }
-    } catch (_) {
-      // Non-critical
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
