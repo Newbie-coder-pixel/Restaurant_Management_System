@@ -21,6 +21,12 @@ class _CustomerCheckoutScreenState
   bool _submitting = false;
   String _orderType = 'dine_in';
 
+  // ── Dropdown meja ──
+  List<Map<String, dynamic>> _availableTables = [];
+  String? _selectedTableNumber;
+  bool _loadingTables = false;
+  String? _lastFetchedBranchId;
+
   final Map<String, TextEditingController> _itemNotesCtrls = {};
 
   @override
@@ -31,6 +37,32 @@ class _CustomerCheckoutScreenState
     _notesCtrl.dispose();
     for (final c in _itemNotesCtrls.values) { c.dispose(); }
     super.dispose();
+  }
+
+  Future<void> _fetchTables(String branchId) async {
+    if (_lastFetchedBranchId == branchId) return;
+    setState(() {
+      _loadingTables = true;
+      _selectedTableNumber = null;
+    });
+    try {
+      final res = await Supabase.instance.client
+          .from('restaurant_tables')
+          .select('id, table_number, capacity, status')
+          .eq('branch_id', branchId)
+          .eq('is_active', true)
+          .order('table_number', ascending: true);
+
+      if (mounted) {
+        setState(() {
+          _availableTables = List<Map<String, dynamic>>.from(res);
+          _lastFetchedBranchId = branchId;
+          _loadingTables = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingTables = false);
+    }
   }
 
   void _syncItemNotesControllers(List<CartItem> items) {
@@ -79,9 +111,8 @@ class _CustomerCheckoutScreenState
                 _confirmRow('No. HP', _phoneCtrl.text.trim()),
               _confirmRow('Tipe',
                   _orderType == 'dine_in' ? 'Makan di sini' : 'Bawa pulang'),
-              if (_orderType == 'dine_in' &&
-                  _tableCtrl.text.trim().isNotEmpty)
-                _confirmRow('Meja', _tableCtrl.text.trim()),
+              if (_orderType == 'dine_in' && _selectedTableNumber != null)
+                _confirmRow('Meja', 'No. $_selectedTableNumber'),
               _confirmRow('Total', 'Rp ${_fmt(cart.total)}'),
               _confirmRow('Item', '${cart.itemCount} item'),
             ])),
@@ -180,7 +211,7 @@ class _CustomerCheckoutScreenState
             'branch_id':        cart.branchId,
             'order_number':     _generateOrderNumber(),
             'status':           'new',
-            'source':           _orderType == 'dine_in' ? 'dine_in' : 'takeaway', // ✅ FIX: dine_in bukan dineIn
+            'source':           _orderType == 'dine_in' ? 'dine_in' : 'takeaway',
             'customer_name':    _nameCtrl.text.trim(),
             'customer_phone':   _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
@@ -198,7 +229,6 @@ class _CustomerCheckoutScreenState
         'menu_item_id': item.menuItemId,
         'quantity':     item.quantity,
         'unit_price':   item.price,
-        // ✅ FIX: subtotal dihapus — generated column (quantity * unit_price)
         'status':       'pending',
         if (item.notes != null && item.notes!.isNotEmpty)
           'special_requests': item.notes,
@@ -208,8 +238,8 @@ class _CustomerCheckoutScreenState
 
       await Supabase.instance.client.from('order_items').insert(orderItems);
 
-      if (_orderType == 'dine_in' && _tableCtrl.text.trim().isNotEmpty) {
-        await _markTableOccupied(cart.branchId!, _tableCtrl.text.trim());
+      if (_orderType == 'dine_in' && _selectedTableNumber != null) {
+        await _markTableOccupied(cart.branchId!, _selectedTableNumber!);
       }
 
       ref.read(cartProvider.notifier).clear();
@@ -229,8 +259,8 @@ class _CustomerCheckoutScreenState
 
   String? _buildOrderNotes() {
     final parts = <String>[];
-    if (_orderType == 'dine_in' && _tableCtrl.text.trim().isNotEmpty) {
-      parts.add('Meja: ${_tableCtrl.text.trim()}');
+    if (_orderType == 'dine_in' && _selectedTableNumber != null) {
+      parts.add('Meja: $_selectedTableNumber');
     }
     if (_notesCtrl.text.trim().isNotEmpty) {
       parts.add(_notesCtrl.text.trim());
@@ -262,6 +292,11 @@ class _CustomerCheckoutScreenState
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     _syncItemNotesControllers(cart.items);
+
+    // Fetch meja otomatis saat branchId tersedia dan orderType dine_in
+    if (_orderType == 'dine_in' && cart.branchId != null) {
+      _fetchTables(cart.branchId!);
+    }
 
     if (cart.isEmpty) {
       return Scaffold(
@@ -355,9 +390,7 @@ class _CustomerCheckoutScreenState
             _phoneField(),
             if (_orderType == 'dine_in') ...[
               const SizedBox(height: 10),
-              _field('Nomor meja', _tableCtrl,
-                  Icons.table_restaurant_outlined,
-                  keyboardType: TextInputType.number),
+              _tableDropdown(),
             ],
             const SizedBox(height: 10),
             _field('Catatan umum pesanan', _notesCtrl,
@@ -430,6 +463,127 @@ class _CustomerCheckoutScreenState
       ),
     );
   }
+
+  // ── Dropdown meja ──────────────────────────────────────────────────────────
+
+  Widget _tableDropdown() {
+    if (_loadingTables) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9F9F9),
+          borderRadius: BorderRadius.circular(10)),
+        child: const Row(children: [
+          Icon(Icons.table_restaurant_outlined, size: 18, color: Colors.grey),
+          SizedBox(width: 12),
+          SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 10),
+          Text('Memuat daftar meja...',
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 13, color: Colors.grey)),
+        ]),
+      );
+    }
+
+    if (_availableTables.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3F3),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.red.shade100)),
+        child: const Row(children: [
+          Icon(Icons.info_outline, size: 18, color: Colors.orange),
+          SizedBox(width: 10),
+          Text('Tidak ada meja tersedia di cabang ini',
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 13, color: Colors.orange)),
+        ]),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedTableNumber,
+      decoration: InputDecoration(
+        hintText: 'Pilih nomor meja',
+        hintStyle: const TextStyle(
+            fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
+        prefixIcon: const Icon(
+            Icons.table_restaurant_outlined, size: 18, color: Colors.grey),
+        filled: true,
+        fillColor: const Color(0xFFF9F9F9),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12, vertical: 10),
+      ),
+      style: const TextStyle(
+          fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF1A1A2E)),
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
+      isExpanded: true,
+      items: _availableTables.map((table) {
+        final number = table['table_number']?.toString() ?? '-';
+        final capacity = table['capacity'];
+        final status = table['status']?.toString() ?? '';
+        final isOccupied = status == 'occupied';
+
+        return DropdownMenuItem<String>(
+          value: number,
+          enabled: !isOccupied,
+          child: Row(children: [
+            Icon(
+              isOccupied ? Icons.block : Icons.check_circle_outline,
+              size: 14,
+              color: isOccupied ? Colors.red.shade300 : Colors.green.shade400,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Meja $number',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: isOccupied
+                    ? Colors.grey.shade400
+                    : const Color(0xFF1A1A2E),
+              ),
+            ),
+            if (capacity != null) ...[
+              const SizedBox(width: 6),
+              Text(
+                '($capacity kursi)',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: Colors.grey.shade500),
+              ),
+            ],
+            if (isOccupied) ...[
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(6)),
+                child: Text('Terisi',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 10,
+                        color: Colors.red.shade400,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ]),
+        );
+      }).toList(),
+      onChanged: (val) => setState(() => _selectedTableNumber = val),
+    );
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   Widget _buildItemRow(CartItem item) {
     final notesCtrl = _itemNotesCtrls[item.menuItemId];
@@ -585,7 +739,11 @@ class _CustomerCheckoutScreenState
 
   Widget _typeBtn(String label, IconData icon, String value) =>
       GestureDetector(
-        onTap: () => setState(() => _orderType = value),
+        onTap: () => setState(() {
+          _orderType = value;
+          // Reset pilihan meja saat ganti tipe
+          if (value != 'dine_in') _selectedTableNumber = null;
+        }),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(vertical: 12),
