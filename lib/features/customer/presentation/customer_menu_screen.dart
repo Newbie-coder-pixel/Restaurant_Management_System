@@ -17,12 +17,24 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
   String? _selectedCategoryId;
   bool _loading = true;
   String _search = '';
+  String _branchName = ''; // ✅ TAMBAH: simpan nama branch
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _load();
+
+    // ✅ FIX: setBranch dipanggil saat screen dibuka, bukan saat item ditambah
+    // Gunakan addPostFrameCallback agar ref.read aman dipanggil setelah build pertama
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(cartProvider.notifier).setBranch(
+          widget.branchId,
+          _branchName, // akan diupdate setelah _load() selesai
+        );
+      }
+    });
   }
 
   @override
@@ -33,20 +45,38 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
 
   Future<void> _load() async {
     try {
+      // ✅ FIX: fetch branch name sekaligus
+      final branchRes = await Supabase.instance.client
+          .from('branches')
+          .select('name')
+          .eq('id', widget.branchId)
+          .single();
+
       final cats = await Supabase.instance.client
-          .from('menu_categories').select()
-          .eq('branch_id', widget.branchId).eq('is_active', true)
+          .from('menu_categories')
+          .select()
+          .eq('branch_id', widget.branchId)
+          .eq('is_active', true)
           .order('sort_order');
+
       final items = await Supabase.instance.client
-          .from('menu_items').select()
-          .eq('branch_id', widget.branchId).eq('is_available', true)
+          .from('menu_items')
+          .select()
+          .eq('branch_id', widget.branchId)
+          .eq('is_available', true)
           .order('name');
+
       if (mounted) {
+        final name = branchRes['name'] as String? ?? '';
         setState(() {
+          _branchName = name;
           _categories = (cats as List).cast();
           _menuItems = (items as List).cast();
           _loading = false;
         });
+
+        // ✅ Update setBranch dengan nama yang sudah ter-fetch
+        ref.read(cartProvider.notifier).setBranch(widget.branchId, name);
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
@@ -56,11 +86,16 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
   List<Map<String, dynamic>> get _filteredItems {
     var items = _menuItems;
     if (_selectedCategoryId != null) {
-      items = items.where((i) => i['category_id'] == _selectedCategoryId).toList();
+      items = items
+          .where((i) => i['category_id'] == _selectedCategoryId)
+          .toList();
     }
     if (_search.isNotEmpty) {
-      items = items.where((i) =>
-        (i['name'] as String).toLowerCase().contains(_search.toLowerCase())).toList();
+      items = items
+          .where((i) => (i['name'] as String)
+              .toLowerCase()
+              .contains(_search.toLowerCase()))
+          .toList();
     }
     return items;
   }
@@ -85,7 +120,9 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
           ),
           _loading
               ? const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator(color: Color(0xFFE94560))))
+                  child: Center(
+                      child: CircularProgressIndicator(
+                          color: Color(0xFFE94560))))
               : _filteredItems.isEmpty
                   ? SliverFillRemaining(
                       child: Center(
@@ -93,57 +130,63 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.restaurant_menu_outlined,
-                              size: 80, color: Colors.grey.shade300),
+                                size: 80, color: Colors.grey.shade300),
                             const SizedBox(height: 16),
                             Text('Tidak ada menu ditemukan',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 16,
-                                color: Colors.grey.shade600,
-                                fontWeight: FontWeight.w500)),
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 16,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500)),
                             const SizedBox(height: 8),
-                            Text('Coba kata kunci lain atau pilih kategori berbeda',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 13,
-                                color: Colors.grey.shade400)),
+                            Text(
+                                'Coba kata kunci lain atau pilih kategori berbeda',
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 13,
+                                    color: Colors.grey.shade400)),
                           ],
                         ),
                       ))
                   : SliverPadding(
-                      padding: EdgeInsets.fromLTRB(16, 8, 16,
-                        cart.isEmpty ? 100 : 140),
+                      padding: EdgeInsets.fromLTRB(
+                          16, 8, 16, cart.isEmpty ? 100 : 140),
                       sliver: SliverGrid(
-                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 180,
-                          childAspectRatio: 0.68,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 16),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 180,
+                                childAspectRatio: 0.68,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 16),
                         delegate: SliverChildBuilderDelegate(
                           (_, i) {
                             final item = _filteredItems[i];
                             final qty = cart.items
-                              .where((c) => c.menuItemId == item['id'])
-                              .fold(0, (s, c) => s + c.quantity);
+                                .where((c) => c.menuItemId == item['id'])
+                                .fold(0, (s, c) => s + c.quantity);
                             return _MenuCard(
                               item: item,
                               cartQty: qty,
                               onAdd: () {
-                                ref.read(cartProvider.notifier).setBranch(
-                                  widget.branchId, '');
-                                ref.read(cartProvider.notifier).addItem(CartItem(
-                                  menuItemId: item['id'],
-                                  name: item['name'],
-                                  price: (item['price'] as num).toDouble(),
-                                  imageUrl: item['image_url'],
-                                ));
+                                // ✅ setBranch sudah dipanggil di initState,
+                                // tidak perlu dipanggil lagi di sini
+                                ref.read(cartProvider.notifier).addItem(
+                                    CartItem(
+                                      menuItemId: item['id'],
+                                      name: item['name'],
+                                      price:
+                                          (item['price'] as num).toDouble(),
+                                      imageUrl: item['image_url'],
+                                    ));
                               },
                               onRemove: () {
                                 final currentQty = cart.items
-                                  .where((c) => c.menuItemId == item['id'])
-                                  .fold(0, (s, c) => s + c.quantity);
-                                ref.read(cartProvider.notifier)
-                                  .updateQuantity(item['id'], currentQty - 1);
+                                    .where((c) => c.menuItemId == item['id'])
+                                    .fold(0, (s, c) => s + c.quantity);
+                                ref
+                                    .read(cartProvider.notifier)
+                                    .updateQuantity(
+                                        item['id'], currentQty - 1);
                               },
                             );
                           },
@@ -153,7 +196,6 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                     ),
         ],
       ),
-      // ✅ Pakai floatingActionButton seperti QR screen — aman, tidak crash saat null
       floatingActionButton: cart.isEmpty
           ? null
           : _CartFab(
@@ -164,127 +206,146 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
   }
 
   Widget _buildSliverHeader() => SliverAppBar(
-    expandedHeight: 120,
-    pinned: true,
-    floating: true,
-    backgroundColor: const Color(0xFF1A1A2E),
-    foregroundColor: Colors.white,
-    elevation: 0,
-    flexibleSpace: FlexibleSpaceBar(
-      title: const Text('Menu Restoran',
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          fontWeight: FontWeight.w600,
-          fontSize: 18)),
-      centerTitle: true,
-      background: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1A1A2E), Color(0xFF0F3460), Color(0xFF16213E)])),
-      ),
-    ),
-    leading: IconButton(
-      icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-      onPressed: () => context.canPop() ? context.pop() : context.go('/customer?tab=0'),
-    ),
-    actions: [
-      Container(
-        margin: const EdgeInsets.only(right: 12),
-        child: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.calendar_today_outlined,
-              color: Colors.white, size: 18)),
-          tooltip: 'Booking meja',
-          onPressed: () => context.push('/customer/booking/${widget.branchId}'),
+        expandedHeight: 120,
+        pinned: true,
+        floating: true,
+        backgroundColor: const Color(0xFF1A1A2E),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        flexibleSpace: FlexibleSpaceBar(
+          // ✅ Tampilkan nama branch di header
+          title: Text(
+            _branchName.isNotEmpty ? _branchName : 'Menu Restoran',
+            style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w600,
+                fontSize: 18),
+          ),
+          centerTitle: true,
+          background: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1A1A2E),
+                    Color(0xFF0F3460),
+                    Color(0xFF16213E)
+                  ]),
+            ),
+          ),
         ),
-      ),
-    ],
-  );
+        leading: IconButton(
+          icon:
+              const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/customer?tab=0'),
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 12),
+            child: IconButton(
+              icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.calendar_today_outlined,
+                      color: Colors.white, size: 18)),
+              tooltip: 'Booking meja',
+              onPressed: () =>
+                  context.push('/customer/booking/${widget.branchId}'),
+            ),
+          ),
+        ],
+      );
 
   Widget _buildSearchBar() => Container(
-    margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-    child: TextField(
-      onChanged: (v) => setState(() => _search = v),
-      decoration: InputDecoration(
-        hintText: 'Cari menu favoritmu...',
-        hintStyle: const TextStyle(
-          fontFamily: 'Poppins',
-          fontSize: 14,
-          color: Color(0xFF9CA3AF)),
-        prefixIcon: const Icon(Icons.search_rounded,
-          color: Color(0xFF9CA3AF), size: 20),
-        suffixIcon: _search.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear, size: 18),
-                onPressed: () => setState(() => _search = ''),
-              )
-            : null,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFFE94560), width: 2)),
-        contentPadding: const EdgeInsets.symmetric(vertical: 14)),
-      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)));
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: TextField(
+          onChanged: (v) => setState(() => _search = v),
+          decoration: InputDecoration(
+            hintText: 'Cari menu favoritmu...',
+            hintStyle: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                color: Color(0xFF9CA3AF)),
+            prefixIcon: const Icon(Icons.search_rounded,
+                color: Color(0xFF9CA3AF), size: 20),
+            suffixIcon: _search.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () => setState(() => _search = ''),
+                  )
+                : null,
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide:
+                    const BorderSide(color: Color(0xFFE94560), width: 2)),
+            contentPadding: const EdgeInsets.symmetric(vertical: 14)),
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)));
 
   Widget _buildCategoryChips() => SizedBox(
-    height: 56,
-    child: ListView.separated(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      itemCount: _categories.length + 1,
-      separatorBuilder: (_, __) => const SizedBox(width: 10),
-      itemBuilder: (_, i) {
-        if (i == 0) {
-          return _chip('Semua Menu', _selectedCategoryId == null,
-            () => setState(() => _selectedCategoryId = null));
-        }
-        final cat = _categories[i - 1];
-        return _chip(cat['name'], _selectedCategoryId == cat['id'],
-          () => setState(() => _selectedCategoryId = cat['id']));
-      }));
+      height: 56,
+      child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          itemCount: _categories.length + 1,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (_, i) {
+            if (i == 0) {
+              return _chip('Semua Menu', _selectedCategoryId == null,
+                  () => setState(() => _selectedCategoryId = null));
+            }
+            final cat = _categories[i - 1];
+            return _chip(cat['name'], _selectedCategoryId == cat['id'],
+                () => setState(() => _selectedCategoryId = cat['id']));
+          }));
 
   Widget _chip(String label, bool selected, VoidCallback onTap) =>
-    GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE94560) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: selected ? Colors.transparent : const Color(0xFFE5E7EB),
-            width: 1.5),
-          boxShadow: selected ? [
-            BoxShadow(
-              color: const Color(0xFFE94560).withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 2))
-          ] : const [],
-        ),
-        child: Text(label,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : const Color(0xFF4B5563))),
-      ));
+      GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFFE94560) : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                    color: selected
+                        ? Colors.transparent
+                        : const Color(0xFFE5E7EB),
+                    width: 1.5),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                            color: const Color(0xFFE94560)
+                                .withValues(alpha: 0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 2))
+                      ]
+                    : const [],
+              ),
+              child: Text(label,
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? Colors.white
+                          : const Color(0xFF4B5563)))));
 }
 
-// ── Cart FAB — sama polanya dengan QR screen ──────────────────────
+// ── Cart FAB ──────────────────────────────────────────────────────
 class _CartFab extends StatelessWidget {
   final CartState cart;
   final VoidCallback onCheckout;
@@ -295,52 +356,58 @@ class _CartFab extends StatelessWidget {
     return GestureDetector(
       onTap: onCheckout,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A2E),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1A1A2E).withValues(alpha: 0.35),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
-          ]),
+            color: const Color(0xFF1A1A2E),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                  color:
+                      const Color(0xFF1A1A2E).withValues(alpha: 0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4))
+            ]),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Stack(children: [
             const Icon(Icons.shopping_cart_outlined,
-              color: Colors.white, size: 22),
+                color: Colors.white, size: 22),
             Positioned(
-              top: -2, right: -2,
+              top: -2,
+              right: -2,
               child: Container(
                 padding: const EdgeInsets.all(2),
                 decoration: const BoxDecoration(
-                  color: Color(0xFFE94560), shape: BoxShape.circle),
-                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                    color: Color(0xFFE94560), shape: BoxShape.circle),
+                constraints: const BoxConstraints(
+                    minWidth: 14, minHeight: 14),
                 child: Text('${cart.itemCount}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold)),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold)),
               ),
             ),
           ]),
           const SizedBox(width: 10),
           const Text('Keranjang',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14)),
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14)),
           const SizedBox(width: 8),
-          Container(width: 1, height: 16,
-            color: Colors.white.withValues(alpha: 0.4)),
+          Container(
+              width: 1,
+              height: 16,
+              color: Colors.white.withValues(alpha: 0.4)),
           const SizedBox(width: 8),
           Text(_fmt(cart.total),
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14)),
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14)),
         ]),
       ),
     );
@@ -363,8 +430,11 @@ class _MenuCard extends StatelessWidget {
   final int cartQty;
   final VoidCallback onAdd;
   final VoidCallback onRemove;
-  const _MenuCard({required this.item, required this.cartQty,
-    required this.onAdd, required this.onRemove});
+  const _MenuCard(
+      {required this.item,
+      required this.cartQty,
+      required this.onAdd,
+      required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
@@ -372,7 +442,6 @@ class _MenuCard extends StatelessWidget {
     final name = item['name'] as String;
     final desc = item['description'] as String? ?? '';
 
-    // ✅ Tidak ada transform — pakai border seperti QR screen
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
@@ -380,17 +449,17 @@ class _MenuCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: cartQty > 0
-            ? const Color(0xFFE94560)
-            : const Color(0xFFE5E7EB),
+              ? const Color(0xFFE94560)
+              : const Color(0xFFE5E7EB),
           width: cartQty > 0 ? 1.5 : 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: cartQty > 0
-              ? const Color(0xFFE94560).withValues(alpha: 0.12)
-              : Colors.black.withValues(alpha: 0.06),
-            blurRadius: cartQty > 0 ? 14 : 12,
-            offset: const Offset(0, 4)),
+              color: cartQty > 0
+                  ? const Color(0xFFE94560).withValues(alpha: 0.12)
+                  : Colors.black.withValues(alpha: 0.06),
+              blurRadius: cartQty > 0 ? 14 : 12,
+              offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -402,22 +471,25 @@ class _MenuCard extends StatelessWidget {
                 height: 120,
                 decoration: const BoxDecoration(
                   color: Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: item['image_url'] != null
-                  ? ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                      child: Image.network(
-                        item['image_url'],
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        errorBuilder: (_, __, ___) => _buildPlaceholder(),
-                      ))
-                  : _buildPlaceholder(),
+                    ? ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(20)),
+                        child: Image.network(
+                          item['image_url'],
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                        ))
+                    : _buildPlaceholder(),
               ),
               if (cartQty > 0)
                 Positioned(
-                  top: 8, right: 8,
+                  top: 8,
+                  right: 8,
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
@@ -425,11 +497,11 @@ class _MenuCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text('$cartQty',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700)),
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
                   ),
                 ),
             ],
@@ -440,22 +512,22 @@ class _MenuCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: Color(0xFF1A1A2E)),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: Color(0xFF1A1A2E)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
                 if (desc.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(desc,
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
-                      color: Color(0xFF9CA3AF)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 10,
+                          color: Color(0xFF9CA3AF)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ],
                 const SizedBox(height: 8),
                 Row(
@@ -463,23 +535,23 @@ class _MenuCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text('Rp${_fmt(price)}',
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: Color(0xFFE94560))),
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: Color(0xFFE94560))),
                     ),
                     if (cartQty == 0)
                       GestureDetector(
                         onTap: onAdd,
                         child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE94560),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.add,
-                            color: Colors.white, size: 18)),
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE94560),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.add,
+                                color: Colors.white, size: 18)),
                       ),
                   ],
                 ),
@@ -494,13 +566,13 @@ class _MenuCard extends StatelessWidget {
                 children: [
                   _iqBtn(Icons.remove, onRemove),
                   Expanded(
-                    child: Text('$cartQty',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: Color(0xFF1A1A2E)),
-                      textAlign: TextAlign.center)),
+                      child: Text('$cartQty',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: Color(0xFF1A1A2E)),
+                          textAlign: TextAlign.center)),
                   _iqBtn(Icons.add, onAdd),
                 ],
               ),
@@ -518,15 +590,15 @@ class _MenuCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(_emoji(item['category_id']),
-            style: const TextStyle(fontSize: 32)),
+              style: const TextStyle(fontSize: 32)),
           const SizedBox(height: 4),
           Text(_getCategoryName(item['category_id']),
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 10,
-              color: Color(0xFF9CA3AF)),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10,
+                  color: Color(0xFF9CA3AF)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ],
       ),
     );
@@ -534,20 +606,23 @@ class _MenuCard extends StatelessWidget {
 
   String _getCategoryName(String? catId) {
     if (catId == null) return 'Menu';
-    const names = ['Makanan', 'Nasi', 'Sayur', 'Sup', 'Minuman', 'Camilan', 'Dessert', 'Jus'];
+    const names = [
+      'Makanan', 'Nasi', 'Sayur', 'Sup',
+      'Minuman', 'Camilan', 'Dessert', 'Jus'
+    ];
     return names[catId.hashCode.abs() % names.length];
   }
 
   Widget _iqBtn(IconData icon, VoidCallback onTap) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE94560),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(icon, color: Colors.white, size: 16)));
+      onTap: onTap,
+      child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE94560),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: Colors.white, size: 16)));
 
   String _fmt(double v) {
     final s = v.toStringAsFixed(0);
