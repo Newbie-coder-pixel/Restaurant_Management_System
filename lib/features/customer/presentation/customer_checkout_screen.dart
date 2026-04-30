@@ -21,13 +21,28 @@ class _CustomerCheckoutScreenState
   bool _submitting = false;
   String _orderType = 'dine_in';
 
-  // ── Dropdown meja ──
   List<Map<String, dynamic>> _availableTables = [];
   String? _selectedTableNumber;
   bool _loadingTables = false;
   String? _lastFetchedBranchId;
 
   final Map<String, TextEditingController> _itemNotesCtrls = {};
+
+  // ── TAMBAH: flag agar fetch hanya dipanggil sekali dari didChangeDependencies
+  bool _didFetchOnce = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Panggil fetch di sini (bukan di build), hanya sekali saat branchId tersedia
+    if (!_didFetchOnce) {
+      final cart = ref.read(cartProvider);
+      if (_orderType == 'dine_in' && cart.branchId != null) {
+        _didFetchOnce = true;
+        _fetchTables(cart.branchId!);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -40,6 +55,7 @@ class _CustomerCheckoutScreenState
   }
 
   Future<void> _fetchTables(String branchId) async {
+    // Guard: jangan fetch ulang jika branchId sama
     if (_lastFetchedBranchId == branchId) return;
     setState(() {
       _loadingTables = true;
@@ -60,8 +76,11 @@ class _CustomerCheckoutScreenState
           _loadingTables = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingTables = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingTables = false);
+        debugPrint('_fetchTables error: $e');
+      }
     }
   }
 
@@ -293,10 +312,8 @@ class _CustomerCheckoutScreenState
     final cart = ref.watch(cartProvider);
     _syncItemNotesControllers(cart.items);
 
-    // Fetch meja otomatis saat branchId tersedia dan orderType dine_in
-    if (_orderType == 'dine_in' && cart.branchId != null) {
-      _fetchTables(cart.branchId!);
-    }
+    // ✅ HAPUS pemanggilan _fetchTables dari sini!
+    // Sudah dipindah ke didChangeDependencies
 
     if (cart.isEmpty) {
       return Scaffold(
@@ -464,8 +481,6 @@ class _CustomerCheckoutScreenState
     );
   }
 
-  // ── Dropdown meja ──────────────────────────────────────────────────────────
-
   Widget _tableDropdown() {
     if (_loadingTables) {
       return Container(
@@ -505,7 +520,7 @@ class _CustomerCheckoutScreenState
     }
 
     return DropdownButtonFormField<String>(
-      initialValue: _selectedTableNumber,
+      initialValue: _selectedTableNumber,   // ✅ fix: was 'value'
       decoration: InputDecoration(
         hintText: 'Pilih nomor meja',
         hintStyle: const TextStyle(
@@ -553,7 +568,7 @@ class _CustomerCheckoutScreenState
             if (capacity != null) ...[
               const SizedBox(width: 6),
               Text(
-                '($capacity kursi)',
+                '($capacity kursi)',   // ✅ fix: was '${capacity}'
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
@@ -582,8 +597,6 @@ class _CustomerCheckoutScreenState
       onChanged: (val) => setState(() => _selectedTableNumber = val),
     );
   }
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
 
   Widget _buildItemRow(CartItem item) {
     final notesCtrl = _itemNotesCtrls[item.menuItemId];
@@ -739,11 +752,21 @@ class _CustomerCheckoutScreenState
 
   Widget _typeBtn(String label, IconData icon, String value) =>
       GestureDetector(
-        onTap: () => setState(() {
-          _orderType = value;
-          // Reset pilihan meja saat ganti tipe
-          if (value != 'dine_in') _selectedTableNumber = null;
-        }),
+        onTap: () {
+          setState(() {
+            _orderType = value;
+            if (value != 'dine_in') {
+              _selectedTableNumber = null;
+            } else {
+              // ✅ Fetch ulang meja jika user switch ke dine_in
+              final branchId = ref.read(cartProvider).branchId;
+              if (branchId != null) {
+                _lastFetchedBranchId = null; // reset guard agar bisa fetch ulang
+                _fetchTables(branchId);
+              }
+            }
+          });
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(vertical: 12),
