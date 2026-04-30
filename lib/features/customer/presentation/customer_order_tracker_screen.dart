@@ -673,9 +673,13 @@ class _OrderStatusCard extends StatelessWidget {
     final statusLabel = _statusLabels[status] ?? status;
     final statusColor = _statusColors[status] ?? Colors.grey;
     final statusMsg   = _statusMessages[status] ?? '';
-    final total       = (order['total_amount'] as num?)?.toDouble() ?? 0;
+    // Hitung subtotal dari items (bukan dari order['total_amount'] yg bisa 0/null)
+    final subtotal     = items.fold<double>(0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
+    final discount     = (order['discount_amount'] as num?)?.toDouble() ?? 0;
+    final taxAmount    = subtotal * 0.11; // PPN 11%
+    final total        = subtotal + taxAmount - discount;
     final customerName = order['customer_name'] as String?;
-    final notes       = order['notes'] as String?;
+    final notes        = order['notes'] as String?;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -898,6 +902,85 @@ class _OrderStatusCard extends StatelessWidget {
 
           const Divider(height: 24, thickness: 1, color: Color(0xFFEEEEEE)),
 
+          // Subtotal
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Subtotal',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              Text(
+                'Rp ${_fmt(subtotal)}',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          // PPN 11%
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'PPN (11%)',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              Text(
+                'Rp ${_fmt(taxAmount)}',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+
+          // Diskon (hanya tampil jika ada)
+          if (discount > 0) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Diskon',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                Text(
+                  '- Rp ${_fmt(discount)}',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: Color(0xFF1D9E75),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Divider(thickness: 1, color: Color(0xFFEEEEEE)),
+          ),
+
+          // Total
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
