@@ -87,10 +87,14 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       return;
     }
     try {
+      // FIX: Explicit select kolom agar order_type pasti ikut ter-fetch
+      // (menggunakan * bersamaan dengan relasi kadang tidak meng-include semua kolom)
       var query = Supabase.instance.client
           .from('orders')
           .select('''
-            *,
+            id, branch_id, table_id, order_number,
+            status, source, order_type, customer_name,
+            discount_amount, notes, created_at, updated_at,
             restaurant_tables(table_number),
             order_items(
               id, menu_item_id, menu_item_name, unit_price,
