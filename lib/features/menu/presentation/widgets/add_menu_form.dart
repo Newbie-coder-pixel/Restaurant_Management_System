@@ -10,12 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../../../shared/models/menu_model.dart';
 import '../../providers/menu_provider.dart';
 
-// Provider untuk fetch kategori berdasarkan branchId
-final menuCategoriesProvider =
-    FutureProvider.family<List<MenuCategory>, String>((ref, branchId) async {
-  final service = ref.watch(menuServiceProvider);
-  return service.fetchCategories(branchId: branchId);
-});
+// Provider untuk fetch kategori berdasarkan branchId — gunakan categoryNotifierProvider dari menu_provider
 
 class AddMenuForm extends ConsumerStatefulWidget {
   final MenuItem? existingMenu;
@@ -136,6 +131,109 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     );
   }
 
+  Future<void> _showAddCategoryDialog(BuildContext context) async {
+    final ctrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Tambah Kategori',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'Contoh: Minuman, Makanan Berat...',
+              filled: true,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Nama kategori tidak boleh kosong'
+                : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(dialogCtx);
+              final messenger = ScaffoldMessenger.of(context);
+              final success = await ref
+                  .read(categoryNotifierProvider(widget.branchId).notifier)
+                  .addCategory(ctrl.text.trim());
+              if (mounted) {
+                messenger.showSnackBar(SnackBar(
+                  content: Text(success
+                      ? 'Kategori berhasil ditambahkan!'
+                      : 'Gagal menambahkan kategori.'),
+                  backgroundColor: success ? Colors.green : Colors.red,
+                ));
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+  }
+
+  Future<void> _confirmDeleteCategory(
+      BuildContext context, MenuCategory cat) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Hapus Kategori?',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        content: Text(
+            'Kategori "${cat.name}" akan dihapus. Menu yang sudah pakai kategori ini tidak terpengaruh.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style:
+                FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      if (_selectedCategoryId == cat.id) {
+        setState(() => _selectedCategoryId = null);
+      }
+      final success = await ref
+          .read(categoryNotifierProvider(widget.branchId).notifier)
+          .deleteCategory(cat.id);
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text(success
+              ? 'Kategori berhasil dihapus!'
+              : 'Gagal menghapus kategori.'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ));
+      }
+    }
+  }
+
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -198,7 +296,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     final colorScheme = theme.colorScheme;
     final mq = MediaQuery.of(context);
     final categoriesAsync =
-        ref.watch(menuCategoriesProvider(widget.branchId));
+        ref.watch(categoryNotifierProvider(widget.branchId));
 
     return Container(
       height: mq.size.height * 0.92,
@@ -301,7 +399,23 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     const SizedBox(height: 16),
 
                     // Category
-                    const _FormLabel('Kategori'),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const _FormLabel('Kategori'),
+                        TextButton.icon(
+                          onPressed: () => _showAddCategoryDialog(context),
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Tambah',
+                              style: TextStyle(fontSize: 13)),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     categoriesAsync.when(
                       loading: () => const Center(
@@ -313,6 +427,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                         selectedId: _selectedCategoryId,
                         onChanged: (id) =>
                             setState(() => _selectedCategoryId = id),
+                        onDelete: (cat) => _confirmDeleteCategory(context, cat),
                       ),
                     ),
                     const SizedBox(height: 28),
@@ -405,18 +520,20 @@ class _CategorySelector extends StatelessWidget {
   final List<MenuCategory> categories;
   final String? selectedId;
   final ValueChanged<String?> onChanged;
+  final ValueChanged<MenuCategory> onDelete;
 
   const _CategorySelector({
     required this.categories,
     required this.selectedId,
     required this.onChanged,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     if (categories.isEmpty) {
-      return const Text('Belum ada kategori tersedia.',
+      return const Text('Belum ada kategori. Tambahkan kategori baru.',
           style: TextStyle(color: Colors.grey));
     }
     return Wrap(
@@ -428,23 +545,46 @@ class _CategorySelector extends StatelessWidget {
           onTap: () => onChanged(cat.id),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.only(left: 14, top: 6, bottom: 6, right: 6),
             decoration: BoxDecoration(
               color: isSelected
                   ? colorScheme.primary
-                  : colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.6),
+                  : colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Text(
-              cat.name,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? colorScheme.onPrimary
-                    : colorScheme.onSurface,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  cat.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isSelected
+                        ? colorScheme.onPrimary
+                        : colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: () => onDelete(cat),
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? colorScheme.onPrimary.withValues(alpha: 0.2)
+                          : colorScheme.onSurface.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.close,
+                      size: 12,
+                      color: isSelected
+                          ? colorScheme.onPrimary
+                          : colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );

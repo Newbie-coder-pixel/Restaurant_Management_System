@@ -69,6 +69,51 @@ class MenuService {
     }
   }
 
+  // ─── CATEGORY CRUD ────────────────────────────────────────────────────────
+
+  Future<MenuCategory> addCategory({
+    required String branchId,
+    required String name,
+  }) async {
+    try {
+      final existing = await _client
+          .from(_categoriesTable)
+          .select('sort_order')
+          .eq('branch_id', branchId)
+          .order('sort_order', ascending: false)
+          .limit(1);
+
+      final nextOrder = existing.isEmpty
+          ? 0
+          : ((existing.first['sort_order'] as int?) ?? 0) + 1;
+
+      final response = await _client
+          .from(_categoriesTable)
+          .insert({
+            'branch_id': branchId,
+            'name': name.trim(),
+            'is_active': true,
+            'sort_order': nextOrder,
+          })
+          .select()
+          .single();
+
+      return MenuCategory.fromJson(response);
+    } on PostgrestException catch (e) {
+      throw MenuServiceException('Gagal menambahkan kategori: ${e.message}');
+    }
+  }
+
+  Future<void> deleteCategory(String categoryId) async {
+    try {
+      await _client
+          .from(_categoriesTable)
+          .update({'is_active': false}).eq('id', categoryId);
+    } on PostgrestException catch (e) {
+      throw MenuServiceException('Gagal menghapus kategori: ${e.message}');
+    }
+  }
+
   // ─── CREATE ───────────────────────────────────────────────────────────────
 
   Future<MenuItem> addMenu(MenuItem item) async {

@@ -235,3 +235,42 @@ final menuCountByCategoryProvider = Provider<Map<String?, int>>((ref) {
   }
   return counts;
 });
+
+// ─── CATEGORY NOTIFIER ────────────────────────────────────────────────────────
+
+class CategoryNotifier extends FamilyAsyncNotifier<List<MenuCategory>, String> {
+  late MenuService _service;
+
+  @override
+  Future<List<MenuCategory>> build(String branchId) async {
+    _service = ref.watch(menuServiceProvider);
+    return _service.fetchCategories(branchId: branchId);
+  }
+
+  Future<bool> addCategory(String name) async {
+    final branchId = arg;
+    try {
+      final newCat = await _service.addCategory(branchId: branchId, name: name);
+      state = state.whenData((cats) => [...cats, newCat]);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteCategory(String categoryId) async {
+    final prev = state.valueOrNull ?? [];
+    state = state.whenData((cats) => cats.where((c) => c.id != categoryId).toList());
+    try {
+      await _service.deleteCategory(categoryId);
+      return true;
+    } catch (_) {
+      state = AsyncData(prev);
+      return false;
+    }
+  }
+}
+
+final categoryNotifierProvider =
+    AsyncNotifierProviderFamily<CategoryNotifier, List<MenuCategory>, String>(
+        CategoryNotifier.new);

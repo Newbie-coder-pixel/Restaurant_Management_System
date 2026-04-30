@@ -229,7 +229,7 @@ class _CategoryTabs extends ConsumerWidget {
     final filter = ref.watch(menuFilterProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
-    final categoriesAsync = ref.watch(menuCategoriesProvider(branchId));
+    final categoriesAsync = ref.watch(categoryNotifierProvider(branchId));
     final counts = ref.watch(menuCountByCategoryProvider);
     final totalCount = counts.values.fold(0, (a, b) => a + b);
 
