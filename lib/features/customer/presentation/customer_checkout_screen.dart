@@ -244,11 +244,13 @@ class _CustomerCheckoutScreenState
       final orderId = orderRes['id'] as String;
 
       final orderItems = ref.read(cartProvider).items.map((item) => {
-        'order_id':     orderId,
-        'menu_item_id': item.menuItemId,
-        'quantity':     item.quantity,
-        'unit_price':   item.price,
-        'status':       'pending',
+        'order_id':        orderId,
+        'menu_item_id':    item.menuItemId,
+        'menu_item_name':  item.name,
+        'quantity':        item.quantity,
+        'unit_price':      item.price,
+        'subtotal':        item.subtotal,
+        'status':          'pending',
         if (item.notes != null && item.notes!.isNotEmpty)
           'special_requests': item.notes,
       }).where((i) => (i['menu_item_id'] as String).isNotEmpty).toList();
