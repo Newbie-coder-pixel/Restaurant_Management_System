@@ -21,8 +21,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   List<StaffMember> _staff = [];
   bool _isLoading = true;
   String? _branchId;
+  StaffRole? _userRole;
   bool _showArchived = false;
   bool _initialized = false;
+
+  // Branch list untuk superadmin saat tambah staff
+  List<Map<String, dynamic>> _allBranches = [];
 
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
@@ -53,15 +57,34 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     final staff = ref.read(currentStaffProvider);
     if (staff != null) {
       _branchId = staff.branchId;
+      _userRole = staff.role;
       _initialized = true;
+      if (_userRole == StaffRole.superadmin) _fetchAllBranches();
       _load();
     } else {
       _initialized = true;
       ref.listenManual(currentStaffProvider, (_, next) {
         if (next != null && _branchId == null && mounted) {
-          setState(() => _branchId = next.branchId);
+          setState(() {
+            _branchId = next.branchId;
+            _userRole = next.role;
+          });
+          if (_userRole == StaffRole.superadmin) _fetchAllBranches();
           _load();
         }
+      });
+    }
+  }
+
+  Future<void> _fetchAllBranches() async {
+    final res = await Supabase.instance.client
+        .from('branches')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name');
+    if (mounted) {
+      setState(() {
+        _allBranches = (res as List).cast<Map<String, dynamic>>();
       });
     }
   }
@@ -557,6 +580,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     bool isLoading = false;
     String? errorMsg;
 
+    // Branch selection: superadmin bisa pilih, role lain pakai branch sendiri
+    final isSuperadmin = _userRole == StaffRole.superadmin;
+    String? selectedBranchId = isSuperadmin
+        ? (_allBranches.isNotEmpty ? _allBranches.first['id'] as String : _branchId)
+        : _branchId;
+
     if (!mounted) return;
     await showDialog(
       context: context,
@@ -642,6 +671,35 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 )).toList(),
                 onChanged: (v) { if (v != null) ss(() => selectedRole = v); },
               ),
+              // ── Branch selector (superadmin only) ────────────────────
+              if (isSuperadmin && _allBranches.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedBranchId,
+                  decoration: InputDecoration(
+                    labelText: 'Branch *',
+                    prefixIcon: const Icon(Icons.store_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  items: _allBranches.map((b) => DropdownMenuItem<String>(
+                    value: b['id'] as String,
+                    child: Text(b['name'] as String,
+                        style: const TextStyle(fontFamily: 'Poppins')),
+                  )).toList(),
+                  onChanged: (v) { if (v != null) ss(() => selectedBranchId = v); },
+                ),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Text(
+                    'Staff ini hanya bisa mengakses data di branch yang dipilih.',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: Colors.grey.shade600),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -737,6 +795,15 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
                       ss(() { isLoading = true; errorMsg = null; });
 
+                      // Validasi branch untuk superadmin
+                      if (isSuperadmin && selectedBranchId == null) {
+                        ss(() {
+                          isLoading = false;
+                          errorMsg = 'Pilih branch untuk staff ini.';
+                        });
+                        return;
+                      }
+
                       try {
                         final res = await Supabase.instance.client.functions.invoke(
                           'create-staff-user',
@@ -748,7 +815,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                 ? null
                                 : phoneCtrl.text.trim(),
                             'role':      selectedRole.name,
-                            'branchId':  _branchId,
+                            'branchId':  selectedBranchId,
                           },
                         );
 

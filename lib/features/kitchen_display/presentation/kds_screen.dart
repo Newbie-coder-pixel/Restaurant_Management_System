@@ -5,6 +5,7 @@ import '../../../shared/models/order_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
+import '../../../core/models/staff_role.dart';
 
 class KDSScreen extends ConsumerStatefulWidget {
   const KDSScreen({super.key});
@@ -16,9 +17,17 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   List<OrderModel> _orders = [];
   int _readyCount = 0;
   bool _isLoading = true;
-  String? _branchId;
+  String? _branchId;       // branch milik staff yang login
+  StaffRole? _userRole;
   RealtimeChannel? _channel;
   bool _initialized = false;
+
+  // Multi-branch (superadmin & manager only)
+  List<_BranchItem> _branches = [];
+  String? _selectedBranchId; // null = semua branch
+
+  bool get _isMultiBranchRole =>
+      _userRole == StaffRole.superadmin || _userRole == StaffRole.manager;
 
   @override
   void initState() {
@@ -32,14 +41,20 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     final staff = ref.read(currentStaffProvider);
     if (staff != null) {
       _branchId = staff.branchId;
+      _userRole = staff.role;
       _initialized = true;
+      if (_isMultiBranchRole) _fetchBranches();
       _load();
       _subscribeRealtime();
     } else {
       _initialized = true;
       ref.listenManual(currentStaffProvider, (_, next) {
         if (next != null && _branchId == null && mounted) {
-          setState(() => _branchId = next.branchId);
+          setState(() {
+            _branchId = next.branchId;
+            _userRole = next.role;
+          });
+          if (_isMultiBranchRole) _fetchBranches();
           _load();
           _subscribeRealtime();
         }
@@ -47,13 +62,32 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     }
   }
 
+  Future<void> _fetchBranches() async {
+    final res = await Supabase.instance.client
+        .from('branches')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name');
+    if (mounted) {
+      setState(() {
+        _branches = (res as List)
+            .map((e) => _BranchItem(id: e['id'], name: e['name']))
+            .toList();
+      });
+    }
+  }
+
   Future<void> _load() async {
-    if (_branchId == null) {
+    // superadmin/manager: pakai _selectedBranchId (null = semua branch)
+    // role lain: wajib pakai _branchId sendiri
+    final targetBranch = _isMultiBranchRole ? _selectedBranchId : _branchId;
+
+    if (!_isMultiBranchRole && targetBranch == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
     try {
-      final res = await Supabase.instance.client
+      var query = Supabase.instance.client
           .from('orders')
           .select('''
             *,
@@ -63,15 +97,24 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               quantity, subtotal, special_requests, status
             )
           ''')
-          .eq('branch_id', _branchId!)
-          .inFilter('status', ['new', 'created', 'preparing'])
-          .order('created_at');
+          .inFilter('status', ['new', 'created', 'preparing']);
 
-      final readyRes = await Supabase.instance.client
+      if (targetBranch != null) {
+        query = query.eq('branch_id', targetBranch);
+      }
+
+      final res = await query.order('created_at');
+
+      var readyQuery = Supabase.instance.client
           .from('orders')
           .select('id')
-          .eq('branch_id', _branchId!)
           .eq('status', 'ready');
+
+      if (targetBranch != null) {
+        readyQuery = readyQuery.eq('branch_id', targetBranch);
+      }
+
+      final readyRes = await readyQuery;
 
       if (mounted) {
         setState(() {
@@ -215,27 +258,45 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             onPressed: _load),
         ],
       ),
-      body: Column(children: [
-        if (_readyCount > 0) _buildReadyBanner(colorScheme),
+      body: Row(children: [
+        // ── Sidebar branch (superadmin & manager only) ──────────────
+        if (_isMultiBranchRole)
+          _KDSBranchSidebar(
+            branches: _branches,
+            selectedBranchId: _selectedBranchId,
+            onSelect: (id) {
+              setState(() {
+                _selectedBranchId = id;
+                _isLoading = true;
+              });
+              _load();
+            },
+          ),
+        // ── Main content ────────────────────────────────────────────
         Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _orders.isEmpty
-                  ? _buildEmptyState(colorScheme)
-                  : RefreshIndicator(
-                      onRefresh: _load,
-                      child: GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 340,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 0.70,
+          child: Column(children: [
+            if (_readyCount > 0) _buildReadyBanner(colorScheme),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _orders.isEmpty
+                      ? _buildEmptyState(colorScheme)
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: GridView.builder(
+                            padding: const EdgeInsets.all(16),
+                            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 340,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                              childAspectRatio: 0.70,
+                            ),
+                            itemCount: _orders.length,
+                            itemBuilder: (_, i) => _buildKDSCard(_orders[i], colorScheme),
+                          ),
                         ),
-                        itemCount: _orders.length,
-                        itemBuilder: (_, i) => _buildKDSCard(_orders[i], colorScheme),
-                      ),
-                    ),
+            ),
+          ]),
         ),
       ]),
     );
@@ -482,6 +543,98 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           ),
         ),
       ]),
+    );
+  }
+}
+
+// ── Helper model ───────────────────────────────────────────────────────
+class _BranchItem {
+  final String id;
+  final String name;
+  _BranchItem({required this.id, required this.name});
+}
+
+// ── KDS Branch Sidebar ─────────────────────────────────────────────────
+class _KDSBranchSidebar extends StatelessWidget {
+  final List<_BranchItem> branches;
+  final String? selectedBranchId;
+  final void Function(String?) onSelect;
+
+  const _KDSBranchSidebar({
+    required this.branches,
+    required this.selectedBranchId,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 90,
+      color: AppColors.primary,
+      child: Column(
+        children: [
+          _SidebarItem(
+            label: 'Semua',
+            isSelected: selectedBranchId == null,
+            onTap: () => onSelect(null),
+          ),
+          const Divider(color: Colors.white24, height: 1),
+          Expanded(
+            child: ListView.builder(
+              itemCount: branches.length,
+              itemBuilder: (ctx, i) => _SidebarItem(
+                label: branches[i].name,
+                isSelected: selectedBranchId == branches[i].id,
+                onTap: () => onSelect(branches[i].id),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _SidebarItem({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.white.withValues(alpha: 0.15)
+              : Colors.transparent,
+          border: isSelected
+              ? const Border(left: BorderSide(color: Colors.white, width: 3))
+              : null,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: isSelected ? Colors.white : Colors.white60,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+          ),
+        ),
+      ),
     );
   }
 }
