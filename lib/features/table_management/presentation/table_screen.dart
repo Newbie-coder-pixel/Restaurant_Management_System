@@ -245,13 +245,32 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
+          // Simpan messenger sebelum async gap
+          final messenger = ScaffoldMessenger.of(context);
+
           final result = await showDialog<Map<String, dynamic>>(
             context: context,
             builder: (_) => const AddTableDialog(),
           );
-          if (result != null && _branchId != null) {
+          if (result == null || !mounted) return;
+
+          // Superadmin: pakai branch yang dipilih di sidebar,
+          // fallback ke branch sendiri jika pilih "Semua"
+          final targetBranch = (_userRole == StaffRole.superadmin)
+              ? (_selectedBranchId ?? _branchId)
+              : _branchId;
+
+          if (targetBranch == null) {
+            messenger.showSnackBar(const SnackBar(
+              content: Text('❌ Pilih branch terlebih dahulu di sidebar'),
+              backgroundColor: Colors.red,
+            ));
+            return;
+          }
+
+          try {
             await Supabase.instance.client.from('restaurant_tables').insert({
-              'branch_id': _branchId,
+              'branch_id': targetBranch,
               'table_number': result['number'],
               'capacity': result['capacity'],
               'shape': result['shape'],
@@ -259,6 +278,22 @@ class _TableScreenState extends ConsumerState<TableScreen> {
               'position_x': 0,
               'position_y': 0,
             });
+            if (mounted) {
+              messenger.showSnackBar(SnackBar(
+                content: Text('✅ Meja ${result["number"]} berhasil ditambahkan'),
+                backgroundColor: const Color(0xFF4CAF50),
+              ));
+            }
+          } on PostgrestException catch (e) {
+            if (!mounted) return;
+            final isDuplicate = e.code == '23505';
+            messenger.showSnackBar(SnackBar(
+              content: Text(isDuplicate
+                ? '❌ Meja "${result["number"]}" sudah ada di branch ini'
+                : '❌ Gagal menambahkan meja: ${e.message}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ));
           }
         },
         backgroundColor: AppColors.accent,
