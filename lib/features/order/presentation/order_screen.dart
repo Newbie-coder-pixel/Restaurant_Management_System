@@ -92,7 +92,13 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       final activeStatuses = ['new', 'created', 'paid', 'preparing', 'ready', 'served'];
       var ordQuery = Supabase.instance.client
           .from('orders')
-          .select('*, restaurant_tables!orders_table_id_fkey(table_number), order_items(*)')
+          .select('''
+            id, branch_id, table_id, order_number,
+            status, source, order_type, customer_name,
+            discount_amount, notes, created_at, updated_at,
+            restaurant_tables!orders_table_id_fkey(table_number),
+            order_items(*)
+          ''')
           .inFilter('status', activeStatuses);
       if (!_isSuperAdmin) ordQuery = ordQuery.eq('branch_id', _branchId!);
       final ordRes = await ordQuery.order('created_at', ascending: false);
@@ -121,7 +127,14 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     try {
       var query = Supabase.instance.client
           .from('orders')
-          .select('*, restaurant_tables!orders_table_id_fkey(table_number), order_items(*, menu_items(name))');
+          .select('''
+            id, branch_id, table_id, order_number,
+            status, source, order_type, customer_name,
+            discount_amount, notes, created_at, updated_at,
+            total_amount,
+            restaurant_tables!orders_table_id_fkey(table_number),
+            order_items(*, menu_items(name))
+          ''');
       if (!_isSuperAdmin) query = query.eq('branch_id', _branchId!);
       if (_historyFilter == 'paid') {
         query = query.inFilter('status', ['paid', 'served']);
@@ -166,6 +179,27 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   bool _isQrOrder(OrderModel o) => o.orderType == 'qr_order';
+  bool _isAppOrder(OrderModel o) =>
+      o.orderType == 'app_order' || o.orderType == 'takeaway';
+
+  String _orderTypeLabel(OrderModel o) {
+    if (_isQrOrder(o)) return 'QR';
+    if (o.orderType == 'app_order') return 'App Order';
+    if (o.orderType == 'takeaway') return 'Takeaway';
+    return 'Staff';
+  }
+
+  Color _orderTypeBadgeColor(OrderModel o) {
+    if (_isQrOrder(o)) return const Color(0xFF7C3AED);
+    if (_isAppOrder(o)) return const Color(0xFF0F9D58);
+    return AppColors.primary;
+  }
+
+  IconData _orderTypeBadgeIcon(OrderModel o) {
+    if (_isQrOrder(o)) return Icons.qr_code_scanner;
+    if (_isAppOrder(o)) return Icons.smartphone_outlined;
+    return Icons.person_outline;
+  }
 
   Color _statusColor(OrderStatus s) {
     switch (s) {
@@ -532,7 +566,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     final color = _statusColor(o.status);
     final nextS = _nextStatus(o.status);
     final isUpdating = _updatingOrderId == o.id;
-    final isQr = _isQrOrder(o);
+    final badgeLabel = _orderTypeLabel(o);
+    final badgeColor = _orderTypeBadgeColor(o);
+    final badgeIcon = _orderTypeBadgeIcon(o);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -563,16 +599,15 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: isQr ? const Color(0xFF7C3AED).withValues(alpha: 0.08) : AppColors.primary.withValues(alpha: 0.08),
+                color: badgeColor.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: isQr ? const Color(0xFF7C3AED).withValues(alpha: 0.3) : AppColors.primary.withValues(alpha: 0.3))),
+                border: Border.all(color: badgeColor.withValues(alpha: 0.3))),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(isQr ? Icons.qr_code_scanner : Icons.person_outline, size: 9,
-                  color: isQr ? const Color(0xFF7C3AED) : AppColors.primary),
+                Icon(badgeIcon, size: 9, color: badgeColor),
                 const SizedBox(width: 3),
-                Text(isQr ? 'QR' : 'Staff', style: TextStyle(
+                Text(badgeLabel, style: TextStyle(
                   fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700,
-                  color: isQr ? const Color(0xFF7C3AED) : AppColors.primary)),
+                  color: badgeColor)),
               ])),
             const SizedBox(width: 6),
             Text('${o.items.length} item', style: AppTextStyles.caption),
@@ -795,6 +830,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                       final statusColor = _historyStatusColor(status);
                       final rawItems = o['order_items'] as List? ?? [];
                       final isQr = orderType == 'qr_order';
+                      final isApp = orderType == 'app_order' || orderType == 'takeaway';
+                      final histBadgeLabel = isQr ? 'QR' : isApp ? (orderType == 'takeaway' ? 'Takeaway' : 'App Order') : 'Staff';
+                      final histBadgeColor = isQr ? const Color(0xFF7C3AED) : isApp ? const Color(0xFF0F9D58) : AppColors.primary;
 
                       return Card(
                         elevation: 0,
@@ -814,11 +852,11 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                               decoration: BoxDecoration(
-                                color: isQr ? const Color(0xFF7C3AED).withValues(alpha: 0.10) : AppColors.primary.withValues(alpha: 0.10),
+                                color: histBadgeColor.withValues(alpha: 0.10),
                                 borderRadius: BorderRadius.circular(4)),
-                              child: Text(isQr ? 'QR' : 'Staff', style: TextStyle(
+                              child: Text(histBadgeLabel, style: TextStyle(
                                 fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700,
-                                color: isQr ? const Color(0xFF7C3AED) : AppColors.primary))),
+                                color: histBadgeColor))),
                           ]),
                           subtitle: Text(_formatDate(o['created_at'] as String?), style: AppTextStyles.caption),
                           trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
