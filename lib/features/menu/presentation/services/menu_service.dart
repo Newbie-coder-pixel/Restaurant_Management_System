@@ -3,28 +3,37 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../models/menu_model.dart';
+import '../../../../shared/models/menu_model.dart';
 
 class MenuService {
   final SupabaseClient _client;
-  static const String _tableName = 'menus';
+  static const String _itemsTable = 'menu_items';
+  static const String _categoriesTable = 'menu_categories';
   static const String _bucketName = 'menu-images';
 
   MenuService(this._client);
 
   // ─── FETCH ────────────────────────────────────────────────────────────────
 
-  /// Ambil semua menu, diurutkan berdasarkan kategori lalu nama.
-  Future<List<Menu>> fetchMenus() async {
+  /// Ambil semua menu items dari semua branch (untuk admin view global).
+  Future<List<MenuItem>> fetchMenus({String? branchId}) async {
     try {
-      final response = await _client
-          .from(_tableName)
+      var query = _client
+          .from(_itemsTable)
           .select()
-          .order('category', ascending: true)
           .order('name', ascending: true);
 
+      if (branchId != null) {
+        query = _client
+            .from(_itemsTable)
+            .select()
+            .eq('branch_id', branchId)
+            .order('name', ascending: true);
+      }
+
+      final response = await query;
       return (response as List<dynamic>)
-          .map((item) => Menu.fromMap(item as Map<String, dynamic>))
+          .map((item) => MenuItem.fromJson(item as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
       throw MenuServiceException('Gagal memuat menu: ${e.message}');
@@ -33,17 +42,44 @@ class MenuService {
     }
   }
 
+  /// Ambil semua kategori, opsional filter per branch.
+  Future<List<MenuCategory>> fetchCategories({String? branchId}) async {
+    try {
+      var query = _client
+          .from(_categoriesTable)
+          .select()
+          .eq('is_active', true)
+          .order('sort_order', ascending: true);
+
+      if (branchId != null) {
+        query = _client
+            .from(_categoriesTable)
+            .select()
+            .eq('branch_id', branchId)
+            .eq('is_active', true)
+            .order('sort_order', ascending: true);
+      }
+
+      final response = await query;
+      return (response as List<dynamic>)
+          .map((item) => MenuCategory.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw MenuServiceException('Gagal memuat kategori: ${e.message}');
+    }
+  }
+
   // ─── CREATE ───────────────────────────────────────────────────────────────
 
-  Future<Menu> addMenu(Menu menu) async {
+  Future<MenuItem> addMenu(MenuItem item) async {
     try {
       final response = await _client
-          .from(_tableName)
-          .insert(menu.toInsertMap())
+          .from(_itemsTable)
+          .insert(item.toInsertMap())
           .select()
           .single();
 
-      return Menu.fromMap(response);
+      return MenuItem.fromJson(response);
     } on PostgrestException catch (e) {
       throw MenuServiceException('Gagal menambahkan menu: ${e.message}');
     }
@@ -51,16 +87,16 @@ class MenuService {
 
   // ─── UPDATE ───────────────────────────────────────────────────────────────
 
-  Future<Menu> updateMenu(Menu menu) async {
+  Future<MenuItem> updateMenu(MenuItem item) async {
     try {
       final response = await _client
-          .from(_tableName)
-          .update(menu.toInsertMap())
-          .eq('id', menu.id)
+          .from(_itemsTable)
+          .update(item.toInsertMap())
+          .eq('id', item.id)
           .select()
           .single();
 
-      return Menu.fromMap(response);
+      return MenuItem.fromJson(response);
     } on PostgrestException catch (e) {
       throw MenuServiceException('Gagal mengupdate menu: ${e.message}');
     }
@@ -68,12 +104,9 @@ class MenuService {
 
   Future<void> toggleAvailability(String id, bool status) async {
     try {
-      final newStatus =
-          status ? MenuStatus.available.name : MenuStatus.outOfStock.name;
-
-      await _client.from(_tableName).update({
+      await _client.from(_itemsTable).update({
         'is_available': status,
-        'status': newStatus,
+        'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', id);
     } on PostgrestException catch (e) {
       throw MenuServiceException('Gagal mengubah status menu: ${e.message}');
@@ -87,7 +120,7 @@ class MenuService {
       if (imageUrl != null && imageUrl.isNotEmpty) {
         await _deleteImageByUrl(imageUrl);
       }
-      await _client.from(_tableName).delete().eq('id', id);
+      await _client.from(_itemsTable).delete().eq('id', id);
     } on PostgrestException catch (e) {
       throw MenuServiceException('Gagal menghapus menu: ${e.message}');
     }
@@ -95,32 +128,22 @@ class MenuService {
 
   // ─── STORAGE ──────────────────────────────────────────────────────────────
 
-  /// Upload gambar menu. Mendukung File (mobile) dan Uint8List (web/file_picker).
   Future<String> uploadImage(dynamic image) async {
     try {
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_menu_image';
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_menu_image';
       final filePath = 'public/$fileName';
 
       if (image is File) {
-        // Mobile — dart:io File
         await _client.storage.from(_bucketName).upload(
               filePath,
               image,
-              fileOptions: const FileOptions(
-                cacheControl: '3600',
-                upsert: false,
-              ),
+              fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
             );
       } else if (image is Uint8List) {
-        // Web / file_picker withData: true
         await _client.storage.from(_bucketName).uploadBinary(
               filePath,
               image,
-              fileOptions: const FileOptions(
-                cacheControl: '3600',
-                upsert: false,
-              ),
+              fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
             );
       } else {
         throw const MenuServiceException('Tipe file tidak didukung');
@@ -141,9 +164,7 @@ class MenuService {
         final filePath = segments.sublist(bucketIndex + 1).join('/');
         await _client.storage.from(_bucketName).remove([filePath]);
       }
-    } catch (_) {
-      // Tidak perlu throw — gambar mungkin sudah tidak ada
-    }
+    } catch (_) {}
   }
 
   // ─── REALTIME ─────────────────────────────────────────────────────────────
@@ -154,23 +175,23 @@ class MenuService {
     required void Function(Map<String, dynamic>) onDelete,
   }) {
     return _client
-        .channel('menu_changes')
+        .channel('menu_items_changes')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
-          table: _tableName,
+          table: _itemsTable,
           callback: (payload) => onInsert(payload.newRecord),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
-          table: _tableName,
+          table: _itemsTable,
           callback: (payload) => onUpdate(payload.newRecord),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.delete,
           schema: 'public',
-          table: _tableName,
+          table: _itemsTable,
           callback: (payload) => onDelete(payload.oldRecord),
         )
         .subscribe();
@@ -184,5 +205,5 @@ class MenuServiceException implements Exception {
   const MenuServiceException(this.message);
 
   @override
-  String toString() => 'MenuServiceException: $message'; 
+  String toString() => 'MenuServiceException: $message';
 }

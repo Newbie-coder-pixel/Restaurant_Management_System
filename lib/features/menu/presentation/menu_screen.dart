@@ -2,10 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/menu_model.dart';
 import '../providers/menu_provider.dart';
 import 'widgets/menu_card.dart';
 import 'widgets/add_menu_form.dart';
+
+// Ganti dengan branch ID yang aktif / sedang dikelola admin.
+// Idealnya ini diambil dari auth/session provider.
+const String _activeBranchId = '27fb221d-e59c-464a-86fc-9c7f19627beb';
 
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
@@ -28,7 +31,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const AddMenuForm(),
+      builder: (_) => const AddMenuForm(branchId: _activeBranchId),
     );
   }
 
@@ -156,7 +159,8 @@ class _SearchFilterBar extends ConsumerWidget {
                       : const SizedBox.shrink(),
                 ),
                 filled: true,
-                fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                fillColor:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -208,89 +212,123 @@ class _SearchFilterBar extends ConsumerWidget {
 class _CategoryTabs extends ConsumerWidget {
   const _CategoryTabs();
 
-  static const _categories = [
-    (null, '🍽️', 'Semua'),
-    (MenuCategory.food, '🍛', 'Makanan'),
-    (MenuCategory.drinks, '🥤', 'Minuman'),
-    (MenuCategory.dessert, '🍰', 'Dessert'),
-    (MenuCategory.snack, '🍟', 'Snack'),
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final filter = ref.watch(menuFilterProvider);
-    final counts = ref.watch(menuCountByCategoryProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
+    // Ambil kategori dari database berdasarkan branch aktif
+    final categoriesAsync =
+        ref.watch(menuCategoriesProvider(_activeBranchId));
+    final counts = ref.watch(menuCountByCategoryProvider);
     final totalCount = counts.values.fold(0, (a, b) => a + b);
 
     return SizedBox(
       height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final (cat, emoji, label) = _categories[i];
-          final isSelected = filter.category == cat;
-          final count = cat == null ? totalCount : (counts[cat] ?? 0);
-
-          return GestureDetector(
-            onTap: () => ref.read(menuFilterProvider.notifier).update(
-                  (s) => cat == null
-                      ? s.copyWith(clearCategory: true)
-                      : s.copyWith(category: cat),
-                ),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? colorScheme.primary
-                    : colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Row(
-                children: [
-                  Text(emoji, style: const TextStyle(fontSize: 14)),
-                  const SizedBox(width: 4),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: isSelected
-                          ? colorScheme.onPrimary
-                          : colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? colorScheme.onPrimary.withValues(alpha: 0.25)
-                          : colorScheme.onSurface.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$count',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: isSelected
-                            ? colorScheme.onPrimary
-                            : colorScheme.onSurface,
+      child: categoriesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => const SizedBox.shrink(),
+        data: (categories) {
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: categories.length + 1, // +1 untuk "Semua"
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              // Item pertama = "Semua"
+              if (i == 0) {
+                final isSelected = filter.categoryId == null;
+                return _categoryChip(
+                  context: context,
+                  colorScheme: colorScheme,
+                  emoji: '🍽️',
+                  label: 'Semua',
+                  count: totalCount,
+                  isSelected: isSelected,
+                  onTap: () => ref.read(menuFilterProvider.notifier).update(
+                        (s) => s.copyWith(clearCategory: true),
                       ),
+                );
+              }
+
+              final cat = categories[i - 1];
+              final isSelected = filter.categoryId == cat.id;
+              final count = counts[cat.id] ?? 0;
+
+              return _categoryChip(
+                context: context,
+                colorScheme: colorScheme,
+                emoji: '🍴',
+                label: cat.name,
+                count: count,
+                isSelected: isSelected,
+                onTap: () => ref.read(menuFilterProvider.notifier).update(
+                      (s) => s.copyWith(categoryId: cat.id),
                     ),
-                  ),
-                ],
-              ),
-            ),
+              );
+            },
           );
         },
+      ),
+    );
+  }
+
+  Widget _categoryChip({
+    required BuildContext context,
+    required ColorScheme colorScheme,
+    required String emoji,
+    required String label,
+    required int count,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? colorScheme.primary
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color:
+                    isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? colorScheme.onPrimary.withValues(alpha: 0.25)
+                    : colorScheme.onSurface.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? colorScheme.onPrimary
+                      : colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

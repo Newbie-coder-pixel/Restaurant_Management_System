@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/menu_model.dart';
+import '../../../../shared/models/menu_model.dart';
 import '../presentation/services/menu_service.dart';
 
 // ─── SERVICE PROVIDER ─────────────────────────────────────────────────────────
@@ -14,26 +14,30 @@ final menuServiceProvider = Provider<MenuService>((ref) {
 // ─── FILTER STATE ─────────────────────────────────────────────────────────────
 
 class MenuFilter {
-  final MenuCategory? category;
+  final String? categoryId;
   final String searchQuery;
   final bool? showAvailableOnly;
+  final String? branchId;
 
   const MenuFilter({
-    this.category,
+    this.categoryId,
     this.searchQuery = '',
     this.showAvailableOnly,
+    this.branchId,
   });
 
   MenuFilter copyWith({
-    MenuCategory? category,
+    String? categoryId,
     String? searchQuery,
     bool? showAvailableOnly,
+    String? branchId,
     bool clearCategory = false,
   }) {
     return MenuFilter(
-      category: clearCategory ? null : (category ?? this.category),
+      categoryId: clearCategory ? null : (categoryId ?? this.categoryId),
       searchQuery: searchQuery ?? this.searchQuery,
       showAvailableOnly: showAvailableOnly ?? this.showAvailableOnly,
+      branchId: branchId ?? this.branchId,
     );
   }
 }
@@ -43,40 +47,36 @@ final menuFilterProvider =
 
 // ─── MENU NOTIFIER ────────────────────────────────────────────────────────────
 
-class MenuNotifier extends AsyncNotifier<List<Menu>> {
+class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
   late MenuService _service;
   RealtimeChannel? _realtimeChannel;
 
   @override
-  Future<List<Menu>> build() async {
+  Future<List<MenuItem>> build() async {
     _service = ref.watch(menuServiceProvider);
-
     _setupRealtimeSubscription();
-
     ref.onDispose(() {
       _realtimeChannel?.unsubscribe();
     });
-
     return _service.fetchMenus();
   }
 
   void _setupRealtimeSubscription() {
     _realtimeChannel = _service.subscribeToMenuChanges(
       onInsert: (newRecord) {
-        final newMenu = Menu.fromMap(newRecord);
-        state = state.whenData((menus) => [...menus, newMenu]);
+        final newItem = MenuItem.fromJson(newRecord);
+        state = state.whenData((items) => [...items, newItem]);
       },
       onUpdate: (updatedRecord) {
-        final updatedMenu = Menu.fromMap(updatedRecord);
-        state = state.whenData((menus) => menus
-            .map((m) => m.id == updatedMenu.id ? updatedMenu : m)
-            .toList());
+        final updatedItem = MenuItem.fromJson(updatedRecord);
+        state = state.whenData((items) =>
+            items.map((m) => m.id == updatedItem.id ? updatedItem : m).toList());
       },
       onDelete: (deletedRecord) {
         final deletedId = deletedRecord['id'] as String?;
         if (deletedId != null) {
           state = state.whenData(
-              (menus) => menus.where((m) => m.id != deletedId).toList());
+              (items) => items.where((m) => m.id != deletedId).toList());
         }
       },
     );
@@ -92,42 +92,31 @@ class MenuNotifier extends AsyncNotifier<List<Menu>> {
   Future<bool> toggleAvailability(String id, bool currentStatus) async {
     final newStatus = !currentStatus;
 
-    // Optimistic update
-    state = state.whenData((menus) => menus
-        .map((m) => m.id == id
-            ? m.copyWith(
-                isAvailable: newStatus,
-                status:
-                    newStatus ? MenuStatus.available : MenuStatus.outOfStock,
-              )
-            : m)
+    state = state.whenData((items) => items
+        .map((m) => m.id == id ? m.copyWith(isAvailable: newStatus) : m)
         .toList());
 
     try {
       await _service.toggleAvailability(id, newStatus);
       return true;
     } catch (e) {
-      // Rollback on error
-      state = state.whenData((menus) => menus
-          .map((m) => m.id == id
-              ? m.copyWith(
-                  isAvailable: currentStatus,
-                  status: currentStatus
-                      ? MenuStatus.available
-                      : MenuStatus.outOfStock,
-                )
-              : m)
+      // Rollback
+      state = state.whenData((items) => items
+          .map((m) => m.id == id ? m.copyWith(isAvailable: currentStatus) : m)
           .toList());
       return false;
     }
   }
 
   Future<bool> addMenu({
+    required String branchId,
     required String name,
-    required String description,
+    required String? description,
     required double price,
-    required MenuCategory category,
-    dynamic imageFile, // File? — dynamic agar kompatibel web & mobile
+    String? categoryId,
+    dynamic imageFile,
+    bool isSeasonal = false,
+    int preparationTimeMinutes = 15,
   }) async {
     try {
       String? imageUrl;
@@ -135,19 +124,20 @@ class MenuNotifier extends AsyncNotifier<List<Menu>> {
         imageUrl = await _service.uploadImage(imageFile);
       }
 
-      final menu = Menu(
+      final item = MenuItem(
         id: '',
+        branchId: branchId,
+        categoryId: categoryId,
         name: name,
         description: description,
         price: price,
         imageUrl: imageUrl,
-        category: category,
         isAvailable: true,
-        status: MenuStatus.available,
+        isSeasonal: isSeasonal,
+        preparationTimeMinutes: preparationTimeMinutes,
       );
 
-      await _service.addMenu(menu);
-      // Realtime akan handle update state otomatis
+      await _service.addMenu(item);
       return true;
     } catch (e) {
       return false;
@@ -155,17 +145,15 @@ class MenuNotifier extends AsyncNotifier<List<Menu>> {
   }
 
   Future<bool> updateMenu({
-    required Menu menu,
-    dynamic newImageFile, // File? — dynamic agar kompatibel web & mobile
+    required MenuItem item,
+    dynamic newImageFile,
   }) async {
     try {
-      String? imageUrl = menu.imageUrl;
+      String? imageUrl = item.imageUrl;
       if (newImageFile != null) {
         imageUrl = await _service.uploadImage(newImageFile);
       }
-
-      final updatedMenu = menu.copyWith(imageUrl: imageUrl);
-      await _service.updateMenu(updatedMenu);
+      await _service.updateMenu(item.copyWith(imageUrl: imageUrl));
       return true;
     } catch (e) {
       return false;
@@ -173,29 +161,27 @@ class MenuNotifier extends AsyncNotifier<List<Menu>> {
   }
 
   Future<bool> deleteMenu(String id) async {
-    final menu = state.valueOrNull?.firstWhere(
+    final item = state.valueOrNull?.firstWhere(
       (m) => m.id == id,
-      orElse: () => const Menu(
+      orElse: () => const MenuItem(
         id: '',
+        branchId: '',
         name: '',
-        description: '',
         price: 0,
-        category: MenuCategory.food,
         isAvailable: true,
+        isSeasonal: false,
+        preparationTimeMinutes: 15,
       ),
     );
 
-    // Optimistic remove
-    state =
-        state.whenData((menus) => menus.where((m) => m.id != id).toList());
+    state = state.whenData((items) => items.where((m) => m.id != id).toList());
 
     try {
-      await _service.deleteMenu(id, imageUrl: menu?.imageUrl);
+      await _service.deleteMenu(id, imageUrl: item?.imageUrl);
       return true;
     } catch (e) {
-      // Rollback
-      if (menu != null && menu.id.isNotEmpty) {
-        state = state.whenData((menus) => [...menus, menu]);
+      if (item != null && item.id.isNotEmpty) {
+        state = state.whenData((items) => [...items, item]);
       }
       return false;
     }
@@ -203,20 +189,24 @@ class MenuNotifier extends AsyncNotifier<List<Menu>> {
 }
 
 final menuProvider =
-    AsyncNotifierProvider<MenuNotifier, List<Menu>>(MenuNotifier.new);
+    AsyncNotifierProvider<MenuNotifier, List<MenuItem>>(MenuNotifier.new);
 
 // ─── DERIVED PROVIDERS ────────────────────────────────────────────────────────
 
-/// Menu yang sudah difilter berdasarkan kategori, search query, dan availabilitas.
-final filteredMenuProvider = Provider<AsyncValue<List<Menu>>>((ref) {
+final filteredMenuProvider = Provider<AsyncValue<List<MenuItem>>>((ref) {
   final menusAsync = ref.watch(menuProvider);
   final filter = ref.watch(menuFilterProvider);
 
-  return menusAsync.whenData((menus) {
-    var result = menus;
+  return menusAsync.whenData((items) {
+    var result = items;
 
-    if (filter.category != null) {
-      result = result.where((m) => m.category == filter.category).toList();
+    if (filter.branchId != null) {
+      result = result.where((m) => m.branchId == filter.branchId).toList();
+    }
+
+    if (filter.categoryId != null) {
+      result =
+          result.where((m) => m.categoryId == filter.categoryId).toList();
     }
 
     if (filter.searchQuery.isNotEmpty) {
@@ -224,7 +214,7 @@ final filteredMenuProvider = Provider<AsyncValue<List<Menu>>>((ref) {
       result = result
           .where((m) =>
               m.name.toLowerCase().contains(query) ||
-              m.description.toLowerCase().contains(query))
+              (m.description?.toLowerCase().contains(query) ?? false))
           .toList();
     }
 
@@ -236,13 +226,12 @@ final filteredMenuProvider = Provider<AsyncValue<List<Menu>>>((ref) {
   });
 });
 
-/// Jumlah menu per kategori (dari data mentah, bukan filtered).
-final menuCountByCategoryProvider =
-    Provider<Map<MenuCategory, int>>((ref) {
-  final menus = ref.watch(menuProvider).valueOrNull ?? [];
-  final counts = <MenuCategory, int>{};
-  for (final m in menus) {
-    counts[m.category] = (counts[m.category] ?? 0) + 1;
+/// Jumlah menu per categoryId.
+final menuCountByCategoryProvider = Provider<Map<String?, int>>((ref) {
+  final items = ref.watch(menuProvider).valueOrNull ?? [];
+  final counts = <String?, int>{};
+  for (final m in items) {
+    counts[m.categoryId] = (counts[m.categoryId] ?? 0) + 1;
   }
   return counts;
 });

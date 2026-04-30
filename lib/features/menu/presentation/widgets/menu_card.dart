@@ -2,12 +2,15 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/menu_model.dart';
+import '../../../../shared/models/menu_model.dart';
 import '../../providers/menu_provider.dart';
 import 'add_menu_form.dart';
 
+// Harus sama dengan yang di menu_screen.dart
+const String _activeBranchId = '27fb221d-e59c-464a-86fc-9c7f19627beb';
+
 class MenuCard extends ConsumerStatefulWidget {
-  final Menu menu;
+  final MenuItem menu;
 
   const MenuCard({super.key, required this.menu});
 
@@ -70,7 +73,10 @@ class _MenuCardState extends ConsumerState<MenuCard>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddMenuForm(existingMenu: widget.menu),
+      builder: (_) => AddMenuForm(
+        existingMenu: widget.menu,
+        branchId: _activeBranchId,
+      ),
     );
   }
 
@@ -101,21 +107,16 @@ class _MenuCardState extends ConsumerState<MenuCard>
     );
   }
 
-  Color get _statusColor {
-    return switch (widget.menu.status) {
-      MenuStatus.available => Colors.green,
-      MenuStatus.outOfStock => Colors.red,
-      MenuStatus.seasonal => Colors.orange,
-    };
-  }
+  // Karena MenuItem tidak punya status enum, kita derive dari isAvailable
+  Color get _statusColor =>
+      widget.menu.isAvailable ? Colors.green : Colors.red;
 
-  String get _statusLabel {
-    return switch (widget.menu.status) {
-      MenuStatus.available => 'Tersedia',
-      MenuStatus.outOfStock => 'Habis',
-      MenuStatus.seasonal => 'Musiman',
-    };
-  }
+  String get _statusLabel =>
+      widget.menu.isSeasonal
+          ? 'Musiman'
+          : widget.menu.isAvailable
+              ? 'Tersedia'
+              : 'Habis';
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +151,8 @@ class _MenuCardState extends ConsumerState<MenuCard>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Image ──
-              _MenuImage(imageUrl: menu.imageUrl, isAvailable: menu.isAvailable),
+              _MenuImage(
+                  imageUrl: menu.imageUrl, isAvailable: menu.isAvailable),
 
               // ── Content ──
               Expanded(
@@ -181,9 +183,10 @@ class _MenuCardState extends ConsumerState<MenuCard>
                       // Description
                       Expanded(
                         child: Text(
-                          menu.description,
+                          menu.description ?? '',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurface.withValues(alpha: 0.6),
+                            color: colorScheme.onSurface
+                                .withValues(alpha: 0.6),
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -292,7 +295,10 @@ class _PlaceholderImage extends StatelessWidget {
       child: Icon(
         Icons.restaurant,
         size: 36,
-        color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+        color: Theme.of(context)
+            .colorScheme
+            .onSurfaceVariant
+            .withValues(alpha: 0.4),
       ),
     );
   }
@@ -399,7 +405,9 @@ class _AvailabilityToggle extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: isAvailable ? Colors.green.shade700 : Colors.red.shade700,
+                color: isAvailable
+                    ? Colors.green.shade700
+                    : Colors.red.shade700,
               ),
             ),
           ],

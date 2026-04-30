@@ -7,14 +7,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import '../../models/menu_model.dart';
+import '../../../../shared/models/menu_model.dart';
 import '../../providers/menu_provider.dart';
 
-class AddMenuForm extends ConsumerStatefulWidget {
-  /// Jika diisi, form berfungsi sebagai edit mode.
-  final Menu? existingMenu;
+// Provider untuk fetch kategori berdasarkan branchId
+final menuCategoriesProvider =
+    FutureProvider.family<List<MenuCategory>, String>((ref, branchId) async {
+  final service = ref.watch(menuServiceProvider);
+  return service.fetchCategories(branchId: branchId);
+});
 
-  const AddMenuForm({super.key, this.existingMenu});
+class AddMenuForm extends ConsumerStatefulWidget {
+  final MenuItem? existingMenu;
+  final String branchId; // wajib diisi dari parent
+
+  const AddMenuForm({
+    super.key,
+    this.existingMenu,
+    required this.branchId,
+  });
 
   @override
   ConsumerState<AddMenuForm> createState() => _AddMenuFormState();
@@ -26,12 +37,9 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
   late final TextEditingController _descCtrl;
   late final TextEditingController _priceCtrl;
 
-  MenuCategory _selectedCategory = MenuCategory.food;
-
-  // Mobile: gunakan File; Web: gunakan Uint8List
+  String? _selectedCategoryId;
   File? _selectedImageFile;
   Uint8List? _selectedImageBytes;
-
   bool _isLoading = false;
   String? _imageError;
 
@@ -46,7 +54,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     _priceCtrl = TextEditingController(
       text: menu?.price.toStringAsFixed(0) ?? '',
     );
-    if (menu != null) _selectedCategory = menu.category;
+    if (menu != null) _selectedCategoryId = menu.categoryId;
   }
 
   @override
@@ -60,7 +68,6 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
   Future<void> _pickImage() async {
     try {
       if (kIsWeb) {
-        // Web: gunakan file_picker
         final result = await FilePicker.platform.pickFiles(
           type: FileType.image,
           withData: true,
@@ -76,11 +83,9 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
           }
         }
       } else {
-        // Mobile: gunakan image_picker
         final picker = ImagePicker();
         final source = await _showImageSourcePicker();
         if (source == null) return;
-
         final picked = await picker.pickImage(
           source: source,
           imageQuality: 80,
@@ -112,8 +117,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text('Pilih Sumber Gambar',
-                  style:
-                      TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 12),
               ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.camera_alt)),
@@ -121,8 +125,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
               ListTile(
-                leading:
-                    const CircleAvatar(child: Icon(Icons.photo_library)),
+                leading: const CircleAvatar(child: Icon(Icons.photo_library)),
                 title: const Text('Galeri Foto'),
                 onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
@@ -135,7 +138,6 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
 
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     final price = double.tryParse(
@@ -143,28 +145,26 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
         ) ??
         0;
 
-    // Tentukan image yang akan diupload (File atau Uint8List)
-    final dynamic imageToUpload =
-        _selectedImageFile ?? _selectedImageBytes;
-
+    final dynamic imageToUpload = _selectedImageFile ?? _selectedImageBytes;
     bool success;
 
     if (_isEdit) {
       success = await ref.read(menuProvider.notifier).updateMenu(
-            menu: widget.existingMenu!.copyWith(
+            item: widget.existingMenu!.copyWith(
               name: _nameCtrl.text.trim(),
               description: _descCtrl.text.trim(),
               price: price,
-              category: _selectedCategory,
+              categoryId: _selectedCategoryId,
             ),
             newImageFile: imageToUpload,
           );
     } else {
       success = await ref.read(menuProvider.notifier).addMenu(
+            branchId: widget.branchId,
             name: _nameCtrl.text.trim(),
             description: _descCtrl.text.trim(),
             price: price,
-            category: _selectedCategory,
+            categoryId: _selectedCategoryId,
             imageFile: imageToUpload,
           );
     }
@@ -197,6 +197,8 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final mq = MediaQuery.of(context);
+    final categoriesAsync =
+        ref.watch(menuCategoriesProvider(widget.branchId));
 
     return Container(
       height: mq.size.height * 0.92,
@@ -236,8 +238,8 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
           const Divider(height: 24),
           Expanded(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                  20, 0, 20, mq.viewInsets.bottom + 24),
+              padding:
+                  EdgeInsets.fromLTRB(20, 0, 20, mq.viewInsets.bottom + 24),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -256,45 +258,40 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
 
                     // Name
                     const _FormLabel('Nama Menu'),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _nameCtrl,
-                      decoration:
-                          _inputDecoration('Contoh: Nasi Goreng Spesial'),
-                      textCapitalization: TextCapitalization.words,
-                      validator: (v) => (v?.trim().isEmpty ?? true)
-                          ? 'Nama wajib diisi'
+                      decoration: _inputDecoration('Contoh: Nasi Goreng Spesial'),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Nama menu tidak boleh kosong'
                           : null,
                     ),
                     const SizedBox(height: 16),
 
                     // Description
                     const _FormLabel('Deskripsi'),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _descCtrl,
                       decoration:
-                          _inputDecoration('Ceritakan menu ini...'),
+                          _inputDecoration('Deskripsi singkat menu...'),
                       maxLines: 3,
-                      textCapitalization: TextCapitalization.sentences,
                     ),
                     const SizedBox(height: 16),
 
                     // Price
-                    const _FormLabel('Harga'),
-                    const SizedBox(height: 6),
+                    const _FormLabel('Harga (Rp)'),
+                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _priceCtrl,
-                      decoration: _inputDecoration('Contoh: 25000').copyWith(
-                        prefixText: 'Rp ',
-                      ),
+                      decoration: _inputDecoration('Contoh: 25000'),
                       keyboardType: TextInputType.number,
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) {
-                          return 'Harga wajib diisi';
+                          return 'Harga tidak boleh kosong';
                         }
-                        final num = double.tryParse(
-                            v.replaceAll(RegExp(r'[^0-9]'), ''));
+                        final num =
+                            double.tryParse(v.replaceAll(RegExp(r'[^0-9]'), ''));
                         if (num == null || num <= 0) {
                           return 'Harga tidak valid';
                         }
@@ -306,20 +303,29 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     // Category
                     const _FormLabel('Kategori'),
                     const SizedBox(height: 8),
-                    _CategorySelector(
-                      selected: _selectedCategory,
-                      onChanged: (c) =>
-                          setState(() => _selectedCategory = c),
+                    categoriesAsync.when(
+                      loading: () => const Center(
+                          child: CircularProgressIndicator()),
+                      error: (e, _) => Text('Gagal memuat kategori: $e',
+                          style: const TextStyle(color: Colors.red)),
+                      data: (categories) => _CategorySelector(
+                        categories: categories,
+                        selectedId: _selectedCategoryId,
+                        onChanged: (id) =>
+                            setState(() => _selectedCategoryId = id),
+                      ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
-                    // Submit
+                    // Submit Button
                     SizedBox(
                       width: double.infinity,
                       height: 52,
-                      child: FilledButton(
+                      child: ElevatedButton(
                         onPressed: _isLoading ? null : _handleSubmit,
-                        style: FilledButton.styleFrom(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colorScheme.primary,
+                          foregroundColor: colorScheme.onPrimary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -332,12 +338,9 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                                     color: Colors.white, strokeWidth: 2.5),
                               )
                             : Text(
-                                _isEdit
-                                    ? 'Simpan Perubahan'
-                                    : 'Tambahkan Menu',
+                                _isEdit ? 'Simpan Perubahan' : 'Tambahkan Menu',
                                 style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700),
+                                    fontSize: 16, fontWeight: FontWeight.w700),
                               ),
                       ),
                     ),
@@ -355,8 +358,10 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     return InputDecoration(
       hintText: hint,
       filled: true,
-      fillColor:
-          Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      fillColor: Theme.of(context)
+          .colorScheme
+          .surfaceContainerHighest
+          .withValues(alpha: 0.5),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -396,6 +401,58 @@ class _FormLabel extends StatelessWidget {
   }
 }
 
+class _CategorySelector extends StatelessWidget {
+  final List<MenuCategory> categories;
+  final String? selectedId;
+  final ValueChanged<String?> onChanged;
+
+  const _CategorySelector({
+    required this.categories,
+    required this.selectedId,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (categories.isEmpty) {
+      return const Text('Belum ada kategori tersedia.',
+          style: TextStyle(color: Colors.grey));
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: categories.map((cat) {
+        final isSelected = selectedId == cat.id;
+        return GestureDetector(
+          onTap: () => onChanged(cat.id),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? colorScheme.primary
+                  : colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              cat.name,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: isSelected
+                    ? colorScheme.onPrimary
+                    : colorScheme.onSurface,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
 class _ImagePickerSection extends StatelessWidget {
   final File? selectedImageFile;
   final Uint8List? selectedImageBytes;
@@ -414,23 +471,19 @@ class _ImagePickerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
     Widget imageContent;
 
     if (selectedImageBytes != null) {
-      // Web preview
       imageContent = Stack(fit: StackFit.expand, children: [
         Image.memory(selectedImageBytes!, fit: BoxFit.cover),
         const Positioned(bottom: 8, right: 8, child: _EditBadge()),
       ]);
     } else if (selectedImageFile != null) {
-      // Mobile preview
       imageContent = Stack(fit: StackFit.expand, children: [
         Image.file(selectedImageFile!, fit: BoxFit.cover),
         const Positioned(bottom: 8, right: 8, child: _EditBadge()),
       ]);
     } else if (existingImageUrl != null && existingImageUrl!.isNotEmpty) {
-      // Existing image from Supabase
       imageContent = Stack(fit: StackFit.expand, children: [
         Image.network(existingImageUrl!, fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const _EmptyImagePlaceholder()),
@@ -470,26 +523,25 @@ class _EmptyImagePlaceholder extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(
-          Icons.add_photo_alternate_outlined,
-          size: 40,
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-        ),
+        Icon(Icons.add_photo_alternate_outlined,
+            size: 40,
+            color:
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
         const SizedBox(height: 8),
-        Text(
-          'Tambah Foto Menu',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Text('Tambah Foto Menu',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            )),
         const SizedBox(height: 4),
         Text(
           kIsWeb ? 'Ketuk untuk memilih file' : 'Ketuk untuk memilih',
           style: TextStyle(
             fontSize: 12,
-            color:
-                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.5),
           ),
         ),
       ],
@@ -513,69 +565,9 @@ class _EditBadge extends StatelessWidget {
         children: [
           Icon(Icons.edit, color: Colors.white, size: 12),
           SizedBox(width: 4),
-          Text('Ganti',
-              style: TextStyle(color: Colors.white, fontSize: 11)),
+          Text('Ganti', style: TextStyle(color: Colors.white, fontSize: 11)),
         ],
       ),
-    );
-  }
-}
-
-class _CategorySelector extends StatelessWidget {
-  final MenuCategory selected;
-  final ValueChanged<MenuCategory> onChanged;
-
-  const _CategorySelector(
-      {required this.selected, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    const categories = [
-      (MenuCategory.food, '🍛', 'Makanan'),
-      (MenuCategory.drinks, '🥤', 'Minuman'),
-      (MenuCategory.dessert, '🍰', 'Dessert'),
-      (MenuCategory.snack, '🍟', 'Snack'),
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: categories.map((item) {
-        final (category, emoji, label) = item;
-        final isSelected = selected == category;
-        return GestureDetector(
-          onTap: () => onChanged(category),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? colorScheme.primary
-                  : colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(emoji, style: const TextStyle(fontSize: 16)),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: isSelected
-                        ? colorScheme.onPrimary
-                        : colorScheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 }
