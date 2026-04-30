@@ -653,8 +653,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }) async {
     final staff = ref.read(currentStaffProvider);
 
-    // Flow pembayaran baru: semua order (QR maupun Staff) bayar setelah makan.
-    // Status selalu → 'paid' setelah pembayaran dikonfirmasi kasir.
+    // Untuk superadmin: ambil branch_id dari order itu sendiri
+    final effectiveBranchId = _isSuperAdmin ? order.branchId : _branchId;
+
     await Supabase.instance.client.from('orders').update({
       'status': 'paid',
       'payment_status': 'paid',
@@ -664,7 +665,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
     await Supabase.instance.client.from('payments').insert({
       'order_id': order.id,
-      'branch_id': _branchId,
+      'branch_id': effectiveBranchId,
       'method': method,
       'amount': order.totalAmount,
       'cash_received': cashReceived,
