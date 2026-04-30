@@ -47,7 +47,14 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     try {
       var query = Supabase.instance.client
           .from('orders')
-          .select('*, restaurant_tables(table_number), order_items(*)')
+          .select('''
+            id, branch_id, table_id, order_number,
+            status, source, order_type, customer_name,
+            discount_amount, notes, created_at, updated_at,
+            payment_status,
+            restaurant_tables(table_number),
+            order_items(*)
+          ''')
           .inFilter('status', ['ready', 'served'])
           .inFilter('payment_status', ['pending', 'unpaid']);
       if (!_isSuperAdmin) query = query.eq('branch_id', _branchId!);
@@ -751,11 +758,24 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 itemBuilder: (_, i) {
                   final o = _orders[i];
                   final isSelected = _selected?.id == o.id;
-                  // Badge: QR Order vs Staff Order
+                  // Badge: QR / App Order / Staff
                   final isQrOrder = o.orderType == 'qr_order';
+                  final isAppOrder = o.orderType == 'app_order' || o.orderType == 'takeaway';
                   final badgeColor = isQrOrder
                       ? const Color(0xFF7C3AED)
-                      : AppColors.primary;
+                      : isAppOrder
+                          ? const Color(0xFF0F9D58)
+                          : AppColors.primary;
+                  final badgeIcon = isQrOrder
+                      ? Icons.qr_code_scanner
+                      : isAppOrder
+                          ? Icons.smartphone_outlined
+                          : Icons.person_outline;
+                  final badgeLabel = isQrOrder
+                      ? 'QR'
+                      : isAppOrder
+                          ? (o.orderType == 'takeaway' ? 'Takeaway' : 'App Order')
+                          : 'Staff';
 
                   return GestureDetector(
                     onTap: () => setState(() => _selected = o),
@@ -818,12 +838,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                                   ),
                                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                                     Icon(
-                                      isQrOrder
-                                          ? Icons.qr_code_scanner
-                                          : Icons.person_outline,
+                                      badgeIcon,
                                       size: 9, color: badgeColor),
                                     const SizedBox(width: 3),
-                                    Text(isQrOrder ? 'QR' : 'Staff',
+                                    Text(badgeLabel,
                                       style: TextStyle(
                                         fontFamily: 'Poppins', fontSize: 9,
                                         fontWeight: FontWeight.w700,
