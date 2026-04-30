@@ -6,6 +6,7 @@ import '../providers/menu_provider.dart';
 import 'widgets/menu_card.dart';
 import 'widgets/add_menu_form.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../shared/widgets/app_drawer.dart';
 
 class MenuScreen extends ConsumerWidget {
   const MenuScreen({super.key});
@@ -48,6 +49,7 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
+      drawer: const AppDrawer(),
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
           _MenuAppBar(onAddMenu: _openAddMenu),
