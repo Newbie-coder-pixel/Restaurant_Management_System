@@ -28,7 +28,7 @@ class _CustomerCheckoutScreenState
 
   final Map<String, TextEditingController> _itemNotesCtrls = {};
 
-  // ── TAMBAH: flag agar fetch hanya dipanggil sekali dari didChangeDependencies
+  // Flag agar fetch hanya dipanggil sekali dari didChangeDependencies
   bool _didFetchOnce = false;
 
   @override
@@ -66,7 +66,7 @@ class _CustomerCheckoutScreenState
           .from('restaurant_tables')
           .select('id, table_number, capacity, status')
           .eq('branch_id', branchId)
-          .eq('is_active', true)
+          .eq('status', 'available') // ✅ filter hanya meja available
           .order('table_number', ascending: true);
 
       if (mounted) {
@@ -312,8 +312,7 @@ class _CustomerCheckoutScreenState
     final cart = ref.watch(cartProvider);
     _syncItemNotesControllers(cart.items);
 
-    // ✅ HAPUS pemanggilan _fetchTables dari sini!
-    // Sudah dipindah ke didChangeDependencies
+    // ✅ _fetchTables TIDAK dipanggil di sini — sudah dipindah ke didChangeDependencies
 
     if (cart.isEmpty) {
       return Scaffold(
@@ -481,6 +480,8 @@ class _CustomerCheckoutScreenState
     );
   }
 
+  // ── Dropdown meja ──────────────────────────────────────────────────────────
+
   Widget _tableDropdown() {
     if (_loadingTables) {
       return Container(
@@ -520,7 +521,7 @@ class _CustomerCheckoutScreenState
     }
 
     return DropdownButtonFormField<String>(
-      initialValue: _selectedTableNumber,   // ✅ fix: was 'value'
+      initialValue: _selectedTableNumber, // ✅ fix: was 'value'
       decoration: InputDecoration(
         hintText: 'Pilih nomor meja',
         hintStyle: const TextStyle(
@@ -539,56 +540,33 @@ class _CustomerCheckoutScreenState
           fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF1A1A2E)),
       icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
       isExpanded: true,
+      // ✅ Hanya tampilkan meja available (sudah difilter dari Supabase)
       items: _availableTables.map((table) {
         final number = table['table_number']?.toString() ?? '-';
         final capacity = table['capacity'];
-        final status = table['status']?.toString() ?? '';
-        final isOccupied = status == 'occupied';
 
         return DropdownMenuItem<String>(
           value: number,
-          enabled: !isOccupied,
           child: Row(children: [
-            Icon(
-              isOccupied ? Icons.block : Icons.check_circle_outline,
-              size: 14,
-              color: isOccupied ? Colors.red.shade300 : Colors.green.shade400,
-            ),
+            Icon(Icons.check_circle_outline,
+                size: 14, color: Colors.green.shade400),
             const SizedBox(width: 8),
             Text(
               'Meja $number',
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 13,
-                color: isOccupied
-                    ? Colors.grey.shade400
-                    : const Color(0xFF1A1A2E),
+                color: Color(0xFF1A1A2E),
               ),
             ),
             if (capacity != null) ...[
               const SizedBox(width: 6),
               Text(
-                '($capacity kursi)',   // ✅ fix: was '${capacity}'
+                '($capacity kursi)', // ✅ fix: was '${capacity}'
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
                     color: Colors.grey.shade500),
-              ),
-            ],
-            if (isOccupied) ...[
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(6)),
-                child: Text('Terisi',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 10,
-                        color: Colors.red.shade400,
-                        fontWeight: FontWeight.w600)),
               ),
             ],
           ]),
@@ -597,6 +575,8 @@ class _CustomerCheckoutScreenState
       onChanged: (val) => setState(() => _selectedTableNumber = val),
     );
   }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   Widget _buildItemRow(CartItem item) {
     final notesCtrl = _itemNotesCtrls[item.menuItemId];
