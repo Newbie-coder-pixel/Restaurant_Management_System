@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/table_model.dart';
+import '../../../core/models/staff_role.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import 'widgets/table_card.dart';
@@ -21,6 +22,11 @@ class _TableScreenState extends ConsumerState<TableScreen> {
   RealtimeChannel? _channel;
   TableStatus? _filterStatus;
 
+  // Multi-branch (superadmin only)
+  List<_BranchItem> _branches = [];
+  String? _selectedBranchId; // null = semua branch
+  StaffRole? _userRole;
+
   @override
   void initState() {
     super.initState();
@@ -35,14 +41,24 @@ class _TableScreenState extends ConsumerState<TableScreen> {
     final staff = ref.read(currentStaffProvider);
     if (staff != null) {
       _branchId = staff.branchId;
+      _userRole = staff.role;
       _initialized = true;
+      if (staff.role == StaffRole.superadmin) {
+        _fetchBranches();
+      }
       _load();
       _subscribeRealtime();
     } else {
       _initialized = true;
       ref.listenManual(currentStaffProvider, (_, next) {
         if (next != null && _branchId == null && mounted) {
-          setState(() => _branchId = next.branchId);
+          setState(() {
+            _branchId = next.branchId;
+            _userRole = next.role;
+          });
+          if (next.role == StaffRole.superadmin) {
+            _fetchBranches();
+          }
           _load();
           _subscribeRealtime();
         }
@@ -50,17 +66,41 @@ class _TableScreenState extends ConsumerState<TableScreen> {
     }
   }
 
+  Future<void> _fetchBranches() async {
+    final res = await Supabase.instance.client
+        .from('branches')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name');
+    if (mounted) {
+      setState(() {
+        _branches = (res as List)
+            .map((e) => _BranchItem(id: e['id'], name: e['name']))
+            .toList();
+      });
+    }
+  }
+
   Future<void> _load() async {
-    if (_branchId == null) {
+    // superadmin: pakai _selectedBranchId (bisa null = semua branch)
+    // role lain: wajib pakai _branchId sendiri
+    final isSuperadmin = _userRole == StaffRole.superadmin;
+    final targetBranch = isSuperadmin ? _selectedBranchId : _branchId;
+
+    if (!isSuperadmin && targetBranch == null) {
       setState(() => _isLoading = false);
       return;
     }
     try {
-      final res = await Supabase.instance.client
+      var query = Supabase.instance.client
           .from('restaurant_tables')
-          .select()
-          .eq('branch_id', _branchId!)
-          .order('table_number');
+          .select();
+
+      if (targetBranch != null) {
+        query = query.eq('branch_id', targetBranch);
+      }
+
+      final res = await query.order('table_number');
       if (mounted) {
         setState(() {
           _tables = (res as List).map((e) => TableModel.fromJson(e)).toList();
@@ -229,32 +269,52 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(children: [
-              _buildSummaryBar(),
-              _buildFilterChips(),
-              Expanded(
-                child: _filtered.isEmpty && _tables.isEmpty
-                    ? _buildEmptyState()
-                    : _filtered.isEmpty
-                        ? _buildNoFilterResult()
-                        : GridView.builder(
-                            padding: const EdgeInsets.all(16),
-                            gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 200,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 0.85,
-                              ),
-                            itemCount: _filtered.length,
-                            itemBuilder: (ctx, i) => TableCard(
-                              table: _filtered[i],
-                              onStatusChange: (s) =>
-                                _updateStatus(_filtered[i].id, s),
-                            ),
-                          ),
-              ),
-            ]),
+          : Row(
+              children: [
+                // ── Sidebar branch (superadmin only) ──────────────
+                if (_userRole == StaffRole.superadmin)
+                  _BranchSidebar(
+                    branches: _branches,
+                    selectedBranchId: _selectedBranchId,
+                    onSelect: (id) {
+                      setState(() {
+                        _selectedBranchId = id;
+                        _isLoading = true;
+                      });
+                      _load();
+                    },
+                  ),
+                // ── Main content ───────────────────────────────────
+                Expanded(
+                  child: Column(children: [
+                    _buildSummaryBar(),
+                    _buildFilterChips(),
+                    Expanded(
+                      child: _filtered.isEmpty && _tables.isEmpty
+                          ? _buildEmptyState()
+                          : _filtered.isEmpty
+                              ? _buildNoFilterResult()
+                              : GridView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  gridDelegate:
+                                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                                      maxCrossAxisExtent: 200,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      childAspectRatio: 0.85,
+                                    ),
+                                  itemCount: _filtered.length,
+                                  itemBuilder: (ctx, i) => TableCard(
+                                    table: _filtered[i],
+                                    onStatusChange: (s) =>
+                                      _updateStatus(_filtered[i].id, s),
+                                  ),
+                                ),
+                    ),
+                  ]),
+                ),
+              ],
+            ),
     );
   }
 
@@ -392,4 +452,100 @@ class _TableScreenState extends ConsumerState<TableScreen> {
           fontFamily: 'Poppins', color: AppColors.textSecondary)),
     ]),
   );
+}
+
+// ── Helper model ───────────────────────────────────────────────────────
+class _BranchItem {
+  final String id;
+  final String name;
+  _BranchItem({required this.id, required this.name});
+}
+
+// ── Branch sidebar widget ──────────────────────────────────────────────
+class _BranchSidebar extends StatelessWidget {
+  final List<_BranchItem> branches;
+  final String? selectedBranchId;
+  final void Function(String?) onSelect;
+
+  const _BranchSidebar({
+    required this.branches,
+    required this.selectedBranchId,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 100,
+      color: AppColors.primary,
+      child: Column(
+        children: [
+          // "Semua" item
+          _SidebarItem(
+            label: 'Semua',
+            isSelected: selectedBranchId == null,
+            onTap: () => onSelect(null),
+          ),
+          const Divider(color: Colors.white24, height: 1),
+          // Per-branch items
+          Expanded(
+            child: ListView.builder(
+              itemCount: branches.length,
+              itemBuilder: (ctx, i) => _SidebarItem(
+                label: branches[i].name,
+                isSelected: selectedBranchId == branches[i].id,
+                onTap: () => onSelect(branches[i].id),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _SidebarItem({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.white.withValues(alpha: 0.15)
+              : Colors.transparent,
+          border: isSelected
+              ? const Border(
+                  left: BorderSide(color: Colors.white, width: 3),
+                )
+              : null,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: isSelected ? Colors.white : Colors.white60,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
 }
