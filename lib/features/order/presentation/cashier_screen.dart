@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/order_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
 
@@ -19,6 +20,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   List<OrderModel> _orders = [];
   bool _isLoading = true;
   String? _branchId;
+  bool _isSuperAdmin = false;
   RealtimeChannel? _channel;
   OrderModel? _selected;
 
@@ -29,29 +31,27 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }
 
   Future<void> _init() async {
-    _branchId = ref.read(currentStaffProvider)?.branchId;
+    final staff = ref.read(currentStaffProvider);
+    _isSuperAdmin = staff?.role == StaffRole.superadmin;
+    _branchId = _isSuperAdmin ? null : staff?.branchId;
     await _load();
     _subscribeRealtime();
   }
 
   Future<void> _load() async {
-    if (_branchId == null) {
+    if (!_isSuperAdmin && _branchId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
 
     try {
-      // Kasir logic (flow baru: bayar SETELAH makan untuk semua order type):
-      // - QR Order   -> muncul saat status 'served' + payment_status 'pending'
-      // - Staff Order -> muncul saat status 'served' + payment_status 'pending'
-      // Kedua tipe order sekarang bayar setelah makan, cukup 1 query.
-      final res = await Supabase.instance.client
-    .from('orders')
-    .select('*, restaurant_tables(table_number), order_items(*)')
-    .eq('branch_id', _branchId!)
-    .inFilter('status', ['ready', 'served'])
-.inFilter('payment_status', ['pending', 'unpaid'])
-    .order('created_at', ascending: true);
+      var query = Supabase.instance.client
+          .from('orders')
+          .select('*, restaurant_tables(table_number), order_items(*)')
+          .inFilter('status', ['ready', 'served'])
+          .inFilter('payment_status', ['pending', 'unpaid']);
+      if (!_isSuperAdmin) query = query.eq('branch_id', _branchId!);
+      final res = await query.order('created_at', ascending: true);
 
       if (mounted) {
         setState(() {
@@ -68,12 +68,20 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }
 
   void _subscribeRealtime() {
+    if (!_isSuperAdmin && _branchId == null) return;
+    final channelName = _isSuperAdmin ? 'cashier_orders_all' : 'cashier_orders_$_branchId';
     _channel = Supabase.instance.client
-        .channel('cashier_orders')
+        .channel(channelName)
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
+          filter: _isSuperAdmin
+              ? null
+              : PostgresChangeFilter(
+                  type: PostgresChangeFilterType.eq,
+                  column: 'branch_id',
+                  value: _branchId!),
           callback: (_) => _load(),
         )
         .subscribe();
@@ -846,7 +854,21 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Kasir'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Kasir'),
+            if (_isSuperAdmin)
+              const Text(
+                'Semua Cabang',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.white60),
+              ),
+          ],
+        ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         titleTextStyle: const TextStyle(
