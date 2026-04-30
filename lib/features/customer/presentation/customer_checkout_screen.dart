@@ -234,10 +234,6 @@ class _CustomerCheckoutScreenState
         selectedTableId = found['id'] as String?;
       }
 
-      final subtotal   = cart.total;
-      final taxAmount  = subtotal * 0.11;
-      final totalAmount = subtotal + taxAmount;
-
       final orderRes = await Supabase.instance.client
           .from('orders')
           .insert({
@@ -252,9 +248,6 @@ class _CustomerCheckoutScreenState
             'customer_user_id': user?.id,
             'table_id':         selectedTableId,
             'table_name':       _selectedTableNumber,
-            'subtotal':         subtotal,
-            'tax_amount':       taxAmount,
-            'total_amount':     totalAmount,
             'discount_amount':  0,
             'payment_status':   'unpaid',
             'notes':            _buildOrderNotes(),
@@ -270,7 +263,6 @@ class _CustomerCheckoutScreenState
         'menu_item_name':  item.name,
         'quantity':        item.quantity,
         'unit_price':      item.price,
-        'subtotal':        item.price * item.quantity,
         'status':          'pending',
         if (item.notes != null && item.notes!.isNotEmpty)
           'special_requests': item.notes,
