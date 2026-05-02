@@ -25,12 +25,15 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --release
 
+      - name: Copy API folder to build output
+        run: cp -r api build/web/api
+
       - name: Write vercel.json into build output
         run: |
           cat > build/web/vercel.json << 'JSON'
           {
             "rewrites": [
-              { "source": "/(.*)", "destination": "/index.html" }
+              { "source": "/((?!api).*)", "destination": "/index.html" }
             ],
             "headers": [
               {
