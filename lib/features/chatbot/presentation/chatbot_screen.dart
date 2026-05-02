@@ -35,7 +35,7 @@ const _quickActions = [
   ('📊 Report Harian', 'Buatkan report harian lengkap hari ini'),
   ('📈 Bandingkan Minggu', 'Bandingkan revenue minggu ini vs minggu lalu'),
   ('🏆 Menu Terlaris', 'Menu apa yang paling terlaris bulan ini?'),
-  ('⏰ Jam Ramai', 'Jam berapa paling ramai hari ini?'),
+  ('📅 Booking Hari Ini', 'Tampilkan semua booking hari ini beserta detailnya'),
   ('💰 Revenue Bulan Ini', 'Berapa total revenue bulan ini dan tren pertumbuhannya?'),
 ];
 
@@ -54,6 +54,25 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
 
   bool _isTyping = false;
   List<String> _lowStockAlert = [];
+
+  // ── Sentiment Detection ────────────────────────────────────────────
+  static const _negativeKeywords = [
+    'lambat', 'lama', 'error', 'rusak', 'masalah', 'problem', 'gagal',
+    'tidak bisa', 'gabisa', 'kenapa', 'bug', 'salah', 'keluhan', 'komplain',
+    'kecewa', 'buruk', 'jelek', 'parah', 'bingung', 'susah', 'ribet',
+    'tidak jalan', 'ga jalan', 'tidak muncul', 'ga muncul', 'hilang',
+  ];
+  static const _urgentKeywords = [
+    'urgent', 'darurat', 'segera', 'cepat', 'bos', 'penting', 'kritis',
+    'tidak berfungsi', 'mati', 'down', 'offline',
+  ];
+
+  String _detectSentiment(String text) {
+    final lower = text.toLowerCase();
+    if (_urgentKeywords.any((k) => lower.contains(k))) return 'urgent';
+    if (_negativeKeywords.any((k) => lower.contains(k))) return 'negative';
+    return 'neutral';
+  }
 
   // Branch sidebar (superadmin only)
   List<_BranchItem> _branches = [];
@@ -169,6 +188,19 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       final cancelledToday = ordersToday.where((o) => o['status'] == 'cancelled').length;
       final avgOrderValue = completedToday.isEmpty ? 0.0 : revenueToday / completedToday.length;
 
+      // Payment method breakdown
+      final Map<String, int> paymentCount = {};
+      final Map<String, double> paymentRevenue = {};
+      for (final o in completedToday) {
+        final method = (o['payment_method'] as String?) ?? 'unknown';
+        paymentCount[method] = (paymentCount[method] ?? 0) + 1;
+        paymentRevenue[method] = (paymentRevenue[method] ?? 0) +
+            ((o['total_amount'] as num?)?.toDouble() ?? 0);
+      }
+      final paymentSummary = paymentCount.entries.map((e) =>
+          '${e.key}: ${e.value} transaksi (Rp ${paymentRevenue[e.key]!.toStringAsFixed(0)})'
+      ).toList();
+
       // Per-jam (jam berapa paling ramai)
       final Map<int, int> perJam = {};
       for (final o in ordersToday) {
@@ -243,7 +275,43 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           ? 'N/A'
           : '${((revenueWeek - revenueLastWeek) / revenueLastWeek * 100).toStringAsFixed(1)}%';
 
-      // ── 6. Inventory stok menipis ───────────────────────────────────
+      // ── 6. Booking hari ini ─────────────────────────────────────────
+      final todayDate = dateStr(now);
+      var qBooking = sb
+          .from('bookings')
+          .select('customer_name, guest_count, booking_time, status, special_requests, deposit_status')
+          .eq('booking_date', todayDate);
+      if (branchId != null) qBooking = qBooking.eq('branch_id', branchId);
+      final bookingsToday = (await qBooking as List).cast<Map<String, dynamic>>();
+
+      final bookingConfirmed = bookingsToday.where((b) => b['status'] == 'confirmed').toList();
+      final bookingPending = bookingsToday.where((b) => b['status'] == 'pending').toList();
+      final bookingCancelled = bookingsToday.where((b) => b['status'] == 'cancelled').length;
+      final bookingNoShow = bookingsToday.where((b) => b['status'] == 'no_show').length;
+      final totalGuests = bookingConfirmed.fold<int>(
+          0, (s, b) => s + ((b['guest_count'] as num?)?.toInt() ?? 0));
+
+      // Daftar booking confirmed hari ini
+      final bookingList = bookingConfirmed.map((b) {
+        final time = (b['booking_time'] as String?)?.substring(0, 5) ?? '-';
+        final name = b['customer_name'] ?? '-';
+        final guests = b['guest_count'] ?? 0;
+        final deposit = b['deposit_status'] ?? 'none';
+        final notes = b['special_requests'];
+        return '$time - $name ($guests orang)${deposit == 'paid' ? ' [DP✅]' : ''}${notes != null ? ' - $notes' : ''}';
+      }).toList()
+        ..sort();
+
+      // Booking pending (belum dikonfirmasi)
+      final pendingList = bookingPending.map((b) {
+        final time = (b['booking_time'] as String?)?.substring(0, 5) ?? '-';
+        final name = b['customer_name'] ?? '-';
+        final guests = b['guest_count'] ?? 0;
+        return '$time - $name ($guests orang)';
+      }).toList()
+        ..sort();
+
+      // ── 7. Inventory stok menipis ───────────────────────────────────
       var qInv = sb
           .from('inventory_items')
           .select('name, current_stock, minimum_stock, unit, category');
@@ -281,6 +349,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           'revenue': 'Rp ${revenueToday.toStringAsFixed(0)}',
           'rata_rata_nilai_order': 'Rp ${avgOrderValue.toStringAsFixed(0)}',
           'jam_paling_ramai': jamTerramai == '-' ? '-' : '$jamTerramai:00',
+          'payment_method': paymentSummary,
         },
         'minggu_ini': {
           'total_order': ordersWeek.length,
@@ -296,6 +365,16 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           'revenue': 'Rp ${revenueMonth.toStringAsFixed(0)}',
         },
         'top_menu_bulan_ini': topMenu,
+        'booking_hari_ini': {
+          'total': bookingsToday.length,
+          'confirmed': bookingConfirmed.length,
+          'pending': bookingPending.length,
+          'cancelled': bookingCancelled,
+          'no_show': bookingNoShow,
+          'total_tamu': totalGuests,
+          'daftar_confirmed': bookingList,
+          'daftar_pending': pendingList,
+        },
         'peringatan_stok': {
           'stok_habis_atau_dibawah_minimum': lowStock,
           'stok_hampir_habis': nearLowStock,
@@ -351,6 +430,9 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
 
     _scrollToBottom();
 
+    // Detect sentiment sebelum fetch data
+    final sentiment = _detectSentiment(text);
+
     final data = await _fetchAnalyticsData();
 
     // Update proactive stock alert
@@ -379,6 +461,7 @@ KEMAMPUAN KAMU:
 - Analisis menu terlaris
 - Hitung pertumbuhan bisnis
 - Peringatan stok menipis/habis
+- Info booking hari ini (confirmed, pending, no-show, daftar tamu)
 - Berikan rekomendasi actionable berdasarkan data
 
 ATURAN PROACTIVE INSIGHT:
@@ -393,6 +476,9 @@ ATURAN FORMAT:
 - Jika ditanya perbandingan, tampilkan kedua angka + persentase perubahan
 - Gunakan emoji secukupnya untuk keterbacaan
 - Berikan insight dan rekomendasi, bukan hanya angka mentah
+
+SENTIMENT STAFF: $sentiment
+${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan mengakui urgensi. Sarankan eskalasi ke manager jika perlu.' : sentiment == 'negative' ? '- Staff mengalami kesulitan. Mulai dengan empati, akui masalah dulu, gunakan tone supportif, berikan langkah troubleshooting yang jelas.' : '- Respons normal, ramah dan profesional.'}
 ''';
 
     try {
