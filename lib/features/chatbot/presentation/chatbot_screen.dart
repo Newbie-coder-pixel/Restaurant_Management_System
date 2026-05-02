@@ -32,11 +32,11 @@ class _BranchItem {
 
 // ── Quick Actions ──────────────────────────────────────────────────────
 const _quickActions = [
-  ('📊 Report Harian', 'Buatkan report harian hari ini'),
-  ('🏆 Menu Terlaris', 'Analisis menu terlaris minggu ini'),
-  ('📦 Ringkasan Stok', 'Ringkasan status inventory saat ini'),
-  ('💰 Revenue Hari Ini', 'Berapa total revenue hari ini?'),
-  ('📅 Booking Hari Ini', 'Daftar booking yang masuk hari ini'),
+  ('📊 Report Harian', 'Buatkan report harian lengkap hari ini'),
+  ('📈 Bandingkan Minggu', 'Bandingkan revenue minggu ini vs minggu lalu'),
+  ('🏆 Menu Terlaris', 'Menu apa yang paling terlaris bulan ini?'),
+  ('⏰ Jam Ramai', 'Jam berapa paling ramai hari ini?'),
+  ('💰 Revenue Bulan Ini', 'Berapa total revenue bulan ini dan tren pertumbuhannya?'),
 ];
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -53,6 +53,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final List<_Msg> _messages = [];
 
   bool _isTyping = false;
+  List<String> _lowStockAlert = [];
 
   // Branch sidebar (superadmin only)
   List<_BranchItem> _branches = [];
@@ -132,43 +133,176 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   // ── Analytics Data ─────────────────────────────────────────────────
   Future<Map<String, dynamic>> _fetchAnalyticsData() async {
     final sb = Supabase.instance.client;
-    final today = DateTime.now();
-    final todayStr = today.toIso8601String().substring(0, 10);
+    final now = DateTime.now();
     final branchId = _isSuperadmin ? _selectedBranchId : _myBranchId;
 
+    // Helper: format date string
+    String dateStr(DateTime d) => d.toIso8601String().substring(0, 10);
+
+    // Date ranges
+    final todayStart = '${dateStr(now)}T00:00:00';
+    final todayEnd = '${dateStr(now)}T23:59:59';
+
+    final weekStart = dateStr(now.subtract(Duration(days: now.weekday - 1)));
+    final lastWeekStart = dateStr(now.subtract(Duration(days: now.weekday + 6)));
+    final lastWeekEnd = dateStr(now.subtract(Duration(days: now.weekday)));
+
+    final monthStart = '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
+
+    final branchLabel = _isSuperadmin && _selectedBranchId == null
+        ? 'Semua Cabang'
+        : _branches.where((b) => b.id == _selectedBranchId).firstOrNull?.name ?? 'Cabang Saya';
+
     try {
-      var query = sb
+      // ── 1. Orders hari ini ──────────────────────────────────────────
+      var qToday = sb
+          .from('orders')
+          .select('total_amount, status, created_at, order_type, payment_method')
+          .gte('created_at', todayStart)
+          .lte('created_at', todayEnd);
+      if (branchId != null) qToday = qToday.eq('branch_id', branchId);
+      final ordersToday = (await qToday as List).cast<Map<String, dynamic>>();
+
+      final completedToday = ordersToday.where((o) => o['status'] == 'completed').toList();
+      final revenueToday = completedToday.fold<double>(
+          0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+      final cancelledToday = ordersToday.where((o) => o['status'] == 'cancelled').length;
+      final avgOrderValue = completedToday.isEmpty ? 0.0 : revenueToday / completedToday.length;
+
+      // Per-jam (jam berapa paling ramai)
+      final Map<int, int> perJam = {};
+      for (final o in ordersToday) {
+        if (o['created_at'] != null) {
+          final jam = DateTime.parse(o['created_at']).toLocal().hour;
+          perJam[jam] = (perJam[jam] ?? 0) + 1;
+        }
+      }
+      final jamTerramai = perJam.isEmpty ? '-' :
+          perJam.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+
+      // ── 2. Orders minggu ini ────────────────────────────────────────
+      var qWeek = sb
           .from('orders')
           .select('total_amount, status, created_at')
-          .gte('created_at', '${todayStr}T00:00:00')
-          .lte('created_at', '${todayStr}T23:59:59');
+          .gte('created_at', '${weekStart}T00:00:00')
+          .lte('created_at', todayEnd);
+      if (branchId != null) qWeek = qWeek.eq('branch_id', branchId);
+      final ordersWeek = (await qWeek as List).cast<Map<String, dynamic>>();
+      final revenueWeek = ordersWeek
+          .where((o) => o['status'] == 'completed')
+          .fold<double>(0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
-      if (branchId != null) {
-        query = query.eq('branch_id', branchId);
+      // ── 3. Orders minggu lalu ───────────────────────────────────────
+      var qLastWeek = sb
+          .from('orders')
+          .select('total_amount, status')
+          .gte('created_at', '${lastWeekStart}T00:00:00')
+          .lte('created_at', '${lastWeekEnd}T23:59:59');
+      if (branchId != null) qLastWeek = qLastWeek.eq('branch_id', branchId);
+      final ordersLastWeek = (await qLastWeek as List).cast<Map<String, dynamic>>();
+      final revenueLastWeek = ordersLastWeek
+          .where((o) => o['status'] == 'completed')
+          .fold<double>(0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+
+      // ── 4. Orders bulan ini ─────────────────────────────────────────
+      var qMonth = sb
+          .from('orders')
+          .select('total_amount, status')
+          .gte('created_at', '${monthStart}T00:00:00')
+          .lte('created_at', todayEnd);
+      if (branchId != null) qMonth = qMonth.eq('branch_id', branchId);
+      final ordersMonth = (await qMonth as List).cast<Map<String, dynamic>>();
+      final revenueMonth = ordersMonth
+          .where((o) => o['status'] == 'completed')
+          .fold<double>(0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+
+      // ── 5. Menu terlaris bulan ini ──────────────────────────────────
+      var qItems = sb
+          .from('order_items')
+          .select('menu_item_name, quantity, orders!inner(status, created_at, branch_id)')
+          .gte('orders.created_at', '${monthStart}T00:00:00')
+          .lte('orders.created_at', todayEnd)
+          .eq('orders.status', 'completed');
+      if (branchId != null) qItems = qItems.eq('orders.branch_id', branchId);
+
+      final itemsRaw = (await qItems as List).cast<Map<String, dynamic>>();
+      final Map<String, int> menuCount = {};
+      for (final item in itemsRaw) {
+        final name = (item['menu_item_name'] as String?) ?? 'Unknown';
+        final qty = (item['quantity'] as num?)?.toInt() ?? 1;
+        menuCount[name] = (menuCount[name] ?? 0) + qty;
       }
+      final topMenu = (menuCount.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value)))
+          .take(5)
+          .map((e) => '${e.key} (${e.value}x)')
+          .toList();
 
-      final ordersToday = await query;
-      final list = (ordersToday as List).cast<Map<String, dynamic>>();
-      final completed = list.where((o) => o['status'] == 'completed');
-      final revenue = completed.fold<double>(
-          0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+      // ── Perbandingan minggu ini vs minggu lalu ──────────────────────
+      final weekGrowth = revenueLastWeek == 0
+          ? 'N/A'
+          : '${((revenueWeek - revenueLastWeek) / revenueLastWeek * 100).toStringAsFixed(1)}%';
 
-      final branchLabel = _isSuperadmin && _selectedBranchId == null
-          ? 'Semua Cabang'
-          : _branches
-                  .where((b) => b.id == _selectedBranchId)
-                  .firstOrNull
-                  ?.name ??
-              'Cabang Saya';
+      // ── 6. Inventory stok menipis ───────────────────────────────────
+      var qInv = sb
+          .from('inventory_items')
+          .select('name, current_stock, minimum_stock, unit, category');
+      if (branchId != null) qInv = qInv.eq('branch_id', branchId);
+      final invRaw = (await qInv as List).cast<Map<String, dynamic>>();
+
+      // Stok di bawah minimum
+      final lowStock = invRaw.where((i) {
+        final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
+        final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
+        return cur <= min;
+      }).map((i) {
+        final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
+        final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
+        return '${i['name']} (stok: $cur ${i['unit']}, min: $min ${i['unit']})';
+      }).toList();
+
+      // Stok hampir habis (antara 1x - 1.5x minimum)
+      final nearLowStock = invRaw.where((i) {
+        final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
+        final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
+        return cur > min && cur <= min * 1.5 && min > 0;
+      }).map((i) {
+        final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
+        return '${i['name']} (stok: $cur ${i['unit']})';
+      }).toList();
 
       return {
-        'branch': branchLabel,
-        'orders': list.length,
-        'completed': completed.length,
-        'revenue': revenue,
+        'cabang': branchLabel,
+        'tanggal': dateStr(now),
+        'hari_ini': {
+          'total_order': ordersToday.length,
+          'order_selesai': completedToday.length,
+          'order_dibatalkan': cancelledToday,
+          'revenue': 'Rp ${revenueToday.toStringAsFixed(0)}',
+          'rata_rata_nilai_order': 'Rp ${avgOrderValue.toStringAsFixed(0)}',
+          'jam_paling_ramai': jamTerramai == '-' ? '-' : '$jamTerramai:00',
+        },
+        'minggu_ini': {
+          'total_order': ordersWeek.length,
+          'revenue': 'Rp ${revenueWeek.toStringAsFixed(0)}',
+        },
+        'minggu_lalu': {
+          'total_order': ordersLastWeek.length,
+          'revenue': 'Rp ${revenueLastWeek.toStringAsFixed(0)}',
+        },
+        'pertumbuhan_minggu': weekGrowth,
+        'bulan_ini': {
+          'total_order': ordersMonth.length,
+          'revenue': 'Rp ${revenueMonth.toStringAsFixed(0)}',
+        },
+        'top_menu_bulan_ini': topMenu,
+        'peringatan_stok': {
+          'stok_habis_atau_dibawah_minimum': lowStock,
+          'stok_hampir_habis': nearLowStock,
+        },
       };
     } catch (e) {
-      return {'error': e.toString()};
+      return {'error': e.toString(), 'cabang': branchLabel};
     }
   }
 
@@ -219,13 +353,46 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
 
     final data = await _fetchAnalyticsData();
 
-    final systemPrompt = '''
-Kamu adalah AI Analytics restoran.
+    // Update proactive stock alert
+    final warnings = data['peringatan_stok'] as Map?;
+    if (warnings != null && mounted) {
+      final low = (warnings['stok_habis_atau_dibawah_minimum'] as List? ?? []).cast<String>();
+      final near = (warnings['stok_hampir_habis'] as List? ?? []).cast<String>();
+      setState(() {
+        _lowStockAlert = [
+          ...low.map((s) => '🚨 $s'),
+          ...near.map((s) => '⚠️ $s'),
+        ];
+      });
+    }
 
-DATA:
+    final systemPrompt = '''
+Kamu adalah AI Analytics restoran yang cerdas dan helpful untuk tim internal.
+
+DATA ANALYTICS (sudah diambil dari database real-time):
 ${data.toString()}
 
-Berikan insight singkat, jelas, dan actionable dalam Bahasa Indonesia.
+KEMAMPUAN KAMU:
+- Analisis performa hari ini, minggu ini, bulan ini
+- Bandingkan revenue/order minggu ini vs minggu lalu
+- Identifikasi jam paling ramai
+- Analisis menu terlaris
+- Hitung pertumbuhan bisnis
+- Peringatan stok menipis/habis
+- Berikan rekomendasi actionable berdasarkan data
+
+ATURAN PROACTIVE INSIGHT:
+- Jika ada data di "stok_habis_atau_dibawah_minimum", SELALU tampilkan peringatan 🚨 di awal respons
+- Jika ada data di "stok_hampir_habis", tampilkan peringatan ⚠️
+- Jika order dibatalkan > 20% dari total order, beri peringatan dan saran
+- Jika pertumbuhan minggu negatif, berikan analisis dan rekomendasi
+
+ATURAN FORMAT:
+- Jawab dalam Bahasa Indonesia yang ramah dan profesional
+- Format angka rupiah dengan titik sebagai separator ribuan (Rp 1.250.000)
+- Jika ditanya perbandingan, tampilkan kedua angka + persentase perubahan
+- Gunakan emoji secukupnya untuk keterbacaan
+- Berikan insight dan rekomendasi, bukan hanya angka mentah
 ''';
 
     try {
@@ -349,10 +516,84 @@ Berikan insight singkat, jelas, dan actionable dalam Bahasa Indonesia.
           Expanded(
             child: Column(
               children: [
+                if (_lowStockAlert.isNotEmpty) _buildStockAlert(),
                 Expanded(child: _buildMessages()),
                 _buildQuickActions(),
                 _buildInput(),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Stock Alert Banner ────────────────────────────────────────────
+  Widget _buildStockAlert() {
+    final hasUrgent = _lowStockAlert.any((s) => s.startsWith('🚨'));
+    return Container(
+      width: double.infinity,
+      color: hasUrgent
+          ? const Color(0xFFFFEBEE)
+          : const Color(0xFFFFF8E1),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            hasUrgent ? '🚨' : '⚠️',
+            style: const TextStyle(fontSize: 16),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasUrgent ? 'Stok Di Bawah Minimum!' : 'Stok Hampir Habis',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: hasUrgent
+                        ? const Color(0xFFC62828)
+                        : const Color(0xFFE65100),
+                  ),
+                ),
+                Text(
+                  _lowStockAlert.take(3).join(' • '),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: hasUrgent
+                        ? const Color(0xFFB71C1C)
+                        : const Color(0xFFBF360C),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => _send('Tampilkan detail peringatan stok yang bermasalah dan rekomendasinya'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: hasUrgent
+                    ? const Color(0xFFC62828)
+                    : const Color(0xFFE65100),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Detail',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],
