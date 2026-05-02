@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/customer_auth_provider.dart';
 import '../services/sentiment_escalation_service.dart';
 import '../services/recommendation_service.dart';
+import '../services/table_assignment_service.dart';
 
 // ── Models ─────────────────────────────────────────────────────────────
 class _ChatMessage {
@@ -55,6 +56,7 @@ class _CustomerChatbotScreenState
   final _msgCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final List<_ChatMessage> _messages = [];
+  final _tableService = TableAssignmentService();
 
   bool _isTyping = false;
   String? _sessionId;
@@ -68,8 +70,7 @@ class _CustomerChatbotScreenState
   // ── Cached recommendation data ────────────────────────────────────
   RecommendationResult? _cachedRecommendations;
 
-  // ── Escalation cooldown — jangan spam notif manager ──────────────
-  // Eskalasi maksimal 1x per 5 menit per sesi
+  // ── Escalation cooldown ───────────────────────────────────────────
   DateTime? _lastEscalatedAt;
   bool get _canEscalate {
     if (_lastEscalatedAt == null) return true;
@@ -106,13 +107,12 @@ class _CustomerChatbotScreenState
     super.dispose();
   }
 
-  // ── Load Branch Data (cache supaya tidak fetch ulang tiap pesan) ───
+  // ── Load Branch Data ───────────────────────────────────────────────
   Future<void> _loadBranchData() async {
     if (_branchId.isEmpty) return;
     try {
       final sb = Supabase.instance.client;
 
-      // Fetch jam buka + nama cabang
       final branch = await sb
           .from('branches')
           .select('name, opening_time, closing_time')
@@ -135,16 +135,12 @@ class _CustomerChatbotScreenState
           customerUserId: user?.id,
           limit: 5,
         );
-        if (mounted) {
-          setState(() {
-            _cachedRecommendations = result;
-          });
-        }
+        if (mounted) setState(() => _cachedRecommendations = result);
       } catch (e) {
         debugPrint('[Recommendation] Load error: $e');
       }
 
-      // Fetch menu + kategori + alergen + dietary
+      // Fetch menu
       final items = await sb
           .from('menu_items')
           .select(
@@ -158,7 +154,6 @@ class _CustomerChatbotScreenState
         return;
       }
 
-      // Kumpulkan semua menu_item id untuk fetch alergen & dietary sekaligus
       final ids = items.map((i) => i['id'] as String).toList();
 
       final allergens = await sb
@@ -171,28 +166,23 @@ class _CustomerChatbotScreenState
           .select('menu_item_id, dietary_tag')
           .inFilter('menu_item_id', ids);
 
-      // Map: id → list alergen
       final Map<String, List<String>> allergenMap = {};
       for (final a in allergens as List) {
         final id = a['menu_item_id'] as String;
         allergenMap.putIfAbsent(id, () => []).add(a['allergen'] as String);
       }
 
-      // Map: id → list dietary tag
       final Map<String, List<String>> dietaryMap = {};
       for (final d in dietaries as List) {
         final id = d['menu_item_id'] as String;
         dietaryMap.putIfAbsent(id, () => []).add(d['dietary_tag'] as String);
       }
 
-      // Build menu text
       final buf = StringBuffer();
       for (final item in items) {
         final id = item['id'] as String;
-        final cat =
-            (item['menu_categories'] as Map?)?['name'] ?? 'Umum';
-        final price =
-            (item['price'] as num?)?.toStringAsFixed(0) ?? '0';
+        final cat = (item['menu_categories'] as Map?)?['name'] ?? 'Umum';
+        final price = (item['price'] as num?)?.toStringAsFixed(0) ?? '0';
         final desc = item['description'] as String?;
         final prepTime = item['preparation_time_minutes'] as int?;
         final isSeasonal = item['is_seasonal'] as bool? ?? false;
@@ -218,40 +208,29 @@ class _CustomerChatbotScreenState
     }
   }
 
-  // ── Language Detection ────────────────────────────────────────────
-  // Deteksi bahasa dominan dari teks — digunakan untuk logging/sentiment
-  // (AI akan auto-detect sendiri dari system prompt, ini untuk fallback UI)
+  // ── Language Detection ─────────────────────────────────────────────
   static String detectLanguage(String text) {
     final lower = text.toLowerCase();
-
-    // Indikator Bahasa Indonesia
     const idIndicators = [
       'apa', 'ada', 'saya', 'mau', 'bisa', 'dong', 'yuk', 'tolong',
       'makasih', 'terima kasih', 'halo', 'hai', 'makan', 'pesan',
       'berapa', 'kapan', 'dimana', 'kenapa', 'gimana', 'gak', 'tidak',
       'ya', 'iya', 'boleh', 'ingin', 'minta', 'coba', 'bantu',
     ];
-
-    // Indikator English
     const enIndicators = [
       'what', 'how', 'when', 'where', 'why', 'can', 'could', 'would',
       'please', 'thank', 'hello', 'hi', 'want', 'need', 'have', 'are',
       'is', 'the', 'and', 'for', 'menu', 'book', 'reserve', 'order',
     ];
-
-    int idScore = 0;
-    int enScore = 0;
-
+    int idScore = 0, enScore = 0;
     for (final word in lower.split(RegExp(r'\s+'))) {
       if (idIndicators.contains(word)) idScore++;
       if (enIndicators.contains(word)) enScore++;
     }
-
-    if (enScore > idScore) return 'en';
-    return 'id'; // Default Indonesia
+    return enScore > idScore ? 'en' : 'id';
   }
 
-  // ── System Prompt untuk Customer ──────────────────────────────────
+  // ── System Prompt ──────────────────────────────────────────────────
   String _buildSystemPrompt() {
     final now = DateTime.now();
     final todayStr = '${now.day} ${_bulanIndo(now.month)} ${now.year}';
@@ -259,8 +238,6 @@ class _CustomerChatbotScreenState
     final closeTime = _cachedClosingTime ?? '22:00';
     final branchName = _cachedBranchName ?? 'Restoran Kami';
     final menuText = _cachedMenuText ?? '(menu sedang dimuat)';
-
-    // Tambahkan data rekomendasi ke prompt jika tersedia
     final recoText = _cachedRecommendations != null
         ? RecommendationService.formatForPrompt(_cachedRecommendations!)
         : '';
@@ -279,7 +256,7 @@ ${recoText.isNotEmpty ? '$recoText\n' : ''}KEMAMPUAN KAMU:
 3. INFO DIET — bantu customer dengan preferensi diet (vegetarian, vegan, dll), lihat kolom "Diet"
 4. INFO JAM BUKA — sampaikan jam operasional di atas
 5. RESERVASI MEJA — proses booking meja untuk customer
-6. REKOMENDASI — jika customer minta rekomendasi, gunakan data REKOMENDASI MENU PERSONAL di atas (jika ada), sebutkan alasannya (favorit/sering dipesan bareng/terpopuler)
+6. REKOMENDASI — gunakan data REKOMENDASI MENU PERSONAL di atas jika ada
 
 ALUR RESERVASI MEJA:
 Saat customer ingin reservasi:
@@ -293,7 +270,7 @@ Saat customer ingin reservasi:
    - VALID ✅: tanggal hari ini atau setelahnya
    - LEWAT ❌: tolak sopan
    - JAM VALID: $openTime - $closeTime WIB saja
-4. Setelah semua data lengkap, output PERSIS format ini:
+4. Setelah semua data lengkap, output PERSIS format ini (tanpa teks lain setelahnya):
 
 ACTION:create_booking
 {"customer_name":"Nama Tamu","guest_count":2,"booking_date":"2026-03-19","booking_time":"10:00","phone":"08xx atau null","special_requests":"catatan atau null"}
@@ -301,16 +278,12 @@ ACTION:create_booking
 ATURAN BAHASA (WAJIB):
 - Deteksi bahasa dari pesan customer secara otomatis
 - Balas SELALU dalam bahasa yang SAMA dengan pesan customer
-- Contoh: customer tulis Bahasa Indonesia → balas Indonesia, customer tulis English → reply in English
-- Jika campur (Bahasa + English), ikuti bahasa yang dominan
-- Nama menu tetap ditulis PERSIS sesuai daftar menu (jangan diterjemahkan)
+- Nama menu tetap ditulis PERSIS sesuai daftar menu
 
 ATURAN PENTING:
 - Gunakan emoji secukupnya
-- Jika ditanya di luar topik restoran, arahkan kembali dengan sopan
 - Jika customer komplain/tidak puas, akui dengan empati dan tawarkan eskalasi ke staff
 - Format booking_date: YYYY-MM-DD, booking_time: HH:MM
-- Selalu sebut nama menu PERSIS sesuai daftar menu di atas
 ''';
   }
 
@@ -328,10 +301,6 @@ ATURAN PENTING:
         ? _messages.sublist(_messages.length - 14)
         : _messages;
 
-    final history = recent
-        .map((m) => {'role': m.role, 'content': m.content})
-        .toList();
-
     final res = await http
         .post(
           Uri.parse(_proxyUrl),
@@ -340,7 +309,7 @@ ATURAN PENTING:
             'model': 'llama-3.3-70b-versatile',
             'messages': [
               {'role': 'system', 'content': _buildSystemPrompt()},
-              ...history,
+              ...recent.map((m) => {'role': m.role, 'content': m.content}),
               {'role': 'user', 'content': text},
             ],
             'max_tokens': 700,
@@ -356,7 +325,7 @@ ATURAN PENTING:
     throw Exception('Proxy error ${res.statusCode}');
   }
 
-  // ── Parse Response (detect booking action) ─────────────────────────
+  // ── Parse Response ─────────────────────────────────────────────────
   Future<void> _parseAndHandleResponse(String raw) async {
     const marker = 'ACTION:create_booking';
     final idx = raw.indexOf(marker);
@@ -371,13 +340,11 @@ ATURAN PENTING:
           final jsonStr = raw.substring(jsonStart, jsonEnd + 1);
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
 
-          // Tampilkan pesan konfirmasi dulu
           final displayMsg = before.isNotEmpty
               ? before
               : '📅 Baik, saya akan memproses reservasi Anda!';
           _addBot(displayMsg);
 
-          // Proses booking ke Supabase
           await _createBooking(data);
           return;
         } catch (e) {
@@ -386,49 +353,72 @@ ATURAN PENTING:
       }
     }
 
-    // Tidak ada action, tampilkan respons biasa
     _addBot(raw);
   }
 
-  // ── Create Booking ke Supabase ────────────────────────────────────
+  // ── Create Booking + Auto-Assign Meja ─────────────────────────────
   Future<void> _createBooking(Map<String, dynamic> data) async {
     try {
       final user = ref.read(customerUserProvider).value;
 
-      final payload = {
-        'branch_id': _branchId.isNotEmpty ? _branchId : null,
-        'customer_name': data['customer_name'] ?? 'Tamu',
-        'customer_phone': data['phone'],
-        'guest_count': data['guest_count'] ?? 1,
-        'booking_date': data['booking_date'],
-        'booking_time': data['booking_time'],
-        'special_requests': data['special_requests'],
-        'status': 'pending',
-        'source': 'chatbot',
-        if (user != null) 'customer_user_id': user.id,
-      };
-
-      final result = await Supabase.instance.client
-          .from('bookings')
-          .insert(payload)
-          .select('confirmation_code')
-          .single();
-
-      final code = result['confirmation_code'] as String?;
-
-      _addBot(
-        '✅ Reservasi berhasil dibuat!\n\n'
-        '📋 **Kode Konfirmasi:** ${code ?? '-'}\n'
-        '👤 Nama: ${data['customer_name']}\n'
-        '👥 Jumlah tamu: ${data['guest_count']} orang\n'
-        '📅 Tanggal: ${data['booking_date']}\n'
-        '⏰ Jam: ${data['booking_time']} WIB\n'
-        '${data['special_requests'] != null ? '📝 Catatan: ${data['special_requests']}\n' : ''}\n'
-        'Tim kami akan menghubungi Anda untuk konfirmasi lebih lanjut. '
-        'Simpan kode konfirmasi Anda ya! 😊',
+      // Parse booking_date + booking_time → DateTime
+      final dateStr = data['booking_date'] as String;  // YYYY-MM-DD
+      final timeStr = data['booking_time'] as String;  // HH:MM
+      final dp = dateStr.split('-');
+      final tp = timeStr.split(':');
+      final bookingDateTime = DateTime(
+        int.parse(dp[0]),
+        int.parse(dp[1]),
+        int.parse(dp[2]),
+        int.parse(tp[0]),
+        int.parse(tp[1]),
       );
 
-      // Simpan session setelah booking berhasil
+      // Gunakan TableAssignmentService — insert booking + RPC assign_table
+      final result = await _tableService.createAndAssign(
+        branchId: _branchId,
+        customerName: data['customer_name'] as String? ?? 'Tamu',
+        customerPhone: data['phone'] as String?,
+        customerEmail: null,
+        customerUserId: user?.id,
+        guestCount: (data['guest_count'] as num?)?.toInt() ?? 1,
+        bookingDateTime: bookingDateTime,
+        specialRequests: data['special_requests'] as String? ?? '',
+      );
+
+      if (result.isConfirmed) {
+        // ── Meja berhasil di-assign ──────────────────────────────────
+        _addBot(
+          '✅ Reservasi berhasil dikonfirmasi!\n\n'
+          '👤 Nama: ${data['customer_name']}\n'
+          '👥 Jumlah tamu: ${data['guest_count']} orang\n'
+          '📅 Tanggal: ${data['booking_date']}\n'
+          '⏰ Jam: ${data['booking_time']} WIB\n'
+          '🪑 Meja: ${result.tableNumber ?? '-'}\n'
+          '${_hasSpecialRequest(data) ? '📝 Catatan: ${data['special_requests']}\n' : ''}\n'
+          'Sampai jumpa di restoran kami! 😊',
+        );
+      } else if (result.isWaitlisted) {
+        // ── Tidak ada meja kosong — masuk waitlist ───────────────────
+        _addBot(
+          '📋 Reservasi Anda masuk daftar tunggu.\n\n'
+          '👤 Nama: ${data['customer_name']}\n'
+          '👥 Jumlah tamu: ${data['guest_count']} orang\n'
+          '📅 Tanggal: ${data['booking_date']}\n'
+          '⏰ Jam: ${data['booking_time']} WIB\n\n'
+          'Saat ini meja untuk ${data['guest_count']} orang belum tersedia '
+          'di jam tersebut. Staff kami akan menghubungi Anda segera setelah '
+          'ada meja yang tersedia. 🙏',
+        );
+      } else {
+        // ── Error dari RPC ────────────────────────────────────────────
+        _addBot(
+          '⚠️ Maaf, terjadi kendala saat memproses reservasi.\n'
+          '${result.message != null ? '${result.message!}\n' : ''}'
+          'Silakan hubungi kami langsung atau coba lagi.',
+        );
+      }
+
       await _saveSession();
     } catch (e) {
       debugPrint('Create booking error: $e');
@@ -439,16 +429,20 @@ ATURAN PENTING:
     }
   }
 
-  // ── Simpan/Update Chat Session ke Supabase ─────────────────────────
+  bool _hasSpecialRequest(Map<String, dynamic> data) {
+    final sr = data['special_requests'];
+    return sr != null && sr.toString().isNotEmpty && sr.toString() != 'null';
+  }
+
+  // ── Save Session ───────────────────────────────────────────────────
   Future<void> _saveSession() async {
     try {
       final user = ref.read(customerUserProvider).value;
-      if (user == null) return; // Hanya simpan jika sudah login
+      if (user == null) return;
 
       final messagesJson = _messages.map((m) => m.toJson()).toList();
 
       if (_sessionId == null) {
-        // Buat session baru
         final result = await Supabase.instance.client
             .from('customer_chat_sessions')
             .insert({
@@ -460,7 +454,6 @@ ATURAN PENTING:
             .single();
         _sessionId = result['id'] as String?;
       } else {
-        // Update session yang ada
         await Supabase.instance.client
             .from('customer_chat_sessions')
             .update({
@@ -476,7 +469,9 @@ ATURAN PENTING:
 
   String _generateSessionTitle() {
     final now = DateTime.now();
-    return 'Chat ${now.day}/${now.month}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return 'Chat ${now.day}/${now.month}/${now.year} '
+        '${now.hour.toString().padLeft(2, '0')}:'
+        '${now.minute.toString().padLeft(2, '0')}';
   }
 
   // ── Send Message ───────────────────────────────────────────────────
@@ -486,34 +481,26 @@ ATURAN PENTING:
 
     _msgCtrl.clear();
 
-    final userMsg = _ChatMessage(
-      role: 'user',
-      content: text,
-      timestamp: DateTime.now(),
-    );
-
     setState(() {
-      _messages.add(userMsg);
+      _messages.add(_ChatMessage(
+        role: 'user',
+        content: text,
+        timestamp: DateTime.now(),
+      ));
       _isTyping = true;
     });
 
     _scrollToBottom();
 
-    // ── Deteksi bahasa & sentiment ────────────────────────────────────
     final detectedLang = _CustomerChatbotScreenState.detectLanguage(text);
     final sentimentResult = SentimentEscalationService.analyze(text);
-    final shouldModifyPrompt = sentimentResult.shouldEscalate;
-    debugPrint('[Chat] Lang: $detectedLang | Sentiment: ${sentimentResult.level.name}');
 
     try {
-      // Jika menu belum dimuat, tunggu sebentar
-      if (_cachedMenuText == null) {
-        await _loadBranchData();
-      }
+      if (_cachedMenuText == null) await _loadBranchData();
 
-      // Modifikasi prompt jika sentiment negatif/urgent
-      final promptText = shouldModifyPrompt
-          ? '$text\n\n[SISTEM: Customer tampak ${sentimentResult.level == SentimentLevel.urgent ? "dalam situasi darurat" : "kecewa/tidak puas"}. '
+      final promptText = sentimentResult.shouldEscalate
+          ? '$text\n\n[SISTEM: Customer tampak '
+              '${sentimentResult.level == SentimentLevel.urgent ? "dalam situasi darurat" : "kecewa/tidak puas"}. '
               'Respons dengan empati tinggi, akui perasaan customer terlebih dahulu, '
               'tawarkan solusi konkret, dan sampaikan bahwa staff kami siap membantu langsung.]'
           : text;
@@ -521,11 +508,8 @@ ATURAN PENTING:
       final raw = await _callAI(promptText);
       await _parseAndHandleResponse(raw);
 
-      // ── Eskalasi ke manager jika perlu ───────────────────────────
       if (sentimentResult.shouldEscalate && _canEscalate && _branchId.isNotEmpty) {
         _lastEscalatedAt = DateTime.now();
-
-        // Fire-and-forget — jangan await supaya tidak delay respons ke customer
         SentimentEscalationService.escalate(
           branchId: _branchId,
           customerMessage: text,
@@ -533,27 +517,20 @@ ATURAN PENTING:
           sessionId: _sessionId,
         ).catchError((e) => debugPrint('Escalation error: $e'));
 
-        // Tampilkan banner di chat jika urgent — dalam bahasa customer
         if (sentimentResult.level == SentimentLevel.urgent) {
-          final urgentMsg = detectedLang == 'en'
-              ? '🚨 Your message has been forwarded to our staff who will assist you shortly. Please wait a moment.'
-              : '🚨 Pesan Anda telah diteruskan ke staff kami yang akan segera membantu. Mohon tunggu sebentar.';
-          _addBot(urgentMsg);
+          _addBot(detectedLang == 'en'
+              ? '🚨 Your message has been forwarded to our staff who will assist you shortly.'
+              : '🚨 Pesan Anda telah diteruskan ke staff kami yang akan segera membantu.');
         }
       }
     } catch (e) {
-      final errMsg = _CustomerChatbotScreenState.detectLanguage(text) == 'en'
+      _addBot(detectedLang == 'en'
           ? '⚠️ Sorry, something went wrong. Please try again or contact us directly.'
-          : '⚠️ Maaf, terjadi kesalahan. Silakan coba lagi atau hubungi kami langsung.';
-      _addBot(errMsg);
+          : '⚠️ Maaf, terjadi kesalahan. Silakan coba lagi atau hubungi kami langsung.');
     } finally {
       if (mounted) setState(() => _isTyping = false);
       _scrollToBottom();
-
-      // Auto-save session setiap 3 pesan
-      if (_messages.length % 3 == 0) {
-        await _saveSession();
-      }
+      if (_messages.length % 3 == 0) await _saveSession();
     }
   }
 
@@ -636,7 +613,6 @@ ATURAN PENTING:
     );
   }
 
-  // ── Messages ───────────────────────────────────────────────────────
   Widget _buildMessages() => ListView.builder(
         controller: _scrollCtrl,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
@@ -787,7 +763,6 @@ ATURAN PENTING:
         ),
       );
 
-  // ── Quick Actions ──────────────────────────────────────────────────
   Widget _buildQuickActions() => Container(
         color: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -825,7 +800,6 @@ ATURAN PENTING:
         ),
       );
 
-  // ── Input ──────────────────────────────────────────────────────────
   Widget _buildInput() => Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
         decoration: BoxDecoration(
@@ -853,7 +827,8 @@ ATURAN PENTING:
                   textInputAction: TextInputAction.send,
                   decoration: InputDecoration(
                     hintText: 'Tulis pesan...',
-                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                    hintStyle:
+                        TextStyle(color: Colors.grey[400], fontSize: 14),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
@@ -883,11 +858,12 @@ ATURAN PENTING:
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final msgDate = DateTime(time.year, time.month, time.day);
-
     if (msgDate == today) {
-      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-    } else {
-      return '${time.day}/${time.month} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+      return '${time.hour.toString().padLeft(2, '0')}:'
+          '${time.minute.toString().padLeft(2, '0')}';
     }
+    return '${time.day}/${time.month} '
+        '${time.hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')}';
   }
 }
