@@ -4,6 +4,7 @@
 // 1. CustomerChatbotScreen panggil SentimentEscalationService.analyze(text)
 // 2. Jika sentiment == negative/urgent → escalate()
 // 3. escalate() → query manager tokens → kirim FCM via Vercel proxy → log ke Supabase
+// 4. notifyCustomerBooking() → query customer token → kirim FCM konfirmasi booking
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -15,7 +16,7 @@ enum SentimentLevel { neutral, negative, urgent }
 
 class SentimentResult {
   final SentimentLevel level;
-  final String reason; // Untuk logging/debug
+  final String reason;
 
   const SentimentResult({required this.level, required this.reason});
 
@@ -24,7 +25,7 @@ class SentimentResult {
 
 // ── Service ────────────────────────────────────────────────────────────
 class SentimentEscalationService {
-  // ── Keyword-based detection (fast, no API call) ────────────────────
+  // ── Keyword-based detection ────────────────────────────────────────
   static const _urgentKeywords = [
     'darurat', 'urgent', 'bahaya', 'kecelakaan', 'sakit', 'mati',
     'tolong segera', 'minta tolong', 'tidak bisa bernapas',
@@ -40,11 +41,9 @@ class SentimentEscalationService {
   ];
 
   /// Analisis sentiment dari teks customer.
-  /// Menggunakan keyword matching (cepat, tanpa API call).
   static SentimentResult analyze(String text) {
     final lower = text.toLowerCase();
 
-    // Cek urgent dulu (lebih prioritas)
     for (final kw in _urgentKeywords) {
       if (lower.contains(kw)) {
         return SentimentResult(
@@ -54,7 +53,6 @@ class SentimentEscalationService {
       }
     }
 
-    // Cek negative
     int negativeHits = 0;
     String matchedKw = '';
     for (final kw in _negativeKeywords) {
@@ -64,7 +62,6 @@ class SentimentEscalationService {
       }
     }
 
-    // 1 keyword negatif kuat = eskalasi, atau 2+ keyword negatif ringan
     if (negativeHits >= 1) {
       return SentimentResult(
         level: SentimentLevel.negative,
@@ -75,7 +72,65 @@ class SentimentEscalationService {
     return const SentimentResult(level: SentimentLevel.neutral, reason: 'OK');
   }
 
-  /// Eskalasi ke manager — kirim notifikasi push + log ke Supabase.
+  // ── Notifikasi konfirmasi booking ke customer ──────────────────────
+  /// Dipanggil setelah booking berhasil dibuat & meja ter-assign.
+  /// Mengirim push notification ke device customer sebagai konfirmasi.
+  static Future<void> notifyCustomerBooking({
+    required String customerUserId,
+    required String customerName,
+    required String bookingDate,
+    required String bookingTime,
+    required int guestCount,
+    required String tableNumber,
+    bool isWaitlisted = false,
+  }) async {
+    try {
+      // 1. Ambil FCM token customer
+      final tokens = await _getCustomerTokens(customerUserId);
+      if (tokens.isEmpty) {
+        debugPrint('[Notify] Tidak ada token untuk customer $customerUserId');
+        return;
+      }
+
+      // 2. Susun pesan sesuai status booking
+      final String title;
+      final String body;
+
+      if (isWaitlisted) {
+        title = '📋 Reservasi Masuk Daftar Tunggu';
+        body = 'Hi $customerName! Reservasi $bookingDate pukul $bookingTime '
+            'untuk $guestCount orang masuk daftar tunggu. '
+            'Kami akan hubungi Anda jika ada meja tersedia.';
+      } else {
+        title = '✅ Reservasi Dikonfirmasi!';
+        body = 'Hi $customerName! Meja $tableNumber sudah disiapkan untuk '
+            '$guestCount orang pada $bookingDate pukul $bookingTime. '
+            'Sampai jumpa! 😊';
+      }
+
+      // 3. Kirim push notification
+      await _sendPushNotifications(
+        tokens: tokens,
+        title: title,
+        body: body,
+        data: {
+          'type': 'booking_confirmation',
+          'booking_date': bookingDate,
+          'booking_time': bookingTime,
+          'table_number': tableNumber,
+          'is_waitlisted': isWaitlisted.toString(),
+          'screen': 'my_bookings', // Deep link ke halaman booking customer
+        },
+      );
+
+      debugPrint('[Notify] Booking confirmation sent to customer $customerUserId');
+    } catch (e) {
+      debugPrint('[Notify] notifyCustomerBooking error: $e');
+      // Jangan throw — gagal notif tidak boleh crash alur booking
+    }
+  }
+
+  // ── Eskalasi ke manager ────────────────────────────────────────────
   /// Dipanggil hanya jika [result.shouldEscalate] == true.
   static Future<void> escalate({
     required String branchId,
@@ -85,24 +140,26 @@ class SentimentEscalationService {
     String? sessionId,
   }) async {
     try {
-      // 1. Ambil FCM tokens semua manager aktif di branch ini
       final tokens = await _getManagerTokens(branchId);
       if (tokens.isEmpty) {
         debugPrint('[Sentiment] Tidak ada manager token untuk branch $branchId');
         return;
       }
 
-      // 2. Kirim notifikasi push via FCM proxy
       final isUrgent = result.level == SentimentLevel.urgent;
       await _sendPushNotifications(
         tokens: tokens,
-        title: isUrgent ? '🚨 URGENT — Customer Butuh Bantuan!' : '⚠️ Keluhan Customer',
+        title: isUrgent
+            ? '🚨 URGENT — Customer Butuh Bantuan!'
+            : '⚠️ Keluhan Customer',
         body: _truncate(customerMessage, 100),
-        branchId: branchId,
-        isUrgent: isUrgent,
+        data: {
+          'type': isUrgent ? 'urgent_escalation' : 'sentiment_escalation',
+          'branch_id': branchId,
+          'screen': 'escalation_inbox',
+        },
       );
 
-      // 3. Log eskalasi ke Supabase untuk audit trail
       await _logEscalation(
         branchId: branchId,
         customerMessage: customerMessage,
@@ -116,7 +173,24 @@ class SentimentEscalationService {
       debugPrint('[Sentiment] Eskalasi selesai — ${tokens.length} manager dinotifikasi');
     } catch (e) {
       debugPrint('[Sentiment] Escalation error: $e');
-      // Jangan throw — jangan sampai eskalasi gagal malah crash chatbot
+    }
+  }
+
+  // ── Query FCM tokens customer ──────────────────────────────────────
+  static Future<List<String>> _getCustomerTokens(String userId) async {
+    try {
+      final tokenRes = await Supabase.instance.client
+          .from('device_tokens')
+          .select('token')
+          .eq('user_id', userId);
+
+      return (tokenRes as List)
+          .map((t) => t['token'] as String)
+          .where((t) => t.isNotEmpty)
+          .toList();
+    } catch (e) {
+      debugPrint('[Notify] Get customer tokens error: $e');
+      return [];
     }
   }
 
@@ -125,7 +199,6 @@ class SentimentEscalationService {
     try {
       final sb = Supabase.instance.client;
 
-      // Ambil user_id semua manager + superadmin aktif di branch ini
       final staffRes = await sb
           .from('staff')
           .select('user_id')
@@ -135,10 +208,8 @@ class SentimentEscalationService {
 
       if ((staffRes as List).isEmpty) return [];
 
-      final userIds =
-          staffRes.map((s) => s['user_id'] as String).toList();
+      final userIds = staffRes.map((s) => s['user_id'] as String).toList();
 
-      // Ambil FCM token dari device_tokens
       final tokenRes = await sb
           .from('device_tokens')
           .select('token')
@@ -155,19 +226,15 @@ class SentimentEscalationService {
   }
 
   // ── Kirim push via FCM proxy di Vercel ────────────────────────────
-  // Vercel proxy endpoint: /api/notify
-  // (perlu dibuat di api/notify.js — lihat instruksi di bawah)
   static Future<void> _sendPushNotifications({
     required List<String> tokens,
     required String title,
     required String body,
-    required String branchId,
-    required bool isUrgent,
+    required Map<String, String> data,
   }) async {
-    const proxyUrl = kIsWeb ? '/api/notify' : 'http://localhost:3000/api/notify';
+    const proxyUrl =
+        kIsWeb ? '/api/notify' : 'http://localhost:3000/api/notify';
 
-    // Kirim dalam batch (FCM multicast maksimal 500 token per request)
-    // Untuk restoran, jarang lebih dari 10 manager, jadi 1 request cukup
     final res = await http
         .post(
           Uri.parse(proxyUrl),
@@ -176,24 +243,17 @@ class SentimentEscalationService {
             'tokens': tokens,
             'title': title,
             'body': body,
-            'data': {
-              'type': isUrgent ? 'urgent_escalation' : 'sentiment_escalation',
-              'branch_id': branchId,
-              'screen': 'escalation_inbox', // Deep link target di app manager
-            },
+            'data': data,
           }),
         )
         .timeout(const Duration(seconds: 15));
 
     if (res.statusCode != 200) {
-      debugPrint('[Sentiment] Push notif error: ${res.statusCode} ${res.body}');
+      debugPrint('[Notify] Push error: ${res.statusCode} ${res.body}');
     }
   }
 
-  // ── Log ke Supabase (audit trail) ─────────────────────────────────
-  // Menggunakan tabel chatbot_conversations yang sudah ada
-  // (field: id, branch_id, messages jsonb, created_at, dll)
-  // Jika ingin tabel terpisah, bisa buat tabel baru 'sentiment_escalations'
+  // ── Log ke Supabase ────────────────────────────────────────────────
   static Future<void> _logEscalation({
     required String branchId,
     required String customerMessage,

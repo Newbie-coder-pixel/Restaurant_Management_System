@@ -21,6 +21,7 @@ import 'customer_chatbot_screen.dart';
 import '../providers/customer_auth_provider.dart';
 import '../providers/cart_provider.dart';
 import 'widgets/cart_bottom_bar.dart';
+import '../../../../core/services/notification_service.dart';
 
 // ── Provider cabang aktif ─────────────────────────────────────────
 final _customerBranchesProvider =
@@ -377,7 +378,8 @@ class _CustomerLandingScreenState
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              await Supabase.instance.client.auth.signOut();
+              await NotificationService.removeToken();
+  await Supabase.instance.client.auth.signOut();
             },
             child: const Text('Keluar',
                 style: TextStyle(

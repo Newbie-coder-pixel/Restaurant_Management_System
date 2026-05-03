@@ -4,9 +4,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../providers/cart_provider.dart';
 import '../providers/customer_auth_provider.dart';
 import '../services/sentiment_escalation_service.dart';
 import '../services/recommendation_service.dart';
@@ -31,10 +33,11 @@ class _ChatMessage {
       };
 }
 
-// ── Quick Actions untuk Customer ───────────────────────────────────────
+// ── Quick Actions ──────────────────────────────────────────────────────
 const _quickActions = [
   ('✨ Rekomendasi', 'Rekomendasikan menu untuk saya'),
   ('🍽️ Lihat Menu', 'Apa saja menu yang tersedia?'),
+  ('🛒 Pesan Makanan', 'Saya ingin memesan makanan'),
   ('📅 Reservasi Meja', 'Saya ingin reservasi meja'),
   ('🌿 Vegetarian', 'Ada menu vegetarian apa saja?'),
   ('⚠️ Info Alergen', 'Saya punya alergi, bisa bantu cek menu?'),
@@ -61,16 +64,15 @@ class _CustomerChatbotScreenState
   bool _isTyping = false;
   String? _sessionId;
 
-  // ── Cached data dari Supabase ──────────────────────────────────────
   String? _cachedMenuText;
   String? _cachedOpeningTime;
   String? _cachedClosingTime;
   String? _cachedBranchName;
-
-  // ── Cached recommendation data ────────────────────────────────────
   RecommendationResult? _cachedRecommendations;
 
-  // ── Escalation cooldown ───────────────────────────────────────────
+  // Raw menu items list — digunakan untuk resolve menuItemId saat order
+  List<Map<String, dynamic>> _menuItems = [];
+
   DateTime? _lastEscalatedAt;
   bool get _canEscalate {
     if (_lastEscalatedAt == null) return true;
@@ -92,6 +94,7 @@ class _CustomerChatbotScreenState
       'Halo! 👋 Selamat datang di layanan customer support kami.\n\n'
       'Saya bisa membantu Anda dengan:\n'
       '• 🍽️ Informasi menu & bahan\n'
+      '• 🛒 Pemesanan makanan\n'
       '• ⚠️ Info alergen & diet khusus\n'
       '• 📅 Reservasi meja\n'
       '• ⏰ Jam operasional\n\n'
@@ -127,7 +130,6 @@ class _CustomerChatbotScreenState
             (branch['closing_time'] as String?)?.substring(0, 5) ?? '22:00';
       }
 
-      // Fetch rekomendasi
       try {
         final user = ref.read(customerUserProvider).value;
         final result = await RecommendationService.getRecommendations(
@@ -140,7 +142,6 @@ class _CustomerChatbotScreenState
         debugPrint('[Recommendation] Load error: $e');
       }
 
-      // Fetch menu
       final items = await sb
           .from('menu_items')
           .select(
@@ -149,12 +150,14 @@ class _CustomerChatbotScreenState
           .eq('is_available', true)
           .order('name');
 
-      if ((items as List).isEmpty) {
+      _menuItems = List<Map<String, dynamic>>.from(items as List);
+
+      if (_menuItems.isEmpty) {
         _cachedMenuText = '(belum ada menu)';
         return;
       }
 
-      final ids = items.map((i) => i['id'] as String).toList();
+      final ids = _menuItems.map((i) => i['id'] as String).toList();
 
       final allergens = await sb
           .from('menu_item_allergens')
@@ -179,7 +182,7 @@ class _CustomerChatbotScreenState
       }
 
       final buf = StringBuffer();
-      for (final item in items) {
+      for (final item in _menuItems) {
         final id = item['id'] as String;
         final cat = (item['menu_categories'] as Map?)?['name'] ?? 'Umum';
         final price = (item['price'] as num?)?.toStringAsFixed(0) ?? '0';
@@ -257,6 +260,22 @@ ${recoText.isNotEmpty ? '$recoText\n' : ''}KEMAMPUAN KAMU:
 4. INFO JAM BUKA — sampaikan jam operasional di atas
 5. RESERVASI MEJA — proses booking meja untuk customer
 6. REKOMENDASI — gunakan data REKOMENDASI MENU PERSONAL di atas jika ada
+7. PEMESANAN MAKANAN — bantu customer memesan makanan via chatbot
+
+ALUR PEMESANAN MAKANAN:
+Saat customer ingin memesan makanan:
+1. Tanya menu apa yang ingin dipesan dan berapa porsi (bisa lebih dari 1 item)
+2. Konfirmasi ringkasan pesanan customer (nama menu PERSIS sesuai daftar, jumlah, harga satuan, total)
+3. Setelah customer konfirmasi, output PERSIS format ini (tanpa teks lain setelahnya):
+
+ACTION:create_order
+{"items":[{"name":"Nama Menu Persis","quantity":2,"notes":"catatan atau null"},{"name":"Nama Menu Lain","quantity":1,"notes":null}]}
+
+ATURAN PENTING PEMESANAN:
+- Nama menu di JSON HARUS PERSIS sama dengan daftar menu (case-sensitive)
+- Jangan output ACTION:create_order sebelum customer mengkonfirmasi pesanan
+- Jika menu tidak ada di daftar, tolak dengan sopan
+- Setelah output action, jangan tambahkan teks lagi
 
 ALUR RESERVASI MEJA:
 Saat customer ingin reservasi:
@@ -270,7 +289,7 @@ Saat customer ingin reservasi:
    - VALID ✅: tanggal hari ini atau setelahnya
    - LEWAT ❌: tolak sopan
    - JAM VALID: $openTime - $closeTime WIB saja
-4. Setelah semua data lengkap, output PERSIS format ini (tanpa teks lain setelahnya):
+4. Setelah semua data lengkap, output PERSIS format ini:
 
 ACTION:create_booking
 {"customer_name":"Nama Tamu","guest_count":2,"booking_date":"2026-03-19","booking_time":"10:00","phone":"08xx atau null","special_requests":"catatan atau null"}
@@ -327,24 +346,41 @@ ATURAN PENTING:
 
   // ── Parse Response ─────────────────────────────────────────────────
   Future<void> _parseAndHandleResponse(String raw) async {
-    const marker = 'ACTION:create_booking';
-    final idx = raw.indexOf(marker);
-
-    if (idx != -1) {
-      final before = raw.substring(0, idx).trim();
-      final jsonStart = raw.indexOf('{', idx);
+    // Cek order action dulu
+    const orderMarker = 'ACTION:create_order';
+    final orderIdx = raw.indexOf(orderMarker);
+    if (orderIdx != -1) {
+      final before = raw.substring(0, orderIdx).trim();
+      final jsonStart = raw.indexOf('{', orderIdx);
       final jsonEnd = raw.lastIndexOf('}');
-
       if (jsonStart != -1 && jsonEnd != -1) {
         try {
           final jsonStr = raw.substring(jsonStart, jsonEnd + 1);
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+          if (before.isNotEmpty) _addBot(before);
+          await _createOrder(data);
+          return;
+        } catch (e) {
+          debugPrint('Parse order error: $e');
+        }
+      }
+    }
 
+    // Cek booking action
+    const bookingMarker = 'ACTION:create_booking';
+    final bookingIdx = raw.indexOf(bookingMarker);
+    if (bookingIdx != -1) {
+      final before = raw.substring(0, bookingIdx).trim();
+      final jsonStart = raw.indexOf('{', bookingIdx);
+      final jsonEnd = raw.lastIndexOf('}');
+      if (jsonStart != -1 && jsonEnd != -1) {
+        try {
+          final jsonStr = raw.substring(jsonStart, jsonEnd + 1);
+          final data = jsonDecode(jsonStr) as Map<String, dynamic>;
           final displayMsg = before.isNotEmpty
               ? before
               : '📅 Baik, saya akan memproses reservasi Anda!';
           _addBot(displayMsg);
-
           await _createBooking(data);
           return;
         } catch (e) {
@@ -356,14 +392,140 @@ ATURAN PENTING:
     _addBot(raw);
   }
 
-  // ── Create Booking + Auto-Assign Meja ─────────────────────────────
+  // ── Create Order → Cart → Navigate Checkout ────────────────────────
+  Future<void> _createOrder(Map<String, dynamic> data) async {
+    try {
+      final rawItems = data['items'] as List<dynamic>?;
+      if (rawItems == null || rawItems.isEmpty) {
+        _addBot('⚠️ Maaf, pesanan tidak valid. Silakan coba lagi.');
+        return;
+      }
+
+      if (_branchId.isEmpty) {
+        _addBot('⚠️ Maaf, informasi cabang tidak ditemukan.');
+        return;
+      }
+
+      // Set branch di cart
+      final cartNotifier = ref.read(cartProvider.notifier);
+      cartNotifier.setBranch(_branchId, _cachedBranchName ?? 'Restoran');
+
+      final List<String> notFound = [];
+      final List<String> added = [];
+
+      for (final raw in rawItems) {
+        final itemMap = raw as Map<String, dynamic>;
+        final requestedName = itemMap['name'] as String? ?? '';
+        final quantity = (itemMap['quantity'] as num?)?.toInt() ?? 1;
+        final notes = itemMap['notes'] as String?;
+
+        // Cari menu item berdasarkan nama (case-insensitive tolerant tapi exact-match prefer)
+        Map<String, dynamic>? found;
+
+        // 1. Exact match dulu
+        for (final m in _menuItems) {
+          if ((m['name'] as String).toLowerCase() ==
+              requestedName.toLowerCase()) {
+            found = m;
+            break;
+          }
+        }
+
+        // 2. Fallback: contains match
+        found ??= _menuItems.cast<Map<String, dynamic>?>().firstWhere(
+              (m) => (m!['name'] as String)
+                  .toLowerCase()
+                  .contains(requestedName.toLowerCase()),
+              orElse: () => null,
+            );
+
+        if (found == null) {
+          notFound.add(requestedName);
+          continue;
+        }
+
+        final price = (found['price'] as num).toDouble();
+        final cartItem = CartItem(
+          menuItemId: found['id'] as String,
+          name: found['name'] as String,
+          price: price,
+          quantity: quantity,
+          notes: (notes != null && notes != 'null' && notes.isNotEmpty)
+              ? notes
+              : null,
+        );
+
+        cartNotifier.addItem(cartItem);
+        added.add('${found['name']} x$quantity');
+      }
+
+      if (added.isEmpty) {
+        _addBot(
+          '⚠️ Tidak ada menu yang cocok ditemukan:\n'
+          '${notFound.map((n) => '• $n').join('\n')}\n\n'
+          'Silakan cek nama menu dan coba lagi.',
+        );
+        return;
+      }
+
+      // Tampilkan konfirmasi sebelum ke checkout
+      final cart = ref.read(cartProvider);
+      final subtotal = cart.subtotal;
+      final tax = cart.tax;
+      final total = cart.total;
+
+      String msg =
+          '✅ Item berhasil ditambahkan ke keranjang!\n\n'
+          '🛒 *Ringkasan Pesanan:*\n'
+          '${added.map((a) => '• $a').join('\n')}\n';
+
+      if (notFound.isNotEmpty) {
+        msg +=
+            '\n⚠️ Menu berikut tidak ditemukan:\n'
+            '${notFound.map((n) => '• $n').join('\n')}\n';
+      }
+
+      msg +=
+          '\n💰 Subtotal: Rp ${_fmtPrice(subtotal)}\n'
+          '🧾 Pajak (11%): Rp ${_fmtPrice(tax)}\n'
+          '💵 Total: Rp ${_fmtPrice(total)}\n\n'
+          'Mengarahkan ke halaman checkout... 🚀';
+
+      _addBot(msg);
+
+      // Delay sedikit biar pesan terbaca, lalu navigate
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) {
+        context.push('/customer/checkout');
+      }
+
+      await _saveSession();
+    } catch (e) {
+      debugPrint('Create order error: $e');
+      _addBot(
+        '⚠️ Maaf, terjadi kendala saat memproses pesanan.\n'
+        'Silakan coba lagi atau pesan langsung di menu.',
+      );
+    }
+  }
+
+  String _fmtPrice(double v) {
+    final s = v.toStringAsFixed(0);
+    final buffer = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(s[i]);
+    }
+    return buffer.toString();
+  }
+
+  // ── Create Booking + Auto-Assign + Notifikasi Customer ────────────
   Future<void> _createBooking(Map<String, dynamic> data) async {
     try {
       final user = ref.read(customerUserProvider).value;
 
-      // Parse booking_date + booking_time → DateTime
-      final dateStr = data['booking_date'] as String;  // YYYY-MM-DD
-      final timeStr = data['booking_time'] as String;  // HH:MM
+      final dateStr = data['booking_date'] as String;
+      final timeStr = data['booking_time'] as String;
       final dp = dateStr.split('-');
       final tp = timeStr.split(':');
       final bookingDateTime = DateTime(
@@ -374,7 +536,6 @@ ATURAN PENTING:
         int.parse(tp[1]),
       );
 
-      // Gunakan TableAssignmentService — insert booking + RPC assign_table
       final result = await _tableService.createAndAssign(
         branchId: _branchId,
         customerName: data['customer_name'] as String? ?? 'Tamu',
@@ -387,7 +548,6 @@ ATURAN PENTING:
       );
 
       if (result.isConfirmed) {
-        // ── Meja berhasil di-assign ──────────────────────────────────
         _addBot(
           '✅ Reservasi berhasil dikonfirmasi!\n\n'
           '👤 Nama: ${data['customer_name']}\n'
@@ -396,22 +556,43 @@ ATURAN PENTING:
           '⏰ Jam: ${data['booking_time']} WIB\n'
           '🪑 Meja: ${result.tableNumber ?? '-'}\n'
           '${_hasSpecialRequest(data) ? '📝 Catatan: ${data['special_requests']}\n' : ''}\n'
-          'Sampai jumpa di restoran kami! 😊',
+          'Notifikasi konfirmasi sudah dikirim ke HP Anda. Sampai jumpa! 😊',
         );
+
+        if (user != null) {
+          SentimentEscalationService.notifyCustomerBooking(
+            customerUserId: user.id,
+            customerName: data['customer_name'] as String? ?? 'Tamu',
+            bookingDate: data['booking_date'] as String,
+            bookingTime: data['booking_time'] as String,
+            guestCount: (data['guest_count'] as num?)?.toInt() ?? 1,
+            tableNumber: result.tableNumber ?? '-',
+            isWaitlisted: false,
+          ).catchError((e) => debugPrint('Customer notify error: $e'));
+        }
       } else if (result.isWaitlisted) {
-        // ── Tidak ada meja kosong — masuk waitlist ───────────────────
         _addBot(
           '📋 Reservasi Anda masuk daftar tunggu.\n\n'
           '👤 Nama: ${data['customer_name']}\n'
           '👥 Jumlah tamu: ${data['guest_count']} orang\n'
           '📅 Tanggal: ${data['booking_date']}\n'
           '⏰ Jam: ${data['booking_time']} WIB\n\n'
-          'Saat ini meja untuk ${data['guest_count']} orang belum tersedia '
-          'di jam tersebut. Staff kami akan menghubungi Anda segera setelah '
-          'ada meja yang tersedia. 🙏',
+          'Saat ini meja belum tersedia di jam tersebut. '
+          'Staff kami akan menghubungi Anda segera. 🙏',
         );
+
+        if (user != null) {
+          SentimentEscalationService.notifyCustomerBooking(
+            customerUserId: user.id,
+            customerName: data['customer_name'] as String? ?? 'Tamu',
+            bookingDate: data['booking_date'] as String,
+            bookingTime: data['booking_time'] as String,
+            guestCount: (data['guest_count'] as num?)?.toInt() ?? 1,
+            tableNumber: '-',
+            isWaitlisted: true,
+          ).catchError((e) => debugPrint('Customer notify error: $e'));
+        }
       } else {
-        // ── Error dari RPC ────────────────────────────────────────────
         _addBot(
           '⚠️ Maaf, terjadi kendala saat memproses reservasi.\n'
           '${result.message != null ? '${result.message!}\n' : ''}'
@@ -508,7 +689,9 @@ ATURAN PENTING:
       final raw = await _callAI(promptText);
       await _parseAndHandleResponse(raw);
 
-      if (sentimentResult.shouldEscalate && _canEscalate && _branchId.isNotEmpty) {
+      if (sentimentResult.shouldEscalate &&
+          _canEscalate &&
+          _branchId.isNotEmpty) {
         _lastEscalatedAt = DateTime.now();
         SentimentEscalationService.escalate(
           branchId: _branchId,
@@ -585,6 +768,44 @@ ATURAN PENTING:
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
         actions: [
+          // Badge cart jika ada item
+          Consumer(
+            builder: (context, ref, _) {
+              final cartCount = ref.watch(cartProvider).itemCount;
+              if (cartCount == 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.shopping_cart_outlined, size: 22),
+                      tooltip: 'Lihat Keranjang',
+                      onPressed: () => context.push('/customer/checkout'),
+                    ),
+                    Positioned(
+                      right: 6,
+                      top: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '$cartCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
             tooltip: 'Chat Baru',
