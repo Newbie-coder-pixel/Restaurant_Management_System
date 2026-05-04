@@ -15,6 +15,8 @@ import '../../features/customer/presentation/customer_my_bookings_screen.dart';
 import '../../features/customer/presentation/customer_checkout_screen.dart';
 import '../../features/customer/presentation/customer_order_tracker_screen.dart';
 import '../../features/customer/presentation/customer_reset_password_screen.dart';
+import '../../features/customer/presentation/customer_order_success_screen.dart';
+import '../../features/customer/presentation/customer_booking_success_screen.dart';
 
 import '../../features/qr_order/presentation/qr_menu_screen.dart';
 import '../../features/qr_order/presentation/qr_cart_screen.dart';
@@ -73,8 +75,6 @@ String _defaultRouteForRole(StaffRole role) {
 class _AuthChangeNotifier extends ChangeNotifier {
   _AuthChangeNotifier(this._ref) {
     _sub = _ref.listen<AuthState>(authStateProvider, (prev, next) {
-      // Hanya notify kalau isLoading berubah dari true ke false
-      // supaya tidak trigger redirect saat masih loading
       if (prev?.isLoading == true && next.isLoading == false) {
         notifyListeners();
       } else if (prev?.staff != next.staff) {
@@ -92,7 +92,6 @@ class _AuthChangeNotifier extends ChangeNotifier {
   }
 }
 
-// Helper untuk ambil initial location dari URL browser saat web
 String _getInitialLocation() {
   if (kIsWeb) {
     final uri = Uri.base;
@@ -123,16 +122,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       bool isCustomerRoute(String path) =>
           path.startsWith('/customer') || path == '/customer';
 
-      // Customer & QR routes: selalu bebas, tidak perlu auth
       if (isCustomerRoute(loc) || isCustomerRoute(fullPath) ||
           isQrRoute(loc) || isQrRoute(fullPath)) {
         return null;
       }
 
-      // Staff gateway bebas diakses
       if (loc == AppRoutes.staffGateway) return null;
 
-      // Tangani password recovery link
       if (kIsWeb) {
         final uri = Uri.base;
         final type = uri.queryParameters['type'];
@@ -141,20 +137,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // Kalau masih loading auth, jangan redirect dulu
       if (authState.isLoading) return null;
 
-      // Web: belum login → ke customer
       if (kIsWeb && !isLoggedIn && loc != AppRoutes.login) {
         return AppRoutes.customer;
       }
 
-      // Non-web: belum login → ke login
       if (!isLoggedIn && loc != AppRoutes.login) {
         return AppRoutes.login;
       }
 
-      // Sudah login tapi di halaman login → ke halaman sesuai role
       if (isLoggedIn && loc == AppRoutes.login) {
         final s = authState.staff;
         if (s != null) return _defaultRouteForRole(s.role);
@@ -163,7 +155,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // Customer PWA Routes
+      // ── Customer PWA Routes ───────────────────────────────────────────────
       GoRoute(
         path: AppRoutes.customer,
         builder: (_, state) {
@@ -173,7 +165,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/customer/menu/:branchId',
-        builder: (_, state) => CustomerMenuScreen(branchId: state.pathParameters['branchId']!),
+        builder: (_, state) => CustomerMenuScreen(
+            branchId: state.pathParameters['branchId']!),
       ),
       GoRoute(
         path: '/customer/booking/:branchId',
@@ -208,7 +201,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const CustomerResetPasswordScreen(),
       ),
 
-      // QR Order Routes
+      // ── QR Order Routes ───────────────────────────────────────────────────
       GoRoute(
         path: '/qr/:tableId',
         name: 'qrMenu',
@@ -242,11 +235,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 child: QrOrderTrackerScreen(
                   orderId: orderId,
                   queueNumber: queueNumber,
-          GoRoute(
-            path: '/inventory',
-            name: 'inventory',
-            builder: (context, state) => const InventoryScreen(),
-            routes: ),
                 ),
               );
             },
@@ -254,20 +242,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // Staff Routes
+      // ── Staff Routes ──────────────────────────────────────────────────────
       GoRoute(path: AppRoutes.staffGateway, builder: (_, __) => const StaffGatewayScreen()),
-      GoRoute(path: AppRoutes.login, builder: (_, __) => const LoginScreen()),
-      GoRoute(path: AppRoutes.tables, builder: (_, __) => const TableScreen()),
-      GoRoute(path: AppRoutes.booking, builder: (_, __) => const BookingScreen()),
-      GoRoute(path: AppRoutes.order, builder: (_, __) => const OrderScreen()),
-      GoRoute(path: AppRoutes.cashier, builder: (_, __) => const CashierScreen()),
-      GoRoute(path: AppRoutes.kitchen, builder: (_, __) => const KDSScreen()),
-      GoRoute(path: AppRoutes.menu, builder: (_, __) => const MenuScreen()),
+      GoRoute(path: AppRoutes.login,     builder: (_, __) => const LoginScreen()),
+      GoRoute(path: AppRoutes.tables,    builder: (_, __) => const TableScreen()),
+      GoRoute(path: AppRoutes.booking,   builder: (_, __) => const BookingScreen()),
+      GoRoute(path: AppRoutes.order,     builder: (_, __) => const OrderScreen()),
+      GoRoute(path: AppRoutes.cashier,   builder: (_, __) => const CashierScreen()),
+      GoRoute(path: AppRoutes.kitchen,   builder: (_, __) => const KDSScreen()),
+      GoRoute(path: AppRoutes.menu,      builder: (_, __) => const MenuScreen()),
       GoRoute(path: AppRoutes.inventory, builder: (_, __) => const InventoryScreen()),
-      GoRoute(path: AppRoutes.staff, builder: (_, __) => const StaffScreen()),
-      GoRoute(path: AppRoutes.reports, builder: (_, __) => const ReportsScreen()),
-      GoRoute(path: AppRoutes.branches, builder: (_, __) => const BranchDashboardScreen()),
-      GoRoute(path: AppRoutes.chatbot, builder: (_, __) => const ChatbotScreen()),
+      GoRoute(path: AppRoutes.staff,     builder: (_, __) => const StaffScreen()),
+      GoRoute(path: AppRoutes.reports,   builder: (_, __) => const ReportsScreen()),
+      GoRoute(path: AppRoutes.branches,  builder: (_, __) => const BranchDashboardScreen()),
+      GoRoute(path: AppRoutes.chatbot,   builder: (_, __) => const ChatbotScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(

@@ -10,7 +10,8 @@ class MenuItem {
   final String? imageUrl;
   final bool isAvailable;
   final int sortOrder;
-  final int preparationTimeMinutes; // ← TAMBAHAN untuk ML
+  final int preparationTimeMinutes;
+  final String? inventoryItemId; // ← FIX Error 1
 
   const MenuItem({
     required this.id,
@@ -22,7 +23,8 @@ class MenuItem {
     this.imageUrl,
     this.isAvailable = true,
     this.sortOrder = 0,
-    this.preparationTimeMinutes = 15, // default 15 menit
+    this.preparationTimeMinutes = 15,
+    this.inventoryItemId, // ← FIX Error 1
   });
 }
 

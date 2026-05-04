@@ -157,20 +157,31 @@ class MenuService {
       throw MenuServiceException('Gagal mengubah status menu: ${e.message}');
     }
   }
-  
-  // Saat menambah stok (purchase), re-enable menu terkait
-Future<void> _reEnableLinkedMenus(String inventoryItemId, String branchId) async {
-  final item = await getInventoryItem(inventoryItemId);
-  if (item.availableStock > 0 && item.linkedMenuIds != null) {
-    final menuIds = parseMenuIds(item.linkedMenuIds!);
-    for (final menuId in menuIds) {
-      await _client.from('menus')
-        .update({'is_available': true})
-        .eq('id', menuId)
-        .eq('branch_id', branchId);
+
+  // ─── Re-enable menus linked to an inventory item ──────────────────────────
+  // NOTE: Logika ini dipindahkan ke InventoryService karena membutuhkan
+  // akses ke inventory data. Panggil dari InventoryService saat stok bertambah.
+
+  /// Re-enable menu items yang terhubung ke [inventoryItemId] jika stok > 0.
+  /// Dipanggil dari InventoryService setelah purchase/restock.
+  Future<void> reEnableLinkedMenus(
+      List<String> menuIds, String branchId) async {
+    try {
+      for (final menuId in menuIds) {
+        await _client
+            .from(_itemsTable)
+            .update({
+              'is_available': true,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', menuId)
+            .eq('branch_id', branchId);
+      }
+    } on PostgrestException catch (e) {
+      throw MenuServiceException(
+          'Gagal mengaktifkan menu terkait: ${e.message}');
     }
   }
-}
 
   // ─── DELETE ───────────────────────────────────────────────────────────────
 
