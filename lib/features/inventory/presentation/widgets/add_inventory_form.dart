@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/inventory_item.dart';
 import '../../providers/inventory_provider.dart';
-import '../../../../features/auth/providers/auth_provider.dart';
+import '../../../auth/providers/auth_provider.dart';
 
 class AddInventoryForm extends ConsumerStatefulWidget {
   final String branchId;

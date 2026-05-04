@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/inventory_item.dart';
 import '../services/inventory_service.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../../core/theme/supabase_client.dart';
+import '../../../core/supabase_client.dart';
 
 // ─── SERVICE PROVIDER ─────────────────────────────────────────────────────────
 

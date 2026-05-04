@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/inventory_item.dart';
-import '../inventory_detail_sheet.dart';
+import 'inventory_detail_sheet.dart';
 
 class InventoryCard extends ConsumerWidget {
   final InventoryItem item;
