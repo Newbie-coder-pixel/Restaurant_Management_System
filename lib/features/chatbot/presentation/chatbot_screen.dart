@@ -13,6 +13,7 @@ import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../providers/chat_provider.dart';
 import '../services/chatbot_api.dart';
+import '../services/report_export_service.dart';
 import 'widgets/chat_bubble.dart';
 
 // ── Branch Model ───────────────────────────────────────────────────────
@@ -29,6 +30,14 @@ const _quickActions = [
   ('🏆 Menu Terlaris', 'Menu apa yang paling terlaris bulan ini?'),
   ('📅 Booking Hari Ini', 'Tampilkan semua booking hari ini beserta detailnya'),
   ('💰 Revenue Bulan Ini', 'Berapa total revenue bulan ini dan tren pertumbuhannya?'),
+  ('📥 Export Laporan', '__export__'),
+];
+
+// Keyword trigger export
+const _exportKeywords = [
+  'export', 'ekspor', 'download', 'unduh', 'cetak', 'simpan laporan',
+  'laporan pdf', 'laporan excel', 'laporan csv', 'generate report',
+  'buat laporan', 'kirim laporan', 'share laporan',
 ];
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -429,12 +438,57 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     }
   }
 
+  // ── Show Export Sheet ─────────────────────────────────────────────
+  Future<void> _showExportSheet() async {
+    final branchName = _isSuperadmin
+        ? (_selectedBranchId == null
+            ? 'Semua Cabang'
+            : _branches
+                .where((b) => b.id == _selectedBranchId)
+                .firstOrNull
+                ?.name ??
+                'Cabang')
+        : (_branches.where((b) => b.id == _myBranchId).firstOrNull?.name ??
+            'Cabang Saya');
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ReportExportSheet(
+        branchId: _isSuperadmin ? _selectedBranchId : _myBranchId,
+        branchName: branchName,
+      ),
+    );
+
+    if (result == true && mounted) {
+      _addBot('✅ Laporan berhasil diekspor! File sudah tersedia di share sheet.');
+    }
+  }
+
   // ── Send Message ───────────────────────────────────────────────────
   Future<void> _send([String? quick]) async {
     final text = (quick ?? _msgCtrl.text).trim();
     final chatNotifier = ref.read(chatProvider.notifier);
 
     if (text.isEmpty || ref.read(chatProvider).isTyping) return;
+
+    // Intercept export quick action
+    if (text == '__export__') {
+      await _showExportSheet();
+      return;
+    }
+
+    // Intercept export keywords dari user input
+    final lower = text.toLowerCase();
+    if (_exportKeywords.any((k) => lower.contains(k))) {
+      chatNotifier.addMessage(
+          ChatMessage(role: 'user', content: text, timestamp: DateTime.now()));
+      _addBot('📥 Buka panel export laporan...');
+      await Future.delayed(const Duration(milliseconds: 400));
+      await _showExportSheet();
+      return;
+    }
 
     _msgCtrl.clear();
 
@@ -863,35 +917,39 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
-            children: _quickActions
-                .map((e) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: () => _send(e.$2),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color:
-                                  AppColors.primary.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Text(
-                            e.$1,
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ),
+            children: _quickActions.map((e) {
+              final isExport = e.$2 == '__export__';
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => _send(e.$2),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: isExport
+                          ? Colors.green.withValues(alpha: 0.12)
+                          : AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isExport
+                            ? Colors.green.withValues(alpha: 0.5)
+                            : AppColors.primary.withValues(alpha: 0.3),
                       ),
-                    ))
-                .toList(),
+                    ),
+                    child: Text(
+                      e.$1,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isExport ? Colors.green[700] : AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ),
       );
