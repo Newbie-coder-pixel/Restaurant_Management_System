@@ -16,6 +16,7 @@ class KDSScreen extends ConsumerStatefulWidget {
 class _KDSScreenState extends ConsumerState<KDSScreen> {
   List<OrderModel> _orders = [];
   int _readyCount = 0;
+  List<Map<String, dynamic>> _lowStockItems = [];
   bool _isLoading = true;
   String? _branchId;       // branch milik staff yang login
   StaffRole? _userRole;
@@ -119,6 +120,29 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       }
 
       final readyRes = await readyQuery;
+
+      // ── Fetch low stock items ──────────────────────────────────
+      List<Map<String, dynamic>> lowStock = [];
+      try {
+        final today = DateTime.now();
+        final todayStr =
+            '${today.year}-${today.month.toString().padLeft(2,'0')}-${today.day.toString().padLeft(2,'0')}';
+        final lsRes = await Supabase.instance.client
+            .from('inventory_items')
+            .select('name, unit, opening_stock, used_stock, minimum_stock')
+            .eq('branch_id', targetBranch ?? _branchId!)
+            .eq('date', todayStr);
+        for (final item in lsRes as List) {
+          final opening = (item['opening_stock'] ?? 0) as num;
+          final used    = (item['used_stock'] ?? 0) as num;
+          final minimum = (item['minimum_stock'] ?? 0) as num;
+          final closing = opening - used;
+          if (closing <= minimum) lowStock.add(item);
+        }
+      } catch (e) {
+        debugPrint('⚠️ Gagal fetch low stock: $e');
+      }
+      // ──────────────────────────────────────────────────────────
 
       if (mounted) {
         setState(() {
@@ -289,6 +313,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
         Expanded(
           child: Column(children: [
             if (_readyCount > 0) _buildReadyBanner(colorScheme),
+            if (_lowStockItems.isNotEmpty) _buildLowStockBanner(),
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -335,6 +360,31 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     );
   }
 
+Widget _buildLowStockBanner() {
+    final names = _lowStockItems
+        .map((i) => '${i['name']} (${i['unit']})')
+        .join(', ');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: Colors.orange.shade700,
+      child: Row(children: [
+        const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Stok hampir habis: $names',
+            style: const TextStyle(
+              fontFamily: 'Poppins', color: Colors.white,
+              fontWeight: FontWeight.w600, fontSize: 12),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ]),
+    );
+  }
+  
   Widget _buildEmptyState(ColorScheme colorScheme) {
     return Center(
       child: Column(

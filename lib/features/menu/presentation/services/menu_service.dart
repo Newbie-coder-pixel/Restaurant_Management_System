@@ -157,6 +157,20 @@ class MenuService {
       throw MenuServiceException('Gagal mengubah status menu: ${e.message}');
     }
   }
+  
+  // Saat menambah stok (purchase), re-enable menu terkait
+Future<void> _reEnableLinkedMenus(String inventoryItemId, String branchId) async {
+  final item = await getInventoryItem(inventoryItemId);
+  if (item.availableStock > 0 && item.linkedMenuIds != null) {
+    final menuIds = parseMenuIds(item.linkedMenuIds!);
+    for (final menuId in menuIds) {
+      await _client.from('menus')
+        .update({'is_available': true})
+        .eq('id', menuId)
+        .eq('branch_id', branchId);
+    }
+  }
+}
 
   // ─── DELETE ───────────────────────────────────────────────────────────────
 

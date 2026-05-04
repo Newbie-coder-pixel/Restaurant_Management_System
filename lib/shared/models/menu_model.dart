@@ -42,6 +42,7 @@ class MenuItem {
   final bool isSeasonal;
   final int preparationTimeMinutes;
   final int sortOrder;
+  final String? inventoryItemId;
 
   const MenuItem({
     required this.id,
@@ -55,6 +56,7 @@ class MenuItem {
     required this.isSeasonal,
     required this.preparationTimeMinutes,
     this.sortOrder = 0,
+    this.inventoryItemId,
   });
 
   factory MenuItem.fromJson(Map<String, dynamic> j) => MenuItem(
@@ -69,6 +71,7 @@ class MenuItem {
         isSeasonal: j['is_seasonal'] ?? false,
         preparationTimeMinutes: j['preparation_time_minutes'] ?? 15,
         sortOrder: j['sort_order'] ?? 0,
+        inventoryItemId: j['inventory_item_id'],
       );
 
   Map<String, dynamic> toInsertMap() => {
@@ -97,6 +100,7 @@ class MenuItem {
     bool? isSeasonal,
     int? preparationTimeMinutes,
     int? sortOrder,
+    String? inventoryItemId,
   }) =>
       MenuItem(
         id: id ?? this.id,
@@ -111,5 +115,6 @@ class MenuItem {
         preparationTimeMinutes:
             preparationTimeMinutes ?? this.preparationTimeMinutes,
         sortOrder: sortOrder ?? this.sortOrder,
+        inventoryItemId: inventoryItemId ?? this.inventoryItemId,
       );
 }

@@ -75,6 +75,7 @@ class OrderItem {
   final OrderItemStatus status;
   final String? specialRequests;
   final DateTime? sentToKitchenAt;
+  final String? inventoryItemId;
 
   const OrderItem({
     required this.id,
@@ -87,6 +88,7 @@ class OrderItem {
     required this.status,
     this.specialRequests,
     this.sentToKitchenAt,
+    this.inventoryItemId,
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
@@ -105,6 +107,7 @@ class OrderItem {
         sentToKitchenAt: j['sent_to_kitchen_at'] != null
             ? DateTime.parse(j['sent_to_kitchen_at'])
             : null,
+        inventoryItemId: j['inventory_item_id'],
       );
 }
 

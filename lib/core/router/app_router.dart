@@ -242,6 +242,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 child: QrOrderTrackerScreen(
                   orderId: orderId,
                   queueNumber: queueNumber,
+          GoRoute(
+            path: '/inventory',
+            name: 'inventory',
+            builder: (context, state) => const InventoryScreen(),
+            routes: ),
                 ),
               );
             },

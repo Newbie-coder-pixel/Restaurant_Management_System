@@ -17,6 +17,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   int    _todayOrders   = 0;
   double _todayRevenue  = 0;
   int    _todayBookings = 0;
+  double _todayCogs     = 0;
   final List<FlSpot> _revenueSpots = [];
   List<OrderModel>   _recentOrders = [];
   bool _isLoading = true;
@@ -93,7 +94,23 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         .eq('branch_id', _branchId!)
         .order('created_at', ascending: false)
         .limit(20);
-
+    // ── Inventory COGS hari ini ──────────────────────────────────
+    double todayCogs = 0;
+    try {
+      final cogsRes = await Supabase.instance.client
+          .from('inventory_items')
+          .select('used_stock, cost_per_unit')
+          .eq('branch_id', _branchId!)
+          .eq('date', todayStr);
+      for (final item in cogsRes as List) {
+        final used = (item['used_stock'] ?? 0) as num;
+        final cost = (item['cost_per_unit'] ?? 0) as num;
+        todayCogs += used * cost;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Gagal fetch COGS: $e');
+    }
+    // ─────────────────────────────────────────────────────────────
     if (!mounted) return;
 
     // Process 7-day revenue chart
@@ -116,6 +133,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       _todayOrders   = todayPaidOrders.length;
       _todayRevenue  = revenue;
       _todayBookings = (bookRes as List).length;
+      _todayCogs     = todayCogs; // ← tambah ini
       _revenueSpots
         ..clear()
         ..addAll(spots);
@@ -154,6 +172,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   _kpiCard('Booking', '$_todayBookings',
                     Icons.event_available, AppColors.reserved),
                 ]),
+                // ── COGS ──────────────────────────
+                const SizedBox(height: 8),
+                Row(children: [
+                  _kpiCard('COGS Hari Ini',
+                    'Rp ${(_todayCogs/1000).toStringAsFixed(0)}rb',
+                    Icons.calculate_outlined, Colors.orange),
+                ]),
+                // ──────────────────────────────────
                 const SizedBox(height: 24),
                 // Revenue chart
                 const Text('Revenue 7 Hari Terakhir',

@@ -349,6 +349,42 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     );
   }
 
+Future<void> _showTransferDialog({required String fromBranchId}) async {
+    final qtyCtrl = TextEditingController();
+    bool isLoading = false;
+    String? errorMsg;
+
+    await showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Transfer Stok Antar Cabang',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Fitur ini membutuhkan item inventory yang sudah dibuat.',
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: qtyCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Jumlah',
+              prefixIcon: Icon(Icons.numbers)),
+            keyboardType: TextInputType.number),
+          if (errorMsg != null) ...[
+            const SizedBox(height: 8),
+            Text(errorMsg!,
+              style: const TextStyle(color: Colors.red, fontSize: 12)),
+          ],
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup')),
+        ],
+      )),
+    );
+  }
+
   TimeOfDay _parseTime(String? t, TimeOfDay fallback) {
     if (t == null || t.isEmpty) return fallback;
     final parts = t.split(':');
@@ -469,12 +505,17 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                           ],
                         ),
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 20),
-                            color: AppColors.primary,
-                            tooltip: 'Edit',
-                            onPressed: () => _showBranchDialog(branch: b)),
-                          Container(
+                            IconButton(                          // Transfer — PERTAMA
+                              icon: const Icon(Icons.swap_horiz, size: 20),
+                              color: AppColors.accent,
+                              tooltip: 'Transfer Stok',
+                              onPressed: () => _showTransferDialog(fromBranchId: b['id'])),
+                            IconButton(                          // Edit — KEDUA
+                              icon: const Icon(Icons.edit_outlined, size: 20),
+                              color: AppColors.primary,
+                              tooltip: 'Edit',
+                              onPressed: () => _showBranchDialog(branch: b)),
+                            Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(

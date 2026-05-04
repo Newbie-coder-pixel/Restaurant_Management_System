@@ -670,6 +670,31 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', order.id);
 
+     // ── Deduct inventory untuk setiap item ──────────────────────
+    try {
+      final deductions = order.items
+          .where((i) => i.inventoryItemId != null)
+          .map((i) => {
+            'inventory_item_id': i.inventoryItemId,
+            'quantity': i.quantity,
+          }).toList();
+
+      if (deductions.isNotEmpty) {
+        await Supabase.instance.client.rpc(
+          'deduct_inventory_for_order',
+          params: {
+            'p_branch_id': effectiveBranchId,
+            'p_order_id': order.id,
+            'p_items': deductions,
+          },
+        );
+        debugPrint('✅ Inventory terpotong untuk order ${order.id}');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Gagal deduct inventory (pembayaran tetap diproses): $e');
+    }
+    // ─────────────────────────────────────────────────────────────
+
     await Supabase.instance.client.from('payments').insert({
       'order_id': order.id,
       'branch_id': effectiveBranchId,

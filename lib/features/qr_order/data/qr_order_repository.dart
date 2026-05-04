@@ -63,8 +63,29 @@ class QrOrderRepository {
           return itemData;
         }).toList();
 
-        await _client.from('order_items').insert(orderItemsData);
+await _client.from('order_items').insert(orderItemsData);
         debugPrint('✅ ${orderItemsData.length} items tersimpan');
+
+        // ── Deduct inventory ──────────────────────────────────────
+        try {
+          for (final cartItem in session.items) {
+            final invId = cartItem.menuItem.inventoryItemId;
+            if (invId != null) {
+              await _client.rpc('deduct_inventory_for_order', params: {
+                'p_branch_id': branchId,
+                'p_order_id': orderId,
+                'p_items': [{
+                  'inventory_item_id': invId,
+                  'quantity': cartItem.quantity,
+                }],
+              });
+            }
+          }
+          debugPrint('✅ Inventory terpotong untuk order $orderId');
+        } catch (e) {
+          debugPrint('⚠️ Gagal deduct inventory (order tetap dibuat): $e');
+        }
+        // ─────────────────────────────────────────────────────────
       }
 
       // 3. Update status meja SEGERA setelah insert
