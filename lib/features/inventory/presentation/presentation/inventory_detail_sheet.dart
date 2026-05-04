@@ -3,9 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/inventory_item.dart';
-import '../../providers/inventory_provider.dart';
-import 'add_inventory_form.dart';
+import '../models/inventory_item.dart';
+import '../providers/inventory_provider.dart';
+import 'widgets/add_inventory_form.dart';
 
 class InventoryDetailSheet extends ConsumerStatefulWidget {
   final InventoryItem item;
