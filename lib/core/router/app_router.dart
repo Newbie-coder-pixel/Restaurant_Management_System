@@ -15,8 +15,6 @@ import '../../features/customer/presentation/customer_my_bookings_screen.dart';
 import '../../features/customer/presentation/customer_checkout_screen.dart';
 import '../../features/customer/presentation/customer_order_tracker_screen.dart';
 import '../../features/customer/presentation/customer_reset_password_screen.dart';
-import '../../features/customer/presentation/customer_order_success_screen.dart';
-import '../../features/customer/presentation/customer_booking_success_screen.dart';
 
 import '../../features/qr_order/presentation/qr_menu_screen.dart';
 import '../../features/qr_order/presentation/qr_cart_screen.dart';
@@ -186,16 +184,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           initialOrderNumber: state.pathParameters['orderNumber'],
         ),
       ),
-      GoRoute(
-        path: '/customer/order-success/:orderNumber',
-        builder: (_, state) => CustomerOrderSuccessScreen(
-          orderNumber: state.pathParameters['orderNumber']!,
-        ),
-      ),
-      GoRoute(
-        path: AppRoutes.customerBookingSuccess,
-        builder: (_, __) => const CustomerBookingSuccessScreen(),
-      ),
+      // TODO: Tambahkan kembali setelah file dibuat:
+      // GoRoute(
+      //   path: '/customer/order-success/:orderNumber',
+      //   builder: (_, state) => CustomerOrderSuccessScreen(
+      //     orderNumber: state.pathParameters['orderNumber']!,
+      //   ),
+      // ),
+      // GoRoute(
+      //   path: AppRoutes.customerBookingSuccess,
+      //   builder: (_, __) => const CustomerBookingSuccessScreen(),
+      // ),
       GoRoute(
         path: AppRoutes.customerResetPassword,
         builder: (_, __) => const CustomerResetPasswordScreen(),
