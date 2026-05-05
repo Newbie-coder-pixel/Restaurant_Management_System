@@ -191,6 +191,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       //   builder: (_, __) => const CustomerBookingSuccessScreen(),
       // ),
       GoRoute(
+  path: AppRoutes.customerOrderSuccess,
+  builder: (_, state) => CustomerOrderTrackerScreen(
+    initialOrderNumber: state.pathParameters['orderNumber'],
+  ),
+),
+      GoRoute(
         path: AppRoutes.customerResetPassword,
         builder: (_, __) => const CustomerResetPasswordScreen(),
       ),
