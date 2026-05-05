@@ -3,9 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/inventory_provider.dart';
-import '../../auth/providers/auth_provider.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
-import '../models/inventory_item.dart';
 import 'widgets/inventory_card.dart';
 import 'widgets/add_inventory_form.dart';
 
@@ -212,7 +211,7 @@ class _SummaryBanner extends ConsumerWidget {
 
     if (summary == null) return const SizedBox.shrink();
 
-    String _fmtCurrency(double v) {
+    String fmtCurrency(double v) {
       if (v >= 1000000) return 'Rp ${(v / 1000000).toStringAsFixed(1)}jt';
       if (v >= 1000) return 'Rp ${(v / 1000).toStringAsFixed(0)}rb';
       return 'Rp ${v.toInt()}';
@@ -255,7 +254,7 @@ class _SummaryBanner extends ConsumerWidget {
           _VerticalDivider(),
           _SummaryTile(
             label: 'Nilai Stok',
-            value: _fmtCurrency(summary.totalInventoryValue),
+            value: fmtCurrency(summary.totalInventoryValue),
             icon: Icons.account_balance_wallet_outlined,
             color: Colors.green.shade600,
           ),

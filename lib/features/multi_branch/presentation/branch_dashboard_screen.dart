@@ -251,14 +251,14 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
               ),
 
             // ── Error ─────────────────────────────────────────────
-            if (errorMsg != null) ...[
+            if (errorMsg case final msg?) ...[
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.red.shade50,
                   borderRadius: BorderRadius.circular(8)),
-                child: Text(errorMsg!,
+                child: Text(msg,
                   style: const TextStyle(
                     color: Colors.red, fontSize: 12, fontFamily: 'Poppins'))),
             ],
@@ -351,7 +351,6 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
 
 Future<void> _showTransferDialog({required String fromBranchId}) async {
     final qtyCtrl = TextEditingController();
-    bool isLoading = false;
     String? errorMsg;
 
     await showDialog(
@@ -370,9 +369,9 @@ Future<void> _showTransferDialog({required String fromBranchId}) async {
               labelText: 'Jumlah',
               prefixIcon: Icon(Icons.numbers)),
             keyboardType: TextInputType.number),
-          if (errorMsg != null) ...[
+          if (errorMsg case final msg?) ...[
             const SizedBox(height: 8),
-            Text(errorMsg!,
+            Text(msg,
               style: const TextStyle(color: Colors.red, fontSize: 12)),
           ],
         ]),

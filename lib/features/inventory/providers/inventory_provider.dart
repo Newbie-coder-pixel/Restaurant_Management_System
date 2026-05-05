@@ -183,7 +183,7 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
     required double quantity,
     String? note,
   }) async {
-    final userId = ref.read(currentUserProvider)?.id;
+    final userId = ref.read(currentStaffProvider)?.id;
     await _service.recordPurchase(
       inventoryItemId: itemId,
       branchId: _branchId,
@@ -199,7 +199,7 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
     required double quantity,
     String? note,
   }) async {
-    final userId = ref.read(currentUserProvider)?.id;
+    final userId = ref.read(currentStaffProvider)?.id;
     await _service.recordWaste(
       inventoryItemId: itemId,
       branchId: _branchId,
@@ -215,7 +215,7 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
     required double adjustmentQty,
     required String reason,
   }) async {
-    final userId = ref.read(currentUserProvider)?.id;
+    final userId = ref.read(currentStaffProvider)?.id;
     await _service.adjustStock(
       inventoryItemId: itemId,
       branchId: _branchId,

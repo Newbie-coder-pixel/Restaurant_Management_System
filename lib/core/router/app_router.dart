@@ -184,13 +184,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           initialOrderNumber: state.pathParameters['orderNumber'],
         ),
       ),
-      // TODO: Tambahkan kembali setelah file dibuat:
-      // GoRoute(
-      //   path: '/customer/order-success/:orderNumber',
-      //   builder: (_, state) => CustomerOrderSuccessScreen(
-      //     orderNumber: state.pathParameters['orderNumber']!,
-      //   ),
-      // ),
       // GoRoute(
       //   path: AppRoutes.customerBookingSuccess,
       //   builder: (_, __) => const CustomerBookingSuccessScreen(),

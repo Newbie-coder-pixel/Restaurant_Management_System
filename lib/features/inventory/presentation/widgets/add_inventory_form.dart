@@ -3,9 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../models/inventory_item.dart';
-import '../../../providers/inventory_provider.dart';
-import '../../../auth/providers/auth_provider.dart';
+import '../../models/inventory_item.dart';
+import '../../providers/inventory_provider.dart';
 
 class AddInventoryForm extends ConsumerStatefulWidget {
   final String branchId;
@@ -319,7 +318,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,

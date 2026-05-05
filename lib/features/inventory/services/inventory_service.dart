@@ -260,7 +260,6 @@ class InventoryService {
 
   /// Roll over stok akhir → stok awal hari berikutnya
   Future<void> rolloverDailyStock(String branchId) async {
-    final today = DateTime.now().toIso8601String().split('T').first;
     final tomorrow = DateTime.now()
         .add(const Duration(days: 1))
         .toIso8601String()
@@ -380,8 +379,8 @@ class InventoryService {
     double totalWaste = 0;
 
     for (final item in items) {
-      if (item.isOutOfStock) outOfStock++;
-      else if (item.isLowStock) lowStock++;
+      if (item.isOutOfStock) { outOfStock++; }
+      else if (item.isLowStock) { lowStock++; }
 
       totalValue += item.availableStock * item.costPerUnit;
       totalUsed += item.usedStock * item.costPerUnit;

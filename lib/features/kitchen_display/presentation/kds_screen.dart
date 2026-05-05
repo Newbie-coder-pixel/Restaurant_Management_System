@@ -16,7 +16,7 @@ class KDSScreen extends ConsumerStatefulWidget {
 class _KDSScreenState extends ConsumerState<KDSScreen> {
   List<OrderModel> _orders = [];
   int _readyCount = 0;
-  List<Map<String, dynamic>> _lowStockItems = [];
+  final List<Map<String, dynamic>> _lowStockItems = [];
   bool _isLoading = true;
   String? _branchId;       // branch milik staff yang login
   StaffRole? _userRole;
