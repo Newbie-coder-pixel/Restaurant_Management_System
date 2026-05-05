@@ -272,29 +272,51 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
         );
     return formatted;
   }
-  
+
 void _showDeleteDialog(BuildContext context, WidgetRef ref) {
+  final hasStock = widget.item.availableStock > 0;
+  
+  if (hasStock) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Hapus Item'),
-        content: Text('Yakin ingin menghapus "${widget.item.name}"?'),
+        title: const Text('Tidak Bisa Dihapus'),
+        content: Text(
+          'Item "${widget.item.name}" masih memiliki stok ${widget.item.availableStock} ${widget.item.unit}. Kosongkan stok terlebih dahulu sebelum menghapus.',
+        ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
           FilledButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              Navigator.pop(context);
-              await supabase
-                  .from('inventory_items')
-                  .delete()
-                  .eq('id', widget.item.id);
-            },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Hapus'),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Hapus Item'),
+      content: Text('Yakin ingin menghapus "${widget.item.name}"?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            Navigator.pop(context);
+            Navigator.pop(context);
+            await supabase
+                .from('inventory_items')
+                .delete()
+                .eq('id', widget.item.id);
+            ref.invalidate(inventoryStreamProvider(widget.item.branchId));
+          },
+          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          child: const Text('Hapus'),
           ),
         ],
       ),
