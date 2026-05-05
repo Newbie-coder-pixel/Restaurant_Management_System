@@ -351,6 +351,51 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     }
   }
 
+  // ── Pembatalan dengan catatan wajib ──────────────────────
+  Future<void> _cancelBooking(String id, String notes) async {
+    try {
+      final raw = _bookingsRaw.firstWhere(
+        (r) => r['id'] == id,
+        orElse: () => {},
+      );
+
+      await Supabase.instance.client.from('bookings').update({
+        'status': 'cancelled',
+        'cancellation_notes': notes,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', id);
+
+      // Bebaskan meja jika ada
+      final tableId = raw.isNotEmpty ? raw['table_id'] as String? : null;
+      if (tableId != null) {
+        await Supabase.instance.client
+            .from('restaurant_tables')
+            .update({
+              'status': 'available',
+              'current_booking_id': null,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', tableId);
+      }
+      if (raw.isNotEmpty) await _promoteWaitlist(raw);
+
+      await _load();
+      if (_history.isNotEmpty) _loadHistory();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✅ Reservasi berhasil dibatalkan'),
+            backgroundColor: Color(0xFF4CAF50)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Gagal membatalkan booking: $e'),
+            backgroundColor: Colors.red));
+      }
+    }
+  }
+
   // ── Promote manual: staff tap "Promote ke Pending" di card waitlist ──
   // Cari meja yang benar-benar tersedia untuk slot booking ini, lalu assign
   Future<void> _promoteWaitlistManual(
@@ -875,6 +920,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                         tableData: tableData,
                         statusColor: _statusColor(b.status),
                         onStatusChange: (s) => _updateStatus(b.id, s),
+                        onCancel: (notes) => _cancelBooking(b.id, notes),
                         onEdit: () => _showEditBooking(b, tableData),
                       );
                     }),

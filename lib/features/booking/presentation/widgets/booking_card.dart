@@ -8,6 +8,9 @@ class BookingCard extends StatelessWidget {
   final Map<String, dynamic>? tableData;
   final Color statusColor;
   final void Function(BookingStatus) onStatusChange;
+  /// Dipanggil khusus untuk pembatalan — membuka dialog catatan dulu.
+  /// Menerima [notes] yang diisi staff, lalu caller update status + simpan notes.
+  final void Function(String notes) onCancel;
   final VoidCallback? onEdit;
 
   const BookingCard({
@@ -16,6 +19,7 @@ class BookingCard extends StatelessWidget {
     this.tableData,
     required this.statusColor,
     required this.onStatusChange,
+    required this.onCancel,
     this.onEdit,
   });
 
@@ -246,14 +250,14 @@ class BookingCard extends StatelessWidget {
           if (!isFinished)
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              children: _buildActions(),
+              children: _buildActions(context),
             ),
         ]),
       ),
     );
   }
 
-  List<Widget> _buildActions() {
+  List<Widget> _buildActions(BuildContext context) {
     final buttons = <Widget>[];
     switch (booking.status) {
       case BookingStatus.waitlisted:
@@ -261,26 +265,19 @@ class BookingCard extends StatelessWidget {
             'Promote ke Pending', const Color(0xFF7B1FA2), BookingStatus.pending,
             icon: Icons.arrow_upward_outlined));
         buttons.add(const SizedBox(width: 6));
-        buttons.add(_actionBtn(
-            'Batalkan', AppColors.accent, BookingStatus.cancelled));
+        buttons.add(_cancelBtn(context));
         break;
       case BookingStatus.pending:
         buttons.add(_actionBtn(
             'Konfirmasi', AppColors.available, BookingStatus.confirmed));
         buttons.add(const SizedBox(width: 6));
-        buttons.add(
-            _actionBtn('Batalkan', AppColors.accent, BookingStatus.cancelled));
+        buttons.add(_cancelBtn(context));
         break;
       case BookingStatus.confirmed:
         buttons.add(
             _actionBtn('Dudukkan', AppColors.primary, BookingStatus.seated));
         buttons.add(const SizedBox(width: 6));
-        buttons.add(_actionBtn(
-            'Tidak Hadir', Colors.orange, BookingStatus.noShow,
-            icon: Icons.person_off_outlined));
-        buttons.add(const SizedBox(width: 6));
-        buttons.add(
-            _actionBtn('Batalkan', AppColors.accent, BookingStatus.cancelled));
+        buttons.add(_cancelBtn(context));
         break;
       case BookingStatus.seated:
         buttons.add(
@@ -291,6 +288,110 @@ class BookingCard extends StatelessWidget {
         break;
     }
     return buttons;
+  }
+
+  /// Tombol "Batalkan" yang membuka dialog catatan sebelum konfirmasi
+  Widget _cancelBtn(BuildContext context) => ElevatedButton.icon(
+        onPressed: () => _showCancelDialog(context),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        icon: const SizedBox.shrink(),
+        label: const Text('Batalkan'),
+      );
+
+  Future<void> _showCancelDialog(BuildContext context) async {
+    final notesCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [
+          Icon(Icons.cancel_outlined, color: Color(0xFFE94560), size: 20),
+          SizedBox(width: 8),
+          Text('Batalkan Reservasi',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600)),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            'Anda akan membatalkan reservasi atas nama '
+            '${booking.customerName}.',
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: notesCtrl,
+            maxLines: 3,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Alasan pembatalan *',
+              labelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+              hintText: 'Contoh: Tamu tidak hadir, pembatalan mendadak...',
+              hintStyle: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: Colors.black38),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+            ),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Kembali',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.black54)),
+          ),
+          StatefulBuilder(
+            builder: (ctx2, setLocal) => ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE94560),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                if (notesCtrl.text.trim().isEmpty) {
+                  // Shake hint — highlight field
+                  setLocal(() {});
+                  ScaffoldMessenger.of(ctx2).showSnackBar(const SnackBar(
+                    content: Text('Alasan pembatalan wajib diisi'),
+                    backgroundColor: Colors.orange,
+                    duration: Duration(seconds: 2),
+                  ));
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Konfirmasi Batal',
+                  style: TextStyle(
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      onCancel(notesCtrl.text.trim());
+    }
+    notesCtrl.dispose();
   }
 
   Widget _infoChip(IconData icon, String label) => Row(
