@@ -103,7 +103,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   // ─── CASH PAYMENT ────────────────────────────────────────────────────────
   Future<void> _onCashPayment(OrderModel order) async {
     final cashController = TextEditingController();
-    double change = 0;
+    double change = -1; // nilai awal negatif agar tombol disabled sebelum nominal diisi
 
     await showDialog(
       context: context,
@@ -172,7 +172,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                   style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
             ),
             ElevatedButton(
-              onPressed: change >= 0
+              onPressed: (change >= 0 &&
+                      (double.tryParse(cashController.text.replaceAll('.', '')) ?? 0) > 0)
                   ? () {
                       Navigator.pop(ctx);
                       _processPayment(order, 'cash',
