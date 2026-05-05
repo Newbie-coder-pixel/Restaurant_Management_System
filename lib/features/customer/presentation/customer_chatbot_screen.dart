@@ -70,6 +70,9 @@ class _CustomerChatbotScreenState
   String? _cachedBranchName;
   RecommendationResult? _cachedRecommendations;
 
+  // Semua branch -- dipakai saat chatbot dibuka tanpa branchId
+  List<Map<String, dynamic>> _allBranches = [];
+
   // Raw menu items list — digunakan untuk resolve menuItemId saat order
   List<Map<String, dynamic>> _menuItems = [];
 
@@ -112,7 +115,20 @@ class _CustomerChatbotScreenState
 
   // ── Load Branch Data ───────────────────────────────────────────────
   Future<void> _loadBranchData() async {
-    if (_branchId.isEmpty) return;
+    if (_branchId.isEmpty) {
+      try {
+        final branches = await Supabase.instance.client
+            .from('branches')
+            .select('id, name, address, opening_time, closing_time')
+            .order('name');
+        if (mounted) {
+          setState(() => _allBranches = List<Map<String, dynamic>>.from(branches as List));
+        }
+      } catch (e) {
+        debugPrint('_loadBranches error: $e');
+      }
+      return;
+    }
     try {
       final sb = Supabase.instance.client;
 
@@ -233,34 +249,38 @@ class _CustomerChatbotScreenState
     return enScore > idScore ? 'en' : 'id';
   }
 
-  // ── System Prompt ──────────────────────────────────────────────────
+  // -- System Prompt --
   String _buildSystemPrompt() {
     final now = DateTime.now();
     final todayStr = '${now.day} ${_bulanIndo(now.month)} ${now.year}';
-    final openTime = _cachedOpeningTime ?? '10:00';
-    final closeTime = _cachedClosingTime ?? '22:00';
-    final branchName = _cachedBranchName ?? 'Restoran Kami';
-    final menuText = _cachedMenuText ?? '(menu sedang dimuat)';
-    final recoText = _cachedRecommendations != null
-        ? RecommendationService.formatForPrompt(_cachedRecommendations!)
-        : '';
 
-    return '''
+    // Mode: ada branchId spesifik
+    if (_branchId.isNotEmpty) {
+      final openTime = _cachedOpeningTime ?? '10:00';
+      final closeTime = _cachedClosingTime ?? '22:00';
+      final branchName = _cachedBranchName ?? 'Restoran Kami';
+      final menuText = _cachedMenuText ?? '(menu sedang dimuat)';
+      final recoText = _cachedRecommendations != null
+          ? RecommendationService.formatForPrompt(_cachedRecommendations!)
+          : '';
+
+      return '''
 Kamu adalah asisten AI customer support untuk $branchName yang ramah dan helpful.
 Hari ini: $todayStr
 Jam Operasional: $openTime - $closeTime WIB
+Cabang saat ini: $branchName
 
 DAFTAR MENU TERSEDIA (gunakan data ini, jangan karang sendiri):
 $menuText
 
 ${recoText.isNotEmpty ? '$recoText\n' : ''}KEMAMPUAN KAMU:
-1. INFO MENU — jawab pertanyaan tentang menu, harga, bahan, deskripsi
-2. INFO ALERGEN — bantu customer dengan alergi, lihat kolom "Alergen" di data menu
-3. INFO DIET — bantu customer dengan preferensi diet (vegetarian, vegan, dll), lihat kolom "Diet"
-4. INFO JAM BUKA — sampaikan jam operasional di atas
-5. RESERVASI MEJA — proses booking meja untuk customer
-6. REKOMENDASI — gunakan data REKOMENDASI MENU PERSONAL di atas jika ada
-7. PEMESANAN MAKANAN — bantu customer memesan makanan via chatbot
+1. INFO MENU - jawab pertanyaan tentang menu, harga, bahan, deskripsi
+2. INFO ALERGEN - bantu customer dengan alergi, lihat kolom "Alergen" di data menu
+3. INFO DIET - bantu customer dengan preferensi diet (vegetarian, vegan, dll)
+4. INFO JAM BUKA - sampaikan jam operasional di atas
+5. RESERVASI MEJA - proses booking meja untuk customer di cabang $branchName
+6. REKOMENDASI - gunakan data REKOMENDASI MENU PERSONAL di atas jika ada
+7. PEMESANAN MAKANAN - bantu customer memesan makanan via chatbot
 
 ALUR PEMESANAN MAKANAN:
 Saat customer ingin memesan makanan:
@@ -280,15 +300,8 @@ ATURAN PENTING PEMESANAN:
 ALUR RESERVASI MEJA:
 Saat customer ingin reservasi:
 1. Tanya: nama, jumlah orang, tanggal kedatangan, jam kedatangan, nomor HP (opsional)
-2. Interpretasi tanggal dengan cerdas:
-   - "besok" → $todayStr + 1 hari
-   - "minggu depan" → perkirakan tanggalnya
-   - Selalu asumsikan tahun ${now.year} jika tidak disebutkan
-   - JANGAN minta user tulis ulang tanggal
-3. Validasi:
-   - VALID ✅: tanggal hari ini atau setelahnya
-   - LEWAT ❌: tolak sopan
-   - JAM VALID: $openTime - $closeTime WIB saja
+2. Interpretasi tanggal dengan cerdas (besok = hari ini +1, minggu depan = perkirakan)
+3. Validasi: tanggal hari ini atau setelahnya, jam antara $openTime - $closeTime WIB
 4. Setelah semua data lengkap, output PERSIS format ini:
 
 ACTION:create_booking
@@ -303,6 +316,38 @@ ATURAN PENTING:
 - Gunakan emoji secukupnya
 - Jika customer komplain/tidak puas, akui dengan empati dan tawarkan eskalasi ke staff
 - Format booking_date: YYYY-MM-DD, booking_time: HH:MM
+''';
+    }
+
+    // Mode: tanpa branchId - tampilkan info semua cabang dari database
+    final branchLines = _allBranches.isEmpty
+        ? '(data cabang sedang dimuat)'
+        : _allBranches.map((b) {
+            final name = b['name'] as String? ?? '-';
+            final address = b['address'] as String? ?? '';
+            final open = (b['opening_time'] as String?)?.substring(0, 5) ?? '10:00';
+            final close = (b['closing_time'] as String?)?.substring(0, 5) ?? '22:00';
+            final addrPart = address.isNotEmpty ? ' ($address)' : '';
+            return '$name$addrPart | Jam: $open - $close WIB';
+          }).join('\n');
+
+    return '''
+Kamu adalah asisten AI customer support untuk restoran kami yang ramah dan helpful.
+Hari ini: $todayStr
+
+DAFTAR CABANG KAMI (data nyata dari sistem):
+$branchLines
+
+KEMAMPUAN KAMU:
+1. INFO CABANG - jelaskan lokasi, jam operasional setiap cabang di atas
+2. ARAHKAN KE CABANG - jika customer ingin pesan atau booking, minta mereka ke halaman Beranda, pilih cabang, lalu buka Chat AI dari sana
+3. INFO UMUM - jawab pertanyaan umum tentang restoran
+
+PENTING:
+- Kamu TAHU semua cabang beserta jam dan alamatnya - JANGAN bilang tidak tahu info cabang
+- Untuk pesan makanan atau booking di cabang tertentu, arahkan customer ke halaman Beranda
+- Gunakan emoji secukupnya
+- Balas dalam bahasa yang sama dengan customer (Indonesia atau Inggris)
 ''';
   }
 
@@ -677,7 +722,7 @@ ATURAN PENTING:
     final sentimentResult = SentimentEscalationService.analyze(text);
 
     try {
-      if (_cachedMenuText == null) await _loadBranchData();
+      if (_cachedMenuText == null && _allBranches.isEmpty) await _loadBranchData();
 
       final promptText = sentimentResult.shouldEscalate
           ? '$text\n\n[SISTEM: Customer tampak '
