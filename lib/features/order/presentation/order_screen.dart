@@ -31,6 +31,10 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   String? _updatingOrderId;
   String _selectedGroup = '';
 
+  // ── Branch filter (superadmin only) ──────────────────────────────────────
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId; // null = semua cabang
+
   @override
   void initState() {
     super.initState();
@@ -77,18 +81,40 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   Future<void> _init() async {
+    await _loadBranches();
     await _load();
     _subscribeRealtime();
   }
 
+  // ── Load daftar branch (superadmin only) ─────────────────────────────────
+  Future<void> _loadBranches() async {
+    if (!_isSuperAdmin) return;
+    try {
+      final res = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .order('name');
+      if (mounted) {
+        setState(() => _branches = List<Map<String, dynamic>>.from(res));
+      }
+    } catch (e) {
+      debugPrint('_loadBranches error: $e');
+    }
+  }
+
   Future<void> _load() async {
-    // Superadmin bisa lihat semua branch, role lain harus punya branchId
+    // Superadmin bisa lihat semua branch atau filter per branch
+    // Role lain harus punya branchId
     if (!_isSuperAdmin && _branchId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
     if (mounted) setState(() => _isLoading = true);
     try {
+      // effectiveBranchId: superadmin pakai _selectedBranchId (bisa null = semua),
+      // role lain pakai _branchId mereka sendiri
+      final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
+
       final activeStatuses = ['new', 'created', 'paid', 'preparing', 'ready', 'served'];
       var ordQuery = Supabase.instance.client
           .from('orders')
@@ -100,14 +126,19 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             order_items(*)
           ''')
           .inFilter('status', activeStatuses);
-      if (!_isSuperAdmin) ordQuery = ordQuery.eq('branch_id', _branchId!);
+      if (effectiveBranchId != null) {
+        ordQuery = ordQuery.eq('branch_id', effectiveBranchId);
+      }
       final ordRes = await ordQuery.order('created_at', ascending: false);
 
       var tblQuery = Supabase.instance.client
           .from('restaurant_tables')
           .select();
-      if (!_isSuperAdmin) tblQuery = tblQuery.eq('branch_id', _branchId!);
+      if (effectiveBranchId != null) {
+        tblQuery = tblQuery.eq('branch_id', effectiveBranchId);
+      }
       final tblRes = await tblQuery.order('table_number');
+
       if (mounted) {
         setState(() {
           _orders = (ordRes as List).map((e) => OrderModel.fromJson(e)).toList();
@@ -125,6 +156,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     if (!_isSuperAdmin && _branchId == null) return;
     if (mounted) setState(() => _isHistoryLoading = true);
     try {
+      final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
+
       var query = Supabase.instance.client
           .from('orders')
           .select('''
@@ -135,7 +168,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             restaurant_tables!orders_table_id_fkey(table_number),
             order_items(*, menu_items(name))
           ''');
-      if (!_isSuperAdmin) query = query.eq('branch_id', _branchId!);
+      if (effectiveBranchId != null) {
+        query = query.eq('branch_id', effectiveBranchId);
+      }
       if (_historyFilter == 'paid') {
         query = query.inFilter('status', ['paid', 'served']);
       } else if (_historyFilter == 'cancelled') {
@@ -159,7 +194,10 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     _channel?.unsubscribe();
     if (!_isSuperAdmin && _branchId == null) return;
 
-    final channelName = _isSuperAdmin ? 'orders_realtime_all' : 'orders_realtime_$_branchId';
+    final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
+    final channelName = effectiveBranchId != null
+        ? 'orders_realtime_$effectiveBranchId'
+        : 'orders_realtime_all';
 
     var channelBuilder = Supabase.instance.client
         .channel(channelName)
@@ -167,12 +205,12 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          filter: _isSuperAdmin
-              ? null
-              : PostgresChangeFilter(
+          filter: effectiveBranchId != null
+              ? PostgresChangeFilter(
                   type: PostgresChangeFilterType.eq,
                   column: 'branch_id',
-                  value: _branchId!),
+                  value: effectiveBranchId)
+              : null,
           callback: (_) { if (mounted) _load(); },
         );
     _channel = channelBuilder.subscribe();
@@ -381,10 +419,57 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                         const Text('Order Management',
                           style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
                             fontWeight: FontWeight.w600, color: Colors.white)),
+                        // ── Branch dropdown untuk superadmin ─────────────────
                         if (_isSuperAdmin)
-                          const Text('Semua Cabang',
-                            style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
-                              color: Colors.white60)),
+                          DropdownButtonHideUnderline(
+                            child: DropdownButton<String?>(
+                              value: _selectedBranchId,
+                              isDense: true,
+                              dropdownColor: const Color(0xFF1A1A2E),
+                              iconEnabledColor: Colors.white60,
+                              icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white70,
+                              ),
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text(
+                                    'Semua Cabang',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 11,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                                ..._branches.map((b) => DropdownMenuItem<String?>(
+                                  value: b['id'] as String,
+                                  child: Text(
+                                    b['name'] as String,
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                )),
+                              ],
+                              onChanged: (val) {
+                                setState(() {
+                                  _selectedBranchId = val;
+                                  _orders = [];
+                                  _history = [];
+                                  _selectedGroup = '';
+                                });
+                                _load();
+                                _subscribeRealtime();
+                                if (_tab.index == 2) _loadHistory();
+                              },
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -646,8 +731,6 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             child: nextS != null
                     ? SizedBox(
                         width: double.infinity,
-                        // Tombol "Sudah Diantar" (ready→served) tampil lebih besar & hijau terang
-                        // agar waiter mudah tap setelah antar ke meja
                         child: ElevatedButton.icon(
                           onPressed: isUpdating ? null : () => _updateOrderStatus(o),
                           style: ElevatedButton.styleFrom(
