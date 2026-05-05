@@ -272,7 +272,7 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
         );
     return formatted;
   }
-}
+  
 void _showDeleteDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
