@@ -24,6 +24,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   RealtimeChannel? _channel;
   OrderModel? _selected;
 
+  // ── Branch filter (superadmin only) ──────────────────────────────────────
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId; // null = semua cabang
+
   @override
   void initState() {
     super.initState();
@@ -34,8 +38,25 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     final staff = ref.read(currentStaffProvider);
     _isSuperAdmin = staff?.role == StaffRole.superadmin;
     _branchId = _isSuperAdmin ? null : staff?.branchId;
+    await _loadBranches();
     await _load();
     _subscribeRealtime();
+  }
+
+  // ── Load daftar branch (superadmin only) ─────────────────────────────────
+  Future<void> _loadBranches() async {
+    if (!_isSuperAdmin) return;
+    try {
+      final res = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .order('name');
+      if (mounted) {
+        setState(() => _branches = List<Map<String, dynamic>>.from(res));
+      }
+    } catch (e) {
+      debugPrint('_loadBranches error: $e');
+    }
   }
 
   Future<void> _load() async {
@@ -43,6 +64,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
+    if (mounted) setState(() => _isLoading = true);
+
+    final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
 
     try {
       var query = Supabase.instance.client
@@ -57,7 +81,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           ''')
           .inFilter('status', ['ready', 'served'])
           .inFilter('payment_status', ['pending', 'unpaid']);
-      if (!_isSuperAdmin) query = query.eq('branch_id', _branchId!);
+      if (effectiveBranchId != null) query = query.eq('branch_id', effectiveBranchId);
       final res = await query.order('created_at', ascending: true);
 
       if (mounted) {
@@ -75,21 +99,25 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }
 
   void _subscribeRealtime() {
+    _channel?.unsubscribe();
     if (!_isSuperAdmin && _branchId == null) return;
-    final channelName = _isSuperAdmin ? 'cashier_orders_all' : 'cashier_orders_$_branchId';
+    final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
+    final channelName = effectiveBranchId != null
+        ? 'cashier_orders_$effectiveBranchId'
+        : 'cashier_orders_all';
     _channel = Supabase.instance.client
         .channel(channelName)
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          filter: _isSuperAdmin
-              ? null
-              : PostgresChangeFilter(
+          filter: effectiveBranchId != null
+              ? PostgresChangeFilter(
                   type: PostgresChangeFilterType.eq,
                   column: 'branch_id',
-                  value: _branchId!),
-          callback: (_) => _load(),
+                  value: effectiveBranchId)
+              : null,
+          callback: (_) { if (mounted) _load(); },
         )
         .subscribe();
   }
@@ -904,8 +932,56 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           children: [
             const Text('Kasir'),
             if (_isSuperAdmin)
+              DropdownButtonHideUnderline(
+                child: DropdownButton<String?>(
+                  value: _selectedBranchId,
+                  isDense: true,
+                  dropdownColor: const Color(0xFF1A1A2E),
+                  iconEnabledColor: Colors.white60,
+                  icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: Colors.white70,
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(
+                        'Semua Cabang',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ),
+                    ..._branches.map((b) => DropdownMenuItem<String?>(
+                      value: b['id'] as String,
+                      child: Text(
+                        b['name'] as String,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: Colors.white,
+                        ),
+                      ),
+                    )),
+                  ],
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedBranchId = val;
+                      _orders = [];
+                      _selected = null;
+                    });
+                    _load();
+                    _subscribeRealtime();
+                  },
+                ),
+              )
+            else
               const Text(
-                'Semua Cabang',
+                'Kasir',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
