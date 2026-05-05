@@ -1,4 +1,4 @@
-enum BookingStatus { pending, confirmed, seated, cancelled, noShow, completed }
+enum BookingStatus { pending, confirmed, seated, cancelled, noShow, completed, waitlisted }
 enum BookingSource { app, website, aiChatbot, phone, walkIn, whatsapp }
 
 class BookingModel {
@@ -28,13 +28,14 @@ class BookingModel {
 
   static BookingStatus _statusFromString(String s) {
     const map = {
-      'pending':   BookingStatus.pending,
-      'confirmed': BookingStatus.confirmed,
-      'seated':    BookingStatus.seated,
-      'cancelled': BookingStatus.cancelled,
-      'no_show':   BookingStatus.noShow,
-      'noShow':    BookingStatus.noShow,
-      'completed': BookingStatus.completed,
+      'pending':    BookingStatus.pending,
+      'confirmed':  BookingStatus.confirmed,
+      'seated':     BookingStatus.seated,
+      'cancelled':  BookingStatus.cancelled,
+      'no_show':    BookingStatus.noShow,
+      'noShow':     BookingStatus.noShow,
+      'completed':  BookingStatus.completed,
+      'waitlisted': BookingStatus.waitlisted,
     };
     return map[s] ?? BookingStatus.pending;
   }

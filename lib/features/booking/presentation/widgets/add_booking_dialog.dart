@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:math';
 
 class AddBookingDialog extends StatefulWidget {
   final String branchId;
@@ -21,8 +22,10 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
   TimeOfDay _time = const TimeOfDay(hour: 19, minute: 0);
 
   bool _isSearching = false;
+  int _duration = 120; // default 2 jam
   Map<String, dynamic>? _assignedTable;
   String? _assignError;
+  String? _confirmationCode; // di-generate saat meja berhasil ditemukan
 
   // ── Validasi waktu booking tidak kurang dari 2 jam dari sekarang ──
   String? _validateBookingTime() {
@@ -49,14 +52,33 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
     }
 
     setState(() {
-      _isSearching = true;
-      _assignedTable = null;
-      _assignError = null;
+      _isSearching     = true;
+      _assignedTable   = null;
+      _assignError     = null;
+      _confirmationCode = null;
     });
 
     try {
       final dateStr = _formatDate(_date);
-      final timeStr = _formatTime(_time);
+
+      // ── Cek apakah tanggal ini adalah hari tutup restoran ──
+      final closureRes = await Supabase.instance.client
+          .from('restaurant_closures')
+          .select('reason')
+          .eq('branch_id', widget.branchId)
+          .eq('closure_date', dateStr)
+          .maybeSingle();
+
+      if (closureRes != null) {
+        final reason = closureRes['reason'] as String?;
+        setState(() {
+          _assignError = reason != null && reason.isNotEmpty
+              ? '🚫 Restoran tutup pada tanggal ini.\nAlasan: $reason\n\nSilakan pilih tanggal lain.'
+              : '🚫 Restoran tutup pada tanggal ini.\nSilakan pilih tanggal lain.';
+          _isSearching = false;
+        });
+        return;
+      }
 
       final tables = await Supabase.instance.client
           .from('restaurant_tables')
@@ -74,18 +96,27 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
         return;
       }
 
+      // Ambil semua booking aktif di tanggal yang sama, lalu filter overlap durasi
       final existingBookings = await Supabase.instance.client
           .from('bookings')
-          .select('table_id')
+          .select('table_id, booking_time, duration_minutes')
           .eq('branch_id', widget.branchId)
           .eq('booking_date', dateStr)
-          .eq('booking_time', timeStr)
           .inFilter('status', ['pending', 'confirmed', 'seated']);
 
-      final bookedTableIds = (existingBookings as List)
-          .map((b) => b['table_id'] as String?)
-          .where((id) => id != null)
-          .toSet();
+      // Hitung interval booking baru: [newStart, newEnd) dalam menit
+      final newStart = _time.hour * 60 + _time.minute;
+      final newEnd = newStart + _duration;
+
+      final bookedTableIds = (existingBookings as List).where((b) {
+        final rawTime    = b['booking_time'] as String? ?? '00:00:00';
+        final parts      = rawTime.split(':');
+        final existStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+        final existDur   = (b['duration_minutes'] as int?) ?? 120;
+        final existEnd   = existStart + existDur;
+        // Overlap jika dua interval saling berpotongan
+        return newStart < existEnd && newEnd > existStart;
+      }).map((b) => b['table_id'] as String?).where((id) => id != null).toSet();
 
       final available = tables
           .where((t) => !bookedTableIds.contains(t['id']))
@@ -102,6 +133,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
 
       setState(() {
         _assignedTable = available.first;
+        _confirmationCode = _generateConfirmationCode();
         _isSearching = false;
       });
     } catch (e) {
@@ -110,6 +142,16 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
         _isSearching = false;
       });
     }
+  }
+
+  String _generateConfirmationCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // hindari 0/O, 1/I agar tidak ambigu
+    final rng = Random();
+    final suffix = List.generate(4, (_) => chars[rng.nextInt(chars.length)]).join();
+    final d = _date;
+    final dateTag =
+        '${d.year}${d.month.toString().padLeft(2, '0')}${d.day.toString().padLeft(2, '0')}';
+    return 'BK-$dateTag-$suffix';
   }
 
   String _formatDate(DateTime d) =>
@@ -266,6 +308,30 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     ]),
                     const SizedBox(height: 8),
 
+                    // ── Durasi ───────────────────────────────
+                    DropdownButtonFormField<int>(
+                      initialValue: _duration,
+                      decoration: const InputDecoration(
+                          labelText: 'Durasi',
+                          prefixIcon: Icon(Icons.timer_outlined)),
+                      items: const [
+                        DropdownMenuItem(value: 60,  child: Text('1 jam (60 menit)',   style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 90,  child: Text('1.5 jam (90 menit)', style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 120, child: Text('2 jam (120 menit)',  style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 180, child: Text('3 jam (180 menit)',  style: TextStyle(fontFamily: 'Poppins'))),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() {
+                            _duration = v;
+                            _assignedTable = null;
+                            _assignError = null;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+
                     // ── Info cancellation rule ───────────────
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -357,6 +423,23 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                                       fontSize: 12,
                                       color: Color(0xFF4CAF50)),
                                 ),
+                                if (_confirmationCode != null) ...[
+                                  const SizedBox(height: 6),
+                                  Row(children: [
+                                    const Icon(Icons.confirmation_number_outlined,
+                                        size: 13, color: Color(0xFF1565C0)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Kode: $_confirmationCode',
+                                      style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF1565C0),
+                                          letterSpacing: 1.2),
+                                    ),
+                                  ]),
+                                ],
                               ],
                             ),
                           ),
@@ -587,16 +670,18 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
     }
 
     Navigator.pop(context, {
-      'customer_name':    _nameCtrl.text.trim(),
-      'customer_phone':   _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-      'customer_email':   _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-      'guest_count':      _guests,
-      'table_id':         _assignedTable!['id'],
-      'booking_date':     _formatDate(_date),
-      'booking_time':     _formatTime(_time),
-      'special_requests': specialReq,
-      'status':           'pending',
-      'source':           'app',
+      'customer_name':      _nameCtrl.text.trim(),
+      'customer_phone':     _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+      'customer_email':     _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      'guest_count':        _guests,
+      'table_id':           _assignedTable!['id'],
+      'booking_date':       _formatDate(_date),
+      'booking_time':       _formatTime(_time),
+      'duration_minutes':   _duration,
+      'special_requests':   specialReq,
+      'confirmation_code':  _confirmationCode,
+      'status':             'pending',
+      'source':             'app',
     });
   }
 }

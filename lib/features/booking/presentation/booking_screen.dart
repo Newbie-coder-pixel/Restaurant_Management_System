@@ -41,6 +41,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   int _confirmedCount = 0;
   int _pendingCount = 0;
   int _seatedCount = 0;
+  int _waitlistedCount = 0;
 
   // ── Realtime ──
   RealtimeChannel? _realtimeChannel;
@@ -170,19 +171,21 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       if (mounted) {
         final raw = (res as List).cast<Map<String, dynamic>>();
         final models = raw.map((e) => BookingModel.fromJson(e)).toList();
-        int confirmed = 0, pending = 0, seated = 0;
+        int confirmed = 0, pending = 0, seated = 0, waitlisted = 0;
         for (final b in models) {
-          if (b.status == BookingStatus.confirmed) confirmed++;
-          if (b.status == BookingStatus.pending) pending++;
-          if (b.status == BookingStatus.seated) seated++;
+          if (b.status == BookingStatus.confirmed)  confirmed++;
+          if (b.status == BookingStatus.pending)    pending++;
+          if (b.status == BookingStatus.seated)     seated++;
+          if (b.status == BookingStatus.waitlisted) waitlisted++;
         }
         setState(() {
-          _bookingsRaw = raw;
-          _bookings = models;
-          _confirmedCount = confirmed;
-          _pendingCount = pending;
-          _seatedCount = seated;
-          _isLoading = false;
+          _bookingsRaw      = raw;
+          _bookings         = models;
+          _confirmedCount   = confirmed;
+          _pendingCount     = pending;
+          _seatedCount      = seated;
+          _waitlistedCount  = waitlisted;
+          _isLoading        = false;
         });
       }
     } catch (e) {
@@ -257,10 +260,43 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   Future<void> _updateStatus(String id, BookingStatus status) async {
     try {
+      // Jika staff manual promote dari waitlisted → gunakan flow khusus
+      // yang cari meja dulu sebelum update status
+      final raw = _bookingsRaw.firstWhere(
+        (r) => r['id'] == id,
+        orElse: () => {},
+      );
+      final currentStatus = raw.isNotEmpty ? raw['status'] as String? : null;
+
+      if (status == BookingStatus.pending && currentStatus == 'waitlisted') {
+        await _promoteWaitlistManual(id, raw);
+        return;
+      }
+
       await Supabase.instance.client.from('bookings').update({
         'status': status == BookingStatus.noShow ? 'no_show' : status.name,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', id);
+
+      // Jika booking selesai/batal/no-show → bebaskan meja + cek waitlist
+      if (status == BookingStatus.completed ||
+          status == BookingStatus.cancelled ||
+          status == BookingStatus.noShow) {
+        // Bebaskan meja: kembalikan ke available & clear current_booking_id
+        final tableId = raw.isNotEmpty ? raw['table_id'] as String? : null;
+        if (tableId != null) {
+          await Supabase.instance.client
+              .from('restaurant_tables')
+              .update({
+                'status': 'available',
+                'current_booking_id': null,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', tableId);
+        }
+        if (raw.isNotEmpty) await _promoteWaitlist(raw);
+      }
+
       await _load();
       if (_history.isNotEmpty) _loadHistory();
     } catch (e) {
@@ -269,6 +305,175 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
             content: Text('Gagal update status: $e'),
             backgroundColor: Colors.red));
       }
+    }
+  }
+
+  // ── Promote manual: staff tap "Promote ke Pending" di card waitlist ──
+  // Cari meja yang benar-benar tersedia untuk slot booking ini, lalu assign
+  Future<void> _promoteWaitlistManual(
+      String bookingId, Map<String, dynamic> raw) async {
+    if (_branchId == null) return;
+    try {
+      final bookingDate = raw['booking_date'] as String?;
+      final bookingTimeRaw = raw['booking_time'] as String? ?? '00:00:00';
+      final duration = (raw['duration_minutes'] as int?) ?? 120;
+      final guestCount = (raw['guest_count'] as int?) ?? 1;
+      if (bookingDate == null) return;
+
+      final tParts   = bookingTimeRaw.split(':');
+      final newStart = int.parse(tParts[0]) * 60 + int.parse(tParts[1]);
+      final newEnd   = newStart + duration;
+
+      // Ambil semua meja yang kapasitasnya cukup
+      final tables = await Supabase.instance.client
+          .from('restaurant_tables')
+          .select('id, capacity, table_number')
+          .eq('branch_id', _branchId!)
+          .gte('capacity', guestCount)
+          .order('capacity');
+
+      if ((tables as List).isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Tidak ada meja dengan kapasitas yang cukup'),
+              backgroundColor: Colors.orange));
+        }
+        return;
+      }
+
+      // Ambil booking aktif di tanggal yang sama untuk cek overlap
+      final existing = await Supabase.instance.client
+          .from('bookings')
+          .select('table_id, booking_time, duration_minutes')
+          .eq('branch_id', _branchId!)
+          .eq('booking_date', bookingDate)
+          .inFilter('status', ['pending', 'confirmed', 'seated'])
+          .neq('id', bookingId); // exclude booking ini sendiri
+
+      final bookedIds = (existing as List).where((b) {
+        final rawT  = b['booking_time'] as String? ?? '00:00:00';
+        final parts = rawT.split(':');
+        final eStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+        final eDur   = (b['duration_minutes'] as int?) ?? 120;
+        final eEnd   = eStart + eDur;
+        return newStart < eEnd && newEnd > eStart;
+      }).map((b) => b['table_id'] as String?).where((x) => x != null).toSet();
+
+      final available = tables.where((t) => !bookedIds.contains(t['id'])).toList();
+
+      if (available.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Semua meja penuh di slot ini, belum bisa dipromote'),
+              backgroundColor: Colors.orange));
+        }
+        return;
+      }
+
+      // Assign meja terkecil yang cukup + promote ke pending
+      final chosenTable = available.first;
+      await Supabase.instance.client.from('bookings').update({
+        'table_id':   chosenTable['id'],
+        'status':     'pending',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', bookingId);
+
+      if (mounted) {
+        _showRealtimeNotif(
+          icon: Icons.arrow_upward_outlined,
+          message:
+              '✅ Dipromote ke pending — Meja ${chosenTable['table_number']}',
+          color: const Color(0xFF7B1FA2),
+        );
+      }
+
+      await _load();
+      if (_history.isNotEmpty) _loadHistory();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Gagal promote waitlist: $e'),
+            backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  // ── Promote waitlist: cari tamu waitlisted yang overlap slot booking yg baru bebas ──
+  Future<void> _promoteWaitlist(Map<String, dynamic> freedBooking) async {
+    if (_branchId == null) return;
+
+    try {
+      final freedTableId = freedBooking['table_id'] as String?;
+      final freedDate    = freedBooking['booking_date'] as String?;
+      final freedTimeRaw = freedBooking['booking_time'] as String? ?? '00:00:00';
+      final freedDur     = (freedBooking['duration_minutes'] as int?) ?? 120;
+      if (freedTableId == null || freedDate == null) return;
+
+      // Hitung slot yang baru bebas dalam menit
+      final tParts     = freedTimeRaw.split(':');
+      final freedStart = int.parse(tParts[0]) * 60 + int.parse(tParts[1]);
+      final freedEnd   = freedStart + freedDur;
+
+      // Ambil semua booking waitlisted di branch + tanggal yang sama, urut paling lama nunggu
+      final waitlistRes = await Supabase.instance.client
+          .from('bookings')
+          .select('id, booking_time, duration_minutes, guest_count')
+          .eq('branch_id', _branchId!)
+          .eq('booking_date', freedDate)
+          .eq('status', 'waitlisted')
+          .order('created_at'); // FIFO — yang pertama masuk, pertama dipromote
+
+      if ((waitlistRes as List).isEmpty) return;
+
+      // Cek kapasitas meja yang baru bebas
+      final tableRes = await Supabase.instance.client
+          .from('restaurant_tables')
+          .select('capacity')
+          .eq('id', freedTableId)
+          .maybeSingle();
+      if (tableRes == null) return;
+      final tableCapacity = (tableRes['capacity'] as int?) ?? 0;
+
+      // Cari kandidat waitlist pertama yang:
+      // 1. Slot-nya overlap dengan slot yang baru bebas
+      // 2. Jumlah tamu ≤ kapasitas meja
+      Map<String, dynamic>? candidate;
+      for (final w in waitlistRes) {
+        final wTimeRaw = w['booking_time'] as String? ?? '00:00:00';
+        final wParts   = wTimeRaw.split(':');
+        final wStart   = int.parse(wParts[0]) * 60 + int.parse(wParts[1]);
+        final wDur     = (w['duration_minutes'] as int?) ?? 120;
+        final wEnd     = wStart + wDur;
+        final wGuests  = (w['guest_count'] as int?) ?? 1;
+
+        final overlaps = wStart < freedEnd && wEnd > freedStart;
+        if (overlaps && wGuests <= tableCapacity) {
+          candidate = w;
+          break;
+        }
+      }
+
+      if (candidate == null) return;
+
+      // Promote: assign meja + ubah status ke pending
+      await Supabase.instance.client.from('bookings').update({
+        'table_id':   freedTableId,
+        'status':     'pending',
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', candidate['id'] as String);
+
+      debugPrint('✅ Waitlist promoted: ${candidate['id']} → meja $freedTableId');
+
+      if (mounted) {
+        _showRealtimeNotif(
+          icon: Icons.queue_outlined,
+          message: '🎉 Tamu dari waitlist berhasil dipromote ke pending!',
+          color: const Color(0xFF7B1FA2),
+          duration: const Duration(seconds: 5),
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️ Promote waitlist gagal: $e');
     }
   }
 
@@ -291,12 +496,13 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   Color _statusColor(BookingStatus s) {
     switch (s) {
-      case BookingStatus.pending:   return AppColors.reserved;
-      case BookingStatus.confirmed: return AppColors.available;
-      case BookingStatus.seated:    return AppColors.occupied;
-      case BookingStatus.cancelled: return AppColors.textHint;
-      case BookingStatus.noShow:    return AppColors.accent;
-      case BookingStatus.completed: return AppColors.primary;
+      case BookingStatus.pending:    return AppColors.reserved;
+      case BookingStatus.confirmed:  return AppColors.available;
+      case BookingStatus.seated:     return AppColors.occupied;
+      case BookingStatus.cancelled:  return AppColors.textHint;
+      case BookingStatus.noShow:     return AppColors.accent;
+      case BookingStatus.completed:  return AppColors.primary;
+      case BookingStatus.waitlisted: return const Color(0xFF7B1FA2);
     }
   }
 
@@ -519,11 +725,15 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
-        _statChip('Menunggu', _pendingCount, AppColors.reserved),
+        _statChip('Menunggu',   _pendingCount,    AppColors.reserved),
         const SizedBox(width: 8),
-        _statChip('Konfirmasi', _confirmedCount, AppColors.available),
+        _statChip('Konfirmasi', _confirmedCount,  AppColors.available),
         const SizedBox(width: 8),
-        _statChip('Duduk', _seatedCount, AppColors.occupied),
+        _statChip('Duduk',      _seatedCount,     AppColors.occupied),
+        if (_waitlistedCount > 0) ...[
+          const SizedBox(width: 8),
+          _statChip('Waitlist', _waitlistedCount, const Color(0xFF7B1FA2)),
+        ],
       ]),
     );
   }
@@ -554,7 +764,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => EditBookingDialog(
-        booking: booking,
+        booking: _bookingsRaw.firstWhere((r) => r['id'] == booking.id, orElse: () => {}),
         branchId: _branchId ?? '',
       ),
     );

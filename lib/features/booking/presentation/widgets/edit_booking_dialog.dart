@@ -1,133 +1,113 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../shared/models/booking_model.dart';
-import '../../../../core/theme/app_theme.dart';
 
 class EditBookingDialog extends StatefulWidget {
-  final BookingModel booking;
   final String branchId;
-  const EditBookingDialog({
-    super.key,
-    required this.booking,
-    required this.branchId,
-  });
+  final Map<String, dynamic> booking;
+  const EditBookingDialog({super.key, required this.branchId, required this.booking});
 
   @override
   State<EditBookingDialog> createState() => _EditBookingDialogState();
 }
 
 class _EditBookingDialogState extends State<EditBookingDialog> {
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _phoneCtrl;
-  late final TextEditingController _emailCtrl;
-  late final TextEditingController _notesCtrl;
+  final _nameCtrl    = TextEditingController();
+  final _phoneCtrl   = TextEditingController();
+  final _emailCtrl   = TextEditingController();
+  final _allergyCtrl = TextEditingController();
+  final _notesCtrl   = TextEditingController();
 
-  late int _guests;
-  late DateTime _date;
-  late TimeOfDay _time;
-  late int _duration;
+  int _guests = 2;
+  DateTime _date = DateTime.now().add(const Duration(days: 1));
+  TimeOfDay _time = const TimeOfDay(hour: 19, minute: 0);
 
   bool _isSearching = false;
-  final bool _isSaving = false;
+  bool _isWaitlistMode = false; // true jika semua meja penuh → tawarkan waitlist
+  int _duration = 120; // default 2 jam
   Map<String, dynamic>? _assignedTable;
   String? _assignError;
-  bool _tableChanged = false;
 
-  @override
-  void initState() {
-    super.initState();
-    final b = widget.booking;
-    _nameCtrl  = TextEditingController(text: b.customerName);
-    _phoneCtrl = TextEditingController(text: b.customerPhone ?? '');
-    _emailCtrl = TextEditingController(text: b.customerEmail ?? '');
-
-    // Parse special_requests kembali jadi notes saja
-    // (alergi sudah tersimpan di dalam teks yang sama)
-    _notesCtrl = TextEditingController(text: b.specialRequests ?? '');
-
-    _guests   = b.guestCount;
-    _duration = b.durationMinutes;
-
-    // Parse booking date
-    _date = b.bookingDate;
-
-    // Parse booking time "HH:mm:ss" → TimeOfDay
-    final timeParts = b.bookingTime.split(':');
-    _time = TimeOfDay(
-      hour:   int.tryParse(timeParts[0]) ?? 19,
-      minute: int.tryParse(timeParts.length > 1 ? timeParts[1] : '0') ?? 0,
+  // ── Validasi waktu booking tidak kurang dari 2 jam dari sekarang ──
+  String? _validateBookingTime() {
+    final bookingDateTime = DateTime(
+      _date.year, _date.month, _date.day,
+      _time.hour, _time.minute,
     );
+    final minAllowed = DateTime.now().add(const Duration(hours: 2));
+    if (bookingDateTime.isBefore(minAllowed)) {
+      return 'Booking minimal 2 jam sebelum waktu kedatangan.\nPilih waktu minimal ${_formatDateDisplay(minAllowed)} ${minAllowed.hour.toString().padLeft(2, '0')}:${minAllowed.minute.toString().padLeft(2, '0')}.';
+    }
+    return null;
   }
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _emailCtrl.dispose();
-    _notesCtrl.dispose();
-    super.dispose();
-  }
+  Future<void> _findAvailableTable() async {
+    // Validasi waktu dulu sebelum cari meja
+    final timeError = _validateBookingTime();
+    if (timeError != null) {
+      setState(() {
+        _assignError = timeError;
+        _assignedTable = null;
+      });
+      return;
+    }
 
-  String _fmtDate(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-  String _fmtDateDisplay(DateTime d) =>
-      '${d.day}/${d.month}/${d.year}';
-
-  String _fmtTime(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
-
-  // ── Re-assign meja jika jumlah tamu atau waktu berubah ─
-  Future<void> _reassignTable() async {
     setState(() {
-      _isSearching = true;
-      _assignedTable = null;
-      _assignError = null;
+      _isSearching    = true;
+      _assignedTable  = null;
+      _assignError    = null;
+      _isWaitlistMode = false;
     });
 
     try {
-      final dateStr = _fmtDate(_date);
-      final timeStr = _fmtTime(_time);
+      final dateStr = _formatDate(_date);
 
-      // Ambil meja dengan kapasitas cukup
       final tables = await Supabase.instance.client
           .from('restaurant_tables')
           .select()
           .eq('branch_id', widget.branchId)
           .gte('capacity', _guests)
+          .eq('status', 'available')
           .order('capacity');
 
       if ((tables as List).isEmpty) {
         setState(() {
-          _assignError = 'Tidak ada meja untuk $_guests orang';
+          _assignError = 'Tidak ada meja tersedia untuk $_guests orang';
           _isSearching = false;
         });
         return;
       }
 
-      // Cek booking lain di slot yang sama, kecuali booking ini sendiri
+      // Ambil semua booking aktif di tanggal yang sama, lalu filter overlap durasi
       final existingBookings = await Supabase.instance.client
           .from('bookings')
-          .select('table_id')
+          .select('table_id, booking_time, duration_minutes')
           .eq('branch_id', widget.branchId)
           .eq('booking_date', dateStr)
-          .eq('booking_time', timeStr)
-          .neq('id', widget.booking.id) // exclude booking ini sendiri
           .inFilter('status', ['pending', 'confirmed', 'seated']);
 
-      final bookedTableIds = (existingBookings as List)
-          .map((b) => b['table_id'] as String?)
-          .where((id) => id != null)
-          .toSet();
+      // Hitung interval booking baru: [newStart, newEnd) dalam menit
+      final newStart = _time.hour * 60 + _time.minute;
+      final newEnd = newStart + _duration;
 
-      final available =
-          tables.where((t) => !bookedTableIds.contains(t['id'])).toList();
+      final bookedTableIds = (existingBookings as List).where((b) {
+        final rawTime    = b['booking_time'] as String? ?? '00:00:00';
+        final parts      = rawTime.split(':');
+        final existStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+        final existDur   = (b['duration_minutes'] as int?) ?? 120;
+        final existEnd   = existStart + existDur;
+        // Overlap jika dua interval saling berpotongan
+        return newStart < existEnd && newEnd > existStart;
+      }).map((b) => b['table_id'] as String?).where((id) => id != null).toSet();
+
+      final available = tables
+          .where((t) => !bookedTableIds.contains(t['id']))
+          .toList();
 
       if (available.isEmpty) {
         setState(() {
-          _assignError =
-              'Semua meja untuk $_guests orang sudah penuh di waktu ini.\nCoba waktu lain.';
-          _isSearching = false;
+          _assignError    = 'Semua meja untuk $_guests orang sudah penuh di waktu tersebut.';
+          _isWaitlistMode = true;
+          _isSearching    = false;
         });
         return;
       }
@@ -135,7 +115,6 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
       setState(() {
         _assignedTable = available.first;
         _isSearching = false;
-        _tableChanged = true;
       });
     } catch (e) {
       setState(() {
@@ -145,38 +124,62 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
     }
   }
 
-  void _submit() {
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+  String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-    final notes = _notesCtrl.text.trim();
+  String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
 
-    final payload = <String, dynamic>{
-      'customer_name':    name,
-      'customer_phone':   _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-      'customer_email':   _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-      'guest_count':      _guests,
-      'booking_date':     _fmtDate(_date),
-      'booking_time':     _fmtTime(_time),
-      'duration_minutes': _duration,
-      'special_requests': notes.isEmpty ? null : notes,
-    };
+  String _formatDateDisplay(DateTime d) =>
+      '${d.day}/${d.month}/${d.year}';
 
-    // Kalau meja di-assign ulang, update juga table_id
-    if (_tableChanged && _assignedTable != null) {
-      payload['table_id'] = _assignedTable!['id'];
+  @override
+  void initState() {
+    super.initState();
+    final b = widget.booking;
+    _nameCtrl.text    = b['customer_name'] as String? ?? '';
+    _phoneCtrl.text   = b['customer_phone'] as String? ?? '';
+    _emailCtrl.text   = b['customer_email'] as String? ?? '';
+    _guests           = (b['guest_count'] as int?) ?? 2;
+    _duration         = (b['duration_minutes'] as int?) ?? 120;
+
+    // Parse booking_date (yyyy-MM-dd)
+    final rawDate = b['booking_date'] as String?;
+    if (rawDate != null) {
+      final parts = rawDate.split('-');
+      if (parts.length == 3) {
+        _date = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      }
     }
 
-    Navigator.pop(context, payload);
+    // Parse booking_time (HH:mm:ss)
+    final rawTime = b['booking_time'] as String?;
+    if (rawTime != null) {
+      final parts = rawTime.split(':');
+      if (parts.length >= 2) {
+        _time = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+      }
+    }
+
+    // Parse special_requests back to allergy + notes
+    final special = b['special_requests'] as String?;
+    if (special != null) {
+      _notesCtrl.text = special;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _allergyCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final guestOrTimeChanged =
-        _guests != widget.booking.guestCount ||
-        _fmtDate(_date) != _fmtDate(widget.booking.bookingDate) ||
-        _fmtTime(_time) != widget.booking.bookingTime;
-
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
@@ -184,34 +187,29 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            // Header
+            // ── Header ─────────────────────────────────
             Row(children: [
               Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: const Color(0xFF1A1A2E),
                     borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.edit_calendar_outlined,
-                    color: Colors.white, size: 20)),
+                child: const Icon(Icons.event_available,
+                    color: Colors.white, size: 20),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Edit Booking',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18)),
-                  Text('# ${widget.booking.confirmationCode}',
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 12,
-                          color: AppColors.textSecondary)),
-                ],
-              )),
-              IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context)),
+              const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Edit Reservasi',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18)),
+                Text('Perbarui data reservasi',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: Color(0xFF6B7280))),
+              ]),
             ]),
             const SizedBox(height: 20),
 
@@ -220,71 +218,69 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Nama
+                    // ── Nama ────────────────────────────────
                     TextField(
                       controller: _nameCtrl,
+                      onChanged: (_) => setState(() {}),
                       decoration: const InputDecoration(
                           labelText: 'Nama Tamu *',
                           prefixIcon: Icon(Icons.person_outline)),
-                      textCapitalization: TextCapitalization.words,
                     ),
                     const SizedBox(height: 12),
 
-                    // HP & Email
-                    Row(children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _phoneCtrl,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                              labelText: 'No. HP',
-                              prefixIcon: Icon(Icons.phone_outlined)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: Icon(Icons.email_outlined)),
-                        ),
-                      ),
-                    ]),
+                    // ── No HP ────────────────────────────────
+                    TextField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                          labelText: 'No. HP',
+                          prefixIcon: Icon(Icons.phone_outlined)),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ── Email ────────────────────────────────
+                    TextField(
+                      controller: _emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined)),
+                    ),
                     const SizedBox(height: 16),
 
-                    // Jumlah tamu
+                    // ── Jumlah tamu ──────────────────────────
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                           color: const Color(0xFFF8F9FA),
                           borderRadius: BorderRadius.circular(12),
-                          border:
-                              Border.all(color: const Color(0xFFE8EAED))),
+                          border: Border.all(color: const Color(0xFFE8EAED))),
                       child: Row(children: [
                         const Icon(Icons.people_outline,
                             color: Color(0xFF1A1A2E), size: 20),
                         const SizedBox(width: 8),
-                        const Text('Jumlah Tamu',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w500)),
+                        const Flexible(
+                          child: Text('Jumlah Tamu',
+                              style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w500),
+                              overflow: TextOverflow.ellipsis),
+                        ),
                         const Spacer(),
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.remove_circle_outline,
-                              size: 26),
+                          icon: const Icon(Icons.remove_circle_outline, size: 26),
                           color: const Color(0xFFE94560),
-                          onPressed: _guests > 1
-                              ? () => setState(() {
-                                    _guests--;
-                                    _assignedTable = null;
-                                    _assignError = null;
-                                    _tableChanged = false;
-                                  })
-                              : null,
+                          onPressed: () {
+                            if (_guests > 1) {
+                              setState(() {
+                                _guests--;
+                                _assignedTable = null;
+                                _assignError = null;
+                              });
+                            }
+                          },
                         ),
                         const SizedBox(width: 8),
                         Text('$_guests',
@@ -297,123 +293,254 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.add_circle_outline,
-                              size: 26),
+                          icon: const Icon(Icons.add_circle_outline, size: 26),
                           color: const Color(0xFF4CAF50),
                           onPressed: () => setState(() {
                             _guests++;
                             _assignedTable = null;
                             _assignError = null;
-                            _tableChanged = false;
                           }),
                         ),
                       ]),
                     ),
                     const SizedBox(height: 12),
 
-                    // Tanggal & Waktu
+                    // ── Tanggal & Waktu ──────────────────────
                     Row(children: [
                       Expanded(child: _dateTile()),
                       const SizedBox(width: 8),
                       Expanded(child: _timeTile()),
                     ]),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
 
-                    // Durasi
+                    // ── Durasi ───────────────────────────────
                     DropdownButtonFormField<int>(
-                      // ignore: deprecated_member_use
-                      value: _duration,
+                      initialValue: _duration,
                       decoration: const InputDecoration(
                           labelText: 'Durasi',
                           prefixIcon: Icon(Icons.timer_outlined)),
                       items: const [
-                        DropdownMenuItem(value: 60,  child: Text('1 jam (60 menit)', style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 60,  child: Text('1 jam (60 menit)',   style: TextStyle(fontFamily: 'Poppins'))),
                         DropdownMenuItem(value: 90,  child: Text('1.5 jam (90 menit)', style: TextStyle(fontFamily: 'Poppins'))),
-                        DropdownMenuItem(value: 120, child: Text('2 jam (120 menit)', style: TextStyle(fontFamily: 'Poppins'))),
-                        DropdownMenuItem(value: 180, child: Text('3 jam (180 menit)', style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 120, child: Text('2 jam (120 menit)',  style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 180, child: Text('3 jam (180 menit)',  style: TextStyle(fontFamily: 'Poppins'))),
                       ],
-                      onChanged: (v) { if (v != null) setState(() => _duration = v); },
+                      onChanged: (v) {
+                        if (v != null) {
+                          setState(() {
+                            _duration = v;
+                            _assignedTable = null;
+                            _assignError = null;
+                          });
+                        }
+                      },
                     ),
-                    const SizedBox(height: 16),
-
-                    // Re-assign meja (hanya kalau tamu/waktu berubah)
-                    if (guestOrTimeChanged) ...[
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: Colors.blue.shade200)),
-                        child: Row(children: [
-                          Icon(Icons.info_outline,
-                              color: Colors.blue.shade700, size: 16),
-                          const SizedBox(width: 8),
-                          const Expanded(
-                            child: Text(
-                                'Jumlah tamu atau waktu berubah — klik tombol di bawah untuk cari meja ulang.',
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 12)),
-                          ),
-                        ])),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isSearching ? null : _reassignTable,
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1A1A2E),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(10))),
-                          icon: _isSearching
-                              ? const SizedBox(
-                                  width: 16, height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white))
-                              : const Icon(Icons.search, size: 18),
-                          label: Text(
-                              _isSearching
-                                  ? 'Mencari...'
-                                  : 'Cari Meja Ulang',
-                              style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    // Hasil assign
-                    if (_assignedTable != null)
-                      _resultCard(
-                          '✅ Meja ${_assignedTable!['table_number']} — '
-                          'Kapasitas ${_assignedTable!['capacity']} orang',
-                          const Color(0xFF4CAF50)),
-                    if (_assignError != null)
-                      _resultCard(_assignError!, const Color(0xFFE94560)),
-
-                    const SizedBox(height: 12),
-                    const Divider(),
                     const SizedBox(height: 8),
 
-                    // ── Catatan / special requests ──────────
-                    TextField(
-                      controller: _notesCtrl,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Alergi & Catatan Khusus',
-                        hintText:
-                            'Contoh: Alergi kacang, ulang tahun, minta dekorasi...',
-                        prefixIcon: Icon(Icons.notes_outlined),
-                      ),
+                    // ── Info cancellation rule ───────────────
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFE3F2FD),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(0xFF1976D2)
+                                  .withValues(alpha: 0.3))),
+                      child: const Row(children: [
+                        Icon(Icons.info_outline,
+                            size: 14, color: Color(0xFF1976D2)),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Booking minimal 2 jam sebelum kedatangan. Pembatalan < 2 jam dikenakan biaya.',
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Color(0xFF1565C0)),
+                          ),
+                        ),
+                      ]),
                     ),
                     const SizedBox(height: 16),
+
+                    // ── Tombol cari meja ─────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _nameCtrl.text.trim().isEmpty
+                            ? null
+                            : _findAvailableTable,
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1A1A2E),
+                            foregroundColor: Colors.white,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12))),
+                        icon: _isSearching
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.search, size: 18),
+                        label: Text(
+                          _isSearching
+                              ? 'Mencari meja...'
+                              : 'Cek & Pilihkan Meja Otomatis',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ── Hasil auto-assign ────────────────────
+                    if (_assignedTable != null)
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(12),
+                            border:
+                                Border.all(color: const Color(0xFF4CAF50))),
+                        child: Row(children: [
+                          const Icon(Icons.check_circle,
+                              color: Color(0xFF4CAF50), size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Meja ${_assignedTable!['table_number']} — Kapasitas ${_assignedTable!['capacity']} orang',
+                                  style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF2E7D32)),
+                                ),
+                                Text(
+                                  'Bentuk: ${_assignedTable!['shape']} • Lantai ${_assignedTable!['floor_level']}',
+                                  style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 12,
+                                      color: Color(0xFF4CAF50)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ]),
+                      ),
+
+                    if (_assignError != null)
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFFFFEBEE),
+                            borderRadius: BorderRadius.circular(12),
+                            border:
+                                Border.all(color: const Color(0xFFE94560))),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              const Icon(Icons.warning_amber_rounded,
+                                  color: Color(0xFFE94560), size: 24),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(_assignError!,
+                                    style: const TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 13,
+                                        color: Color(0xFFE94560))),
+                              ),
+                            ]),
+                            if (_isWaitlistMode) ...[
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _nameCtrl.text.trim().isEmpty
+                                      ? null
+                                      : () => _submitBooking(asWaitlist: true),
+                                  style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF7B1FA2),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10))),
+                                  icon: const Icon(Icons.queue_outlined, size: 16),
+                                  label: const Text('Masukkan ke Waitlist',
+                                      style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontWeight: FontWeight.w600)),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 12),
+
+                    // ── Alergi ───────────────────────────────
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                          color: const Color(0xFFFFF3E0),
+                          borderRadius: BorderRadius.circular(12),
+                          border:
+                              Border.all(color: const Color(0xFFFF9800))),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(children: [
+                            Icon(Icons.warning_amber_rounded,
+                                color: Color(0xFFE65100), size: 18),
+                            SizedBox(width: 6),
+                            Text('Info Alergi & Pantangan Makanan',
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: Color(0xFFE65100))),
+                          ]),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _allergyCtrl,
+                            maxLines: 2,
+                            decoration: const InputDecoration(
+                              hintText:
+                                  'Contoh: Alergi kacang, tidak makan babi, vegetarian...',
+                              hintStyle: TextStyle(
+                                  fontFamily: 'Poppins', fontSize: 12),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              isDense: true,
+                              contentPadding: EdgeInsets.all(10),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ── Catatan tambahan ─────────────────────
+                    TextField(
+                      controller: _notesCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText: 'Catatan Tambahan (opsional)',
+                          hintText:
+                              'Contoh: Ulang tahun, minta dekorasi bunga...',
+                          prefixIcon: Icon(Icons.notes_outlined)),
+                    ),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -421,39 +548,28 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
 
             const SizedBox(height: 16),
 
-            // Buttons
+            // ── Action buttons ──────────────────────────
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal',
-                      style: TextStyle(fontFamily: 'Poppins'))),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal',
+                    style: TextStyle(fontFamily: 'Poppins')),
+              ),
               const SizedBox(width: 8),
               ElevatedButton.icon(
-                // Kalau waktu/tamu berubah, meja harus di-assign ulang dulu
-                onPressed: (guestOrTimeChanged && !_tableChanged)
-                    ? null
-                    : _isSaving
-                        ? null
-                        : _submit,
+                onPressed:
+                    (_assignedTable == null || _isWaitlistMode) ? null : _submitBooking,
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: const Color(0xFF1A1A2E),
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledBackgroundColor: const Color(0xFFE0E0E0),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10))),
-                icon: _isSaving
-                    ? const SizedBox(
-                        width: 16, height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.save_outlined, size: 16),
-                label: Text(
-                    guestOrTimeChanged && !_tableChanged
-                        ? 'Cari meja dulu'
-                        : 'Simpan Perubahan',
-                    style: const TextStyle(
+                icon: const Icon(Icons.check, size: 16),
+                label: const Text('Simpan Perubahan',
+                    style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600)),
               ),
@@ -464,49 +580,25 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
     );
   }
 
-  Widget _resultCard(String message, Color color) => Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.5)),
-        ),
-        child: Row(children: [
-          Icon(
-              color == const Color(0xFF4CAF50)
-                  ? Icons.check_circle_outline
-                  : Icons.warning_amber_rounded,
-              color: color, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-              child: Text(message,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      color: color))),
-        ]),
-      );
-
   Widget _dateTile() => GestureDetector(
         onTap: () async {
           final d = await showDatePicker(
-              context: context,
-              initialDate: _date,
-              firstDate: DateTime.now(),
-              lastDate:
-                  DateTime.now().add(const Duration(days: 365)));
+            context: context,
+            initialDate: _date,
+            firstDate: DateTime.now(),
+            lastDate: DateTime.now().add(const Duration(days: 365)),
+          );
           if (d != null) {
             setState(() {
               _date = d;
               _assignedTable = null;
               _assignError = null;
-              _tableChanged = false;
             });
           }
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
               border: Border.all(color: const Color(0xFFE8EAED)),
               borderRadius: BorderRadius.circular(8),
@@ -517,20 +609,19 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
             const SizedBox(width: 6),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Tanggal',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 10,
-                          color: Color(0xFF6B7280))),
-                  Text(_fmtDateDisplay(_date),
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13)),
-                ],
-              ),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Tanggal',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            color: Color(0xFF6B7280))),
+                    Text(_formatDateDisplay(_date),
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                  ]),
             ),
           ]),
         ),
@@ -545,12 +636,12 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
               _time = t;
               _assignedTable = null;
               _assignError = null;
-              _tableChanged = false;
             });
           }
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
               border: Border.all(color: const Color(0xFFE8EAED)),
               borderRadius: BorderRadius.circular(8),
@@ -561,22 +652,52 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
             const SizedBox(width: 6),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Waktu',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 10,
-                          color: Color(0xFF6B7280))),
-                  Text(_time.format(context),
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13)),
-                ],
-              ),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Waktu',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            color: Color(0xFF6B7280))),
+                    Text(_time.format(context),
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                  ]),
             ),
           ]),
         ),
       );
+
+  void _submitBooking({bool asWaitlist = false}) {
+    if (!asWaitlist && _assignedTable == null) return;
+    if (_nameCtrl.text.trim().isEmpty) return;
+
+    final allergy = _allergyCtrl.text.trim();
+    final notes   = _notesCtrl.text.trim();
+    String? specialReq;
+    if (allergy.isNotEmpty && notes.isNotEmpty) {
+      specialReq = '🚨 Alergi: $allergy\n📝 Catatan: $notes';
+    } else if (allergy.isNotEmpty) {
+      specialReq = '🚨 Alergi: $allergy';
+    } else if (notes.isNotEmpty) {
+      specialReq = notes;
+    }
+
+    Navigator.pop(context, {
+      'id': widget.booking['id'],
+      'customer_name':    _nameCtrl.text.trim(),
+      'customer_phone':   _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+      'customer_email':   _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      'guest_count':      _guests,
+      if (!asWaitlist) 'table_id': _assignedTable!['id'],
+      'booking_date':     _formatDate(_date),
+      'booking_time':     _formatTime(_time),
+      'duration_minutes': _duration,
+      'special_requests': specialReq,
+      'status':           asWaitlist ? 'waitlisted' : 'pending',
+      'source':           'app',
+    });
+  }
 }

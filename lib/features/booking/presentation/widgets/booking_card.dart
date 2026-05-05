@@ -43,12 +43,13 @@ class BookingCard extends StatelessWidget {
 
   String _statusLabel(BookingStatus s) {
     switch (s) {
-      case BookingStatus.pending:   return 'Menunggu';
-      case BookingStatus.confirmed: return 'Konfirmasi';
-      case BookingStatus.seated:    return 'Sudah Duduk';
-      case BookingStatus.cancelled: return 'Dibatalkan';
-      case BookingStatus.noShow:    return 'Tidak Hadir';
-      case BookingStatus.completed: return 'Selesai';
+      case BookingStatus.pending:    return 'Menunggu';
+      case BookingStatus.confirmed:  return 'Konfirmasi';
+      case BookingStatus.seated:     return 'Sudah Duduk';
+      case BookingStatus.cancelled:  return 'Dibatalkan';
+      case BookingStatus.noShow:     return 'Tidak Hadir';
+      case BookingStatus.completed:  return 'Selesai';
+      case BookingStatus.waitlisted: return 'Waitlist';
     }
   }
 
@@ -134,6 +135,30 @@ class BookingCard extends StatelessWidget {
                 _infoChip(Icons.email_outlined, booking.customerEmail!),
             ],
           ),
+
+          // ── Indikator waitlist tanpa meja ───────────────
+          if (booking.status == BookingStatus.waitlisted && tableNum == null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3E5F5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF7B1FA2).withValues(alpha: 0.4)),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.hourglass_empty_outlined,
+                    size: 13, color: Color(0xFF7B1FA2)),
+                SizedBox(width: 6),
+                Text('Menunggu slot meja tersedia',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF7B1FA2))),
+              ]),
+            ),
+          ],
 
           // ── Info meja ───────────────────────────────────
           if (tableNum != null) ...[
@@ -231,6 +256,14 @@ class BookingCard extends StatelessWidget {
   List<Widget> _buildActions() {
     final buttons = <Widget>[];
     switch (booking.status) {
+      case BookingStatus.waitlisted:
+        buttons.add(_actionBtn(
+            'Promote ke Pending', const Color(0xFF7B1FA2), BookingStatus.pending,
+            icon: Icons.arrow_upward_outlined));
+        buttons.add(const SizedBox(width: 6));
+        buttons.add(_actionBtn(
+            'Batalkan', AppColors.accent, BookingStatus.cancelled));
+        break;
       case BookingStatus.pending:
         buttons.add(_actionBtn(
             'Konfirmasi', AppColors.available, BookingStatus.confirmed));

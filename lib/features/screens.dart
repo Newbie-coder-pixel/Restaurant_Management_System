@@ -2,6 +2,7 @@ export '../shared/widgets/app_drawer.dart';
 export 'auth/presentation/login_screen.dart';
 export 'table_management/presentation/table_screen.dart';
 export 'booking/presentation/booking_screen.dart';
+export 'booking/presentation/booking_stats_screen.dart'; // ← TAMBAH INI
 export 'order/presentation/order_screen.dart';
 export 'order/presentation/cashier_screen.dart';
 export 'kitchen_display/presentation/kds_screen.dart';
@@ -11,3 +12,4 @@ export 'staff/presentation/staff_screen.dart';
 export 'reports/presentation/reports_screen.dart';
 export 'multi_branch/presentation/branch_dashboard_screen.dart';
 export 'chatbot/presentation/chatbot_screen.dart';
+export 'booking/presentation/restaurant_closure_screen.dart';
