@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/inventory_item.dart';
 import '../../providers/inventory_provider.dart';
 import 'add_inventory_form.dart';
+import '../../../../core/supabase_client.dart';
 
 class InventoryDetailSheet extends ConsumerStatefulWidget {
   final InventoryItem item;
@@ -139,6 +140,11 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
                 ],
               ),
             ),
+                    IconButton(
+                      onPressed: () => _showDeleteDialog(context, ref),
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      tooltip: 'Hapus',
+                    ),
 
             // Stock summary cards
             Padding(
@@ -267,6 +273,35 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
     return formatted;
   }
 }
+void _showDeleteDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Hapus Item'),
+        content: Text('Yakin ingin menghapus "${widget.item.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              Navigator.pop(context);
+              await supabase
+                  .from('inventory_items')
+                  .delete()
+                  .eq('id', widget.item.id);
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+  }
+
+} // END OF MAIN WIDGET
 
 // ─── ACTIONS TAB ──────────────────────────────────────────────────────────────
 
