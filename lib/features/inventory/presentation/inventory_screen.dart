@@ -68,15 +68,18 @@ class _InventoryScreenContentState
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddItem,
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah Item',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'add',
+            onPressed: _openAddItem,
+            icon: const Icon(Icons.add),
+            label: const Text('Tambah Item',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
       ),
-    );
-  }
-}
 
 // ─── APP BAR ──────────────────────────────────────────────────────────────────
 
@@ -144,20 +147,15 @@ class _InventoryAppBar extends ConsumerWidget {
         IconButton(
           onPressed: () =>
               ref.read(inventoryNotifierProvider.notifier).refresh(),
-          icon: const Icon(Icons.refresh, color: Colors.white),
+          icon: Icon(Icons.refresh, color: colorScheme.onSurface),
           tooltip: 'Refresh',
         ),
         IconButton(
           onPressed: () => _showRolloverDialog(context, ref),
-          icon: const Icon(Icons.date_range_outlined, color: Colors.white),
+          icon: Icon(Icons.date_range_outlined, color: colorScheme.onSurface),
           tooltip: 'Rollover Harian',
         ),
-        IconButton(
-          onPressed: onAdd,
-          icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-          tooltip: 'Tambah Item',
-        ),
-        const SizedBox(width: 8),
+      const SizedBox(width: 8),
       ],
     );
   }
