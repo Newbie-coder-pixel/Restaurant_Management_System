@@ -43,7 +43,7 @@ class NotificationService {
           'user_id': userId,
           'token': token,
           'platform': platform,
-          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
         },
         // Conflict per user_id + platform supaya 1 user bisa punya
         // token di beberapa device (Android + iOS + Web sekaligus)

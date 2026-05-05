@@ -64,6 +64,7 @@ class TableAssignmentService {
           'booking_time':     bookingTime,
           'special_requests': specialRequests,
           'status':           'pending',
+          'source':           'app',
         })
         .select('id')
         .single();
