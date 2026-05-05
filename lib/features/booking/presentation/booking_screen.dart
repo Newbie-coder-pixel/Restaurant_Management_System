@@ -115,32 +115,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           ),
           callback: (payload) {
             if (!mounted) return;
-            final newRecord      = payload.newRecord;
-            final oldRecord      = payload.oldRecord;
-            final newDepositStatus = newRecord['deposit_status'] as String?;
-            final oldDepositStatus = oldRecord['deposit_status'] as String?;
-            final customerName   = newRecord['customer_name'] as String? ?? 'Pelanggan';
 
             _load();
             if (_history.isNotEmpty) _loadHistory();
-
-            // Notif spesifik hanya saat deposit_status berubah
-            if (newDepositStatus != oldDepositStatus) {
-              if (newDepositStatus == 'uploaded') {
-                _showRealtimeNotif(
-                  icon: Icons.upload_file_outlined,
-                  message: '💳 $customerName mengirim bukti transfer DP. Harap verifikasi.',
-                  color: const Color(0xFF1976D2),
-                  duration: const Duration(seconds: 6),
-                );
-              } else if (newDepositStatus == 'paid') {
-                _showRealtimeNotif(
-                  icon: Icons.check_circle_outline,
-                  message: '✅ DP $customerName dikonfirmasi lunas.',
-                  color: const Color(0xFF4CAF50),
-                );
-              }
-            }
           },
         )
         .subscribe();
@@ -295,29 +272,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     }
   }
 
-  // ── Tandai DP sudah dibayar ─────────────────────────────────
-  Future<void> _markDpPaid(String bookingId) async {
-    try {
-      await Supabase.instance.client.from('bookings').update({
-        'deposit_status': 'paid',
-        'deposit_paid_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', bookingId);
-      await _load();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✅ DP berhasil ditandai lunas'),
-            backgroundColor: Color(0xFF4CAF50)));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal update DP: $e'),
-            backgroundColor: Colors.red));
-      }
-    }
-  }
-
   // ── Notif WA ke staff via Edge Function ──────────────────
   Future<void> _notifyStaff(String bookingId) async {
     try {
@@ -463,21 +417,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         await _load();
         await _loadDatesWithBooking();
 
-        // Tampilkan info DP jika ada
+        // Tampilkan konfirmasi
         if (mounted) {
-          final depositAmount = result['deposit_amount'] as int? ?? 0;
-          final depositStatus = result['deposit_status'] as String? ?? 'not_required';
-
-          if (depositAmount > 0 && depositStatus == 'pending') {
-            _showDpReminderSnackbar(
-              customerName: result['customer_name'] as String? ?? '',
-              depositAmount: depositAmount,
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('✅ Booking berhasil disimpan'),
-                backgroundColor: Color(0xFF4CAF50)));
-          }
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('✅ Booking berhasil disimpan'),
+              backgroundColor: Color(0xFF4CAF50)));
         }
       } catch (e) {
         if (mounted) {
@@ -487,30 +431,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         }
       }
     }
-  }
-
-  void _showDpReminderSnackbar({
-    required String customerName,
-    required int depositAmount,
-  }) {
-    final formatted = depositAmount.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]}.',
-    );
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
-        const Icon(Icons.payments_outlined, color: Colors.white, size: 18),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            '✅ Booking $customerName tersimpan. Tagih DP Rp $formatted sebelum kedatangan.',
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-          ),
-        ),
-      ]),
-      backgroundColor: const Color(0xFFE65100),
-      duration: const Duration(seconds: 5),
-    ));
   }
 
   Widget _buildReservasi() {
@@ -582,15 +502,12 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                           ? _bookingsRaw[rawIdx]['restaurant_tables']
                               as Map<String, dynamic>?
                           : null;
-                      final rawItem = rawIdx >= 0 ? _bookingsRaw[rawIdx] : null;
                       return BookingCard(
                         booking: b,
                         tableData: tableData,
-                        rawData: rawItem,
                         statusColor: _statusColor(b.status),
                         onStatusChange: (s) => _updateStatus(b.id, s),
                         onEdit: () => _showEditBooking(b, tableData),
-                        onMarkDpPaid: () => _markDpPaid(b.id),
                       );
                     }),
       ),
@@ -634,16 +551,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   Future<void> _showEditBooking(
       BookingModel booking, Map<String, dynamic>? tableData) async {
-    // Cari rawData untuk booking ini
-    final rawIdx = _bookings.indexOf(booking);
-    final rawItem = rawIdx >= 0 ? _bookingsRaw[rawIdx] : null;
-
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => EditBookingDialog(
         booking: booking,
         branchId: _branchId ?? '',
-        rawData: rawItem, // ← pass rawData untuk pre-fill nilai DP
       ),
     );
     if (result != null) {
@@ -766,11 +678,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                       final tableNum =
                           tableInfo?['table_number']?.toString();
 
-                      // ── Info DP di history ──
-                      final depositAmount = b['deposit_amount'] as int? ?? 0;
-                      final depositStatus = b['deposit_status'] as String?;
-                      final showDpBadge = depositAmount > 0;
-
                       return Card(
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
@@ -803,11 +710,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                                         fontFamily: 'Poppins',
                                         fontSize: 10,
                                         color: AppColors.textHint)),
-                              // Badge DP
-                              if (showDpBadge) ...[
-                                const SizedBox(height: 4),
-                                _buildDpBadge(depositAmount, depositStatus),
-                              ],
                             ],
                           ),
                           isThreeLine: true,
@@ -829,51 +731,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                                     color: _historyStatusColor(status)))),
                         ));
                     }),
-      ),
-    ]);
-  }
-
-  Widget _buildDpBadge(int amount, String? status) {
-    final isPaid     = status == 'paid' || status == 'applied';
-    final isUploaded = status == 'uploaded';
-    final Color color;
-    final String label;
-    final IconData icon;
-
-    if (isPaid) {
-      color = const Color(0xFF4CAF50);
-      label = 'DP Lunas';
-      icon  = Icons.check_circle_outline;
-    } else if (isUploaded) {
-      color = const Color(0xFF1976D2);
-      label = 'Bukti Dikirim';
-      icon  = Icons.hourglass_top_outlined;
-    } else {
-      color = const Color(0xFFFF9800);
-      label = 'DP Belum Bayar';
-      icon  = Icons.pending_outlined;
-    }
-
-    final formatted = amount.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]}.',
-    );
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 3),
-          Text('$label • Rp $formatted',
-              style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 10,
-                  fontWeight: FontWeight.w600, color: color)),
-        ]),
       ),
     ]);
   }

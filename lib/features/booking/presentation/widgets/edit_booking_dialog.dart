@@ -6,13 +6,10 @@ import '../../../../core/theme/app_theme.dart';
 class EditBookingDialog extends StatefulWidget {
   final BookingModel booking;
   final String branchId;
-  final Map<String, dynamic>? rawData; // untuk pre-fill nilai DP asli
-
   const EditBookingDialog({
     super.key,
     required this.booking,
     required this.branchId,
-    this.rawData,
   });
 
   @override
@@ -35,11 +32,6 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
   Map<String, dynamic>? _assignedTable;
   String? _assignError;
   bool _tableChanged = false;
-
-  // ── DP state ──
-  late int _dpPerOrang;
-  late bool _requireDp;
-  String? _existingDepositStatus; // simpan status asli, jangan override kalau sudah paid
 
   @override
   void initState() {
@@ -65,14 +57,6 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
       hour:   int.tryParse(timeParts[0]) ?? 19,
       minute: int.tryParse(timeParts.length > 1 ? timeParts[1] : '0') ?? 0,
     );
-
-    // ── Init DP dari rawData booking ──
-    final raw = widget.rawData;
-    _dpPerOrang            = raw?['dp_per_orang'] as int? ?? 0;
-    _existingDepositStatus = raw?['deposit_status'] as String?;
-    _requireDp             = _dpPerOrang > 0 &&
-        _existingDepositStatus != null &&
-        _existingDepositStatus != 'not_required';
   }
 
   @override
@@ -161,31 +145,6 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
     }
   }
 
-  String _formatRupiah(int amount) {
-    final str = amount.toString();
-    final buffer = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(str[i]);
-    }
-    return 'Rp ${buffer.toString()}';
-  }
-
-  int get _totalDp => _requireDp ? _dpPerOrang * _guests : 0;
-
-  // Deposit status yang aman untuk dikirim saat edit:
-  // - Kalau sudah paid/applied/refunded → jangan diubah
-  // - Kalau pending/uploaded/not_required → bisa direcalculate
-  String _resolvedDepositStatus() {
-    const immutable = ['paid', 'applied', 'refunded'];
-    if (_existingDepositStatus != null &&
-        immutable.contains(_existingDepositStatus)) {
-      return _existingDepositStatus!;
-    }
-    if (!_requireDp) return 'not_required';
-    return 'pending';
-  }
-
   void _submit() {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) return;
@@ -201,10 +160,6 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
       'booking_time':     _fmtTime(_time),
       'duration_minutes': _duration,
       'special_requests': notes.isEmpty ? null : notes,
-      // ── DP fields — recalculate jika tamu berubah ──
-      'dp_per_orang':   _requireDp ? _dpPerOrang : 0,
-      'deposit_amount': _totalDp,
-      'deposit_status': _resolvedDepositStatus(),
     };
 
     // Kalau meja di-assign ulang, update juga table_id
@@ -459,9 +414,6 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // ── Section DP ───────────────────────────
-                    _buildDpSection(),
                   ],
                 ),
               ),
@@ -508,190 +460,6 @@ class _EditBookingDialogState extends State<EditBookingDialog> {
             ]),
           ]),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDpSection() {
-    final isPaidOrApplied = _existingDepositStatus == 'paid' ||
-        _existingDepositStatus == 'applied' ||
-        _existingDepositStatus == 'refunded';
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8E1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFFB300)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.payments_outlined,
-                color: Color(0xFFE65100), size: 18),
-            const SizedBox(width: 6),
-            const Text('Uang Muka (DP)',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Color(0xFFE65100))),
-            const Spacer(),
-            // Toggle hanya aktif kalau DP belum dikonfirmasi
-            if (isPaidOrApplied)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text('Sudah Lunas',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF2E7D32))),
-              )
-            else
-              Switch.adaptive(
-                value: _requireDp,
-                activeThumbColor: const Color(0xFFE65100),
-                activeTrackColor:
-                    const Color(0xFFE65100).withValues(alpha: 0.4),
-                onChanged: (val) => setState(() => _requireDp = val),
-              ),
-          ]),
-          const SizedBox(height: 10),
-
-          if (isPaidOrApplied) ...[
-            // DP sudah dibayar — tampilkan info saja, tidak bisa diubah
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFF4CAF50).withValues(alpha: 0.4)),
-              ),
-              child: Row(children: [
-                const Icon(Icons.lock_outline,
-                    size: 14, color: Color(0xFF2E7D32)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'DP ${_formatRupiah(_totalDp > 0 ? _totalDp : _dpPerOrang * _guests)} '
-                    'sudah dikonfirmasi. Tidak dapat diubah.',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        color: Color(0xFF2E7D32)),
-                  ),
-                ),
-              ]),
-            ),
-          ] else if (_requireDp) ...[
-            // DP aktif — tampilkan field dp_per_orang yang bisa diedit
-            Row(children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('DP per orang',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Color(0xFF795548))),
-                    const SizedBox(height: 4),
-                    TextFormField(
-                      initialValue: _dpPerOrang > 0
-                          ? _dpPerOrang.toString()
-                          : '150000',
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        prefixText: 'Rp ',
-                        prefixStyle: const TextStyle(
-                            fontFamily: 'Poppins', fontSize: 13),
-                      ),
-                      onChanged: (v) {
-                        final val = int.tryParse(v.replaceAll('.', '')) ?? 0;
-                        setState(() => _dpPerOrang = val);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Jumlah tamu',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Color(0xFF795548))),
-                    const SizedBox(height: 4),
-                    Text('$_guests orang',
-                        style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: Color(0xFFE65100))),
-                  ],
-                ),
-              ),
-            ]),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE65100),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Total DP: ',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 13,
-                          color: Colors.white)),
-                  Text(_formatRupiah(_totalDp),
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                          color: Colors.white)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              '* Perubahan tamu otomatis recalculate total DP.',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 11,
-                  color: Color(0xFF795548))),
-          ] else ...[
-            const Text(
-              'Booking tanpa DP — berlaku aturan cancellation.',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 12,
-                  color: Color(0xFF795548))),
-          ],
-        ],
       ),
     );
   }
