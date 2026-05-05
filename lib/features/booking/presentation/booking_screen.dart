@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../shared/models/booking_model.dart';
+import '../../../core/models/staff_role.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import 'widgets/booking_card.dart';
@@ -28,7 +29,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   Set<String> _datesWithBooking = {};
 
-  String? _branchId;
+  String? _branchId; // branch milik staff yang login
+
+  // ── Branch filter (hanya untuk superadmin & manager) ──
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId; // null = "Semua" (hanya superadmin/manager)
 
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
@@ -65,9 +70,17 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     final staff = ref.read(currentStaffProvider);
     if (staff != null && _branchId == null) {
       _branchId = staff.branchId;
+      final canFilterBranch = staff.role == StaffRole.superadmin ||
+          staff.role == StaffRole.manager;
+      if (canFilterBranch) {
+        _selectedBranchId = null; // default "Semua"
+        _loadBranches();
+      } else {
+        _selectedBranchId = _branchId;
+      }
       _load();
       _loadDatesWithBooking();
-      _setupRealtime(_branchId!);
+      if (_selectedBranchId != null) _setupRealtime(_selectedBranchId!);
     }
   }
 
@@ -124,6 +137,22 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         .subscribe();
   }
 
+  // ── Load semua branch (untuk superadmin / manager) ────────
+  Future<void> _loadBranches() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name');
+      if (mounted) {
+        setState(() => _branches = (res as List).cast<Map<String, dynamic>>());
+      }
+    } catch (e) {
+      debugPrint('error load branches = $e');
+    }
+  }
+
   void _showRealtimeNotif({
     required IconData icon,
     required String message,
@@ -161,10 +190,16 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     if (mounted) setState(() => _isLoading = true);
     try {
       final dateStr = _fmtDate(_selectedDay);
-      final res = await Supabase.instance.client
+      var q = Supabase.instance.client
           .from('bookings')
-          .select('*, restaurant_tables!bookings_table_id_fkey(table_number, capacity, floor_level)')
-          .eq('branch_id', _branchId!)
+          .select('*, restaurant_tables!bookings_table_id_fkey(table_number, capacity, floor_level)');
+
+      if (_selectedBranchId != null) {
+        q = q.eq('branch_id', _selectedBranchId!);
+      }
+      // jika _selectedBranchId null (Semua) → tidak filter branch
+
+      final res = await q
           .eq('booking_date', dateStr)
           .order('booking_time');
 
@@ -203,10 +238,15 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     try {
       final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
       final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      final res = await Supabase.instance.client
+      var q = Supabase.instance.client
           .from('bookings')
-          .select('booking_date')
-          .eq('branch_id', _branchId!)
+          .select('booking_date');
+
+      if (_selectedBranchId != null) {
+        q = q.eq('branch_id', _selectedBranchId!);
+      }
+
+      final res = await q
           .gte('booking_date', _fmtDate(firstDay))
           .lte('booking_date', _fmtDate(lastDay))
           .inFilter('status', ['pending', 'confirmed', 'seated', 'waitlisted', 'completed']);
@@ -230,8 +270,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       final today = _fmtDate(DateTime.now());
       var q = Supabase.instance.client
           .from('bookings')
-          .select('*, restaurant_tables!bookings_table_id_fkey(table_number)')
-          .eq('branch_id', _branchId!);
+          .select('*, restaurant_tables!bookings_table_id_fkey(table_number)');
+
+      if (_selectedBranchId != null) {
+        q = q.eq('branch_id', _selectedBranchId!);
+      }
 
       if (_historyFilter == 'completed') {
         q = q.eq('status', 'completed');
@@ -544,17 +587,40 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     final staff = ref.watch(currentStaffProvider);
     if (staff != null && _branchId == null) {
       _branchId = staff.branchId;
+      final canFilterBranch = staff.role == StaffRole.superadmin ||
+          staff.role == StaffRole.manager;
+      _selectedBranchId = canFilterBranch ? null : _branchId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (canFilterBranch) _loadBranches();
         _load();
         _loadDatesWithBooking();
       });
     }
 
-    return Scaffold(
+    final canFilterBranch = staff != null &&
+        (staff.role == StaffRole.superadmin || staff.role == StaffRole.manager);
+
+    final mainContent = Scaffold(
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Booking Management'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Booking Management'),
+            if (canFilterBranch && _selectedBranchId != null)
+              Text(
+                _branches.firstWhere(
+                  (b) => b['id'] == _selectedBranchId,
+                  orElse: () => {'name': ''},
+                )['name'] ?? '',
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    fontFamily: 'Poppins'),
+              ),
+          ],
+        ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         titleTextStyle: const TextStyle(
@@ -600,12 +666,108 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         children: [_buildReservasi(), _buildHistory()],
       ),
     );
+
+    if (!canFilterBranch) return mainContent;
+
+    // Superadmin / manager → tampilkan sidebar branch di kiri
+    return Row(children: [
+      _buildBranchSidebar(),
+      Expanded(child: mainContent),
+    ]);
+  }
+
+  Widget _buildBranchSidebar() {
+    final items = <(String?, String, IconData)>[
+      (null, 'Semua', Icons.store_rounded),
+      for (final b in _branches)
+        (b['id'] as String, b['name'] as String, Icons.storefront_outlined),
+    ];
+
+    return Container(
+      width: 90,
+      color: const Color(0xFF1A1A2E),
+      child: SafeArea(
+        child: Column(children: [
+          const SizedBox(height: 56), // tinggi appbar
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: items.map((item) {
+                final isSelected = _selectedBranchId == item.$1;
+                return GestureDetector(
+                  onTap: () {
+                    if (_selectedBranchId == item.$1) return;
+                    setState(() {
+                      _selectedBranchId = item.$1;
+                      _bookings = [];
+                      _history = [];
+                      _datesWithBooking = {};
+                    });
+                    _load();
+                    _loadDatesWithBooking();
+                    if (_history.isNotEmpty) _loadHistory();
+                    // Setup realtime hanya jika branch spesifik dipilih
+                    if (item.$1 != null) {
+                      _setupRealtime(item.$1!);
+                    } else {
+                      _realtimeChannel?.unsubscribe();
+                      _realtimeChannel = null;
+                    }
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.accent.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      border: isSelected
+                          ? Border.all(
+                              color: AppColors.accent.withValues(alpha: 0.4))
+                          : null,
+                    ),
+                    child: Column(children: [
+                      Icon(item.$3,
+                          size: 20,
+                          color: isSelected
+                              ? AppColors.accent
+                              : Colors.white54),
+                      const SizedBox(height: 6),
+                      Text(
+                        item.$2,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: isSelected
+                                ? AppColors.accent
+                                : Colors.white54),
+                      ),
+                    ]),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 
   Future<void> _showAddBooking() async {
+    // Untuk "Semua" cabang, gunakan branchId staff sendiri
+    final targetBranch = _selectedBranchId ?? _branchId ?? '';
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (_) => AddBookingDialog(branchId: _branchId ?? ''),
+      builder: (_) => AddBookingDialog(branchId: targetBranch),
     );
 
     if (result != null && _branchId != null) {
@@ -613,7 +775,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         // Insert booking ke Supabase
         final inserted = await Supabase.instance.client
             .from('bookings')
-            .insert({...result, 'branch_id': _branchId})
+            .insert({...result, 'branch_id': targetBranch})
             .select()
             .single();
 
