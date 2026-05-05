@@ -173,18 +173,18 @@ class InventoryTransaction {
   });
 
   factory InventoryTransaction.fromMap(Map<String, dynamic> map) {
-    return InventoryTransaction(
-      id: map['id'] as String,
-      inventoryItemId: map['inventory_item_id'] as String,
-      branchId: map['branch_id'] as String,
-      type: map['type'] as String,
-      quantity: (map['quantity'] as num).toDouble(),
-      note: map['note'] as String?,
-      referenceId: map['reference_id'] as String?,
-      createdBy: map['created_by'] as String?,
-      createdAt: DateTime.parse(map['created_at'] as String),
-    );
-  }
+      return InventoryTransaction(
+        id: map['id'] as String,
+        inventoryItemId: (map['inventory_item_id'] ?? map['item_id']) as String,
+        branchId: map['branch_id'] as String,
+        type: (map['type'] ?? map['transaction_type']) as String,
+        quantity: (map['quantity'] as num).toDouble(),
+        note: (map['note'] ?? map['notes']) as String?,
+        referenceId: map['reference_id'] as String?,
+        createdBy: (map['created_by'] ?? map['performed_by']) as String?,
+        createdAt: DateTime.parse(map['created_at'] as String),
+      );
+    }
 
   Map<String, dynamic> toMap() {
     return {

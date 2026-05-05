@@ -33,15 +33,19 @@ class InventoryFilter {
 
   InventoryFilter copyWith({
     String? searchQuery,
-    String? category,
-    bool? showLowStockOnly,
+    Object? category = _undefined,
+    Object? showLowStockOnly = _undefined,
   }) {
     return InventoryFilter(
       searchQuery: searchQuery ?? this.searchQuery,
-      category: category ?? this.category,
-      showLowStockOnly: showLowStockOnly ?? this.showLowStockOnly,
+      category: category == _undefined ? this.category : category as String?,
+      showLowStockOnly: showLowStockOnly == _undefined
+          ? this.showLowStockOnly
+          : showLowStockOnly as bool?,
     );
   }
+
+  static const _undefined = Object();
 }
 
 final inventoryFilterProvider =

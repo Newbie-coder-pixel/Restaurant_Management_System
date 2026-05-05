@@ -310,11 +310,11 @@ class InventoryService {
     await _client.from('inventory_transactions').insert({
       'inventory_item_id': inventoryItemId,
       'branch_id': branchId,
-      'type': type,
+      'transaction_type': type,  // ← pakai nama kolom yang benar
       'quantity': quantity,
-      'note': note,
+      'notes': note,             // ← kolom namanya 'notes' bukan 'note'
       'reference_id': referenceId,
-      'created_by': createdBy,
+      'performed_by': createdBy, // ← kolom namanya 'performed_by' bukan 'created_by'
     });
   }
 
