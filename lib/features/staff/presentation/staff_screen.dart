@@ -17,7 +17,7 @@ class StaffScreen extends ConsumerStatefulWidget {
 
 class _StaffScreenState extends ConsumerState<StaffScreen>
     with SingleTickerProviderStateMixin {
-  // ── state (unchanged) ──────────────────────────────────────────────
+  // ── state ──────────────────────────────────────────────
   List<StaffMember> _staff = [];
   bool _isLoading = true;
   String? _branchId;
@@ -25,15 +25,18 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   bool _showArchived = false;
   bool _initialized = false;
 
-  // Branch list untuk superadmin saat tambah staff
+  // Branch list untuk superadmin
   List<Map<String, dynamic>> _allBranches = [];
+
+  // ✅ FIX: Branch filter untuk superadmin (null = semua branch)
+  String? _selectedFilterBranchId;
 
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
 
   late TabController _tabController;
 
-  // ── lifecycle (unchanged) ──────────────────────────────────────────
+  // ── lifecycle ──────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -89,28 +92,51 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     }
   }
 
-  // ── data (unchanged) ───────────────────────────────────────────────
+  // ── data ───────────────────────────────────────────────
   Future<void> _load() async {
     if (_branchId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
     setState(() => _isLoading = true);
-    final res = await Supabase.instance.client
-        .from('staff')
-        .select()
-        .eq('branch_id', _branchId!)
-        .eq('is_active', !_showArchived)
-        .order('full_name');
+
+    // ✅ FIX: Filter harus dipanggil SEBELUM .order() karena .order()
+    // mengembalikan PostgrestTransformBuilder yang tidak punya .eq()
+    List res;
+    if (_userRole != StaffRole.superadmin) {
+      // Non-superadmin: hanya branch sendiri
+      res = await Supabase.instance.client
+          .from('staff')
+          .select()
+          .eq('branch_id', _branchId!)
+          .eq('is_active', !_showArchived)
+          .order('full_name');
+    } else if (_selectedFilterBranchId != null) {
+      // Superadmin filter branch tertentu
+      res = await Supabase.instance.client
+          .from('staff')
+          .select()
+          .eq('branch_id', _selectedFilterBranchId!)
+          .eq('is_active', !_showArchived)
+          .order('full_name');
+    } else {
+      // Superadmin lihat semua branch
+      res = await Supabase.instance.client
+          .from('staff')
+          .select()
+          .eq('is_active', !_showArchived)
+          .order('full_name');
+    }
+
     if (mounted) {
       setState(() {
-        _staff = (res as List).map((e) => StaffMember.fromJson(e)).toList();
+        _staff = res.map((e) => StaffMember.fromJson(e)).toList();
         _isLoading = false;
       });
     }
   }
 
-  // ── helpers (unchanged) ────────────────────────────────────────────
+  // ── helpers ────────────────────────────────────────────
   Color _roleColor(StaffRole r) {
     switch (r) {
       case StaffRole.superadmin: return const Color(0xFF9C27B0);
@@ -133,7 +159,17 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         s.role.displayName.toLowerCase().contains(_searchQuery)).toList();
   }
 
-  // ── archive / restore (unchanged) ──────────────────────────────────
+  // ✅ FIX: Helper nama branch dari id
+  String _branchName(String? branchId) {
+    if (branchId == null) return 'Semua Branch';
+    final branch = _allBranches.firstWhere(
+      (b) => b['id'] == branchId,
+      orElse: () => {'name': 'Unknown'},
+    );
+    return branch['name'] as String;
+  }
+
+  // ── archive / restore ──────────────────────────────────
   Future<void> _setActiveStatus(StaffMember s, bool active) async {
     final action = active ? 'mengaktifkan' : 'mengarsipkan';
     final confirm = await showDialog<bool>(
@@ -178,7 +214,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     await _load();
   }
 
-  // ── reset password (unchanged) ─────────────────────────────────────
+  // ── reset password ─────────────────────────────────────
   Future<void> _sendPasswordReset(StaffMember s) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -224,7 +260,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     }
   }
 
-  // ── edit staff (unchanged logic, UI improved) ─────────────────────────
+  // ── edit staff ─────────────────────────────────────────
   Future<void> _showEditStaffDialog(StaffMember s) async {
     final nameCtrl  = TextEditingController(text: s.fullName);
     final phoneCtrl = TextEditingController(text: s.phone ?? '');
@@ -424,7 +460,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── bottom sheet options (UI improved) ───────────────────────────────
+  // ── bottom sheet options ───────────────────────────────
   void _showStaffOptions(StaffMember s) {
     showModalBottomSheet(
       context: context,
@@ -499,12 +535,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               ListTile(
                 leading: const Icon(Icons.fact_check_outlined,
                     color: Color(0xFF4CAF50)),
-                title: const Text('Riwayat Absensi',
+                title: const Text('Absensi',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         color: Color(0xFF4CAF50),
                         fontWeight: FontWeight.w600)),
-                subtitle: const Text('Lihat & koreksi catatan kehadiran',
+                subtitle: const Text('Lihat riwayat kehadiran',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -512,9 +548,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     context,
                     MaterialPageRoute(
                       builder: (_) => StaffAttendanceScreen(
-                        staff: s,
-                        branchId: _branchId ?? '',
-                      ),
+                      staff: s,
+                      branchId: s.branchId ?? _branchId ?? '',
+                    ),
                     ),
                   );
                 }),
@@ -522,19 +558,19 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
             if (s.isActive)
               ListTile(
                 leading: const Icon(Icons.lock_reset_outlined,
-                    color: Color(0xFF607D8B)),
+                    color: Color(0xFFFF9800)),
                 title: const Text('Reset Password',
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        color: Color(0xFF607D8B),
+                        color: Color(0xFFFF9800),
                         fontWeight: FontWeight.w600)),
-                subtitle: const Text('Kirim email reset ke staff',
+                subtitle: const Text('Kirim email reset password',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _sendPasswordReset(s);
                 }),
-            const Divider(),
+            const Divider(height: 0),
             // archive / restore
             if (s.isActive)
               ListTile(
@@ -569,7 +605,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── add staff (unchanged logic, UI improved) ──────────────────────────
+  // ── add staff ──────────────────────────────────────────
   Future<void> _showAddStaffDialog() async {
     final nameCtrl     = TextEditingController();
     final emailCtrl    = TextEditingController();
@@ -856,9 +892,11 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── build (UI improved) ──────────────────────────────────────────────
+  // ── build ────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final isSuperadmin = _userRole == StaffRole.superadmin;
+
     return Scaffold(
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
@@ -890,24 +928,95 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TabBar(
-              controller: _tabController,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              indicator: const UnderlineTabIndicator(
-                borderSide: BorderSide(color: Colors.white, width: 2),
-                insets: EdgeInsets.symmetric(horizontal: 16),
+          preferredSize: Size.fromHeight(isSuperadmin && _allBranches.isNotEmpty ? 104 : 48),
+          child: Column(
+            children: [
+              // ✅ FIX: Branch selector bar khusus superadmin
+              if (isSuperadmin && _allBranches.isNotEmpty)
+                Container(
+                  color: AppColors.primary.withValues(alpha: 0.85),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.store_outlined, color: Colors.white70, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: _selectedFilterBranchId,
+                            dropdownColor: const Color(0xFF3D2C8D),
+                            iconEnabledColor: Colors.white,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 13,
+                                color: Colors.white),
+                            items: [
+                              // Opsi "Semua Branch"
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('🏢 Semua Branch',
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 13,
+                                        color: Colors.white)),
+                              ),
+                              // Daftar branch
+                              ..._allBranches.map((b) => DropdownMenuItem<String?>(
+                                value: b['id'] as String,
+                                child: Text('📍 ${b['name']}',
+                                    style: const TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 13,
+                                        color: Colors.white)),
+                              )),
+                            ],
+                            onChanged: (value) {
+                              setState(() => _selectedFilterBranchId = value);
+                              _load();
+                            },
+                          ),
+                        ),
+                      ),
+                      // Badge jumlah staff yang ditampilkan
+                      if (!_isLoading)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${_staff.length} staff',
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              // Tab bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TabBar(
+                  controller: _tabController,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white70,
+                  indicator: const UnderlineTabIndicator(
+                    borderSide: BorderSide(color: Colors.white, width: 2),
+                    insets: EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14),
+                  unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                  tabs: const [
+                    Tab(text: 'Staff', icon: Icon(Icons.people_outline, size: 18)),
+                    Tab(text: 'Rekap Shift', icon: Icon(Icons.calendar_today_outlined, size: 18)),
+                  ],
+                ),
               ),
-              labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14),
-              unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-              tabs: const [
-                Tab(text: 'Staff', icon: Icon(Icons.people_outline, size: 18)),
-                Tab(text: 'Rekap Shift', icon: Icon(Icons.calendar_today_outlined, size: 18)),
-              ],
-            ),
+            ],
           ),
         ),
       ),
@@ -934,7 +1043,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── TAB 1: daftar staff (UI improved) ────────────────────────────────
+  // ── TAB 1: daftar staff ───────────────────────────────────
   Widget _buildStaffTab() {
     return Column(children: [
       if (_showArchived)
@@ -1127,10 +1236,26 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                       fontFamily: 'Poppins',
                                       fontSize: 12,
                                       color: AppColors.textHint)),
+                            // ✅ FIX: Tampilkan badge nama branch jika superadmin lihat semua branch
+                            if (_userRole == StaffRole.superadmin && _selectedFilterBranchId == null)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '📍 ${_branchName(s.branchId)}',
+                                  style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 11,
+                                      color: AppColors.primary),
+                                ),
+                              ),
                           ],
                         ),
-                        isThreeLine:
-                            s.phone != null && s.phone!.isNotEmpty,
+                        isThreeLine: true,
                         trailing: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
@@ -1148,7 +1273,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── TAB 2: rekap shift minggu ini (UI improved) ─────────────────────
+  // ── TAB 2: rekap shift ─────────────────────────────────
   Widget _buildShiftSummaryTab() {
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
@@ -1178,14 +1303,14 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 ))
             : _ShiftSummaryView(
                 staff: _staff,
-                branchId: _branchId ?? '',
+                branchId: _selectedFilterBranchId ?? _branchId ?? '',
                 roleColor: _roleColor,
               );
   }
 }
 
 // ─────────────────────────────────────────────────────────
-// Shift Summary Widget (Tab 2 — rekap semua staff) — UI improved
+// Shift Summary Widget (Tab 2 — rekap semua staff)
 // ─────────────────────────────────────────────────────────
 class _ShiftSummaryView extends StatefulWidget {
   final List<StaffMember> staff;
