@@ -126,19 +126,23 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
     return int.parse(parts[0]) * 60 + int.parse(parts[1]);
   }
 
+  // Cek apakah dua shift bertabrakan, termasuk shift overnight (mis. 22:00–02:00).
+  // Shift overnight (end < start) di-normalkan ke end + 1440, lalu dicek overlap
+  // dalam tiga skenario: langsung, shift2 geser mundur, shift1 geser mundur.
   bool _isOverlapping(String start1, String end1, String start2, String end2) {
     final s1 = _toMinutes(start1);
-    final e1 = _toMinutes(end1);
+    var e1 = _toMinutes(end1);
     final s2 = _toMinutes(start2);
-    final e2 = _toMinutes(end2);
+    var e2 = _toMinutes(end2);
 
-    final e1Norm = e1 <= s1 ? e1 + 1440 : e1;
-    final e2Norm = e2 <= s2 ? e2 + 1440 : e2;
+    if (e1 <= s1) e1 += 1440;
+    if (e2 <= s2) e2 += 1440;
 
-    final overlap1 = s1 < e2Norm && s2 < e1Norm;
-    final overlap2 = s1 < (e2Norm - 1440 + 1440) && (s2 + 1440) < e1Norm;
+    if (s1 < e2 && s2 < e1) return true;
+    if (s1 < (e2 - 1440) && (s2 - 1440) < e1) return true;
+    if ((s1 - 1440) < e2 && s2 < (e1 - 1440)) return true;
 
-    return overlap1 || (e2 <= s2 && overlap2);
+    return false;
   }
 
   Future<void> _addShiftDialog(int day) async {

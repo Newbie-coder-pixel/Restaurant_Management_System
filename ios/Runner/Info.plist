@@ -26,10 +26,16 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Digunakan untuk mengambil foto profil staff</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Digunakan untuk menyimpan foto profil staff</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Digunakan untuk memilih foto profil staff</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

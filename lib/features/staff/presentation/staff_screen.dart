@@ -8,6 +8,9 @@ import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import 'staff_shift_screen.dart';
 import 'staff_attendance_screen.dart';
+import 'staff_performance_screen.dart';
+import 'staff_login_history_screen.dart';
+import '../services/staff_avatar_service.dart';
 
 class StaffScreen extends ConsumerStatefulWidget {
   const StaffScreen({super.key});
@@ -28,7 +31,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   // Branch list untuk superadmin
   List<Map<String, dynamic>> _allBranches = [];
 
-  // ✅ FIX: Branch filter untuk superadmin (null = semua branch)
+  // Branch filter untuk superadmin (null = semua branch)
   String? _selectedFilterBranchId;
 
   final _searchCtrl = TextEditingController();
@@ -100,11 +103,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     }
     setState(() => _isLoading = true);
 
-    // ✅ FIX: Filter harus dipanggil SEBELUM .order() karena .order()
-    // mengembalikan PostgrestTransformBuilder yang tidak punya .eq()
     List res;
     if (_userRole != StaffRole.superadmin) {
-      // Non-superadmin: hanya branch sendiri
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -112,7 +112,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           .eq('is_active', !_showArchived)
           .order('full_name');
     } else if (_selectedFilterBranchId != null) {
-      // Superadmin filter branch tertentu
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -120,7 +119,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           .eq('is_active', !_showArchived)
           .order('full_name');
     } else {
-      // Superadmin lihat semua branch
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -159,7 +157,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         s.role.displayName.toLowerCase().contains(_searchQuery)).toList();
   }
 
-  // ✅ FIX: Helper nama branch dari id
   String _branchName(String? branchId) {
     if (branchId == null) return 'Semua Branch';
     final branch = _allBranches.firstWhere(
@@ -278,9 +275,15 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
             CircleAvatar(
               radius: 20,
               backgroundColor: _roleColor(s.role).withValues(alpha: 0.15),
-              child: Text(s.fullName[0].toUpperCase(),
-                  style: TextStyle(fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w700, color: _roleColor(s.role)))),
+              backgroundImage: s.avatarUrl != null
+                  ? NetworkImage(s.avatarUrl!) as ImageProvider
+                  : null,
+              child: s.avatarUrl == null
+                  ? Text(s.fullName[0].toUpperCase(),
+                      style: TextStyle(fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w700, color: _roleColor(s.role)))
+                  : null,
+            ),
             const SizedBox(width: 12),
             const Expanded(
               child: Text('Edit Staff',
@@ -460,6 +463,63 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
+  // ── ganti / hapus avatar ───────────────────────────────
+  Future<void> _changeAvatar(StaffMember s) async {
+    final newUrl = await StaffAvatarService.pickAndUpload(
+      context: context,
+      staffId: s.id,
+      oldAvatarUrl: s.avatarUrl,
+    );
+    if (newUrl != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('📸 Foto ${s.fullName} berhasil diperbarui'),
+          backgroundColor: const Color(0xFF4CAF50),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
+      await _load();
+    }
+  }
+
+  Future<void> _removeAvatar(StaffMember s) async {
+    if (s.avatarUrl == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Hapus Foto',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: const Text('Yakin ingin menghapus foto profil staff ini?',
+            style: TextStyle(fontFamily: 'Poppins')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
+          ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Hapus', style: TextStyle(fontFamily: 'Poppins'))),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    final ok = await StaffAvatarService.removeAvatar(
+      context: context,
+      staffId: s.id,
+      avatarUrl: s.avatarUrl!,
+    );
+    if (ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('🗑️ Foto ${s.fullName} dihapus'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
+      await _load();
+    }
+  }
+
   // ── bottom sheet options ───────────────────────────────
   void _showStaffOptions(StaffMember s) {
     showModalBottomSheet(
@@ -481,11 +541,16 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               leading: CircleAvatar(
                   radius: 24,
                   backgroundColor: _roleColor(s.role).withValues(alpha: 0.15),
-                  child: Text(s.fullName[0].toUpperCase(),
-                      style: TextStyle(fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
-                          color: _roleColor(s.role)))),
+                  backgroundImage: s.avatarUrl != null
+                      ? NetworkImage(s.avatarUrl!) as ImageProvider
+                      : null,
+                  child: s.avatarUrl == null
+                      ? Text(s.fullName[0].toUpperCase(),
+                          style: TextStyle(fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                              color: _roleColor(s.role)))
+                      : null),
               title: Text(s.fullName,
                   style: const TextStyle(
                       fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
@@ -494,6 +559,46 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   style: AppTextStyles.caption),
             ),
             const Divider(height: 0),
+            // ganti foto
+            if (s.isActive)
+              ListTile(
+                leading: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: _roleColor(s.role).withValues(alpha: 0.15),
+                  backgroundImage: s.avatarUrl != null
+                      ? NetworkImage(s.avatarUrl!) as ImageProvider
+                      : null,
+                  child: s.avatarUrl == null
+                      ? Icon(Icons.camera_alt_outlined,
+                          size: 18, color: _roleColor(s.role))
+                      : null,
+                ),
+                title: Text(
+                    s.avatarUrl != null ? 'Ganti Foto Profil' : 'Tambah Foto Profil',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                    s.avatarUrl != null
+                        ? 'Pilih foto baru dari galeri atau kamera'
+                        : 'Upload foto dari galeri atau kamera',
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _changeAvatar(s);
+                }),
+            // hapus foto
+            if (s.isActive && s.avatarUrl != null)
+              ListTile(
+                leading: const Icon(Icons.no_photography_outlined, color: Colors.red),
+                title: const Text('Hapus Foto Profil',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.red,
+                        fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _removeAvatar(s);
+                }),
             // edit
             if (s.isActive)
               ListTile(
@@ -508,6 +613,50 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 onTap: () {
                   Navigator.pop(ctx);
                   _showEditStaffDialog(s);
+                }),
+            // performance
+            if (s.isActive)
+              ListTile(
+                leading: const Icon(Icons.bar_chart_outlined,
+                    color: Color(0xFF5C6BC0)),
+                title: const Text('Performa',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Color(0xFF5C6BC0),
+                        fontWeight: FontWeight.w600)),
+                subtitle: const Text('Lihat statistik order & kehadiran',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StaffPerformanceScreen(
+                        branchId: s.branchId ?? _branchId ?? '',
+                      ),
+                    ),
+                  );
+                }),
+            // login history
+            if (s.isActive)
+              ListTile(
+                leading: const Icon(Icons.history_outlined,
+                    color: Color(0xFF00BCD4)),
+                title: const Text('Riwayat Login',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Color(0xFF00BCD4),
+                        fontWeight: FontWeight.w600)),
+                subtitle: const Text('Lihat histori login staff ini',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StaffLoginHistoryScreen(staff: s),
+                    ),
+                  );
                 }),
             // shift
             if (s.isActive)
@@ -616,7 +765,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     bool isLoading = false;
     String? errorMsg;
 
-    // Branch selection: superadmin bisa pilih, role lain pakai branch sendiri
     final isSuperadmin = _userRole == StaffRole.superadmin;
     String? selectedBranchId = isSuperadmin
         ? (_allBranches.isNotEmpty ? _allBranches.first['id'] as String : _branchId)
@@ -707,7 +855,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 )).toList(),
                 onChanged: (v) { if (v != null) ss(() => selectedRole = v); },
               ),
-              // ── Branch selector (superadmin only) ────────────────────
               if (isSuperadmin && _allBranches.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
@@ -831,7 +978,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
                       ss(() { isLoading = true; errorMsg = null; });
 
-                      // Validasi branch untuk superadmin
                       if (isSuperadmin && selectedBranchId == null) {
                         ss(() {
                           isLoading = false;
@@ -911,6 +1057,17 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
             fontWeight: FontWeight.w600,
             color: Colors.white),
         actions: [
+          IconButton(
+              icon: const Icon(Icons.bar_chart_outlined),
+              tooltip: 'Performa Staff',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StaffPerformanceScreen(
+                    branchId: _selectedFilterBranchId ?? _branchId ?? '',
+                  ),
+                ),
+              )),
           TextButton.icon(
               onPressed: () {
                 setState(() => _showArchived = !_showArchived);
@@ -931,7 +1088,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           preferredSize: Size.fromHeight(isSuperadmin && _allBranches.isNotEmpty ? 104 : 48),
           child: Column(
             children: [
-              // ✅ FIX: Branch selector bar khusus superadmin
               if (isSuperadmin && _allBranches.isNotEmpty)
                 Container(
                   color: AppColors.primary.withValues(alpha: 0.85),
@@ -951,7 +1107,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                 fontSize: 13,
                                 color: Colors.white),
                             items: [
-                              // Opsi "Semua Branch"
                               const DropdownMenuItem<String?>(
                                 value: null,
                                 child: Text('🏢 Semua Branch',
@@ -960,7 +1115,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                         fontSize: 13,
                                         color: Colors.white)),
                               ),
-                              // Daftar branch
                               ..._allBranches.map((b) => DropdownMenuItem<String?>(
                                 value: b['id'] as String,
                                 child: Text('📍 ${b['name']}',
@@ -977,7 +1131,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           ),
                         ),
                       ),
-                      // Badge jumlah staff yang ditampilkan
                       if (!_isLoading)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -997,7 +1150,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     ],
                   ),
                 ),
-              // Tab bar
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: TabBar(
@@ -1211,16 +1363,21 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       child: ListTile(
                         onTap: () => _showStaffOptions(s),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        // ── Avatar: tampilkan foto jika ada, fallback ke inisial ──
                         leading: CircleAvatar(
                             radius: 24,
-                            backgroundColor:
-                                color.withValues(alpha: 0.15),
-                            child: Text(s.fullName[0].toUpperCase(),
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                    color: color))),
+                            backgroundColor: color.withValues(alpha: 0.15),
+                            backgroundImage: s.avatarUrl != null
+                                ? NetworkImage(s.avatarUrl!) as ImageProvider
+                                : null,
+                            child: s.avatarUrl == null
+                                ? Text(s.fullName[0].toUpperCase(),
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
+                                        color: color))
+                                : null),
                         title: Text(s.fullName,
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
@@ -1236,7 +1393,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                       fontFamily: 'Poppins',
                                       fontSize: 12,
                                       color: AppColors.textHint)),
-                            // ✅ FIX: Tampilkan badge nama branch jika superadmin lihat semua branch
                             if (_userRole == StaffRole.superadmin && _selectedFilterBranchId == null)
                               Container(
                                 margin: const EdgeInsets.only(top: 4),
@@ -1383,7 +1539,7 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      // day selector with animation
+      // day selector
       Container(
         color: AppColors.primary.withValues(alpha: 0.05),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -1475,15 +1631,21 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
                           child: Row(children: [
+                            // Avatar dengan foto jika ada
                             CircleAvatar(
                                 radius: 24,
                                 backgroundColor: color.withValues(alpha: 0.15),
-                                child: Text(s.fullName[0].toUpperCase(),
-                                    style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 16,
-                                        color: color))),
+                                backgroundImage: s.avatarUrl != null
+                                    ? NetworkImage(s.avatarUrl!) as ImageProvider
+                                    : null,
+                                child: s.avatarUrl == null
+                                    ? Text(s.fullName[0].toUpperCase(),
+                                        style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 16,
+                                            color: color))
+                                    : null),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Column(
