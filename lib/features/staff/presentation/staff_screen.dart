@@ -524,231 +524,214 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   void _showStaffOptions(StaffMember s) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2))),
-            // header
-            ListTile(
-              leading: CircleAvatar(
-                  radius: 24,
-                  backgroundColor: _roleColor(s.role).withValues(alpha: 0.15),
-                  backgroundImage: s.avatarUrl != null
-                      ? NetworkImage(s.avatarUrl!) as ImageProvider
-                      : null,
-                  child: s.avatarUrl == null
-                      ? Text(s.fullName[0].toUpperCase(),
-                          style: TextStyle(fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 18,
-                              color: _roleColor(s.role)))
-                      : null),
-              title: Text(s.fullName,
-                  style: const TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
-              subtitle: Text(
-                  '${s.role.displayName}${s.phone != null ? ' • ${s.phone}' : ''}',
-                  style: AppTextStyles.caption),
-            ),
-            const Divider(height: 0),
-            // ganti foto
-            if (s.isActive)
-              ListTile(
-                leading: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: _roleColor(s.role).withValues(alpha: 0.15),
-                  backgroundImage: s.avatarUrl != null
-                      ? NetworkImage(s.avatarUrl!) as ImageProvider
-                      : null,
-                  child: s.avatarUrl == null
-                      ? Icon(Icons.camera_alt_outlined,
-                          size: 18, color: _roleColor(s.role))
-                      : null,
-                ),
-                title: Text(
-                    s.avatarUrl != null ? 'Ganti Foto Profil' : 'Tambah Foto Profil',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-                subtitle: Text(
-                    s.avatarUrl != null
-                        ? 'Pilih foto baru dari galeri atau kamera'
-                        : 'Upload foto dari galeri atau kamera',
-                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _changeAvatar(s);
-                }),
-            // hapus foto
-            if (s.isActive && s.avatarUrl != null)
-              ListTile(
-                leading: const Icon(Icons.no_photography_outlined, color: Colors.red),
-                title: const Text('Hapus Foto Profil',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.red,
-                        fontWeight: FontWeight.w600)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _removeAvatar(s);
-                }),
-            // edit
-            if (s.isActive)
-              ListTile(
-                leading: const Icon(Icons.edit_outlined, color: Color(0xFF2196F3)),
-                title: const Text('Edit Data Staff',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFF2196F3),
-                        fontWeight: FontWeight.w600)),
-                subtitle: const Text('Ubah nama, no. HP, atau role',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showEditStaffDialog(s);
-                }),
-            // performance
-            if (s.isActive)
-              ListTile(
-                leading: const Icon(Icons.bar_chart_outlined,
-                    color: Color(0xFF5C6BC0)),
-                title: const Text('Performa',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFF5C6BC0),
-                        fontWeight: FontWeight.w600)),
-                subtitle: const Text('Lihat statistik order & kehadiran',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => StaffPerformanceScreen(
-                        branchId: s.branchId ?? _branchId ?? '',
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.4,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (_, scrollController) => SafeArea(
+          child: SingleChildScrollView(
+            controller: scrollController,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // drag handle
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  // header
+                  Row(children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: _roleColor(s.role).withValues(alpha: 0.15),
+                      backgroundImage: s.avatarUrl != null
+                          ? NetworkImage(s.avatarUrl!) as ImageProvider
+                          : null,
+                      child: s.avatarUrl == null
+                          ? Text(s.fullName[0].toUpperCase(),
+                              style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 20,
+                                  color: _roleColor(s.role)))
+                          : null),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(s.fullName,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 17)),
+                          const SizedBox(height: 2),
+                          Text(
+                              '${s.role.displayName}${s.phone != null ? ' • ${s.phone}' : ''}',
+                              style: AppTextStyles.caption),
+                        ],
                       ),
                     ),
-                  );
-                }),
-            // login history
-            if (s.isActive)
-              ListTile(
-                leading: const Icon(Icons.history_outlined,
-                    color: Color(0xFF00BCD4)),
-                title: const Text('Riwayat Login',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFF00BCD4),
-                        fontWeight: FontWeight.w600)),
-                subtitle: const Text('Lihat histori login staff ini',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => StaffLoginHistoryScreen(staff: s),
+                  ]),
+                  const SizedBox(height: 20),
+                  const Divider(height: 1),
+                  // grid menu
+                  if (s.isActive)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: 2.6,
+                        children: [
+                          _MenuGridItem(
+                            icon: s.avatarUrl != null
+                                ? Icons.camera_alt_outlined
+                                : Icons.add_a_photo_outlined,
+                            label: s.avatarUrl != null
+                                ? 'Ganti Foto'
+                                : 'Tambah Foto',
+                            color: _roleColor(s.role),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _changeAvatar(s);
+                            },
+                          ),
+                          _MenuGridItem(
+                            icon: Icons.edit_outlined,
+                            label: 'Edit Data',
+                            color: const Color(0xFF2196F3),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _showEditStaffDialog(s);
+                            },
+                          ),
+                          _MenuGridItem(
+                            icon: Icons.bar_chart_outlined,
+                            label: 'Performa',
+                            color: const Color(0xFF5C6BC0),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => StaffPerformanceScreen(
+                                    branchId: s.branchId ?? _branchId ?? '',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          _MenuGridItem(
+                            icon: Icons.history_outlined,
+                            label: 'Riwayat Login',
+                            color: const Color(0xFF00BCD4),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => StaffLoginHistoryScreen(staff: s),
+                                ),
+                              );
+                            },
+                          ),
+                          _MenuGridItem(
+                            icon: Icons.calendar_month_outlined,
+                            label: 'Jadwal Shift',
+                            color: const Color(0xFF9C27B0),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => StaffShiftScreen(staff: s),
+                                ),
+                              );
+                            },
+                          ),
+                          _MenuGridItem(
+                            icon: Icons.fact_check_outlined,
+                            label: 'Absensi',
+                            color: const Color(0xFF4CAF50),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => StaffAttendanceScreen(
+                                    staff: s,
+                                    branchId: s.branchId ?? _branchId ?? '',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          _MenuGridItem(
+                            icon: Icons.lock_reset_outlined,
+                            label: 'Reset Password',
+                            color: const Color(0xFFFF9800),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _sendPasswordReset(s);
+                            },
+                          ),
+                          if (s.avatarUrl != null)
+                            _MenuGridItem(
+                              icon: Icons.no_photography_outlined,
+                              label: 'Hapus Foto',
+                              color: Colors.red,
+                              onTap: () {
+                                Navigator.pop(ctx);
+                                _removeAvatar(s);
+                              },
+                            ),
+                        ],
+                      ),
                     ),
-                  );
-                }),
-            // shift
-            if (s.isActive)
-              ListTile(
-                leading: const Icon(Icons.calendar_month_outlined,
-                    color: Color(0xFF9C27B0)),
-                title: const Text('Jadwal Shift',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFF9C27B0),
-                        fontWeight: FontWeight.w600)),
-                subtitle: const Text('Atur jadwal kerja mingguan',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => StaffShiftScreen(staff: s),
+                  // archive / restore
+                  if (s.isActive)
+                    _ActionTile(
+                      icon: Icons.archive_outlined,
+                      label: 'Arsipkan Staff',
+                      subtitle: 'Data tetap tersimpan, bisa diaktifkan kembali',
+                      color: Colors.orange,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _setActiveStatus(s, false);
+                      },
+                    )
+                  else
+                    _ActionTile(
+                      icon: Icons.unarchive_outlined,
+                      label: 'Aktifkan Kembali',
+                      subtitle: 'Staff akan bisa login kembali',
+                      color: const Color(0xFF4CAF50),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _setActiveStatus(s, true);
+                      },
                     ),
-                  );
-                }),
-            // attendance
-            if (s.isActive)
-              ListTile(
-                leading: const Icon(Icons.fact_check_outlined,
-                    color: Color(0xFF4CAF50)),
-                title: const Text('Absensi',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFF4CAF50),
-                        fontWeight: FontWeight.w600)),
-                subtitle: const Text('Lihat riwayat kehadiran',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => StaffAttendanceScreen(
-                      staff: s,
-                      branchId: s.branchId ?? _branchId ?? '',
-                    ),
-                    ),
-                  );
-                }),
-            // reset password
-            if (s.isActive)
-              ListTile(
-                leading: const Icon(Icons.lock_reset_outlined,
-                    color: Color(0xFFFF9800)),
-                title: const Text('Reset Password',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFFFF9800),
-                        fontWeight: FontWeight.w600)),
-                subtitle: const Text('Kirim email reset password',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _sendPasswordReset(s);
-                }),
-            const Divider(height: 0),
-            // archive / restore
-            if (s.isActive)
-              ListTile(
-                leading: const Icon(Icons.archive_outlined, color: Colors.orange),
-                title: const Text('Arsipkan Staff',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.orange,
-                        fontWeight: FontWeight.w600)),
-                subtitle: const Text('Data tetap tersimpan, bisa diaktifkan kembali',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _setActiveStatus(s, false);
-                })
-            else
-              ListTile(
-                leading: const Icon(Icons.unarchive_outlined,
-                    color: Color(0xFF4CAF50)),
-                title: const Text('Aktifkan Kembali',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFF4CAF50),
-                        fontWeight: FontWeight.w600)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _setActiveStatus(s, true);
-                }),
-          ]),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1685,5 +1668,133 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
                     }),
       ),
     ]);
+  }
+}
+
+// ── Grid Menu Item Widget ──────────────────────────────
+class _MenuGridItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MenuGridItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: color.withValues(alpha: 0.9),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Action Tile Widget ─────────────────────────────────
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.15)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: color,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: color.withValues(alpha: 0.5),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
