@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -26,6 +27,15 @@ class StaffPerformance {
   final double avgWorkHours;
   final double attendanceRatePct;
   final double orderCompletionRatePct;
+  // --- field baru ---
+  final int totalShiftsScheduled;
+  final int onTimeShifts;
+  final double punctualityRatePct;
+  final double attendanceScore;
+  final double orderScore;
+  final double punctualityScore;
+  final double finalScore;
+  final String grade;
 
   const StaffPerformance({
     required this.staffId,
@@ -48,6 +58,14 @@ class StaffPerformance {
     required this.avgWorkHours,
     required this.attendanceRatePct,
     required this.orderCompletionRatePct,
+    required this.totalShiftsScheduled,
+    required this.onTimeShifts,
+    required this.punctualityRatePct,
+    required this.attendanceScore,
+    required this.orderScore,
+    required this.punctualityScore,
+    required this.finalScore,
+    required this.grade,
   });
 
   factory StaffPerformance.fromMap(Map<String, dynamic> map) {
@@ -72,6 +90,14 @@ class StaffPerformance {
       avgWorkHours: _toDouble(map['avg_work_hours']),
       attendanceRatePct: _toDouble(map['attendance_rate_pct']),
       orderCompletionRatePct: _toDouble(map['order_completion_rate_pct']),
+      totalShiftsScheduled: (map['total_shifts_scheduled'] ?? 0) as int,
+      onTimeShifts: (map['on_time_shifts'] ?? 0) as int,
+      punctualityRatePct: _toDouble(map['punctuality_rate_pct']),
+      attendanceScore: _toDouble(map['attendance_score']),
+      orderScore: _toDouble(map['order_score']),
+      punctualityScore: _toDouble(map['punctuality_score']),
+      finalScore: _toDouble(map['final_score']),
+      grade: map['grade'] ?? 'D',
     );
   }
 
@@ -96,7 +122,6 @@ class StaffPerformanceScreen extends StatefulWidget {
 }
 
 class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
-  // Currency format — konsisten dengan app (id_ID, Rp, 0 desimal)
   final _currency = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
@@ -107,17 +132,16 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
   bool _isLoading = true;
   String? _error;
 
-  // Filter bulan
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
-  // Filter role
   String _selectedRole = 'all';
   static const _roles = ['all', 'waiter', 'cashier', 'manager', 'kitchen', 'host'];
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // FIX: inisialisasi locale id_ID sebelum load data
+    initializeDateFormatting('id_ID', null).then((_) => _loadData());
   }
 
   Future<void> _loadData() async {
@@ -267,7 +291,6 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
   }
 
   Future<void> _pickMonth() async {
-    // Simple year+month picker using showDatePicker with day ignored
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedMonth,
@@ -358,20 +381,15 @@ class _StaffCard extends StatelessWidget {
               ),
             ],
           ),
+          // Trailing: tampilkan grade + final score
           trailing: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              _GradeBadge(grade: staff.grade),
+              const SizedBox(height: 2),
               Text(
-                currency.format(staff.totalRevenueContribution),
-                style: const TextStyle(
-                  color: Color(0xFF4CAF50),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-              Text(
-                '${staff.attendanceRatePct.toStringAsFixed(0)}% hadir',
+                '${staff.finalScore.toStringAsFixed(1)} pts',
                 style: const TextStyle(color: Colors.white38, fontSize: 11),
               ),
             ],
@@ -379,7 +397,12 @@ class _StaffCard extends StatelessWidget {
           children: [
             const Divider(color: Colors.white10),
             const SizedBox(height: 8),
-            // Order section
+
+            // ── Score Summary ──
+            _ScoreSummaryRow(staff: staff),
+            const SizedBox(height: 12),
+
+            // ── Order sebagai Waiter ──
             if (staff.role == 'waiter' || staff.totalOrdersAsWaiter > 0) ...[
               const _SectionTitle(title: 'Sebagai Waiter', icon: Icons.restaurant),
               const SizedBox(height: 8),
@@ -415,6 +438,8 @@ class _StaffCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
             ],
+
+            // ── Order sebagai Kasir ──
             if (staff.role == 'cashier' || staff.totalOrdersAsCashier > 0) ...[
               const _SectionTitle(title: 'Sebagai Kasir', icon: Icons.point_of_sale),
               const SizedBox(height: 8),
@@ -438,7 +463,8 @@ class _StaffCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
             ],
-            // Attendance section
+
+            // ── Kehadiran ──
             const _SectionTitle(title: 'Kehadiran Bulan Ini', icon: Icons.calendar_today),
             const SizedBox(height: 8),
             _MetricsRow(children: [
@@ -484,8 +510,34 @@ class _StaffCard extends StatelessWidget {
               const Expanded(child: SizedBox()),
             ]),
             const SizedBox(height: 8),
-            // Attendance rate bar
             _AttendanceBar(pct: staff.attendanceRatePct),
+            const SizedBox(height: 12),
+
+            // ── Ketepatan Waktu (Punctuality) ──
+            const _SectionTitle(title: 'Ketepatan Waktu', icon: Icons.access_time),
+            const SizedBox(height: 8),
+            _MetricsRow(children: [
+              _MetricTile(
+                label: 'Total Shift',
+                value: '${staff.totalShiftsScheduled}',
+                icon: Icons.calendar_view_week,
+              ),
+              _MetricTile(
+                label: 'Tepat Waktu',
+                value: '${staff.onTimeShifts}',
+                icon: Icons.alarm_on,
+                color: const Color(0xFF4CAF50),
+              ),
+              _MetricTile(
+                label: 'Terlambat',
+                value: '${staff.totalShiftsScheduled - staff.onTimeShifts}',
+                icon: Icons.alarm_off,
+                color: const Color(0xFFE94560),
+              ),
+              const Expanded(child: SizedBox()),
+            ]),
+            const SizedBox(height: 8),
+            _PunctualityBar(pct: staff.punctualityRatePct),
           ],
         ),
       ),
@@ -507,6 +559,118 @@ class _StaffCard extends StatelessWidget {
       default:
         return Colors.white54;
     }
+  }
+}
+
+// ─────────────────────────────────────────────
+// Grade Badge
+// ─────────────────────────────────────────────
+class _GradeBadge extends StatelessWidget {
+  final String grade;
+  const _GradeBadge({required this.grade});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = {
+      'A': const Color(0xFF4CAF50),
+      'B': const Color(0xFF64B5F6),
+      'C': const Color(0xFFFFB74D),
+      'D': const Color(0xFFE94560),
+    };
+    final color = colors[grade] ?? Colors.white38;
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Center(
+        child: Text(
+          grade,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Score Summary Row
+// ─────────────────────────────────────────────
+class _ScoreSummaryRow extends StatelessWidget {
+  final StaffPerformance staff;
+  const _ScoreSummaryRow({required this.staff});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _ScoreItem(label: 'Kehadiran', value: staff.attendanceScore, color: const Color(0xFF4CAF50)),
+          _Divider(),
+          _ScoreItem(label: 'Order', value: staff.orderScore, color: const Color(0xFF64B5F6)),
+          _Divider(),
+          _ScoreItem(label: 'Tepat Waktu', value: staff.punctualityScore, color: const Color(0xFFFFB74D)),
+          _Divider(),
+          _ScoreItem(label: 'Final', value: staff.finalScore, color: const Color(0xFFE94560), isBold: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: 32, color: Colors.white10);
+  }
+}
+
+class _ScoreItem extends StatelessWidget {
+  final String label;
+  final double value;
+  final Color color;
+  final bool isBold;
+
+  const _ScoreItem({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.isBold = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value.toStringAsFixed(1),
+          style: TextStyle(
+            color: color,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            fontSize: isBold ? 16 : 14,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white38, fontSize: 10),
+        ),
+      ],
+    );
   }
 }
 
@@ -574,9 +738,7 @@ class _MetricsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: children
-          .map((c) => Expanded(child: c))
-          .toList(),
+      children: children.map((c) => Expanded(child: c)).toList(),
     );
   }
 }
@@ -677,17 +839,52 @@ class _AttendanceBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Attendance Rate',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
-            ),
+            const Text('Attendance Rate',
+                style: TextStyle(color: Colors.white54, fontSize: 12)),
             Text(
               '${pct.toStringAsFixed(1)}%',
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: (pct / 100).clamp(0.0, 1.0),
+            backgroundColor: Colors.white10,
+            valueColor: AlwaysStoppedAnimation(color),
+            minHeight: 6,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PunctualityBar extends StatelessWidget {
+  final double pct;
+  const _PunctualityBar({required this.pct});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = pct >= 80
+        ? const Color(0xFF4CAF50)
+        : pct >= 60
+            ? const Color(0xFFFFB74D)
+            : const Color(0xFFE94560);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Punctuality Rate',
+                style: TextStyle(color: Colors.white54, fontSize: 12)),
+            Text(
+              '${pct.toStringAsFixed(1)}%',
+              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
             ),
           ],
         ),
