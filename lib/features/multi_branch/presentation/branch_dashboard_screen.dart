@@ -60,7 +60,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
 
     TimeOfDay openTime  = _parseTime(branch?['opening_time'],  const TimeOfDay(hour: 10, minute: 0));
     TimeOfDay closeTime = _parseTime(branch?['closing_time'],  const TimeOfDay(hour: 22, minute: 0));
-    bool isActive  = branch?['is_active'] ?? true;
+    bool isActive = branch?['is_active'] == true;
     bool isLoading = false;
     String? errorMsg;
 
