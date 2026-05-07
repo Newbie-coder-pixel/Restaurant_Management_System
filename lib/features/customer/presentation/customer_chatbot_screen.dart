@@ -342,7 +342,13 @@ ALUR RESERVASI MEJA:
 Saat customer ingin reservasi:
 1. Tanya: nama, jumlah orang, tanggal kedatangan, jam kedatangan, nomor HP (WAJIB)
 2. Interpretasi tanggal dengan cerdas (besok = hari ini +1, minggu depan = perkirakan)
-3. Validasi: tanggal hari ini atau setelahnya, jam antara $openTime - $closeTime WIB
+3. VALIDASI TANGGAL (WAJIB - JANGAN LEWATI):
+   - Hari ini adalah $todayStr
+   - Tanggal reservasi HARUS hari ini ($todayStr) atau di masa depan
+   - TOLAK KERAS jika tanggal sudah lewat (kemarin, minggu lalu, bulan lalu, dll)
+   - Contoh TOLAK: jika hari ini 7 Mei 2026, maka tanggal 6 Mei 2026 atau sebelumnya DILARANG
+   - Jika customer memberi tanggal lampau, JANGAN output ACTION:create_booking, minta tanggal ulang
+4. VALIDASI JAM: harus antara $openTime - $closeTime WIB
 4. Nomor HP WAJIB diisi — jika customer belum memberikan, MINTA terlebih dahulu dan jelaskan bahwa nomor HP diperlukan untuk konfirmasi kedatangan. JANGAN proses booking tanpa nomor HP.
 5. Setelah semua data lengkap (nama, jumlah, tanggal, jam, DAN nomor HP), output PERSIS format ini:
 
@@ -650,6 +656,47 @@ PENTING:
         int.parse(tp[0]),
         int.parse(tp[1]),
       );
+
+      // ── Validasi tanggal tidak boleh di masa lalu ──────────────────
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final bookingDate = DateTime(
+        int.parse(dp[0]),
+        int.parse(dp[1]),
+        int.parse(dp[2]),
+      );
+
+      if (bookingDate.isBefore(today)) {
+        final todayFormatted =
+            '${today.day} ${_bulanIndo(today.month)} ${today.year}';
+        _addBot(
+          '⚠️ Tanggal reservasi tidak valid.\n\n'
+          'Tanggal *$dateStr* sudah lewat. '
+          'Reservasi hanya bisa dilakukan untuk hari ini ($todayFormatted) atau setelahnya.\n\n'
+          'Silakan berikan tanggal yang benar. 📅',
+        );
+        return;
+      }
+
+      // ── Validasi jam operasional ───────────────────────────────────
+      final openTime = _cachedOpeningTime ?? '10:00';
+      final closeTime = _cachedClosingTime ?? '22:00';
+      final openParts = openTime.split(':');
+      final closeParts = closeTime.split(':');
+      final openMinutes =
+          int.parse(openParts[0]) * 60 + int.parse(openParts[1]);
+      final closeMinutes =
+          int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
+      final bookingMinutes = int.parse(tp[0]) * 60 + int.parse(tp[1]);
+
+      if (bookingMinutes < openMinutes || bookingMinutes > closeMinutes) {
+        _addBot(
+          '⚠️ Jam reservasi tidak valid.\n\n'
+          'Jam *$timeStr* di luar jam operasional kami ($openTime - $closeTime WIB).\n\n'
+          'Silakan pilih jam antara $openTime hingga $closeTime WIB. ⏰',
+        );
+        return;
+      }
 
       final result = await _tableService.createAndAssign(
         branchId: _branchId,
