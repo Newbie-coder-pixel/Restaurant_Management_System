@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart'; // ← TAMBAH IMPORT INI
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/router/app_router.dart'; // ← TAMBAH IMPORT INI
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_drawer.dart';
-import 'transfer_stock_list_screen.dart';
 
 class BranchDashboardScreen extends ConsumerStatefulWidget {
   const BranchDashboardScreen({super.key});
@@ -61,7 +62,6 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
 
     TimeOfDay openTime  = _parseTime(branch?['opening_time'],  const TimeOfDay(hour: 10, minute: 0));
     TimeOfDay closeTime = _parseTime(branch?['closing_time'],  const TimeOfDay(hour: 22, minute: 0));
-    // FIX: gunakan == true untuk handle null dari Supabase
     bool isActive  = branch?['is_active'] == true;
     bool isLoading = false;
     String? errorMsg;
@@ -275,19 +275,16 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white),
             onPressed: isLoading ? null : () async {
-              // Validasi nama
               if (nameCtrl.text.trim().isEmpty) {
                 ss(() => errorMsg = 'Nama cabang wajib diisi.');
                 return;
               }
-              // Validasi jam
               final openMin  = openTime.hour * 60 + openTime.minute;
               final closeMin = closeTime.hour * 60 + closeTime.minute;
               if (closeMin <= openMin) {
                 ss(() => errorMsg = 'Jam tutup harus setelah jam buka.');
                 return;
               }
-              // Validasi koordinat — boleh kosong dua-duanya, tapi tidak boleh setengah
               final latStr = latCtrl.text.trim();
               final lngStr = lngCtrl.text.trim();
               final latFilled = latStr.isNotEmpty;
@@ -351,13 +348,9 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     );
   }
 
-  Future<void> _showTransferDialog({required String fromBranchId}) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const TransferStockListScreen(),
-      ),
-    );
+  // FIX: Ganti Navigator.push dengan context.go agar kompatibel dengan GoRouter
+  void _navigateToTransferStock() {
+    context.go(AppRoutes.transferStock);
   }
 
   TimeOfDay _parseTime(String? t, TimeOfDay fallback) {
@@ -480,7 +473,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                           ],
                         ),
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                          // FIX: Transfer Stok button lebih visible
+                          // Transfer Stok button — FIX: gunakan context.go
                           Container(
                             margin: const EdgeInsets.only(right: 4),
                             decoration: BoxDecoration(
@@ -493,7 +486,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                               icon: const Icon(Icons.swap_horiz, size: 20),
                               color: AppColors.accent,
                               tooltip: 'Transfer Stok',
-                              onPressed: () => _showTransferDialog(fromBranchId: b['id']),
+                              onPressed: _navigateToTransferStock, // ← FIX
                             ),
                           ),
                           // Edit button

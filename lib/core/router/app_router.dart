@@ -28,7 +28,7 @@ abstract class AppRoutes {
   static const tables         = '/tables';
   static const booking        = '/booking';
   static const bookingStats   = '/booking-stats';
-  static const closures = '/closures';
+  static const closures       = '/closures';
   static const order          = '/order';
   static const cashier        = '/cashier';
   static const kitchen        = '/kitchen';
@@ -37,6 +37,7 @@ abstract class AppRoutes {
   static const staff          = '/staff';
   static const reports        = '/reports';
   static const branches       = '/branches';
+  static const transferStock  = '/branches/transfer-stock'; // ← TAMBAH INI
   static const chatbot        = '/chatbot';
 
   // Customer PWA
@@ -186,16 +187,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           initialOrderNumber: state.pathParameters['orderNumber'],
         ),
       ),
-      // GoRoute(
-      //   path: AppRoutes.customerBookingSuccess,
-      //   builder: (_, __) => const CustomerBookingSuccessScreen(),
-      // ),
       GoRoute(
-  path: AppRoutes.customerOrderSuccess,
-  builder: (_, state) => CustomerOrderTrackerScreen(
-    initialOrderNumber: state.pathParameters['orderNumber'],
-  ),
-),
+        path: AppRoutes.customerOrderSuccess,
+        builder: (_, state) => CustomerOrderTrackerScreen(
+          initialOrderNumber: state.pathParameters['orderNumber'],
+        ),
+      ),
       GoRoute(
         path: AppRoutes.customerResetPassword,
         builder: (_, __) => const CustomerResetPasswordScreen(),
@@ -244,20 +241,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // ── Staff Routes ──────────────────────────────────────────────────────
       GoRoute(path: AppRoutes.staffGateway, builder: (_, __) => const StaffGatewayScreen()),
-      GoRoute(path: AppRoutes.login,     builder: (_, __) => const LoginScreen()),
-      GoRoute(path: AppRoutes.tables,    builder: (_, __) => const TableScreen()),
-      GoRoute(path: AppRoutes.booking,   builder: (_, __) => const BookingScreen()),
+      GoRoute(path: AppRoutes.login,        builder: (_, __) => const LoginScreen()),
+      GoRoute(path: AppRoutes.tables,       builder: (_, __) => const TableScreen()),
+      GoRoute(path: AppRoutes.booking,      builder: (_, __) => const BookingScreen()),
       GoRoute(path: AppRoutes.bookingStats, builder: (_, __) => const BookingStatsScreen()),
-      GoRoute(path: AppRoutes.order,     builder: (_, __) => const OrderScreen()),
-      GoRoute(path: AppRoutes.cashier,   builder: (_, __) => const CashierScreen()),
-      GoRoute(path: AppRoutes.kitchen,   builder: (_, __) => const KDSScreen()),
-      GoRoute(path: AppRoutes.menu,      builder: (_, __) => const MenuScreen()),
-      GoRoute(path: AppRoutes.closures, builder: (_, __) => const RestaurantClosureScreen()),
-      GoRoute(path: AppRoutes.inventory, builder: (_, __) => const InventoryScreen()),
-      GoRoute(path: AppRoutes.staff,     builder: (_, __) => const StaffScreen()),
-      GoRoute(path: AppRoutes.reports,   builder: (_, __) => const ReportsScreen()),
-      GoRoute(path: AppRoutes.branches,  builder: (_, __) => const BranchDashboardScreen()),
-      GoRoute(path: AppRoutes.chatbot,   builder: (_, __) => const ChatbotScreen()),
+      GoRoute(path: AppRoutes.order,        builder: (_, __) => const OrderScreen()),
+      GoRoute(path: AppRoutes.cashier,      builder: (_, __) => const CashierScreen()),
+      GoRoute(path: AppRoutes.kitchen,      builder: (_, __) => const KDSScreen()),
+      GoRoute(path: AppRoutes.menu,         builder: (_, __) => const MenuScreen()),
+      GoRoute(path: AppRoutes.closures,     builder: (_, __) => const RestaurantClosureScreen()),
+      GoRoute(path: AppRoutes.inventory,    builder: (_, __) => const InventoryScreen()),
+      GoRoute(path: AppRoutes.staff,        builder: (_, __) => const StaffScreen()),
+      GoRoute(path: AppRoutes.reports,      builder: (_, __) => const ReportsScreen()),
+
+      // ── Multi Branch Routes ───────────────────────────────────────────────
+      // FIX: Pisahkan menjadi 2 top-level GoRoute agar tidak ada ShellRoute
+      // yang menyebabkan error "parent route must be a page route"
+      GoRoute(
+        path: AppRoutes.branches,
+        builder: (_, __) => const BranchDashboardScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.transferStock,
+        builder: (_, __) => const TransferStockListScreen(),
+      ),
+
+      GoRoute(path: AppRoutes.chatbot, builder: (_, __) => const ChatbotScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(
