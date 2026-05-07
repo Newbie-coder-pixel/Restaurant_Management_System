@@ -94,34 +94,24 @@ class _CustomerChatbotScreenState
   // Prioritas: widget.branchId → _selectedBranchId (dipilih user) → ''
   String get _branchId => widget.branchId ?? _selectedBranchId ?? '';
 
-  // True jika perlu tampilkan picker branch (belum ada branchId sama sekali)
-  bool get _needsBranchSelection =>
-      widget.branchId == null &&
-      _selectedBranchId == null &&
-      _allBranches.isNotEmpty;
+  // Muncul hanya saat user trigger aksi yang butuh branch (booking/order)
+  bool _showBranchPicker = false;
+  bool get _needsBranchSelection => _showBranchPicker && _selectedBranchId == null && widget.branchId == null;
 
   @override
   void initState() {
     super.initState();
-    if (widget.branchId != null) {
-      // Punya branchId langsung — sambut normal
-      _addBot(
-        'Halo! 👋 Selamat datang di layanan customer support kami.\n\n'
-        'Saya bisa membantu Anda dengan:\n'
-        '• 🍽️ Informasi menu & bahan\n'
-        '• 🛒 Pemesanan makanan\n'
-        '• ⚠️ Info alergen & diet khusus\n'
-        '• 📅 Reservasi meja\n'
-        '• ⏰ Jam operasional\n\n'
-        'Silakan pilih topik di bawah atau ketik pertanyaan Anda 👇',
-      );
-    } else {
-      // Tanpa branchId — minta pilih cabang dulu
-      _addBot(
-        'Halo! 👋 Selamat datang di layanan customer support kami.\n\n'
-        'Untuk membantu Anda lebih baik, silakan pilih cabang yang ingin Anda kunjungi 🏠',
-      );
-    }
+    // Sambut customer — sama untuk semua mode
+    _addBot(
+      'Halo! 👋 Selamat datang di layanan customer support kami.\n\n'
+      'Saya bisa membantu Anda dengan:\n'
+      '• 🍽️ Informasi menu & bahan\n'
+      '• 🛒 Pemesanan makanan\n'
+      '• ⚠️ Info alergen & diet khusus\n'
+      '• 📅 Reservasi meja\n'
+      '• ⏰ Jam operasional\n\n'
+      'Silakan pilih topik di bawah atau ketik pertanyaan Anda 👇',
+    );
     _loadBranchData();
   }
 
@@ -361,6 +351,8 @@ ACTION:create_booking
 
 ATURAN NOMOR HP:
 - Field "phone" TIDAK BOLEH null atau kosong
+- Nomor HP harus valid: diawali 08 atau +62, panjang 10-13 digit (contoh: 081234567890)
+- Jika customer memberi nomor yang terlalu pendek atau tidak valid, MINTA ulang dengan sopan
 - Jika customer menolak memberikan nomor HP, jelaskan dengan sopan bahwa nomor HP wajib untuk konfirmasi kedatangan dan tidak bisa dilewati
 
 ATURAN BAHASA (WAJIB):
@@ -620,10 +612,32 @@ PENTING:
     return buffer.toString();
   }
 
+  // ── Validasi nomor HP Indonesia (10–13 digit, diawali 08 atau +62) ──
+  static bool _isValidPhone(String? phone) {
+    if (phone == null || phone.isEmpty || phone == 'null') return false;
+    final digits = phone.replaceAll(RegExp(r'[\s\-()]'), '');
+    // Format: 08xxxxxxxxx (10-13 digit) atau +628xxxxxxxxx
+    return RegExp(r'^(\+62|62|0)8[0-9]{8,11}$').hasMatch(digits);
+  }
+
   // ── Create Booking + Auto-Assign + Notifikasi Customer ────────────
   Future<void> _createBooking(Map<String, dynamic> data) async {
     try {
       final user = ref.read(customerUserProvider).value;
+
+      // Validasi nomor HP sebelum proses
+      final phone = data['phone'] as String?;
+      if (!_isValidPhone(phone)) {
+        _addBot(
+          '⚠️ Nomor HP tidak valid.\n\n'
+          'Nomor HP Indonesia harus:\n'
+          '• Diawali dengan 08 atau +62\n'
+          '• Terdiri dari 10–13 digit\n\n'
+          'Contoh: 081234567890\n\n'
+          'Silakan berikan nomor HP yang valid untuk melanjutkan reservasi.',
+        );
+        return;
+      }
 
       final dateStr = data['booking_date'] as String;
       final timeStr = data['booking_time'] as String;
@@ -761,8 +775,35 @@ PENTING:
     final text = (quick ?? _msgCtrl.text).trim();
     if (text.isEmpty || _isTyping) return;
 
-    // Jika belum pilih cabang, jangan proses pesan — picker sudah tampil
+    // Jika picker sedang tampil (user belum pilih cabang), blokir
     if (_needsBranchSelection) return;
+
+    // Deteksi apakah pesan butuh branch spesifik (booking / order)
+    if (_branchId.isEmpty && widget.branchId == null && _selectedBranchId == null) {
+      final lower = text.toLowerCase();
+      const branchTriggers = [
+        'reservasi', 'booking', 'book', 'reserve', 'pesan', 'order',
+        'menu', 'meja', 'makanan', 'makan', 'minuman', 'harga', 'bayar',
+      ];
+      final needsBranch = branchTriggers.any((t) => lower.contains(t));
+      if (needsBranch) {
+        // Tampilkan pesan user dulu, lalu munculkan picker
+        setState(() {
+          _messages.add(_ChatMessage(
+            role: 'user',
+            content: text,
+            timestamp: DateTime.now(),
+          ));
+          _showBranchPicker = true;
+        });
+        _scrollToBottom();
+        _addBot(
+          'Untuk membantu Anda dengan hal itu, saya perlu tahu cabang mana yang Anda tuju. '
+          'Silakan pilih cabang di bawah ini 👇',
+        );
+        return;
+      }
+    }
 
     _msgCtrl.clear();
 
@@ -929,6 +970,7 @@ PENTING:
                 // Reset branch selection jika mode tanpa branchId
                 if (widget.branchId == null) {
                   _selectedBranchId = null;
+                  _showBranchPicker = false;
                   _cachedMenuText = null;
                   _cachedBranchName = null;
                   _cachedOpeningTime = null;
@@ -937,13 +979,7 @@ PENTING:
                   _menuItems = [];
                 }
               });
-              if (widget.branchId == null) {
-                _addBot(
-                  'Halo lagi! 👋 Silakan pilih cabang yang ingin Anda kunjungi 🏠',
-                );
-              } else {
-                _addBot('Halo lagi! 👋 Ada yang bisa saya bantu?');
-              }
+              _addBot('Halo lagi! 👋 Ada yang bisa saya bantu?');
             },
           ),
           const SizedBox(width: 4),
@@ -956,11 +992,10 @@ PENTING:
       body: Column(
         children: [
           Expanded(child: _buildMessages()),
-          // Tampilkan picker branch jika belum ada branchId
+          // Picker muncul hanya saat user trigger aksi yang butuh branch
           if (_needsBranchSelection) _buildBranchPicker(),
-          // Sembunyikan quick actions & input sampai branch dipilih
-          if (!_needsBranchSelection) _buildQuickActions(),
-          if (!_needsBranchSelection) _buildInput(),
+          _buildQuickActions(),
+          _buildInput(),
         ],
       ),
     );
