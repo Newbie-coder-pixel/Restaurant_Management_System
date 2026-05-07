@@ -60,7 +60,8 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
 
     TimeOfDay openTime  = _parseTime(branch?['opening_time'],  const TimeOfDay(hour: 10, minute: 0));
     TimeOfDay closeTime = _parseTime(branch?['closing_time'],  const TimeOfDay(hour: 22, minute: 0));
-    bool isActive = branch?['is_active'] == true;
+    // FIX: gunakan == true untuk handle null dari Supabase
+    bool isActive  = branch?['is_active'] == true;
     bool isLoading = false;
     String? errorMsg;
 
@@ -349,7 +350,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     );
   }
 
-Future<void> _showTransferDialog({required String fromBranchId}) async {
+  Future<void> _showTransferDialog({required String fromBranchId}) async {
     final qtyCtrl = TextEditingController();
     String? errorMsg;
 
@@ -432,7 +433,7 @@ Future<void> _showTransferDialog({required String fromBranchId}) async {
                   itemCount: _branches.length,
                   itemBuilder: (_, i) {
                     final b        = _branches[i];
-                    final isActive = b['is_active'] ?? true;
+                    final isActive = b['is_active'] == true;
                     final openStr  = _fmtTime(b['opening_time']);
                     final closeStr = _fmtTime(b['closing_time']);
                     final hasCoords =
@@ -504,17 +505,30 @@ Future<void> _showTransferDialog({required String fromBranchId}) async {
                           ],
                         ),
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                            IconButton(                          // Transfer — PERTAMA
+                          // FIX: Transfer Stok button lebih visible
+                          Container(
+                            margin: const EdgeInsets.only(right: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: AppColors.accent.withValues(alpha: 0.4)),
+                            ),
+                            child: IconButton(
                               icon: const Icon(Icons.swap_horiz, size: 20),
                               color: AppColors.accent,
                               tooltip: 'Transfer Stok',
-                              onPressed: () => _showTransferDialog(fromBranchId: b['id'])),
-                            IconButton(                          // Edit — KEDUA
-                              icon: const Icon(Icons.edit_outlined, size: 20),
-                              color: AppColors.primary,
-                              tooltip: 'Edit',
-                              onPressed: () => _showBranchDialog(branch: b)),
-                            Container(
+                              onPressed: () => _showTransferDialog(fromBranchId: b['id']),
+                            ),
+                          ),
+                          // Edit button
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, size: 20),
+                            color: AppColors.primary,
+                            tooltip: 'Edit',
+                            onPressed: () => _showBranchDialog(branch: b)),
+                          // Status badge
+                          Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
