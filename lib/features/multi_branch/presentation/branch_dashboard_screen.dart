@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_drawer.dart';
+import 'transfer_stock_list_screen.dart';
 
 class BranchDashboardScreen extends ConsumerStatefulWidget {
   const BranchDashboardScreen({super.key});
@@ -351,37 +352,11 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
   }
 
   Future<void> _showTransferDialog({required String fromBranchId}) async {
-    final qtyCtrl = TextEditingController();
-    String? errorMsg;
-
-    await showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Transfer Stok Antar Cabang',
-          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Fitur ini membutuhkan item inventory yang sudah dibuat.',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: qtyCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Jumlah',
-              prefixIcon: Icon(Icons.numbers)),
-            keyboardType: TextInputType.number),
-          if (errorMsg case final msg?) ...[
-            const SizedBox(height: 8),
-            Text(msg,
-              style: const TextStyle(color: Colors.red, fontSize: 12)),
-          ],
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Tutup')),
-        ],
-      )),
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const TransferStockListScreen(),
+      ),
     );
   }
 

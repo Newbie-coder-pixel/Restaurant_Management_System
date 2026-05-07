@@ -13,5 +13,6 @@ export 'staff/presentation/staff_performance_screen.dart';
 export 'staff/presentation/staff_login_history_screen.dart';
 export 'reports/presentation/reports_screen.dart';
 export 'multi_branch/presentation/branch_dashboard_screen.dart';
+export 'multi_branch/presentation/transfer_stock_list_screen.dart';
 export 'chatbot/presentation/chatbot_screen.dart';
 export 'booking/presentation/restaurant_closure_screen.dart';
