@@ -73,6 +73,9 @@ class _CustomerChatbotScreenState
   // Semua branch -- dipakai saat chatbot dibuka tanpa branchId
   List<Map<String, dynamic>> _allBranches = [];
 
+  // Branch yang dipilih user saat mode tanpa branchId
+  String? _selectedBranchId;
+
   // Raw menu items list — digunakan untuk resolve menuItemId saat order
   List<Map<String, dynamic>> _menuItems = [];
 
@@ -88,21 +91,37 @@ class _CustomerChatbotScreenState
     return 'http://localhost:3000/api/chat';
   }
 
-  String get _branchId => widget.branchId ?? '';
+  // Prioritas: widget.branchId → _selectedBranchId (dipilih user) → ''
+  String get _branchId => widget.branchId ?? _selectedBranchId ?? '';
+
+  // True jika perlu tampilkan picker branch (belum ada branchId sama sekali)
+  bool get _needsBranchSelection =>
+      widget.branchId == null &&
+      _selectedBranchId == null &&
+      _allBranches.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _addBot(
-      'Halo! 👋 Selamat datang di layanan customer support kami.\n\n'
-      'Saya bisa membantu Anda dengan:\n'
-      '• 🍽️ Informasi menu & bahan\n'
-      '• 🛒 Pemesanan makanan\n'
-      '• ⚠️ Info alergen & diet khusus\n'
-      '• 📅 Reservasi meja\n'
-      '• ⏰ Jam operasional\n\n'
-      'Silakan pilih topik di bawah atau ketik pertanyaan Anda 👇',
-    );
+    if (widget.branchId != null) {
+      // Punya branchId langsung — sambut normal
+      _addBot(
+        'Halo! 👋 Selamat datang di layanan customer support kami.\n\n'
+        'Saya bisa membantu Anda dengan:\n'
+        '• 🍽️ Informasi menu & bahan\n'
+        '• 🛒 Pemesanan makanan\n'
+        '• ⚠️ Info alergen & diet khusus\n'
+        '• 📅 Reservasi meja\n'
+        '• ⏰ Jam operasional\n\n'
+        'Silakan pilih topik di bawah atau ketik pertanyaan Anda 👇',
+      );
+    } else {
+      // Tanpa branchId — minta pilih cabang dulu
+      _addBot(
+        'Halo! 👋 Selamat datang di layanan customer support kami.\n\n'
+        'Untuk membantu Anda lebih baik, silakan pilih cabang yang ingin Anda kunjungi 🏠',
+      );
+    }
     _loadBranchData();
   }
 
@@ -224,6 +243,38 @@ class _CustomerChatbotScreenState
     } catch (e) {
       debugPrint('Error loading branch data: $e');
       _cachedMenuText = '(gagal memuat menu)';
+    }
+  }
+
+  // ── Branch Selection (saat tidak ada branchId dari widget) ────────
+  /// Dipanggil saat user mengetuk tombol cabang di UI picker.
+  Future<void> _selectBranch(Map<String, dynamic> branch) async {
+    final id = branch['id'] as String;
+    final name = branch['name'] as String? ?? 'Restoran';
+
+    setState(() {
+      _selectedBranchId = id;
+    });
+
+    // Tampilkan pesan konfirmasi pilihan
+    _addBot(
+      '✅ Anda memilih *$name*.\n\n'
+      'Sedang memuat data cabang... ⏳',
+    );
+
+    // Load semua data branch yang dipilih
+    await _loadBranchData();
+
+    if (mounted) {
+      _addBot(
+        'Siap! Saya sekarang bisa membantu Anda di *$name* dengan:\n'
+        '• 🍽️ Informasi menu & harga\n'
+        '• 🛒 Pemesanan makanan\n'
+        '• 📅 Reservasi meja\n'
+        '• ⚠️ Info alergen & diet\n'
+        '• ⏰ Jam operasional\n\n'
+        'Silakan pilih topik di bawah atau ketik pertanyaan Anda 👇',
+      );
     }
   }
 
@@ -705,6 +756,9 @@ PENTING:
     final text = (quick ?? _msgCtrl.text).trim();
     if (text.isEmpty || _isTyping) return;
 
+    // Jika belum pilih cabang, jangan proses pesan — picker sudah tampil
+    if (_needsBranchSelection) return;
+
     _msgCtrl.clear();
 
     setState(() {
@@ -805,6 +859,15 @@ PENTING:
                   color: Colors.green[100],
                   fontWeight: FontWeight.normal,
                 ),
+              )
+            else if (_selectedBranchId == null && widget.branchId == null)
+              Text(
+                'Pilih cabang untuk mulai',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.green[200],
+                  fontWeight: FontWeight.normal,
+                ),
               ),
           ],
         ),
@@ -858,8 +921,24 @@ PENTING:
               setState(() {
                 _messages.clear();
                 _sessionId = null;
+                // Reset branch selection jika mode tanpa branchId
+                if (widget.branchId == null) {
+                  _selectedBranchId = null;
+                  _cachedMenuText = null;
+                  _cachedBranchName = null;
+                  _cachedOpeningTime = null;
+                  _cachedClosingTime = null;
+                  _cachedRecommendations = null;
+                  _menuItems = [];
+                }
               });
-              _addBot('Halo lagi! 👋 Ada yang bisa saya bantu?');
+              if (widget.branchId == null) {
+                _addBot(
+                  'Halo lagi! 👋 Silakan pilih cabang yang ingin Anda kunjungi 🏠',
+                );
+              } else {
+                _addBot('Halo lagi! 👋 Ada yang bisa saya bantu?');
+              }
             },
           ),
           const SizedBox(width: 4),
@@ -872,12 +951,101 @@ PENTING:
       body: Column(
         children: [
           Expanded(child: _buildMessages()),
-          _buildQuickActions(),
-          _buildInput(),
+          // Tampilkan picker branch jika belum ada branchId
+          if (_needsBranchSelection) _buildBranchPicker(),
+          // Sembunyikan quick actions & input sampai branch dipilih
+          if (!_needsBranchSelection) _buildQuickActions(),
+          if (!_needsBranchSelection) _buildInput(),
         ],
       ),
     );
   }
+
+  // ── Branch Picker UI ───────────────────────────────────────────────
+  Widget _buildBranchPicker() => Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '🏠 Pilih Cabang',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            if (_allBranches.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _allBranches.map((branch) {
+                  final name = branch['name'] as String? ?? '-';
+                  final open = (branch['opening_time'] as String?)?.substring(0, 5) ?? '10:00';
+                  final close = (branch['closing_time'] as String?)?.substring(0, 5) ?? '22:00';
+                  return GestureDetector(
+                    onTap: () => _selectBranch(branch),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green[300]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.green[800],
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '⏰ $open - $close WIB',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.green[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+      );
 
   Widget _buildMessages() => ListView.builder(
         controller: _scrollCtrl,
