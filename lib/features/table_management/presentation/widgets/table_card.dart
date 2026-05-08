@@ -280,7 +280,7 @@ class _OrderDetail {
     taxAmount: (j['tax_amount'] ?? 0).toDouble(),
     totalAmount: (j['total_amount'] ?? 0).toDouble(),
     notes: j['notes'],
-    createdAt: DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
+    createdAt: (DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now()).toLocal(),
     items: j['items'] ?? [],
   );
 }
@@ -493,10 +493,10 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
         : const Color(0xFFE94560);
     final payLabel = o.paymentStatus == 'paid' ? 'Lunas' : 'Belum Bayar';
 
-    // ✅ FIX: konversi UTC ke WIB (UTC+7)
-    final wibTime = o.createdAt.toUtc().add(const Duration(hours: 7));
+    // Konversi ke local time (otomatis ikut timezone device)
+    final localTime = o.createdAt.toLocal();
     final jamMasuk =
-        '${wibTime.hour.toString().padLeft(2, '0')}:${wibTime.minute.toString().padLeft(2, '0')} WIB';
+        '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')} WIB';
 
     return Container(
       padding: const EdgeInsets.all(16),

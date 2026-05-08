@@ -79,6 +79,9 @@ class _CustomerChatbotScreenState
   // Raw menu items list — digunakan untuk resolve menuItemId saat order
   List<Map<String, dynamic>> _menuItems = [];
 
+  // Nama customer yang dikumpulkan dari percakapan (fallback untuk booking)
+  String? _collectedCustomerName;
+
   DateTime? _lastEscalatedAt;
   bool get _canEscalate {
     if (_lastEscalatedAt == null) return true;
@@ -626,6 +629,55 @@ PENTING:
     return RegExp(r'^(\+62|62|0)8[0-9]{8,11}$').hasMatch(digits);
   }
 
+  // ── Resolve nama customer dari berbagai sumber ─────────────────────
+  // Prioritas: 1) JSON dari AI, 2) nama yang pernah disebut di chat, 3) user metadata, 4) 'Tamu'
+  String _resolveCustomerName(Map<String, dynamic> data) {
+    // 1. Cek JSON dari AI — valid jika bukan null, kosong, atau 'Tamu'
+    final fromJson = data['customer_name'] as String?;
+    if (fromJson != null && fromJson.trim().isNotEmpty && fromJson.trim() != 'Tamu') {
+      _collectedCustomerName = fromJson.trim();
+      return _collectedCustomerName!;
+    }
+
+    // 2. Cek nama yang sudah dikumpulkan dari percakapan sebelumnya
+    if (_collectedCustomerName != null && _collectedCustomerName!.isNotEmpty) {
+      return _collectedCustomerName!;
+    }
+
+    // 3. Coba ekstrak dari history chat — cari pesan user pendek (kemungkinan jawaban nama)
+    // Biasanya AI bertanya "siapa nama Anda?" lalu user menjawab dengan nama singkat
+    for (int i = _messages.length - 1; i >= 0; i--) {
+      final msg = _messages[i];
+      if (msg.role != 'user') continue;
+      final text = msg.content.trim();
+      // Nama biasanya: 1-3 kata, tidak mengandung angka, tidak terlalu panjang
+      final words = text.split(RegExp(r'\s+'));
+      if (words.length <= 3 && text.length <= 40 && !text.contains(RegExp(r'[0-9]'))) {
+        // Pastikan pesan sebelumnya (dari bot) adalah pertanyaan nama
+        if (i > 0) {
+          final prevBot = _messages[i - 1];
+          if (prevBot.role == 'assistant') {
+            final botText = prevBot.content.toLowerCase();
+            if (botText.contains('nama') || botText.contains('name')) {
+              _collectedCustomerName = text;
+              return _collectedCustomerName!;
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Fallback ke user metadata Supabase (jika login)
+    final user = ref.read(customerUserProvider).value;
+    if (user != null) {
+      final meta = user.userMetadata;
+      final metaName = meta?['full_name'] as String? ?? meta?['name'] as String?;
+      if (metaName != null && metaName.isNotEmpty) return metaName;
+    }
+
+    return 'Tamu';
+  }
+
   // ── Create Booking + Auto-Assign + Notifikasi Customer ────────────
   Future<void> _createBooking(Map<String, dynamic> data) async {
     try {
@@ -698,9 +750,11 @@ PENTING:
         return;
       }
 
+      final resolvedName = _resolveCustomerName(data);
+
       final result = await _tableService.createAndAssign(
         branchId: _branchId,
-        customerName: data['customer_name'] as String? ?? 'Tamu',
+        customerName: resolvedName,
         customerPhone: data['phone'] as String?,
         customerEmail: null,
         customerUserId: user?.id,
@@ -712,7 +766,7 @@ PENTING:
       if (result.isConfirmed) {
         _addBot(
           '✅ Reservasi berhasil dikonfirmasi!\n\n'
-          '👤 Nama: ${data['customer_name']}\n'
+          '👤 Nama: $resolvedName\n'
           '👥 Jumlah tamu: ${data['guest_count']} orang\n'
           '📅 Tanggal: ${data['booking_date']}\n'
           '⏰ Jam: ${data['booking_time']} WIB\n'
@@ -724,7 +778,7 @@ PENTING:
         if (user != null) {
           SentimentEscalationService.notifyCustomerBooking(
             customerUserId: user.id,
-            customerName: data['customer_name'] as String? ?? 'Tamu',
+            customerName: resolvedName,
             bookingDate: data['booking_date'] as String,
             bookingTime: data['booking_time'] as String,
             guestCount: (data['guest_count'] as num?)?.toInt() ?? 1,
@@ -735,7 +789,7 @@ PENTING:
       } else if (result.isWaitlisted) {
         _addBot(
           '📋 Reservasi Anda masuk daftar tunggu.\n\n'
-          '👤 Nama: ${data['customer_name']}\n'
+          '👤 Nama: $resolvedName\n'
           '👥 Jumlah tamu: ${data['guest_count']} orang\n'
           '📅 Tanggal: ${data['booking_date']}\n'
           '⏰ Jam: ${data['booking_time']} WIB\n\n'
@@ -746,7 +800,7 @@ PENTING:
         if (user != null) {
           SentimentEscalationService.notifyCustomerBooking(
             customerUserId: user.id,
-            customerName: data['customer_name'] as String? ?? 'Tamu',
+            customerName: resolvedName,
             bookingDate: data['booking_date'] as String,
             bookingTime: data['booking_time'] as String,
             guestCount: (data['guest_count'] as num?)?.toInt() ?? 1,
