@@ -54,19 +54,25 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   }
 
   Future<void> _load() async {
-    final catRes  = await Supabase.instance.client
-        .from('menu_categories').select()
-        .eq('branch_id', widget.branchId).order('sort_order');
-    final itemRes = await Supabase.instance.client
-        .from('menu_items').select()
-        .eq('branch_id', widget.branchId).eq('is_available', true).order('name');
-    if (mounted) {
-      setState(() {
-        _categories    = (catRes  as List).map((e) => MenuCategory.fromJson(e)).toList();
-        _allItems      = (itemRes as List).map((e) => MenuItem.fromJson(e)).toList();
-        _selectedCatId = null;
-        _isLoading     = false;
-      });
+    try {
+      final catRes = await Supabase.instance.client
+          .from('menu_categories').select()
+          .eq('branch_id', widget.branchId).order('sort_order');
+      final itemRes = await Supabase.instance.client
+          .from('menu_items').select()
+          .eq('branch_id', widget.branchId).eq('is_available', true).order('name');
+
+      if (mounted) {
+        setState(() {
+          _categories    = catRes.map((e) => MenuCategory.fromJson(e)).toList();
+          _allItems      = itemRes.map((e) => MenuItem.fromJson(e)).toList();
+          _selectedCatId = null;
+          _isLoading     = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('MenuItemSelector _load error: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
