@@ -59,87 +59,119 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-    final today = DateTime.now();
+    if (mounted) setState(() => _isLoading = true);
+
+    final today = DateTime.now().toLocal();
     final todayStr =
         '${today.year}-${today.month.toString().padLeft(2,'0')}-${today.day.toString().padLeft(2,'0')}';
+    final tomorrowStr = () {
+      final t = today.add(const Duration(days: 1));
+      return '${t.year}-${t.month.toString().padLeft(2,'0')}-${t.day.toString().padLeft(2,'0')}';
+    }();
+    // Gunakan ISO8601 dengan offset timezone lokal agar Supabase filter benar
+    final todayStart = DateTime(today.year, today.month, today.day).toIso8601String();
+    final tomorrowStart = DateTime(today.year, today.month, today.day + 1).toIso8601String();
+    final weekStartDate = today.subtract(const Duration(days: 6));
+    final weekStartIso = DateTime(weekStartDate.year, weekStartDate.month, weekStartDate.day).toIso8601String();
 
-    // Today orders
-    final ordRes = await Supabase.instance.client
-        .from('orders')
-        .select()
-        .eq('branch_id', _branchId!)
-        .eq('status', 'paid')
-        .gte('created_at', '$todayStr 00:00:00');
-
-    // Today bookings
-    final bookRes = await Supabase.instance.client
-        .from('bookings')
-        .select()
-        .eq('branch_id', _branchId!)
-        .eq('booking_date', todayStr);
-
-    // 7-day revenue
-    final weekStart = today.subtract(const Duration(days: 6));
-    final weekRes = await Supabase.instance.client
-        .from('orders')
-        .select()
-        .eq('branch_id', _branchId!)
-        .eq('status', 'paid')
-        .gte('created_at', weekStart.toIso8601String());
-
-    // Recent orders (any status, last 20)
-    final recentRes = await Supabase.instance.client
-        .from('orders')
-        .select('*, restaurant_tables(table_number), order_items(*, menu_items(name))')
-        .eq('branch_id', _branchId!)
-        .order('created_at', ascending: false)
-        .limit(20);
-    // ── Inventory COGS hari ini ──────────────────────────────────
-    double todayCogs = 0;
     try {
-      final cogsRes = await Supabase.instance.client
-          .from('inventory_items')
-          .select('used_stock, cost_per_unit')
+      // ── Today orders (paid status) ──────────────────────────────
+      final ordRes = await Supabase.instance.client
+          .from('orders')
+          .select('id, total_amount, created_at')
           .eq('branch_id', _branchId!)
-          .eq('date', todayStr);
-      for (final item in cogsRes as List) {
-        final used = (item['used_stock'] ?? 0) as num;
-        final cost = (item['cost_per_unit'] ?? 0) as num;
-        todayCogs += used * cost;
+          .eq('status', 'paid')
+          .gte('created_at', todayStart)
+          .lt('created_at', tomorrowStart);
+
+      // ── Revenue dari payments (lebih akurat) ────────────────────
+      final payRes = await Supabase.instance.client
+          .from('payments')
+          .select('amount, created_at')
+          .eq('branch_id', _branchId!)
+          .eq('status', 'paid')
+          .gte('created_at', todayStart)
+          .lt('created_at', tomorrowStart);
+
+      // ── Today bookings ──────────────────────────────────────────
+      final bookRes = await Supabase.instance.client
+          .from('bookings')
+          .select('id')
+          .eq('branch_id', _branchId!)
+          .gte('booking_date', todayStr)
+          .lt('booking_date', tomorrowStr);
+
+      // ── 7-day revenue dari payments ─────────────────────────────
+      final weekRes = await Supabase.instance.client
+          .from('payments')
+          .select('amount, created_at')
+          .eq('branch_id', _branchId!)
+          .eq('status', 'paid')
+          .gte('created_at', weekStartIso);
+
+      // ── Recent orders ───────────────────────────────────────────
+      final recentRes = await Supabase.instance.client
+          .from('orders')
+          .select('*, restaurant_tables(table_number), order_items(*)')
+          .eq('branch_id', _branchId!)
+          .order('created_at', ascending: false)
+          .limit(20);
+
+      // ── COGS dari inventory_transactions ────────────────────────
+      double todayCogs = 0;
+      try {
+        final cogsRes = await Supabase.instance.client
+            .from('inventory_transactions')
+            .select('quantity, unit_cost')
+            .eq('branch_id', _branchId!)
+            .eq('transaction_type', 'usage')
+            .gte('created_at', todayStart)
+            .lt('created_at', tomorrowStart);
+        for (final item in cogsRes as List) {
+          final qty  = (item['quantity']  ?? 0) as num;
+          final cost = (item['unit_cost'] ?? 0) as num;
+          todayCogs += qty * cost;
+        }
+      } catch (e) {
+        debugPrint('⚠️ Gagal fetch COGS: $e');
       }
-    } catch (e) {
-      debugPrint('⚠️ Gagal fetch COGS: $e');
-    }
-    // ─────────────────────────────────────────────────────────────
-    if (!mounted) return;
 
-    // Process 7-day revenue chart
-    final Map<int, double> dayRevenue = {0:0,1:0,2:0,3:0,4:0,5:0,6:0};
-    for (final o in weekRes as List) {
-      final created = DateTime.parse(o['created_at']);
-      final diff = today.difference(created).inDays;
-      if (diff >= 0 && diff <= 6) {
-        dayRevenue[6 - diff] = (dayRevenue[6 - diff]! + (o['total_amount'] ?? 0));
+      if (!mounted) return;
+
+      // ── Process 7-day revenue chart ─────────────────────────────
+      final Map<int, double> dayRevenue = {0:0,1:0,2:0,3:0,4:0,5:0,6:0};
+      for (final p in weekRes as List) {
+        final created = DateTime.parse(p['created_at']).toLocal();
+        final diff = DateTime(today.year, today.month, today.day)
+            .difference(DateTime(created.year, created.month, created.day))
+            .inDays;
+        if (diff >= 0 && diff <= 6) {
+          dayRevenue[6 - diff] = (dayRevenue[6 - diff]! + ((p['amount'] ?? 0) as num).toDouble());
+        }
       }
+      final spots = dayRevenue.entries
+          .map((e) => FlSpot(e.key.toDouble(), e.value / 1000))
+          .toList();
+
+      // ── Revenue hari ini dari payments ──────────────────────────
+      final revenue = (payRes as List).fold<double>(
+          0, (s, p) => s + ((p['amount'] ?? 0) as num).toDouble());
+
+      setState(() {
+        _todayOrders   = (ordRes as List).length;
+        _todayRevenue  = revenue;
+        _todayBookings = (bookRes as List).length;
+        _todayCogs     = todayCogs;
+        _revenueSpots
+          ..clear()
+          ..addAll(spots);
+        _recentOrders  = (recentRes as List).map((e) => OrderModel.fromJson(e)).toList();
+        _isLoading     = false;
+      });
+    } catch (e, st) {
+      debugPrint('ReportsScreen _load error: $e\n$st');
+      if (mounted) setState(() => _isLoading = false);
     }
-    final spots = dayRevenue.entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value / 1000))
-        .toList();
-
-    final todayPaidOrders = (ordRes as List);
-    final revenue = todayPaidOrders.fold<double>(0, (s, o) => s + (o['total_amount'] ?? 0));
-
-    setState(() {
-      _todayOrders   = todayPaidOrders.length;
-      _todayRevenue  = revenue;
-      _todayBookings = (bookRes as List).length;
-      _todayCogs     = todayCogs; // ← tambah ini
-      _revenueSpots
-        ..clear()
-        ..addAll(spots);
-      _recentOrders  = (recentRes as List).map((e) => OrderModel.fromJson(e)).toList();
-      _isLoading     = false;
-    });
   }
 
   @override
