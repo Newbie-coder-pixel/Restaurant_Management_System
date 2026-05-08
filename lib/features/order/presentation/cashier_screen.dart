@@ -697,6 +697,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       'payment_status': 'paid',
       'cashier_id': staff?.id,
       'updated_at': DateTime.now().toIso8601String(),
+      // Simpan breakdown harga agar riwayat tampil dengan benar
+      'subtotal': order.subtotal,
+      'tax_amount': order.taxAmount,
+      'total_amount': order.totalAmount,
     }).eq('id', order.id);
 
      // ── Deduct inventory untuk setiap item ──────────────────────

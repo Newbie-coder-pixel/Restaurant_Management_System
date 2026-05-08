@@ -234,12 +234,14 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       await Supabase.instance.client.from('order_items').insert(
         _cart.entries.map((e) {
           final m = _allItems.firstWhere((x) => x.id == e.key);
+          final subtotal = m.price * e.value.qty;
           return {
             'order_id':       orderId,
             'menu_item_id':   m.id,
             'menu_item_name': m.name,
             'quantity':       e.value.qty,
             'unit_price':     m.price,
+            'subtotal':       subtotal,
             'status':         'pending',
             if (e.value.notes.isNotEmpty) 'special_requests': e.value.notes,
           };

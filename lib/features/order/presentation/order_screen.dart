@@ -925,10 +925,14 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                       final orderType = o['order_type'] as String?;
                       final rawItems = o['order_items'] as List? ?? [];
                       final dbTotal = (o['total_amount'] as num?)?.toDouble() ?? 0;
+                      final itemsSubtotal = rawItems.fold<double>(
+                          0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
+                      // Gunakan total_amount dari DB (sudah termasuk PPN).
+                      // Fallback: hitung ulang subtotal + PPN 11% - diskon
+                      final discountAmount = (o['discount_amount'] as num?)?.toDouble() ?? 0;
                       final total = dbTotal > 0
                           ? dbTotal
-                          : rawItems.fold<double>(
-                              0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
+                          : (itemsSubtotal * 1.11) - discountAmount;
                       final statusColor = _historyStatusColor(status);
                       final isQr = orderType == 'qr_order';
                       final isApp = orderType == 'app_order' || orderType == 'takeaway';
