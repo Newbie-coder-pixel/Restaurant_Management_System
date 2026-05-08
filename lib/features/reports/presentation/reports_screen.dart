@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../shared/models/order_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
 
@@ -22,6 +23,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   List<OrderModel>   _recentOrders = [];
   bool _isLoading = true;
   String? _branchId;
+  bool _isSuperAdmin = false;
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId; // null = semua cabang
 
   @override
   void initState() {
@@ -36,14 +40,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     if (_initialized) return;
     final staff = ref.read(currentStaffProvider);
     if (staff != null) {
-      _branchId = staff.branchId;
+      _isSuperAdmin = staff.role == StaffRole.superadmin;
+      _branchId = _isSuperAdmin ? null : staff.branchId;
       _initialized = true;
       _init();
     } else {
       _initialized = true;
       ref.listenManual(currentStaffProvider, (_, next) {
-        if (next != null && _branchId == null && mounted) {
-          setState(() => _branchId = next.branchId);
+        if (next != null && mounted) {
+          setState(() {
+            _isSuperAdmin = next.role == StaffRole.superadmin;
+            _branchId = _isSuperAdmin ? null : next.branchId;
+          });
           _init();
         }
       });
@@ -51,14 +59,31 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   Future<void> _init() async {
+    await _loadBranches();
     await _load();
   }
 
+  Future<void> _loadBranches() async {
+    if (!_isSuperAdmin) return;
+    try {
+      final res = await Supabase.instance.client
+          .from('branches').select('id, name').order('name');
+      if (mounted) {
+        setState(() => _branches = List<Map<String, dynamic>>.from(res));
+      }
+    } catch (e) {
+      debugPrint('_loadBranches error: \$e');
+    }
+  }
+
   Future<void> _load() async {
-    if (_branchId == null) {
+    // Superadmin boleh lihat semua cabang (branchId null),
+    // role lain harus punya branchId
+    if (!_isSuperAdmin && _branchId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
+    final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
     if (mounted) setState(() => _isLoading = true);
 
     final today = DateTime.now().toLocal();
@@ -76,57 +101,61 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     try {
       // ── Today orders (paid status) ──────────────────────────────
-      final ordRes = await Supabase.instance.client
+      var ordQ = Supabase.instance.client
           .from('orders')
           .select('id, total_amount, created_at')
-          .eq('branch_id', _branchId!)
           .eq('status', 'paid')
           .gte('created_at', todayStart)
           .lt('created_at', tomorrowStart);
+      if (effectiveBranchId != null) ordQ = ordQ.eq('branch_id', effectiveBranchId);
+      final ordRes = await ordQ;
 
       // ── Revenue dari payments (lebih akurat) ────────────────────
-      final payRes = await Supabase.instance.client
+      var payQ = Supabase.instance.client
           .from('payments')
           .select('amount, created_at')
-          .eq('branch_id', _branchId!)
           .eq('status', 'paid')
           .gte('created_at', todayStart)
           .lt('created_at', tomorrowStart);
+      if (effectiveBranchId != null) payQ = payQ.eq('branch_id', effectiveBranchId);
+      final payRes = await payQ;
 
       // ── Today bookings ──────────────────────────────────────────
-      final bookRes = await Supabase.instance.client
+      var bookQ = Supabase.instance.client
           .from('bookings')
           .select('id')
-          .eq('branch_id', _branchId!)
           .gte('booking_date', todayStr)
           .lt('booking_date', tomorrowStr);
+      if (effectiveBranchId != null) bookQ = bookQ.eq('branch_id', effectiveBranchId);
+      final bookRes = await bookQ;
 
       // ── 7-day revenue dari payments ─────────────────────────────
-      final weekRes = await Supabase.instance.client
+      var weekQ = Supabase.instance.client
           .from('payments')
           .select('amount, created_at')
-          .eq('branch_id', _branchId!)
           .eq('status', 'paid')
           .gte('created_at', weekStartIso);
+      if (effectiveBranchId != null) weekQ = weekQ.eq('branch_id', effectiveBranchId);
+      final weekRes = await weekQ;
 
       // ── Recent orders ───────────────────────────────────────────
-      final recentRes = await Supabase.instance.client
+      var recentQ = Supabase.instance.client
           .from('orders')
-          .select('*, restaurant_tables(table_number), order_items(*)')
-          .eq('branch_id', _branchId!)
-          .order('created_at', ascending: false)
-          .limit(20);
+          .select('*, restaurant_tables(table_number), order_items(*)');
+      if (effectiveBranchId != null) recentQ = recentQ.eq('branch_id', effectiveBranchId);
+      final recentRes = await recentQ.order('created_at', ascending: false).limit(20);
 
       // ── COGS dari inventory_transactions ────────────────────────
       double todayCogs = 0;
       try {
-        final cogsRes = await Supabase.instance.client
+        var cogsQ = Supabase.instance.client
             .from('inventory_transactions')
             .select('quantity, unit_cost')
-            .eq('branch_id', _branchId!)
             .eq('transaction_type', 'usage')
             .gte('created_at', todayStart)
             .lt('created_at', tomorrowStart);
+        if (effectiveBranchId != null) cogsQ = cogsQ.eq('branch_id', effectiveBranchId);
+        final cogsRes = await cogsQ;
         for (final item in cogsRes as List) {
           final qty  = (item['quantity']  ?? 0) as num;
           final cost = (item['unit_cost'] ?? 0) as num;
@@ -186,7 +215,36 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         titleTextStyle: const TextStyle(
           fontFamily: 'Poppins', fontSize: 18,
           fontWeight: FontWeight.w600, color: Colors.white),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
+        actions: [
+          if (_isSuperAdmin)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                    value: b['id'] as String,
+                    child: Text(b['name'] as String,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white)))),
+                ],
+                onChanged: (val) {
+                  setState(() => _selectedBranchId = val);
+                  _load();
+                },
+              ),
+            ),
+          const SizedBox(width: 8),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
