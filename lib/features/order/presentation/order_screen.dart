@@ -122,7 +122,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             id, branch_id, table_id, order_number,
             status, source, order_type, customer_name,
             discount_amount, notes, created_at, updated_at,
-            restaurant_tables!orders_table_id_fkey(table_number),
+            restaurant_tables(table_number),
             order_items(*)
           ''')
           .inFilter('status', activeStatuses);
@@ -165,7 +165,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             status, source, order_type, customer_name,
             discount_amount, notes, created_at, updated_at,
             total_amount,
-            restaurant_tables!orders_table_id_fkey(table_number),
+            restaurant_tables(table_number),
             order_items(*, menu_items(name))
           ''');
       if (effectiveBranchId != null) {
