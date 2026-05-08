@@ -831,11 +831,25 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
       // Content kanan: menu selector
       Expanded(
-        child: MenuItemSelector(
-          branchId: _branchId ?? '',
-          tables: _tables,
-          onOrderCreated: () { _load(); _tab.animateTo(0); },
-        ),
+        child: Builder(builder: (_) {
+          // Superadmin harus pilih branch dulu sebelum bisa buat order
+          final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
+          if (effectiveBranchId == null || effectiveBranchId.isEmpty) {
+            return const Center(
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.store_outlined, size: 48, color: AppColors.textHint),
+                SizedBox(height: 12),
+                Text('Pilih cabang terlebih dahulu',
+                  style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+              ]),
+            );
+          }
+          return MenuItemSelector(
+            branchId: effectiveBranchId,
+            tables: _tables,
+            onOrderCreated: () { _load(); _tab.animateTo(0); },
+          );
+        }),
       ),
     ]);
   }
