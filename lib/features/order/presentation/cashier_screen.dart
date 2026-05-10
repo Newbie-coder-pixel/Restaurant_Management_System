@@ -700,6 +700,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       // Simpan breakdown harga agar riwayat tampil dengan benar
       'subtotal': order.subtotal,
       'tax_amount': order.taxAmount,
+      'pb1_amount': order.pb1Amount,
+      'service_charge_amount': order.serviceChargeAmount,
       'total_amount': order.totalAmount,
     }).eq('id', order.id);
 
@@ -1130,7 +1132,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
           // Summary yang sekarang benar
           _summaryRow('Subtotal', order.subtotal),
-          _summaryRow('PPN (11%)', order.taxAmount),
+          _summaryRow('PB1 (10%)', order.pb1Amount),
+          _summaryRow('Service Charge (3%)', order.serviceChargeAmount),
           if (order.discountAmount > 0)
             _summaryRow('Diskon', -order.discountAmount, color: AppColors.available),
 

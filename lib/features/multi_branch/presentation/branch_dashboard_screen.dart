@@ -280,9 +280,11 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                 return;
               }
               final openMin  = openTime.hour * 60 + openTime.minute;
+              // Jika closeMin <= openMin, anggap tutup keesokan hari (misal buka 10:00, tutup 01:00)
               final closeMin = closeTime.hour * 60 + closeTime.minute;
-              if (closeMin <= openMin) {
-                ss(() => errorMsg = 'Jam tutup harus setelah jam buka.');
+              final effectiveCloseMin = closeMin <= openMin ? closeMin + 1440 : closeMin;
+              if (effectiveCloseMin == openMin) {
+                ss(() => errorMsg = 'Jam tutup tidak boleh sama dengan jam buka.');
                 return;
               }
               final latStr = latCtrl.text.trim();

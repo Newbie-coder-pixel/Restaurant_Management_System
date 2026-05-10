@@ -129,7 +129,9 @@ class OrderModel {
 
   // Field yang dihitung otomatis dari items
   double get subtotal => items.fold(0.0, (sum, item) => sum + item.subtotal);
-  double get taxAmount => subtotal * 0.11; // PPN 11%
+  double get pb1Amount => subtotal * 0.10;         // PB1 10%
+  double get serviceChargeAmount => subtotal * 0.03; // Service Charge 3%
+  double get taxAmount => pb1Amount + serviceChargeAmount; // total pajak & charge
   double get totalAmount => subtotal + taxAmount - discountAmount;
 
   const OrderModel({
