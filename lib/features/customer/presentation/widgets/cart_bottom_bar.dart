@@ -36,7 +36,7 @@ class CartBottomBar extends StatelessWidget {
         Text('Rp ${_fmt(cart.subtotal)}',
           style: const TextStyle(fontFamily: 'Poppins',
             color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
-        Text('${cart.itemCount} item • +PPN 11%',
+        Text('${cart.itemCount} item • +PB1 & service charge',
           style: const TextStyle(fontFamily: 'Poppins',
             color: Colors.white54, fontSize: 11)),
       ])),

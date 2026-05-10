@@ -1,13 +1,10 @@
 // lib/features/customer/presentation/customer_landing_screen.dart
 //
-// CHANGES v3 (fixed):
-// 1. Semua perubahan dari v2 dipertahankan
-// 2. Tambah fitur deteksi lokasi & cabang terdekat
-// - LocationPermissionSheet (bottom sheet gaya Shopee/Tokopedia)
-// - NearestBranchBanner di HomeTab (prompt → izin → hasil)
-// - Fetch lat/lng dari Supabase jika kolom tersedia
-// - Haversine distance calculation inline (tanpa package tambahan)
-// 3. Branch model diperkaya: isOpen dihitung dari opening/closing_time
+// CHANGES v4:
+// 1. Semua perubahan dari v3 dipertahankan
+// 2. Tab "Pesanan" sekarang punya 2 sub-tab:
+//    - "Riwayat" → CustomerOrderHistoryScreen
+//    - "Cek Pesanan" → _EmbeddedOrderTracker
 
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -18,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'customer_login_screen.dart';
 import 'customer_my_bookings_screen.dart';
 import 'customer_chatbot_screen.dart';
+import 'customer_order_history_screen.dart'; // ← TAMBAH INI
 import '../providers/customer_auth_provider.dart';
 import '../providers/cart_provider.dart';
 import 'widgets/cart_bottom_bar.dart';
@@ -62,7 +60,6 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
   Future<void> detect(List<Map<String, dynamic>> branches) async {
     state = _NearestLoading();
 
-    // Cek dan minta permission
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       state = _NearestError('GPS tidak aktif. Aktifkan lokasi di pengaturan.');
@@ -80,7 +77,6 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
       return;
     }
 
-    // Get posisi user
     Position? pos;
     try {
       pos = await Geolocator.getCurrentPosition(
@@ -94,7 +90,6 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
       return;
     }
 
-    // Filter branch yang punya koordinat
     final branchesWithCoord = branches.where((b) {
       final lat = b['latitude'];
       final lng = b['longitude'];
@@ -106,7 +101,6 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
       return;
     }
 
-    // Cari yang terdekat
     Map<String, dynamic>? nearest;
     double minDist = double.infinity;
 
@@ -162,7 +156,7 @@ class _CustomerLandingScreenState
     extends ConsumerState<CustomerLandingScreen> {
   late int _tab;
   late final ValueNotifier<int> _tabNotifier;
-  User? _cachedUser; // cache user terakhir supaya tidak flash ke login saat refresh
+  User? _cachedUser;
 
   @override
   void initState() {
@@ -173,7 +167,6 @@ class _CustomerLandingScreenState
       if (mounted) setState(() => _tab = _tabNotifier.value);
     });
 
-    // Auto-detect jika permission sudah pernah diberikan
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
 
@@ -202,18 +195,15 @@ class _CustomerLandingScreenState
   Widget build(BuildContext context) {
     final userAsync = ref.watch(customerUserProvider);
 
-    // Simpan user valid ke cache supaya tidak hilang saat loading/refresh
     userAsync.whenData((u) {
       if (u != null) _cachedUser = u;
     });
 
-    // Pakai data terbaru, fallback ke cache saat loading/error
     final User? user = userAsync.maybeWhen(
       data: (u) => u,
       orElse: () => _cachedUser,
     );
 
-    // Belum ada data sama sekali dan masih loading → spinner
     if (user == null && userAsync.isLoading) {
       return const Scaffold(
         backgroundColor: Color(0xFFF8F9FA),
@@ -223,12 +213,10 @@ class _CustomerLandingScreenState
       );
     }
 
-    // Sudah selesai load, memang tidak ada user → login screen
     if (user == null) {
       return CustomerLoginScreen(onLoginSuccess: () {});
     }
 
-    // Ada user → tampilkan landing normal
     final cart = ref.watch(cartProvider);
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -254,7 +242,6 @@ class _CustomerLandingScreenState
     );
   }
 
-  // ── Safe helpers ──────────────────────────────────────────────
   String _displayName(User user) {
     final meta = user.userMetadata;
     if (meta != null) {
@@ -282,7 +269,8 @@ class _CustomerLandingScreenState
 
   // ── TOP BAR ──────────────────────────────────────────────────
   Widget _buildTopBar(User user) {
-    const titles = ['Beranda', 'Booking Meja', 'Cek Pesanan', 'Chat AI'];
+    // ← UBAH 'Cek Pesanan' → 'Pesanan'
+    const titles = ['Beranda', 'Booking Meja', 'Pesanan', 'Chat AI'];
     final displayName = _displayName(user);
     final firstName = displayName.split(' ').first;
     final initial =
@@ -379,7 +367,7 @@ class _CustomerLandingScreenState
             onPressed: () async {
               Navigator.pop(context);
               await NotificationService.removeToken();
-  await Supabase.instance.client.auth.signOut();
+              await Supabase.instance.client.auth.signOut();
             },
             child: const Text('Keluar',
                 style: TextStyle(
@@ -406,10 +394,11 @@ class _CustomerLandingScreenState
           maintainState: false,
           child: const CustomerMyBookingsScreen(),
         ),
+        // ← GANTI _EmbeddedOrderTracker dengan _OrderTab
         Visibility(
           visible: _tab == 2,
           maintainState: true,
-          child: const _EmbeddedOrderTracker(),
+          child: const _OrderTab(),
         ),
         Visibility(
           visible: _tab == 3,
@@ -500,6 +489,77 @@ class _CustomerLandingScreenState
     );
   }
 }
+
+// ════════════════════════════════════════════
+// ORDER TAB — sub-tab Riwayat & Cek Pesanan
+// ════════════════════════════════════════════
+class _OrderTab extends StatefulWidget {
+  const _OrderTab();
+
+  @override
+  State<_OrderTab> createState() => _OrderTabState();
+}
+
+class _OrderTabState extends State<_OrderTab>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // ── Sub-tab bar
+        Container(
+          color: Colors.white,
+          child: TabBar(
+            controller: _tabCtrl,
+            labelStyle: const TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+            ),
+            labelColor: const Color(0xFFE94560),
+            unselectedLabelColor: const Color(0xFF9CA3AF),
+            indicatorColor: const Color(0xFFE94560),
+            indicatorWeight: 3,
+            tabs: const [
+              Tab(text: 'Riwayat'),
+              Tab(text: 'Cek Pesanan'),
+            ],
+          ),
+        ),
+        // ── Sub-tab content
+        Expanded(
+          child: TabBarView(
+            controller: _tabCtrl,
+            children: const [
+              CustomerOrderHistoryScreen(),
+              _EmbeddedOrderTracker(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ════════════════════════════════════════════
 // EMBEDDED ORDER TRACKER
 // ════════════════════════════════════════════
@@ -643,9 +703,12 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4))
           ]),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Masukkan Nomor Pesanan',
               style: TextStyle(
                   fontFamily: 'Poppins',
@@ -679,7 +742,8 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
                         color: Colors.grey,
                         letterSpacing: 0),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 16),
                   ),
                 ),
               )),
@@ -742,16 +806,17 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
                 color: Colors.grey[100],
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey[400]),
+              child: Icon(Icons.receipt_long_outlined,
+                  size: 48, color: Colors.grey[400]),
             ),
             const SizedBox(height: 16),
             Text(
               'Masukkan nomor pesanan di atas\nuntuk melihat status.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontFamily: 'Poppins', 
+                  fontFamily: 'Poppins',
                   fontSize: 14,
-                  color: Colors.grey[500], 
+                  color: Colors.grey[500],
                   height: 1.6),
             ),
           ])),
@@ -855,7 +920,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   ])),
             const SizedBox(height: 20),
 
-            // ── Nearest Branch Banner (NEW)
+            // ── Nearest Branch Banner
             branchesAsync.maybeWhen(
               data: (branches) => _NearestBranchBanner(
                 nearestState: nearestState,
@@ -1031,15 +1096,12 @@ class _NearestBranchBanner extends StatelessWidget {
     required this.onRetry,
   });
 
-  // Cek apakah ada branch yang punya koordinat
   bool get _hasCoordinates =>
       branches.any((b) => b['latitude'] != null && b['longitude'] != null);
 
   @override
   Widget build(BuildContext context) {
-    // Jangan tampilkan banner jika tidak ada koordinat sama sekali
     if (!_hasCoordinates) return const SizedBox.shrink();
-
     if (nearestState is _NearestDenied) return const SizedBox.shrink();
 
     if (nearestState is _NearestInitial) {
@@ -1118,7 +1180,9 @@ class _PromptCard extends StatelessWidget {
                 color: Colors.white, size: 22)),
           const SizedBox(width: 14),
           const Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               Text('Temukan cabang terdekat',
                   style: TextStyle(
                       fontFamily: 'Poppins',
@@ -1132,7 +1196,8 @@ class _PromptCard extends StatelessWidget {
                       fontSize: 12,
                       color: Color(0xFF6B7280))),
             ])),
-          const Icon(Icons.chevron_right, color: Color(0xFF0F3460), size: 24),
+          const Icon(Icons.chevron_right,
+              color: Color(0xFF0F3460), size: 24),
         ]),
       ),
     );
@@ -1249,7 +1314,9 @@ class _ResultCard extends StatelessWidget {
                 color: Colors.white, size: 20)),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               Row(children: [
                 Flexible(
                   child: Text(name,
@@ -1261,8 +1328,8 @@ class _ResultCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis)),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: isOpen
                         ? const Color(0xFFE8F5E9)
@@ -1367,7 +1434,6 @@ class _ErrorCard extends StatelessWidget {
 
 // ════════════════════════════════════════════
 // LOCATION PERMISSION BOTTOM SHEET
-// Gaya Shopee / Tokopedia
 // ════════════════════════════════════════════
 class _LocationPermissionSheet extends StatelessWidget {
   final VoidCallback onGranted;
@@ -1438,7 +1504,6 @@ class _LocationPermissionSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle bar
           Container(
             width: 48,
             height: 5,
@@ -1446,8 +1511,6 @@ class _LocationPermissionSheet extends StatelessWidget {
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(3))),
           const SizedBox(height: 28),
-
-          // Icon
           Container(
             width: 80,
             height: 80,
@@ -1461,8 +1524,6 @@ class _LocationPermissionSheet extends StatelessWidget {
             child: const Icon(Icons.location_on_rounded,
                 size: 40, color: Colors.white)),
           const SizedBox(height: 20),
-
-          // Judul
           const Text('Izinkan Akses Lokasi',
               style: TextStyle(
                   fontFamily: 'Poppins',
@@ -1470,8 +1531,6 @@ class _LocationPermissionSheet extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF1A1A2E))),
           const SizedBox(height: 10),
-
-          // Deskripsi
           Text(
             'Kami menggunakan lokasi Anda untuk\nmenampilkan cabang restoran terdekat.',
             textAlign: TextAlign.center,
@@ -1481,18 +1540,14 @@ class _LocationPermissionSheet extends StatelessWidget {
                 color: Colors.grey[600],
                 height: 1.5)),
           const SizedBox(height: 22),
-
-          // Benefit rows
           _benefitRow(Icons.store_rounded, 'Cabang terdekat dari posisi Anda'),
           const SizedBox(height: 8),
-          _benefitRow(Icons.access_time_rounded,
-              'Info buka/tutup yang relevan'),
+          _benefitRow(
+              Icons.access_time_rounded, 'Info buka/tutup yang relevan'),
           const SizedBox(height: 8),
-          _benefitRow(Icons.navigation_rounded, 'Langsung navigasi ke cabang'),
-
+          _benefitRow(
+              Icons.navigation_rounded, 'Langsung navigasi ke cabang'),
           const SizedBox(height: 28),
-
-          // Tombol Izinkan
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -1510,8 +1565,6 @@ class _LocationPermissionSheet extends StatelessWidget {
                       fontSize: 15,
                       fontWeight: FontWeight.w700)))),
           const SizedBox(height: 10),
-
-          // Tombol Lewati
           SizedBox(
             width: double.infinity,
             child: TextButton(
@@ -1526,10 +1579,7 @@ class _LocationPermissionSheet extends StatelessWidget {
                       fontSize: 14,
                       color: Colors.grey[500],
                       fontWeight: FontWeight.w600)))),
-
           const SizedBox(height: 12),
-
-          // Privacy note
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(Icons.lock_outline, size: 12, color: Colors.grey[400]),
             const SizedBox(width: 6),
@@ -1616,7 +1666,6 @@ class _BranchCard extends StatelessWidget {
                 offset: const Offset(0, 4))
           ]),
         child: Column(children: [
-          // Info baris
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
             child: Row(children: [
@@ -1687,8 +1736,6 @@ class _BranchCard extends StatelessWidget {
                       ]),
                     ])),
             ])),
-
-          // Tombol Pesan Sekarang — full width di bawah
           GestureDetector(
             onTap: isOpen
                 ? () => context.go('/customer/menu/${branch['id']}')
@@ -1709,7 +1756,8 @@ class _BranchCard extends StatelessWidget {
                     isOpen
                         ? Icons.restaurant_menu_rounded
                         : Icons.do_not_disturb_alt_outlined,
-                    color: isOpen ? Colors.white : const Color(0xFF9CA3AF),
+                    color:
+                        isOpen ? Colors.white : const Color(0xFF9CA3AF),
                     size: 18),
                   const SizedBox(width: 10),
                   Text(
@@ -1836,9 +1884,12 @@ class _OrderStatusCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
         ]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(
             child: Column(
@@ -1909,7 +1960,8 @@ class _OrderStatusCard extends StatelessWidget {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                        color: const Color(0xFFE94560)
+                            .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Center(
@@ -1934,8 +1986,7 @@ class _OrderStatusCard extends StatelessWidget {
                   ]),
                   if (special != null && special.isNotEmpty)
                     Padding(
-                      padding:
-                          const EdgeInsets.only(left: 40, top: 6),
+                      padding: const EdgeInsets.only(left: 40, top: 6),
                       child: Row(children: [
                         const Icon(Icons.edit_note,
                             size: 12, color: Color(0xFFD97706)),
@@ -1945,8 +1996,7 @@ class _OrderStatusCard extends StatelessWidget {
                               style: const TextStyle(
                                   fontFamily: 'Poppins',
                                   fontSize: 11,
-                                  color: Color(0xFFD97706))),
-                        ),
+                                  color: Color(0xFFD97706)))),
                       ])),
                 ]));
         }),
@@ -1996,7 +2046,8 @@ class _OrderStatusCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Row(children: [
-              Icon(Icons.info_outline, size: 14, color: Color(0xFF0F3460)),
+              Icon(Icons.info_outline,
+                  size: 14, color: Color(0xFF0F3460)),
               SizedBox(width: 8),
               Expanded(
                 child: Text('💡 Pembayaran di kasir saat pesanan siap.',
@@ -2037,26 +2088,24 @@ class _StatusProgress extends StatelessWidget {
     if (isCancelled) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE94560).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.cancel_outlined,
-                    color: Color(0xFFE94560), size: 20),
-              ),
-              const SizedBox(width: 10),
-              const Text('Pesanan dibatalkan',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      color: Color(0xFFE94560),
-                      fontWeight: FontWeight.w700)),
-            ]));
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE94560).withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.cancel_outlined,
+                color: Color(0xFFE94560), size: 20),
+          ),
+          const SizedBox(width: 10),
+          const Text('Pesanan dibatalkan',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: Color(0xFFE94560),
+                  fontWeight: FontWeight.w700)),
+        ]));
     }
 
     return Row(
@@ -2082,9 +2131,7 @@ class _StatusProgress extends StatelessWidget {
                             end: Alignment.bottomRight,
                           )
                         : null,
-                    color: isActive
-                        ? null
-                        : const Color(0xFFE5E7EB),
+                    color: isActive ? null : const Color(0xFFE5E7EB),
                     shape: BoxShape.circle,
                     boxShadow: isCurrent
                         ? [
@@ -2123,9 +2170,7 @@ class _StatusProgress extends StatelessWidget {
                             colors: [Color(0xFFE94560), Color(0xFFC93550)],
                           )
                         : null,
-                    color: idx < currentIdx
-                        ? null
-                        : const Color(0xFFE5E7EB),
+                    color: idx < currentIdx ? null : const Color(0xFFE5E7EB),
                   ),
                 )),
           ]));

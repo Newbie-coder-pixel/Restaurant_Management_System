@@ -676,8 +676,9 @@ class _OrderStatusCard extends StatelessWidget {
     // Hitung subtotal dari items (bukan dari order['total_amount'] yg bisa 0/null)
     final subtotal     = items.fold<double>(0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
     final discount     = (order['discount_amount'] as num?)?.toDouble() ?? 0;
-    final taxAmount    = subtotal * 0.11; // PPN 11%
-    final total        = subtotal + taxAmount - discount;
+    final serviceCharge = subtotal * 0.03;
+    final pb1Amount    = (subtotal + serviceCharge) * 0.10;
+    final total        = subtotal + serviceCharge + pb1Amount - discount;
     final customerName = order['customer_name'] as String?;
     final notes        = order['notes'] as String?;
 
@@ -926,12 +927,12 @@ class _OrderStatusCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
 
-          // PPN 11%
+          // Service Charge & PB1
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'PPN (11%)',
+                'Service Charge (3%)',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 13,
@@ -939,7 +940,29 @@ class _OrderStatusCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'Rp ${_fmt(taxAmount)}',
+                'Rp ${_fmt(serviceCharge)}',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'PB1 (10%)',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              Text(
+                'Rp ${_fmt(pb1Amount)}',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 13,

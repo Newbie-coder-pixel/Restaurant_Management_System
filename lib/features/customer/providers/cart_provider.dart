@@ -43,8 +43,10 @@ class CartState {
   });
 
   double get subtotal => items.fold(0, (s, i) => s + i.subtotal);
-  double get tax => subtotal * 0.11;
-  double get total => subtotal + tax;
+  double get serviceCharge => subtotal * 0.03;
+  double get pb1Amount => (subtotal + serviceCharge) * 0.10;
+  double get tax => 0; // PPN dihapus, tetap ada agar tidak breaking change
+  double get total => subtotal + serviceCharge + pb1Amount;
   int get itemCount => items.fold(0, (s, i) => s + i.quantity);
   bool get isEmpty => items.isEmpty;
 

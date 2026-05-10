@@ -249,6 +249,9 @@ class _CustomerCheckoutScreenState
             'table_id':         selectedTableId,
             'table_name':       _selectedTableNumber,
             'discount_amount':  0,
+            'subtotal':         cart.subtotal,
+            'tax_amount':       cart.pb1Amount,
+            'total_amount':     cart.total,
             'payment_status':   'unpaid',
             'notes':            _buildOrderNotes(),
           })
@@ -419,7 +422,9 @@ class _CustomerCheckoutScreenState
             const Divider(height: 20),
             _row('Subtotal', _fmt(cart.subtotal)),
             const SizedBox(height: 4),
-            _row('PPN 11%', _fmt(cart.tax)),
+            _row('Service Charge (3%)', _fmt(cart.serviceCharge)),
+            const SizedBox(height: 4),
+            _row('PB1 (10%)', _fmt(cart.pb1Amount)),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
