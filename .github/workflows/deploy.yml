@@ -22,14 +22,45 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Flutter Web
-        run: flutter build web --release
+      # ── Build 3 versi ──────────────────────────────────────────
 
-      - name: Copy API folder to build output
-        run: cp -r api build/web/api
+      - name: Build Flutter Web (Staff)
+        run: flutter build web --release --dart-define=APP_MODE=staff
 
-      - name: Write vercel.json into build output
+      - name: Copy API & vercel.json (Staff)
         run: |
+          cp -r api build/web/api
+          cat > build/web/vercel.json << 'JSON'
+          {
+            "rewrites": [
+              { "source": "/((?!api).*)", "destination": "/index.html" }
+            ],
+            "headers": [
+              {
+                "source": "/index.html",
+                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+              },
+              {
+                "source": "/flutter_bootstrap.js",
+                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+              },
+              {
+                "source": "/assets/(.*)",
+                "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+              }
+            ]
+          }
+          JSON
+      
+      - name: Copy Staff build
+        run: cp -r build/web build/staff
+
+      - name: Build Flutter Web (Customer)
+        run: flutter build web --release --dart-define=APP_MODE=customer
+
+      - name: Copy API & vercel.json (Customer)
+        run: |
+          cp -r api build/web/api
           cat > build/web/vercel.json << 'JSON'
           {
             "rewrites": [
@@ -52,21 +83,95 @@ jobs:
           }
           JSON
 
-      - name: Install Vercel CLI (latest)
+      - name: Copy Customer build
+        run: cp -r build/web build/customer
+
+      - name: Build Flutter Web (QR)
+        run: flutter build web --release --dart-define=APP_MODE=qr
+
+      - name: Copy API & vercel.json (QR)
+        run: |
+          cp -r api build/web/api
+          cat > build/web/vercel.json << 'JSON'
+          {
+            "rewrites": [
+              { "source": "/((?!api).*)", "destination": "/index.html" }
+            ],
+            "headers": [
+              {
+                "source": "/index.html",
+                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+              },
+              {
+                "source": "/flutter_bootstrap.js",
+                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+              },
+              {
+                "source": "/assets/(.*)",
+                "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+              }
+            ]
+          }
+          JSON
+
+      - name: Copy QR build
+        run: cp -r build/web build/qr
+
+      # ── Install Vercel CLI ─────────────────────────────────────
+
+      - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Deploy to Vercel (Production)
+      # ── Deploy Staff ───────────────────────────────────────────
+
+      - name: Deploy Staff to Vercel (Production)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: build/web
+        working-directory: build/staff
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
 
-      - name: Deploy to Vercel (Preview - PR only)
+      - name: Deploy Staff to Vercel (Preview)
         if: github.event_name == 'pull_request'
         run: vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: build/web
+        working-directory: build/staff
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
+
+      # ── Deploy Customer ────────────────────────────────────────
+
+      - name: Deploy Customer to Vercel (Production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: build/customer
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CUSTOMER }}
+
+      - name: Deploy Customer to Vercel (Preview)
+        if: github.event_name == 'pull_request'
+        run: vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: build/customer
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CUSTOMER }}
+
+      # ── Deploy QR ──────────────────────────────────────────────
+
+      - name: Deploy QR to Vercel (Production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: build/qr
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_QR }}
+
+      - name: Deploy QR to Vercel (Preview)
+        if: github.event_name == 'pull_request'
+        run: vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: build/qr
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_QR }}

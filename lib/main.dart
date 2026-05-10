@@ -51,9 +51,6 @@ void main() async {
     final uri = Uri.base;
     final code = uri.queryParameters['code'];
     if (code != null && code.isNotEmpty) {
-      // Hanya exchange code kalau belum ada session aktif.
-      // OAuth code hanya bisa dipakai SEKALI — kalau di-exchange ulang
-      // saat refresh akan error dan session tidak ter-restore.
       final existingSession = Supabase.instance.client.auth.currentSession;
       if (existingSession == null) {
         try {
@@ -61,9 +58,11 @@ void main() async {
         } catch (_) {}
       }
 
-      // Bersihkan URL dari ?code= supaya saat refresh berikutnya
-      // tidak ada ?code= lagi dan tidak masuk blok ini lagi
-      final fragment = uri.fragment.isNotEmpty ? '#${uri.fragment}' : '#/customer';
+      // Tentukan fallback fragment sesuai APP_MODE
+      // - customer/qr  → kembali ke /customer
+      // - staff        → kembali ke /login (router akan handle redirect ke role masing-masing)
+      const fallbackFragment = appMode == 'staff' ? '#/login' : '#/customer';
+      final fragment = uri.fragment.isNotEmpty ? '#${uri.fragment}' : fallbackFragment;
       _replaceState(null, '', '/$fragment');
     }
   }

@@ -22,6 +22,12 @@ import '../../features/qr_order/presentation/qr_order_tracker_screen.dart';
 
 import '../models/staff_role.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// APP MODE — di-set saat build via --dart-define=APP_MODE=staff|customer|qr
+// Default: 'staff' supaya kalau build tanpa define, yang muncul adalah staff app
+// ─────────────────────────────────────────────────────────────────────────────
+const String appMode = String.fromEnvironment('APP_MODE', defaultValue: 'staff');
+
 abstract class AppRoutes {
   static const staffGateway   = '/staff-access';
   static const login          = '/login';
@@ -37,7 +43,7 @@ abstract class AppRoutes {
   static const staff          = '/staff';
   static const reports        = '/reports';
   static const branches       = '/branches';
-  static const transferStock  = '/branches/transfer-stock'; // ← TAMBAH INI
+  static const transferStock  = '/branches/transfer-stock';
   static const chatbot        = '/chatbot';
 
   // Customer PWA
@@ -101,7 +107,11 @@ String _getInitialLocation() {
         : uri.path;
     if (path.isNotEmpty && path != '/') return path;
   }
-  return AppRoutes.customer;
+
+  // Initial location sesuai mode
+  if (appMode == 'customer') return AppRoutes.customer;
+  if (appMode == 'qr') return '/'; // QR butuh tableId dari URL, biarkan dari URL
+  return AppRoutes.customer; // staff default ke customer dulu, redirect handle sisanya
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -123,11 +133,48 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       bool isCustomerRoute(String path) =>
           path.startsWith('/customer') || path == '/customer';
 
-      if (isCustomerRoute(loc) || isCustomerRoute(fullPath) ||
-          isQrRoute(loc) || isQrRoute(fullPath)) {
+      // ─── GUARD: Customer App ───────────────────────────────────────────────
+      // Kalau build dengan APP_MODE=customer, hanya boleh akses /customer/...
+      // Semua route lain (staff, qr) di-redirect balik ke /customer
+      if (appMode == 'customer') {
+        if (!isCustomerRoute(loc) && !isCustomerRoute(fullPath)) {
+          return AppRoutes.customer;
+        }
+        // Tetap handle reset password via email link
+        if (kIsWeb) {
+          final uri = Uri.base;
+          final type = uri.queryParameters['type'];
+          if (type == 'recovery') return AppRoutes.customerResetPassword;
+        }
         return null;
       }
 
+      // ─── GUARD: QR App ────────────────────────────────────────────────────
+      // Kalau build dengan APP_MODE=qr, hanya boleh akses /qr/...
+      // Tidak perlu redirect karena QR URL sudah pasti mengandung tableId
+      if (appMode == 'qr') {
+        if (!isQrRoute(loc) && !isQrRoute(fullPath)) {
+          // Tidak ada halaman fallback untuk QR, tampilkan error
+          return null;
+        }
+        return null;
+      }
+
+      // ─── GUARD: Staff App ─────────────────────────────────────────────────
+      // Kalau build dengan APP_MODE=staff (default), blok akses ke /customer dan /qr
+      // Staff tidak boleh akses halaman customer atau QR
+      if (appMode == 'staff') {
+        if (isCustomerRoute(loc) || isCustomerRoute(fullPath) ||
+            isQrRoute(loc) || isQrRoute(fullPath)) {
+          // Redirect ke login kalau belum login, atau ke default role
+          if (!isLoggedIn) return AppRoutes.login;
+          final s = authState.staff;
+          if (s != null) return _defaultRouteForRole(s.role);
+          return AppRoutes.login;
+        }
+      }
+
+      // ─── Logic staff lama (tidak berubah) ─────────────────────────────────
       if (loc == AppRoutes.staffGateway) return null;
 
       if (kIsWeb) {
@@ -141,7 +188,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (authState.isLoading) return null;
 
       if (kIsWeb && !isLoggedIn && loc != AppRoutes.login) {
-        return AppRoutes.customer;
+        return AppRoutes.login;
       }
 
       if (!isLoggedIn && loc != AppRoutes.login) {
@@ -255,8 +302,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.reports,      builder: (_, __) => const ReportsScreen()),
 
       // ── Multi Branch Routes ───────────────────────────────────────────────
-      // FIX: Pisahkan menjadi 2 top-level GoRoute agar tidak ada ShellRoute
-      // yang menyebabkan error "parent route must be a page route"
       GoRoute(
         path: AppRoutes.branches,
         builder: (_, __) => const BranchDashboardScreen(),
@@ -278,8 +323,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             Text('Page not found:\n${state.uri.path}'),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () => GoRouter.of(context).go(AppRoutes.customer),
-              child: const Text('Kembali ke Beranda'),
+              onPressed: () => GoRouter.of(context).go(
+                appMode == 'staff' ? AppRoutes.login : AppRoutes.customer,
+              ),
+              child: const Text('Kembali'),
             ),
           ],
         ),
