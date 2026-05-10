@@ -11,7 +11,7 @@ class MenuItem {
   final bool isAvailable;
   final int sortOrder;
   final int preparationTimeMinutes;
-  final String? inventoryItemId; // ← FIX Error 1
+  final String? inventoryItemId;
 
   const MenuItem({
     required this.id,
@@ -24,7 +24,7 @@ class MenuItem {
     this.isAvailable = true,
     this.sortOrder = 0,
     this.preparationTimeMinutes = 15,
-    this.inventoryItemId, // ← FIX Error 1
+    this.inventoryItemId,
   });
 }
 
@@ -85,8 +85,18 @@ class QrOrderSession {
       );
 
   double get subtotal => items.fold(0, (sum, item) => sum + item.subtotal);
-  double get taxAmount => subtotal * 0.11;
-  double get totalAmount => subtotal + taxAmount;
+
+  // Service charge 3% dari subtotal
+  double get serviceCharge => subtotal * 0.03;
+
+  // PB1 10% dari subtotal + service charge
+  double get pb1Amount => (subtotal + serviceCharge) * 0.10;
+
+  // taxAmount di-set 0 (PPN dihapus), tetap ada agar tidak breaking change
+  double get taxAmount => 0;
+
+  double get totalAmount => subtotal + serviceCharge + pb1Amount;
+
   int get totalItems => items.fold(0, (sum, item) => sum + item.quantity);
   bool get isEmpty => items.isEmpty;
 }

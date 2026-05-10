@@ -779,7 +779,7 @@ class _PaymentStatusCard extends StatelessWidget {
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
               Text(
-                'sudah termasuk PPN 11%',
+                'sudah termasuk PB1 & service charge',
                 style: theme.textTheme.labelSmall
                     ?.copyWith(color: colorScheme.outline, fontSize: 10),
               ),
@@ -905,7 +905,7 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
                             ))),
                       const SizedBox(height: 10),
                       Divider(height: 1, color: colorScheme.outlineVariant),
-                      // ── Subtotal, PPN, Total breakdown ──────────────────
+                      // ── Subtotal, Service Charge, PB1, Total breakdown ──
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
                         child: _PriceRow(
@@ -919,8 +919,19 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
                         child: _PriceRow(
-                          label: 'PPN 11%',
-                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 0.11,
+                          label: 'Service Charge (3%)',
+                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 0.03,
+                          theme: theme,
+                          colorScheme: colorScheme,
+                          formatPrice: _formatPrice,
+                          isNote: true,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
+                        child: _PriceRow(
+                          label: 'PB1 (10%)',
+                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 1.03 * 0.10,
                           theme: theme,
                           colorScheme: colorScheme,
                           formatPrice: _formatPrice,

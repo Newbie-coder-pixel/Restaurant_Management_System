@@ -32,6 +32,8 @@ class QrOrderRepository {
             'table_id': session.tableId,
             'table_name': session.tableName ?? 'Meja ${session.tableId}',
             'customer_name': session.customerName ?? 'Tamu',
+            'subtotal': session.subtotal,
+            'tax_amount': session.pb1Amount,
             'total_amount': session.totalAmount,
             'status': 'created',
             'payment_status': 'pending',

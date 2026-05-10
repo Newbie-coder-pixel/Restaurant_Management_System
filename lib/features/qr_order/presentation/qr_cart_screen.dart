@@ -641,10 +641,17 @@ class _OrderSummaryCard extends StatelessWidget {
         ]),
         const SizedBox(height: 4),
         Row(children: [
-          Text('PPN (11%)',
+          Text('Service Charge (3%)',
             style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
           const Spacer(),
-          Text(_formatPrice(cart.taxAmount), style: theme.textTheme.bodySmall),
+          Text(_formatPrice(cart.serviceCharge), style: theme.textTheme.bodySmall),
+        ]),
+        const SizedBox(height: 4),
+        Row(children: [
+          Text('PB1 (10%)',
+            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+          const Spacer(),
+          Text(_formatPrice(cart.pb1Amount), style: theme.textTheme.bodySmall),
         ]),
         const SizedBox(height: 8),
         Container(
