@@ -141,11 +141,12 @@ class MenuItem {
 ///   menu_ingredients.inventory_item_id → inventory_items.id
 class MenuIngredient {
   final String id;
-  final String menuItemId;       // FK ke menu_items
-  final String inventoryItemId;  // FK ke inventory_items
-  final String inventoryItemName; // denormalized, untuk display tanpa join
-  final String unit;             // satuan (ikut inventory_item)
-  final double quantity;         // takaran per 1 porsi menu
+  final String menuItemId;
+  final String inventoryItemId;
+  final String inventoryItemName;
+  final String unit;
+  final double quantity;
+  final double costPerUnit; // denormalized dari inventory_items.cost_per_unit
 
   const MenuIngredient({
     required this.id,
@@ -154,6 +155,7 @@ class MenuIngredient {
     required this.inventoryItemName,
     required this.unit,
     required this.quantity,
+    this.costPerUnit = 0,
   });
 
   factory MenuIngredient.fromJson(Map<String, dynamic> j) => MenuIngredient(
@@ -163,6 +165,7 @@ class MenuIngredient {
         inventoryItemName: j['inventory_item_name'] as String? ?? '',
         unit: j['unit'] as String? ?? 'pcs',
         quantity: (j['quantity'] as num).toDouble(),
+        costPerUnit: (j['cost_per_unit'] as num?)?.toDouble() ?? 0,
       );
 
   Map<String, dynamic> toInsertMap() => {
@@ -171,6 +174,7 @@ class MenuIngredient {
         'inventory_item_name': inventoryItemName,
         'unit': unit,
         'quantity': quantity,
+        'cost_per_unit': costPerUnit,
       };
 
   MenuIngredient copyWith({
@@ -180,6 +184,7 @@ class MenuIngredient {
     String? inventoryItemName,
     String? unit,
     double? quantity,
+    double? costPerUnit,
   }) =>
       MenuIngredient(
         id: id ?? this.id,
@@ -188,6 +193,7 @@ class MenuIngredient {
         inventoryItemName: inventoryItemName ?? this.inventoryItemName,
         unit: unit ?? this.unit,
         quantity: quantity ?? this.quantity,
+        costPerUnit: costPerUnit ?? this.costPerUnit,
       );
 }
 
@@ -198,23 +204,24 @@ class MenuIngredientDraft {
   final String inventoryItemName;
   final String unit;
   final double quantity;
+  final double costPerUnit; // dari inventory_items.cost_per_unit
 
   const MenuIngredientDraft({
     required this.inventoryItemId,
     required this.inventoryItemName,
     required this.unit,
     required this.quantity,
+    this.costPerUnit = 0,
   });
 
-  /// Konversi ke MenuIngredient penuh setelah menu berhasil disimpan
-  /// dan mendapat [menuItemId] dari DB.
   MenuIngredient toIngredient({required String menuItemId}) => MenuIngredient(
-        id: '',           // akan diisi oleh DB (UUID auto-generated)
+        id: '',
         menuItemId: menuItemId,
         inventoryItemId: inventoryItemId,
         inventoryItemName: inventoryItemName,
         unit: unit,
         quantity: quantity,
+        costPerUnit: costPerUnit,
       );
 
   MenuIngredientDraft copyWith({double? quantity}) => MenuIngredientDraft(
@@ -222,5 +229,6 @@ class MenuIngredientDraft {
         inventoryItemName: inventoryItemName,
         unit: unit,
         quantity: quantity ?? this.quantity,
+        costPerUnit: costPerUnit,
       );
 }

@@ -151,6 +151,15 @@ class _MenuCardState extends ConsumerState<MenuCard>
     );
   }
 
+  void _showCostingSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _MenuCostingSheet(menu: widget.menu),
+    );
+  }
+
   Color get _statusColor {
     if (widget.menu.isSeasonal) return Colors.orange;
     return widget.menu.isAvailable ? Colors.green : Colors.red;
@@ -177,6 +186,7 @@ class _MenuCardState extends ConsumerState<MenuCard>
       onTapDown: _onTapDown,
       onTapUp: _onTapUp,
       onTapCancel: _onTapCancel,
+      onTap: () => _showCostingSheet(context),
       child: AnimatedBuilder(
         animation: _scaleAnimation,
         builder: (context, child) => Transform.scale(
@@ -315,6 +325,393 @@ class _MenuCardState extends ConsumerState<MenuCard>
           (m) => '${m[1]}.',
         );
   }
+}
+
+// ─── COSTING DETAIL SHEET ─────────────────────────────────────────────────────
+
+/// Bottom sheet yang menampilkan detail costing per menu item:
+/// daftar ingredients, cost per bahan, total COGS, gross profit, dan margin.
+/// Hanya visible untuk admin/manager — customer tidak punya akses ke screen ini.
+class _MenuCostingSheet extends ConsumerStatefulWidget {
+  final MenuItem menu;
+  const _MenuCostingSheet({required this.menu});
+
+  @override
+  ConsumerState<_MenuCostingSheet> createState() => _MenuCostingSheetState();
+}
+
+class _MenuCostingSheetState extends ConsumerState<_MenuCostingSheet> {
+  List<MenuIngredient>? _ingredients;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIngredients();
+  }
+
+  Future<void> _loadIngredients() async {
+    try {
+      final service = ref.read(menuServiceProvider);
+      final result = await service.fetchIngredients(widget.menu.id);
+      if (mounted) {
+        setState(() {
+          _ingredients = result;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Gagal memuat data bahan';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final menu = widget.menu;
+    final mq = MediaQuery.of(context);
+
+    return Container(
+      height: mq.size.height * 0.75,
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          const SizedBox(height: 12),
+          Container(
+            width: 44, height: 4,
+            decoration: BoxDecoration(
+              color: colorScheme.onSurface.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(menu.name,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text('Detail Bahan & Kalkulasi Profit',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurface.withValues(alpha: 0.5))),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 24),
+
+          // Content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Text(_error!,
+                        style: const TextStyle(color: Colors.red)))
+                    : _buildContent(theme, colorScheme, menu),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent(ThemeData theme, ColorScheme colorScheme, MenuItem menu) {
+    final ingredients = _ingredients ?? [];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // ── Summary Cards ─────────────────────────────────────────────────
+          _SummaryRow(menu: menu, ingredients: ingredients),
+          const SizedBox(height: 24),
+
+          // ── Ingredients List ──────────────────────────────────────────────
+          Row(
+            children: [
+              const Icon(Icons.blender_outlined, size: 16),
+              const SizedBox(width: 6),
+              Text('Bahan / Resep',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700)),
+              const Spacer(),
+              Text('${ingredients.length} bahan',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withValues(alpha: 0.5))),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          if (ingredients.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.info_outline, size: 28,
+                      color: colorScheme.onSurface.withValues(alpha: 0.3)),
+                  const SizedBox(height: 8),
+                  Text('Belum ada bahan terdaftar',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurface.withValues(alpha: 0.45))),
+                  const SizedBox(height: 4),
+                  Text('Tambahkan bahan saat edit menu',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
+                          color: colorScheme.onSurface.withValues(alpha: 0.3))),
+                ],
+              ),
+            )
+          else
+            ...ingredients.map((ing) => _IngredientRow(ingredient: ing)),
+
+          const SizedBox(height: 20),
+
+          // ── Prep Time Info ────────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.shade100),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.timer_outlined, size: 18, color: Colors.blue.shade600),
+                const SizedBox(width: 10),
+                Text('Estimasi waktu persiapan',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.blue.shade700)),
+                const Spacer(),
+                Text('${menu.preparationTimeMinutes} menit',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.blue.shade700)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── SUMMARY ROW ──────────────────────────────────────────────────────────────
+
+/// 3 kartu ringkasan: Harga Jual, Est. COGS, dan Margin.
+/// COGS dihitung dari ingredients × cost_per_unit inventory.
+/// Jika belum ada ingredients, semua nilai tampil sebagai '-'.
+class _SummaryRow extends StatelessWidget {
+  final MenuItem menu;
+  final List<MenuIngredient> ingredients;
+
+  const _SummaryRow({required this.menu, required this.ingredients});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasIngredients = ingredients.isNotEmpty;
+
+    // Kalkulasi COGS dari costPerUnit yang tersimpan di MenuIngredient
+    final totalCost = hasIngredients
+        ? ingredients.fold<double>(
+            0, (sum, ing) => sum + (ing.costPerUnit * ing.quantity))
+        : null;
+
+    final profit = totalCost != null ? menu.price - totalCost : null;
+    final margin = (profit != null && menu.price > 0)
+        ? (profit / menu.price * 100)
+        : null;
+
+    return Row(
+      children: [
+        _SummaryCard(
+          label: 'Harga Jual',
+          value: 'Rp ${_fmt(menu.price)}',
+          icon: Icons.sell_outlined,
+          color: Colors.blue.shade600,
+        ),
+        const SizedBox(width: 8),
+        _SummaryCard(
+          label: 'Est. COGS',
+          value: totalCost != null ? 'Rp ${_fmt(totalCost)}' : '-',
+          icon: Icons.receipt_long_outlined,
+          color: Colors.orange.shade700,
+        ),
+        const SizedBox(width: 8),
+        _SummaryCard(
+          label: 'Margin',
+          value: margin != null ? '${margin.toStringAsFixed(1)}%' : '-',
+          icon: Icons.trending_up,
+          color: (margin != null && margin >= 50)
+              ? Colors.green.shade700
+              : (margin != null && margin >= 30)
+                  ? Colors.orange.shade700
+                  : Colors.red.shade600,
+        ),
+      ],
+    );
+  }
+
+  String _fmt(double v) => v.toStringAsFixed(0).replaceAllMapped(
+        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _SummaryCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.outlineVariant, width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(height: 6),
+            Text(value,
+                style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800, color: color)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 10,
+                    color: colorScheme.onSurface.withValues(alpha: 0.5))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── INGREDIENT ROW ───────────────────────────────────────────────────────────
+
+class _IngredientRow extends StatelessWidget {
+  final MenuIngredient ingredient;
+
+  const _IngredientRow({required this.ingredient});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final hasCost = ingredient.costPerUnit > 0;
+    final lineCost = ingredient.costPerUnit * ingredient.quantity;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colorScheme.outlineVariant, width: 1),
+      ),
+      child: Row(
+        children: [
+          // Avatar
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: Colors.teal.shade50,
+            child: Text(
+              ingredient.inventoryItemName.isNotEmpty
+                  ? ingredient.inventoryItemName[0].toUpperCase()
+                  : '?',
+              style: TextStyle(
+                  color: Colors.teal.shade700,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Nama + qty
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(ingredient.inventoryItemName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(
+                  '${ingredient.quantity % 1 == 0 ? ingredient.quantity.toInt() : ingredient.quantity} ${ingredient.unit}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                ),
+              ],
+            ),
+          ),
+
+          // Cost per line
+          if (hasCost)
+            Text(
+              'Rp ${_fmt(lineCost)}',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.orange.shade700),
+            )
+          else
+            Text('- cost',
+                style: TextStyle(
+                    fontSize: 11,
+                    color: colorScheme.onSurface.withValues(alpha: 0.35))),
+        ],
+      ),
+    );
+  }
+
+  String _fmt(double v) => v.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
 }
 
 // ─── ALLERGEN & DIETARY SECTION ───────────────────────────────────────────────

@@ -12,6 +12,8 @@ class MenuItem {
   final int sortOrder;
   final int preparationTimeMinutes;
   final String? inventoryItemId;
+  final List<String> allergens;
+  final List<String> dietaryTags;
 
   const MenuItem({
     required this.id,
@@ -25,6 +27,8 @@ class MenuItem {
     this.sortOrder = 0,
     this.preparationTimeMinutes = 15,
     this.inventoryItemId,
+    this.allergens = const [],
+    this.dietaryTags = const [],
   });
 }
 

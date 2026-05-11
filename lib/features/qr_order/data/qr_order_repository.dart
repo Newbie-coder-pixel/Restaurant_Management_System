@@ -271,6 +271,7 @@ await _client.from('order_items').insert(orderItemsData);
   Future<List<Map<String, dynamic>>> fetchMenuByBranch(String branchId) async {
     if (branchId.trim().isEmpty) return [];
     try {
+      // 1. Fetch menu items (only available)
       final items = await _client
           .from('menu_items')
           .select('''
@@ -282,7 +283,46 @@ await _client.from('order_items').insert(orderItemsData);
           .eq('branch_id', branchId)
           .eq('is_available', true)
           .order('sort_order', ascending: true);
-      return List<Map<String, dynamic>>.from(items);
+
+      if (items.isEmpty) return [];
+
+      final menuIds = (items as List).map((e) => e['id'] as String).toList();
+
+      // 2. Fetch allergens & dietary tags secara paralel
+      final results = await Future.wait([
+        _client
+            .from('menu_item_allergens')
+            .select('menu_item_id, allergen')
+            .inFilter('menu_item_id', menuIds),
+        _client
+            .from('menu_item_dietary')
+            .select('menu_item_id, dietary_tag')
+            .inFilter('menu_item_id', menuIds),
+      ]);
+
+      // 3. Build lookup maps
+      final Map<String, List<String>> allergenMap = {};
+      for (final row in results[0]) {
+        final id = row['menu_item_id'] as String;
+        allergenMap.putIfAbsent(id, () => []).add(row['allergen'] as String);
+      }
+
+      final Map<String, List<String>> dietaryMap = {};
+      for (final row in results[1]) {
+        final id = row['menu_item_id'] as String;
+        dietaryMap.putIfAbsent(id, () => []).add(row['dietary_tag'] as String);
+      }
+
+      // 4. Merge ke setiap item
+      return items.map<Map<String, dynamic>>((item) {
+        final id = item['id'] as String;
+        return {
+          ...Map<String, dynamic>.from(item as Map),
+          'allergens': allergenMap[id] ?? [],
+          'dietary_tags': dietaryMap[id] ?? [],
+        };
+      }).toList();
+
     } catch (e, stack) {
       debugPrint('❌ ERROR fetchMenuByBranch: $e\n$stack');
       rethrow;

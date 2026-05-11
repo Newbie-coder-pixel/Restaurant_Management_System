@@ -30,6 +30,8 @@ const _quickActions = [
   ('🏆 Menu Terlaris', 'Menu apa yang paling terlaris bulan ini?'),
   ('📅 Booking Hari Ini', 'Tampilkan semua booking hari ini beserta detailnya'),
   ('💰 Revenue Bulan Ini', 'Berapa total revenue bulan ini dan tren pertumbuhannya?'),
+  ('🍽️ Info Menu', 'Tampilkan semua menu beserta harga, kategori, dan info allergen/dietary-nya'),
+  ('💡 Margin Menu', 'Menu mana yang margin keuntungannya paling tinggi? Tampilkan perbandingannya'),
   ('📥 Export Laporan', '__export__'),
 ];
 
@@ -88,7 +90,6 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   @override
   void initState() {
     super.initState();
-    // Tambah welcome message hanya jika history kosong
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final messages = ref.read(chatProvider).messages;
       if (messages.isEmpty) {
@@ -96,8 +97,9 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           '👋 Halo! Saya **Resto Analytics AI**.\n\n'
           'Saya bisa bantu:\n'
           '• 📊 Report harian\n'
-          '• 🏆 Analisis menu\n'
+          '• 🏆 Analisis menu & margin\n'
           '• 📦 Status inventory\n'
+          '• 🍽️ Info menu, allergen & dietary\n'
           '• 💡 Insight bisnis\n\n'
           'Silakan pilih atau ketik pertanyaan 👇',
         );
@@ -407,6 +409,150 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     }
   }
 
+  // ── Menu Data untuk AI ─────────────────────────────────────────────
+  Future<Map<String, dynamic>> _fetchMenuData() async {
+    final sb = Supabase.instance.client;
+    final branchId = _isSuperadmin ? _selectedBranchId : _myBranchId;
+
+    try {
+      // 1. Fetch semua menu items + kategori
+     // BARU
+dynamic qMenu = sb
+    .from('menu_items')
+    .select(
+        'id, name, price, description, is_available, prep_time_minutes, menu_categories(name)');
+if (branchId != null) qMenu = (qMenu as dynamic).eq('branch_id', branchId);
+final menuRaw = ((await (qMenu as dynamic).order('name')) as List)
+    .cast<Map<String, dynamic>>();
+
+      if (menuRaw.isEmpty) {
+        return {'total_menu': 0, 'menu_tersedia': [], 'menu_tidak_tersedia': [], 'ranking_margin': []};
+      }
+
+      final menuIds = menuRaw.map((m) => m['id'] as String).toList();
+
+      // 2. Fetch allergens untuk semua menu
+      final allergensRaw = (await sb
+          .from('menu_item_allergens')
+          .select('menu_item_id, allergen')
+          .inFilter('menu_item_id', menuIds) as List)
+          .cast<Map<String, dynamic>>();
+
+      final Map<String, List<String>> allergenMap = {};
+      for (final a in allergensRaw) {
+        final id = a['menu_item_id'] as String;
+        allergenMap.putIfAbsent(id, () => []).add(a['allergen'] as String);
+      }
+
+      // 3. Fetch dietary tags untuk semua menu
+      final dietaryRaw = (await sb
+          .from('menu_item_dietary')
+          .select('menu_item_id, dietary_tag')
+          .inFilter('menu_item_id', menuIds) as List)
+          .cast<Map<String, dynamic>>();
+
+      final Map<String, List<String>> dietaryMap = {};
+      for (final d in dietaryRaw) {
+        final id = d['menu_item_id'] as String;
+        dietaryMap.putIfAbsent(id, () => []).add(d['dietary_tag'] as String);
+      }
+
+      // 4. Fetch menu_ingredients untuk hitung COGS
+      final ingredientsRaw = (await sb
+          .from('menu_ingredients')
+          .select('menu_item_id, quantity, cost_per_unit')
+          .inFilter('menu_item_id', menuIds) as List)
+          .cast<Map<String, dynamic>>();
+
+      final Map<String, double> cogsMap = {};
+      for (final ing in ingredientsRaw) {
+        final id = ing['menu_item_id'] as String;
+        final qty = (ing['quantity'] as num?)?.toDouble() ?? 0;
+        final cost = (ing['cost_per_unit'] as num?)?.toDouble() ?? 0;
+        cogsMap[id] = (cogsMap[id] ?? 0) + (qty * cost);
+      }
+
+      // 5. Gabungkan semua data per menu item
+      final List<Map<String, dynamic>> available = [];
+      final List<String> unavailable = [];
+
+      for (final m in menuRaw) {
+        final id = m['id'] as String;
+        final price = (m['price'] as num?)?.toDouble() ?? 0;
+        final cogs = cogsMap[id] ?? 0;
+        final margin = price > 0 ? ((price - cogs) / price * 100) : null;
+        final allergens = allergenMap[id] ?? [];
+        final dietary = dietaryMap[id] ?? [];
+        final category = (m['menu_categories'] as Map?)?['name'] ?? 'Umum';
+        final prepTime = m['prep_time_minutes'] as int?;
+
+        final item = {
+          'nama': m['name'],
+          'harga': 'Rp ${price.toStringAsFixed(0)}',
+          'harga_raw': price,
+          'kategori': category,
+          'deskripsi': m['description'] ?? '-',
+          'prep_time': prepTime != null ? '$prepTime menit' : '-',
+          'cogs': cogs > 0 ? 'Rp ${cogs.toStringAsFixed(0)}' : 'belum diset',
+          'cogs_raw': cogs,
+          'margin_persen': margin != null ? '${margin.toStringAsFixed(1)}%' : 'belum diset',
+          'margin_raw': margin,
+          'allergen': allergens.isEmpty ? 'tidak ada' : allergens.join(', '),
+          'dietary': dietary.isEmpty ? '-' : dietary.join(', '),
+        };
+
+        if (m['is_available'] == true) {
+          available.add(item);
+        } else {
+          unavailable.add(m['name'] as String);
+        }
+      }
+
+      // 6. Ranking margin terbaik (hanya yang sudah ada COGS-nya)
+      final withMargin = available
+          .where((m) => (m['margin_raw'] as double?) != null && (m['cogs_raw'] as double) > 0)
+          .toList()
+        ..sort((a, b) {
+          final ma = (a['margin_raw'] as double?) ?? 0;
+          final mb = (b['margin_raw'] as double?) ?? 0;
+          return mb.compareTo(ma);
+        });
+
+      final rankingMargin = withMargin.take(5).map((m) =>
+          '${m['nama']}: margin ${m['margin_persen']} (jual ${m['harga']}, COGS ${m['cogs']})').toList();
+
+      // 7. Format detail menu untuk AI (tanpa field raw)
+      final availableForAI = available.map((m) => {
+        'nama': m['nama'],
+        'harga': m['harga'],
+        'kategori': m['kategori'],
+        'deskripsi': m['deskripsi'],
+        'prep_time': m['prep_time'],
+        'cogs': m['cogs'],
+        'margin_persen': m['margin_persen'],
+        'allergen': m['allergen'],
+        'dietary': m['dietary'],
+      }).toList();
+
+      return {
+        'total_menu': menuRaw.length,
+        'total_tersedia': available.length,
+        'total_tidak_tersedia': unavailable.length,
+        'menu_tersedia': availableForAI,
+        'menu_tidak_tersedia': unavailable,
+        'ranking_margin': rankingMargin,
+      };
+    } catch (e) {
+      return {
+        'error': e.toString(),
+        'total_menu': 0,
+        'menu_tersedia': [],
+        'menu_tidak_tersedia': [],
+        'ranking_margin': [],
+      };
+    }
+  }
+
   // ── AI Call ────────────────────────────────────────────────────────
   Future<String> _callAI({
     required String systemPrompt,
@@ -444,9 +590,9 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         ? (_selectedBranchId == null
             ? 'Semua Cabang'
             : _branches
-                .where((b) => b.id == _selectedBranchId)
-                .firstOrNull
-                ?.name ??
+                    .where((b) => b.id == _selectedBranchId)
+                    .firstOrNull
+                    ?.name ??
                 'Cabang')
         : (_branches.where((b) => b.id == _myBranchId).firstOrNull?.name ??
             'Cabang Saya');
@@ -499,7 +645,14 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     _scrollToBottom();
 
     final sentiment = _detectSentiment(text);
-    final data = await _fetchAnalyticsData();
+
+    // Fetch analytics + menu data secara paralel
+    final results = await Future.wait([
+      _fetchAnalyticsData(),
+      _fetchMenuData(),
+    ]);
+    final data = results[0];
+    final menuData = results[1];
 
     // Update proactive stock alert banner
     final warnings = data['peringatan_stok'] as Map?;
@@ -516,21 +669,51 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       });
     }
 
+    // Format detail menu untuk system prompt
+    final menuTersedia = (menuData['menu_tersedia'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
+    final menuDetail = menuTersedia.map((m) =>
+        '• ${m['nama']} — ${m['harga']} [${m['kategori']}]\n'
+        '  Deskripsi: ${m['deskripsi']}\n'
+        '  COGS: ${m['cogs']} | Margin: ${m['margin_persen']} | Prep: ${m['prep_time']}\n'
+        '  Allergen: ${m['allergen']} | Dietary: ${m['dietary']}').join('\n');
+
+    final menuTidakTersedia = (menuData['menu_tidak_tersedia'] as List? ?? []);
+    final rankingMargin = (menuData['ranking_margin'] as List? ?? []);
+
     final systemPrompt = '''
 Kamu adalah AI Analytics restoran yang cerdas dan helpful untuk tim internal.
 
 DATA ANALYTICS (sudah diambil dari database real-time):
 ${data.toString()}
 
+DATA MENU RESTORAN (real-time dari database):
+- Total menu: ${menuData['total_menu']} item (tersedia: ${menuData['total_tersedia']}, tidak tersedia: ${menuData['total_tidak_tersedia']})
+- Menu tidak tersedia saat ini: ${menuTidakTersedia.isEmpty ? 'tidak ada' : menuTidakTersedia.join(', ')}
+- Ranking margin terbaik: ${rankingMargin.isEmpty ? 'belum ada data COGS' : rankingMargin.join(' | ')}
+
+DETAIL MENU YANG TERSEDIA:
+${menuDetail.isEmpty ? '(belum ada menu tersedia)' : menuDetail}
+
 KEMAMPUAN KAMU:
 - Analisis performa hari ini, minggu ini, bulan ini
 - Bandingkan revenue/order minggu ini vs minggu lalu
 - Identifikasi jam paling ramai
-- Analisis menu terlaris
+- Analisis menu terlaris & margin keuntungan
 - Hitung pertumbuhan bisnis
 - Peringatan stok menipis/habis
 - Info booking hari ini (confirmed, pending, no-show, daftar tamu)
+- Info lengkap menu: harga, kategori, allergen, dietary, COGS, margin
+- Rekomendasikan menu berdasarkan margin, kategori, atau dietary preference
 - Berikan rekomendasi actionable berdasarkan data
+
+ATURAN MENU:
+- Jika ditanya tentang allergen (contoh: "ada menu bebas gluten?"), cek kolom allergen di data menu
+- Jika ditanya tentang dietary (contoh: "ada menu vegetarian?"), cek kolom dietary di data menu
+- Jika ditanya margin atau profitabilitas menu, gunakan data ranking_margin dan detail margin per item
+- Jika ditanya COGS atau harga pokok, tampilkan dari data menu
+- Jika menu belum punya data COGS, sampaikan bahwa data belum diisi
+- Selalu rekomendasikan menu dengan margin tinggi jika relevan
 
 ATURAN PROACTIVE INSIGHT:
 - Jika ada data di "stok_habis_atau_dibawah_minimum", SELALU tampilkan peringatan 🚨 di awal respons
@@ -657,8 +840,9 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
                 '👋 Halo! Saya **Resto Analytics AI**.\n\n'
                 'Saya bisa bantu:\n'
                 '• 📊 Report harian\n'
-                '• 🏆 Analisis menu\n'
+                '• 🏆 Analisis menu & margin\n'
                 '• 📦 Status inventory\n'
+                '• 🍽️ Info menu, allergen & dietary\n'
                 '• 💡 Insight bisnis\n\n'
                 'Silakan pilih atau ketik pertanyaan 👇',
               );
@@ -774,7 +958,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
     );
   }
 
-  // ── Messages — pakai ChatBubble ────────────────────────────────────
+  // ── Messages ───────────────────────────────────────────────────────
   Widget _buildMessages(ChatState chatState) => ListView.builder(
         controller: _scrollCtrl,
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -785,25 +969,21 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
             return const TypingIndicator();
           }
           final m = chatState.messages[i];
-          // ChatBubble dari chat_bubble.dart tidak support markdown.
-          // Untuk pesan bot dengan format markdown, kita render custom.
           final isUser = m.role == 'user';
           if (isUser) {
             return ChatBubble(message: m);
           }
-          // Bot: render dengan MarkdownBody seperti versi lama
           return _buildBotBubble(m);
         },
       );
 
-  // Bot bubble dengan MarkdownBody (lebih rich dari ChatBubble default)
+  // Bot bubble dengan MarkdownBody
   Widget _buildBotBubble(ChatMessage m) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Bot avatar dari ChatBubble style
           Container(
             width: 32,
             height: 32,
@@ -919,6 +1099,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
           child: Row(
             children: _quickActions.map((e) {
               final isExport = e.$2 == '__export__';
+              final isMenu = e.$1.contains('🍽️') || e.$1.contains('💡');
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
@@ -929,12 +1110,16 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
                     decoration: BoxDecoration(
                       color: isExport
                           ? Colors.green.withValues(alpha: 0.12)
-                          : AppColors.primary.withValues(alpha: 0.1),
+                          : isMenu
+                              ? Colors.orange.withValues(alpha: 0.12)
+                              : AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isExport
                             ? Colors.green.withValues(alpha: 0.5)
-                            : AppColors.primary.withValues(alpha: 0.3),
+                            : isMenu
+                                ? Colors.orange.withValues(alpha: 0.5)
+                                : AppColors.primary.withValues(alpha: 0.3),
                       ),
                     ),
                     child: Text(
@@ -943,7 +1128,11 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
                         fontFamily: 'Poppins',
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isExport ? Colors.green[700] : AppColors.primary,
+                        color: isExport
+                            ? Colors.green[700]
+                            : isMenu
+                                ? Colors.orange[800]
+                                : AppColors.primary,
                       ),
                     ),
                   ),

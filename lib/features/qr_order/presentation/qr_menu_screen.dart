@@ -55,8 +55,9 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
         imageUrl: row['image_url'] as String?,
         isAvailable: row['is_available'] as bool? ?? true,
         sortOrder: row['sort_order'] as int? ?? 0,
-        // ✅ FIX: petakan preparation_time_minutes dari Supabase ke MenuItem
         preparationTimeMinutes: row['preparation_time_minutes'] as int? ?? 15,
+        allergens: List<String>.from(row['allergens'] as List? ?? []),
+        dietaryTags: List<String>.from(row['dietary_tags'] as List? ?? []),
       );
     }).toList();
   }
@@ -481,6 +482,8 @@ class _MenuItemTile extends StatelessWidget {
                     _fmt(item.price),
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.primary),
                   ),
+                  const SizedBox(height: 5),
+                  _MenuItemBadges(item: item, cs: cs),
                 ],
               ),
             ),
@@ -540,6 +543,87 @@ class _MenuItemTile extends StatelessWidget {
   }
 
   String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+}
+
+// ─── Menu Item Badges (prep time, dietary, allergen) ─────────────────────────
+class _MenuItemBadges extends StatelessWidget {
+  final MenuItem item;
+  final ColorScheme cs;
+
+  const _MenuItemBadges({required this.item, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasInfo = item.dietaryTags.isNotEmpty ||
+        item.allergens.isNotEmpty ||
+        item.preparationTimeMinutes > 0;
+
+    if (!hasInfo) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 3,
+      children: [
+        // Prep time
+        if (item.preparationTimeMinutes > 0)
+          _Badge(
+            label: '~${item.preparationTimeMinutes} min',
+            icon: Icons.schedule_outlined,
+            color: cs.onSurfaceVariant,
+            bg: cs.surfaceContainerHighest,
+          ),
+        // Dietary tags (hijau)
+        ...item.dietaryTags.map((tag) => _Badge(
+              label: tag,
+              color: Colors.green[700]!,
+              bg: Colors.green.withValues(alpha: 0.10),
+            )),
+        // Allergens (oranye) — max 2, sisanya "+N"
+        ...item.allergens.take(2).map((a) => _Badge(
+              label: a,
+              icon: Icons.warning_amber_rounded,
+              color: Colors.orange[800]!,
+              bg: Colors.orange.withValues(alpha: 0.10),
+            )),
+        if (item.allergens.length > 2)
+          _Badge(
+            label: '+${item.allergens.length - 2} allergen',
+            color: Colors.orange[800]!,
+            bg: Colors.orange.withValues(alpha: 0.10),
+          ),
+      ],
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final Color color;
+  final Color bg;
+
+  const _Badge({required this.label, this.icon, required this.color, required this.bg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 10, color: color),
+            const SizedBox(width: 2),
+          ],
+          Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
 }
 
 class _QtyBtn extends StatelessWidget {

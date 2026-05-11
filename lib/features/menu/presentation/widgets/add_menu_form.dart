@@ -953,6 +953,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
         inventoryItemName: picked.name,
         unit: picked.unit,
         quantity: 1,
+        costPerUnit: picked.costPerUnit,
       ));
     }
   }
