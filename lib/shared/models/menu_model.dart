@@ -130,3 +130,97 @@ class MenuItem {
         dietaryLabels: dietaryLabels ?? this.dietaryLabels,
       );
 }
+
+// ─── MENU INGREDIENT MODEL ────────────────────────────────────────────────────
+
+/// Satu bahan/ingredient yang dipakai untuk membuat satu menu item.
+/// Tersimpan di tabel `menu_ingredients` di Supabase.
+///
+/// Relasi:
+///   menu_ingredients.menu_item_id  → menu_items.id
+///   menu_ingredients.inventory_item_id → inventory_items.id
+class MenuIngredient {
+  final String id;
+  final String menuItemId;       // FK ke menu_items
+  final String inventoryItemId;  // FK ke inventory_items
+  final String inventoryItemName; // denormalized, untuk display tanpa join
+  final String unit;             // satuan (ikut inventory_item)
+  final double quantity;         // takaran per 1 porsi menu
+
+  const MenuIngredient({
+    required this.id,
+    required this.menuItemId,
+    required this.inventoryItemId,
+    required this.inventoryItemName,
+    required this.unit,
+    required this.quantity,
+  });
+
+  factory MenuIngredient.fromJson(Map<String, dynamic> j) => MenuIngredient(
+        id: j['id'] as String,
+        menuItemId: j['menu_item_id'] as String,
+        inventoryItemId: j['inventory_item_id'] as String,
+        inventoryItemName: j['inventory_item_name'] as String? ?? '',
+        unit: j['unit'] as String? ?? 'pcs',
+        quantity: (j['quantity'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toInsertMap() => {
+        'menu_item_id': menuItemId,
+        'inventory_item_id': inventoryItemId,
+        'inventory_item_name': inventoryItemName,
+        'unit': unit,
+        'quantity': quantity,
+      };
+
+  MenuIngredient copyWith({
+    String? id,
+    String? menuItemId,
+    String? inventoryItemId,
+    String? inventoryItemName,
+    String? unit,
+    double? quantity,
+  }) =>
+      MenuIngredient(
+        id: id ?? this.id,
+        menuItemId: menuItemId ?? this.menuItemId,
+        inventoryItemId: inventoryItemId ?? this.inventoryItemId,
+        inventoryItemName: inventoryItemName ?? this.inventoryItemName,
+        unit: unit ?? this.unit,
+        quantity: quantity ?? this.quantity,
+      );
+}
+
+/// Digunakan sementara di form sebelum disimpan ke DB
+/// (belum punya id dan menuItemId).
+class MenuIngredientDraft {
+  final String inventoryItemId;
+  final String inventoryItemName;
+  final String unit;
+  final double quantity;
+
+  const MenuIngredientDraft({
+    required this.inventoryItemId,
+    required this.inventoryItemName,
+    required this.unit,
+    required this.quantity,
+  });
+
+  /// Konversi ke MenuIngredient penuh setelah menu berhasil disimpan
+  /// dan mendapat [menuItemId] dari DB.
+  MenuIngredient toIngredient({required String menuItemId}) => MenuIngredient(
+        id: '',           // akan diisi oleh DB (UUID auto-generated)
+        menuItemId: menuItemId,
+        inventoryItemId: inventoryItemId,
+        inventoryItemName: inventoryItemName,
+        unit: unit,
+        quantity: quantity,
+      );
+
+  MenuIngredientDraft copyWith({double? quantity}) => MenuIngredientDraft(
+        inventoryItemId: inventoryItemId,
+        inventoryItemName: inventoryItemName,
+        unit: unit,
+        quantity: quantity ?? this.quantity,
+      );
+}

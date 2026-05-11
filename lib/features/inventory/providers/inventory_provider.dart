@@ -230,6 +230,30 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
     refresh();
   }
 
+
+  /// Transfer stok ke cabang lain.
+  /// [fromItemId] = ID item di cabang ini (sumber).
+  /// [toItemId]   = ID item di cabang tujuan (item yang sama, beda branch).
+  /// [toBranchId] = branch ID tujuan.
+  Future<void> recordTransfer({
+    required String fromItemId,
+    required String toItemId,
+    required String toBranchId,
+    required double quantity,
+    String? note,
+  }) async {
+    final userId = ref.read(currentStaffProvider)?.id;
+    await _service.transferStock(
+      fromItemId: fromItemId,
+      fromBranchId: _branchId,
+      toItemId: toItemId,
+      toBranchId: toBranchId,
+      quantity: quantity,
+      createdBy: userId,
+    );
+    refresh();
+  }
+
   Future<void> rolloverDaily() async {
     await _service.rolloverDailyStock(_branchId);
     refresh();

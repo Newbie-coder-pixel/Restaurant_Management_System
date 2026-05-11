@@ -2,7 +2,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../shared/models/menu_model.dart';
+import '../../../../shared/models/menu_model.dart'; // includes MenuIngredient, MenuIngredientDraft
 import '../presentation/services/menu_service.dart';
 
 // ─── SERVICE PROVIDER ─────────────────────────────────────────────────────────
@@ -119,6 +119,7 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
     int preparationTimeMinutes = 15,
     List<String> allergens = const [],
     List<String> dietaryLabels = const [],
+    List<MenuIngredientDraft> ingredients = const [],
   }) async {
     try {
       String? imageUrl;
@@ -141,7 +142,16 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
         dietaryLabels: dietaryLabels,
       );
 
-      await _service.addMenu(item);
+      final saved = await _service.addMenu(item);
+
+      // Simpan ingredients setelah menu berhasil dibuat dan dapat ID-nya
+      if (ingredients.isNotEmpty) {
+        await _service.saveIngredients(
+          menuItemId: saved.id,
+          drafts: ingredients,
+        );
+      }
+
       return true;
     } catch (e) {
       return false;
@@ -151,6 +161,7 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
   Future<bool> updateMenu({
     required MenuItem item,
     dynamic newImageFile,
+    List<MenuIngredientDraft> ingredients = const [],
   }) async {
     try {
       String? imageUrl = item.imageUrl;
@@ -158,6 +169,13 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
         imageUrl = await _service.uploadImage(newImageFile);
       }
       await _service.updateMenu(item.copyWith(imageUrl: imageUrl));
+
+      // Update ingredients: hapus lama, insert baru
+      await _service.updateIngredients(
+        menuItemId: item.id,
+        drafts: ingredients,
+      );
+
       return true;
     } catch (e) {
       return false;

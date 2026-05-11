@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../../shared/models/menu_model.dart';
 import '../../providers/menu_provider.dart';
+import '../../../inventory/models/inventory_item.dart';
+import '../../../inventory/providers/inventory_provider.dart';
 
 // Provider untuk fetch kategori berdasarkan branchId — gunakan categoryNotifierProvider dari menu_provider
 
@@ -41,6 +43,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
   late final TextEditingController _prepTimeCtrl;
   List<String> _selectedAllergens = [];
   List<String> _selectedDietaryLabels = [];
+  List<MenuIngredientDraft> _ingredientDrafts = [];
 
   static const _allergenOptions = [
     ('gluten', 'Gluten', '🌾'),
@@ -83,6 +86,32 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     _prepTimeCtrl = TextEditingController(
       text: (widget.existingMenu?.preparationTimeMinutes ?? 15).toString(),
     );
+
+    // Saat edit, load ingredients yang sudah tersimpan
+    if (_isEdit) {
+      _loadExistingIngredients();
+    }
+  }
+
+  Future<void> _loadExistingIngredients() async {
+    try {
+      final service = ref.read(menuServiceProvider);
+      final existing = await service.fetchIngredients(widget.existingMenu!.id);
+      if (mounted) {
+        setState(() {
+          _ingredientDrafts = existing
+              .map((i) => MenuIngredientDraft(
+                    inventoryItemId: i.inventoryItemId,
+                    inventoryItemName: i.inventoryItemName,
+                    unit: i.unit,
+                    quantity: i.quantity,
+                  ))
+              .toList();
+        });
+      }
+    } catch (_) {
+      // Gagal load ingredients — tidak perlu crash, form tetap bisa dipakai
+    }
   }
 
   @override
@@ -293,6 +322,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
               dietaryLabels: _selectedDietaryLabels,
             ),
             newImageFile: imageToUpload,
+            ingredients: _ingredientDrafts,
           );
     } else {
       success = await ref.read(menuProvider.notifier).addMenu(
@@ -306,6 +336,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
             allergens: _selectedAllergens,
             dietaryLabels: _selectedDietaryLabels,
             imageFile: imageToUpload,
+            ingredients: _ingredientDrafts,
           );
     }
 
@@ -500,6 +531,21 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                         if (n > 180) return 'Maksimal 180 menit';
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Ingredients / Resep
+                    _IngredientsSection(
+                      branchId: widget.branchId,
+                      drafts: _ingredientDrafts,
+                      onAdd: (draft) =>
+                          setState(() => _ingredientDrafts.add(draft)),
+                      onRemove: (index) => setState(
+                          () => _ingredientDrafts.removeAt(index)),
+                      onUpdateQty: (index, qty) => setState(() {
+                        _ingredientDrafts[index] =
+                            _ingredientDrafts[index].copyWith(quantity: qty);
+                      }),
                     ),
                     const SizedBox(height: 20),
 
@@ -773,6 +819,334 @@ class _ImagePickerSection extends StatelessWidget {
     );
   }
 }
+
+// ─── INGREDIENTS SECTION ──────────────────────────────────────────────────────
+
+class _IngredientsSection extends ConsumerStatefulWidget {
+  final String branchId;
+  final List<MenuIngredientDraft> drafts;
+  final ValueChanged<MenuIngredientDraft> onAdd;
+  final ValueChanged<int> onRemove;
+  final void Function(int index, double qty) onUpdateQty;
+
+  const _IngredientsSection({
+    required this.branchId,
+    required this.drafts,
+    required this.onAdd,
+    required this.onRemove,
+    required this.onUpdateQty,
+  });
+
+  @override
+  ConsumerState<_IngredientsSection> createState() =>
+      _IngredientsSectionState();
+}
+
+class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
+  // Controller qty untuk setiap row — key: index
+  final Map<int, TextEditingController> _qtyControllers = {};
+
+  @override
+  void dispose() {
+    for (final c in _qtyControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _controllerFor(int index, double qty) {
+    return _qtyControllers.putIfAbsent(
+      index,
+      () => TextEditingController(text: qty.toString()),
+    );
+  }
+
+  Future<void> _showPickIngredientSheet(
+      BuildContext context, List<InventoryItem> items) async {
+    // Filter item yang belum dipilih
+    final alreadyPicked =
+        widget.drafts.map((d) => d.inventoryItemId).toSet();
+    final available =
+        items.where((i) => !alreadyPicked.contains(i.id)).toList();
+
+    if (available.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Semua item inventory sudah ditambahkan.')),
+      );
+      return;
+    }
+
+    final picked = await showModalBottomSheet<InventoryItem>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (_, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Pilih Bahan',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollCtrl,
+                itemCount: available.length,
+                itemBuilder: (_, i) {
+                  final item = available[i];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.teal.shade50,
+                      child: Text(
+                        item.name.isNotEmpty
+                            ? item.name[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                            color: Colors.teal.shade700,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    title: Text(item.name,
+                        style:
+                            const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text(
+                        'Stok: ${item.availableStock.toStringAsFixed(1)} ${item.unit}',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade600)),
+                    onTap: () => Navigator.pop(context, item),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (picked != null) {
+      widget.onAdd(MenuIngredientDraft(
+        inventoryItemId: picked.id,
+        inventoryItemName: picked.name,
+        unit: picked.unit,
+        quantity: 1,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final inventoryAsync =
+        ref.watch(inventoryStreamProvider(widget.branchId));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const _FormLabel('Bahan / Resep'),
+            inventoryAsync.when(
+              loading: () => const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2)),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (items) => TextButton.icon(
+                onPressed: () =>
+                    _showPickIngredientSheet(context, items),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Tambah Bahan',
+                    style: TextStyle(fontSize: 13)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Bahan yang digunakan akan otomatis dikurangi saat ada pesanan',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Kosong
+        if (widget.drafts.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: colorScheme.outlineVariant, width: 1),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.blender_outlined,
+                    size: 32,
+                    color: colorScheme.onSurface.withValues(alpha: 0.3)),
+                const SizedBox(height: 6),
+                Text(
+                  'Belum ada bahan ditambahkan',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.45),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // List bahan
+        ...widget.drafts.asMap().entries.map((entry) {
+          final index = entry.key;
+          final draft = entry.value;
+          final ctrl = _controllerFor(index, draft.quantity);
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: colorScheme.outlineVariant, width: 1),
+            ),
+            child: Row(
+              children: [
+                // Ikon bahan
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.teal.shade50,
+                  child: Text(
+                    draft.inventoryItemName.isNotEmpty
+                        ? draft.inventoryItemName[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(
+                        color: Colors.teal.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Nama bahan
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        draft.inventoryItemName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      Text(
+                        draft.unit,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: colorScheme.onSurface
+                                .withValues(alpha: 0.5)),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Input qty
+                SizedBox(
+                  width: 72,
+                  child: TextFormField(
+                    controller: ctrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: colorScheme.surface,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                            color: colorScheme.outlineVariant),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                            color: colorScheme.outlineVariant),
+                      ),
+                    ),
+                    onChanged: (v) {
+                      final qty = double.tryParse(v);
+                      if (qty != null && qty > 0) {
+                        widget.onUpdateQty(index, qty);
+                      }
+                    },
+                    validator: (v) {
+                      final qty = double.tryParse(v ?? '');
+                      if (qty == null || qty <= 0) return '!';
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 4),
+
+                // Tombol hapus
+                IconButton(
+                  onPressed: () {
+                    _qtyControllers.remove(index)?.dispose();
+                    widget.onRemove(index);
+                  },
+                  icon: const Icon(Icons.close, size: 18),
+                  color: Colors.red.shade400,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+// ─── IMAGE PICKER SECTION ─────────────────────────────────────────────────────
 
 class _EmptyImagePlaceholder extends StatelessWidget {
   const _EmptyImagePlaceholder();

@@ -6,6 +6,8 @@ import '../../../shared/models/table_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../features/inventory/services/inventory_service.dart';
+import '../../../core/supabase_client.dart';
 import 'widgets/order_item_tile.dart';
 import 'widgets/menu_item_selector.dart';
 import '../../../shared/widgets/app_drawer.dart';
@@ -281,6 +283,57 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     }
   }
 
+  /// Deduct inventory berdasarkan ingredients setiap menu item di order.
+  /// Dipanggil sekali saat order pertama kali masuk ke status [preparing].
+  Future<void> _deductInventoryForOrder(OrderModel order) async {
+    if (order.items.isEmpty) return;
+
+    try {
+      final inventoryService = InventoryService(supabase);
+      final staff = ref.read(currentStaffProvider);
+
+      // Kumpulkan semua menuItemId yang unik dari order
+      final menuItemIds = order.items.map((i) => i.menuItemId).toSet().toList();
+
+      // Fetch semua ingredients untuk menu-menu tersebut sekaligus
+      final ingredientsRes = await Supabase.instance.client
+          .from('menu_ingredients')
+          .select()
+          .inFilter('menu_item_id', menuItemIds);
+
+      if (ingredientsRes.isEmpty) return;
+
+      // Deduct per ingredient × qty menu yang dipesan
+      for (final orderItem in order.items) {
+        // Filter ingredients milik menu item ini
+        final ingredients = ingredientsRes
+            .where((r) => r['menu_item_id'] == orderItem.menuItemId)
+            .toList();
+
+        for (final ing in ingredients) {
+          final inventoryItemId = ing['inventory_item_id'] as String?;
+          final qtyPerPortion = (ing['quantity'] as num?)?.toDouble() ?? 0;
+
+          if (inventoryItemId == null || qtyPerPortion <= 0) continue;
+
+          final totalDeduct = qtyPerPortion * orderItem.quantity;
+
+          await inventoryService.deductFromOrder(
+            inventoryItemId: inventoryItemId,
+            branchId: order.branchId,
+            quantity: totalDeduct,
+            orderId: order.id,
+            createdBy: staff?.id,
+          );
+        }
+      }
+    } catch (e) {
+      // Deduct gagal tidak boleh block flow order —
+      // log saja, status order tetap diupdate
+      debugPrint('[InventoryDeduct] Error: $e');
+    }
+  }
+
   Future<void> _updateOrderStatus(OrderModel order) async {
     final next = _nextStatus(order.status);
     if (next == null) return;
@@ -329,6 +382,11 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       await Supabase.instance.client.from('order_items').update({
         'status': next.dbValue,
       }).eq('order_id', order.id);
+
+      // Deduct inventory saat dapur mulai masak (new/created → preparing)
+      if (next == OrderStatus.preparing) {
+        await _deductInventoryForOrder(order);
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

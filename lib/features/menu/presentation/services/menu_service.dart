@@ -4,12 +4,14 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/models/menu_model.dart';
+// MenuIngredient & MenuIngredientDraft sudah ada di menu_model.dart
 
 class MenuService {
   final SupabaseClient _client;
   static const String _itemsTable = 'menu_items';
   static const String _categoriesTable = 'menu_categories';
   static const String _bucketName = 'menu-images';
+  static const String _ingredientsTable = 'menu_ingredients';
 
   MenuService(this._client);
 
@@ -130,6 +132,78 @@ class MenuService {
     }
   }
 
+  // ─── INGREDIENTS ──────────────────────────────────────────────────────────
+
+  /// Simpan daftar ingredients untuk satu menu item ke tabel `menu_ingredients`.
+  /// Dipanggil setelah [addMenu] berhasil dan menuItemId sudah diketahui.
+  ///
+  /// Catatan: method ini melakukan insert batch. Jika ingredients kosong,
+  /// method langsung return tanpa melakukan apapun.
+  Future<void> saveIngredients({
+    required String menuItemId,
+    required List<MenuIngredientDraft> drafts,
+  }) async {
+    if (drafts.isEmpty) return;
+
+    try {
+      final rows = drafts
+          .map((d) => d.toIngredient(menuItemId: menuItemId).toInsertMap())
+          .toList();
+
+      await _client.from(_ingredientsTable).insert(rows);
+    } on PostgrestException catch (e) {
+      throw MenuServiceException('Gagal menyimpan ingredients: ${e.message}');
+    }
+  }
+
+  /// Ambil semua ingredients untuk satu menu item berdasarkan [menuItemId].
+  /// Return list kosong jika tidak ada ingredient yang terdaftar.
+  Future<List<MenuIngredient>> fetchIngredients(String menuItemId) async {
+    try {
+      final response = await _client
+          .from(_ingredientsTable)
+          .select()
+          .eq('menu_item_id', menuItemId)
+          .order('created_at', ascending: true);
+
+      return (response as List<dynamic>)
+          .map((row) => MenuIngredient.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw MenuServiceException('Gagal memuat ingredients: ${e.message}');
+    }
+  }
+
+  /// Hapus semua ingredients untuk satu menu item.
+  /// Biasanya tidak perlu dipanggil manual karena tabel sudah pakai
+  /// ON DELETE CASCADE dari menu_items. Tapi tersedia jika dibutuhkan
+  /// (misalnya saat update ingredients: hapus lama, insert baru).
+  Future<void> deleteIngredients(String menuItemId) async {
+    try {
+      await _client
+          .from(_ingredientsTable)
+          .delete()
+          .eq('menu_item_id', menuItemId);
+    } on PostgrestException catch (e) {
+      throw MenuServiceException('Gagal menghapus ingredients: ${e.message}');
+    }
+  }
+
+  /// Update ingredients untuk satu menu item:
+  /// hapus semua yang lama lalu insert yang baru.
+  /// Gunakan ini saat edit menu dan ingredient list berubah.
+  Future<void> updateIngredients({
+    required String menuItemId,
+    required List<MenuIngredientDraft> drafts,
+  }) async {
+    try {
+      await deleteIngredients(menuItemId);
+      await saveIngredients(menuItemId: menuItemId, drafts: drafts);
+    } on MenuServiceException {
+      rethrow;
+    }
+  }
+
   // ─── UPDATE ───────────────────────────────────────────────────────────────
 
   Future<MenuItem> updateMenu(MenuItem item) async {
@@ -190,6 +264,9 @@ class MenuService {
       if (imageUrl != null && imageUrl.isNotEmpty) {
         await _deleteImageByUrl(imageUrl);
       }
+      // Ingredients akan terhapus otomatis via ON DELETE CASCADE,
+      // tapi kita hapus eksplisit untuk memastikan tidak ada orphan data.
+      await deleteIngredients(id);
       await _client.from(_itemsTable).delete().eq('id', id);
     } on PostgrestException catch (e) {
       throw MenuServiceException('Gagal menghapus menu: ${e.message}');

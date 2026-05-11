@@ -8,6 +8,36 @@ import '../../providers/inventory_provider.dart';
 import 'add_inventory_form.dart';
 import '../../../../core/supabase_client.dart';
 
+
+// ─── LOCAL PROVIDERS UNTUK TRANSFER ──────────────────────────────────────────
+
+/// Fetch semua cabang selain cabang saat ini
+final _branchListProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, currentBranchId) async {
+  final response = await supabase
+      .from('branches')
+      .select('id, name')
+      .neq('id', currentBranchId)
+      .order('name');
+  return List<Map<String, dynamic>>.from(response as List);
+});
+
+/// Fetch item inventory di cabang tujuan berdasarkan nama item yang sama
+final _targetItemProvider = FutureProvider.autoDispose
+    .family<List<InventoryItem>, ({String branchId, String itemName})>(
+        (ref, args) async {
+  final dateStr = DateTime.now().toIso8601String().split('T').first;
+  final response = await supabase
+      .from('inventory_items')
+      .select()
+      .eq('branch_id', args.branchId)
+      .eq('date', dateStr)
+      .ilike('name', '%${args.itemName}%');
+  return (response as List)
+      .map((e) => InventoryItem.fromMap(e as Map<String, dynamic>))
+      .toList();
+});
+
 class InventoryDetailSheet extends ConsumerStatefulWidget {
   final InventoryItem item;
   const InventoryDetailSheet({super.key, required this.item});
@@ -341,11 +371,22 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
   String _selectedAction = 'purchase';
   bool _isLoading = false;
 
+  // State khusus transfer
+  String? _selectedToBranchId;
+  String? _selectedToBranchName;
+  String? _selectedToItemId;
+
   @override
   void dispose() {
     _qtyCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
+  }
+
+  void _resetTransferState() {
+    _selectedToBranchId = null;
+    _selectedToBranchName = null;
+    _selectedToItemId = null;
   }
 
   Future<void> _submit() async {
@@ -376,6 +417,28 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
               itemId: widget.item.id,
               adjustmentQty: qty,
               reason: note ?? 'Stock opname');
+          break;
+        case 'transfer_out':
+          if (_selectedToBranchId == null || _selectedToItemId == null) {
+            setState(() => _isLoading = false);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Pilih cabang dan item tujuan terlebih dahulu'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+            return;
+          }
+          await notifier.recordTransfer(
+            fromItemId: widget.item.id,
+            toItemId: _selectedToItemId!,
+            toBranchId: _selectedToBranchId!,
+            quantity: qty,
+            note: note,
+          );
+          setState(() => _resetTransferState());
           break;
       }
 
@@ -423,25 +486,58 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
                 label: '📦 Beli',
                 isSelected: _selectedAction == 'purchase',
                 color: Colors.green.shade500,
-                onTap: () => setState(() => _selectedAction = 'purchase'),
+                onTap: () => setState(() {
+                  _selectedAction = 'purchase';
+                  _resetTransferState();
+                }),
               ),
               const SizedBox(width: 8),
               _ActionChip(
                 label: '🗑️ Buang',
                 isSelected: _selectedAction == 'waste',
                 color: Colors.red.shade500,
-                onTap: () => setState(() => _selectedAction = 'waste'),
+                onTap: () => setState(() {
+                  _selectedAction = 'waste';
+                  _resetTransferState();
+                }),
               ),
               const SizedBox(width: 8),
               _ActionChip(
                 label: '⚙️ Sesuaikan',
                 isSelected: _selectedAction == 'adjustment',
                 color: Colors.blue.shade500,
-                onTap: () => setState(() => _selectedAction = 'adjustment'),
+                onTap: () => setState(() {
+                  _selectedAction = 'adjustment';
+                  _resetTransferState();
+                }),
+              ),
+              const SizedBox(width: 8),
+              _ActionChip(
+                label: '🔄 Transfer',
+                isSelected: _selectedAction == 'transfer_out',
+                color: Colors.purple.shade500,
+                onTap: () => setState(() => _selectedAction = 'transfer_out'),
               ),
             ],
           ),
           const SizedBox(height: 16),
+
+          // Panel transfer — hanya tampil saat aksi transfer dipilih
+          if (_selectedAction == 'transfer_out')
+            _TransferTargetPanel(
+              currentBranchId: widget.item.branchId,
+              itemName: widget.item.name,
+              selectedBranchId: _selectedToBranchId,
+              selectedBranchName: _selectedToBranchName,
+              selectedItemId: _selectedToItemId,
+              onBranchSelected: (id, name) => setState(() {
+                _selectedToBranchId = id;
+                _selectedToBranchName = name;
+                _selectedToItemId = null; // reset item saat branch berganti
+              }),
+              onItemSelected: (id) => setState(() => _selectedToItemId = id),
+            ),
+          if (_selectedAction == 'transfer_out') const SizedBox(height: 12),
 
           // Qty input
           TextField(
@@ -759,4 +855,213 @@ class _ActionChip extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── TRANSFER TARGET PANEL ────────────────────────────────────────────────────
+
+/// Panel untuk memilih cabang tujuan dan item tujuan saat transfer stok.
+/// Muncul secara conditional hanya ketika aksi 'transfer_out' dipilih.
+class _TransferTargetPanel extends ConsumerWidget {
+  final String currentBranchId;
+  final String itemName;
+  final String? selectedBranchId;
+  final String? selectedBranchName;
+  final String? selectedItemId;
+  final void Function(String id, String name) onBranchSelected;
+  final void Function(String id) onItemSelected;
+
+  const _TransferTargetPanel({
+    required this.currentBranchId,
+    required this.itemName,
+    required this.selectedBranchId,
+    required this.selectedBranchName,
+    required this.selectedItemId,
+    required this.onBranchSelected,
+    required this.onItemSelected,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final branchAsync = ref.watch(_branchListProvider(currentBranchId));
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.purple.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Label
+          Row(
+            children: [
+              Icon(Icons.swap_horiz, size: 14, color: Colors.purple.shade400),
+              const SizedBox(width: 6),
+              Text(
+                'Tujuan Transfer',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.purple.shade700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Pilih Cabang Tujuan
+          branchAsync.when(
+            loading: () => const Center(
+              child: SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+            error: (e, _) => Text(
+              'Gagal memuat cabang: $e',
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+            data: (branches) {
+              if (branches.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          size: 14, color: Colors.orange.shade600),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Tidak ada cabang lain tersedia',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return DropdownButtonFormField<String>(
+                initialValue: selectedBranchId,
+                decoration: InputDecoration(
+                  labelText: 'Cabang Tujuan',
+                  filled: true,
+                  fillColor: colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.4),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                ),
+                items: branches
+                    .map((b) => DropdownMenuItem<String>(
+                          value: b['id'] as String,
+                          child: Text(b['name'] as String,
+                              style: const TextStyle(fontSize: 13)),
+                        ))
+                    .toList(),
+                onChanged: (id) {
+                  if (id == null) return;
+                  final name = branches.firstWhere(
+                      (b) => b['id'] == id)['name'] as String;
+                  onBranchSelected(id, name);
+                },
+              );
+            },
+          ),
+
+          // Pilih Item Tujuan — hanya tampil jika cabang sudah dipilih
+          if (selectedBranchId != null) ...[
+            const SizedBox(height: 10),
+            Consumer(
+              builder: (context, ref, _) {
+                final itemsAsync = ref.watch(_targetItemProvider(
+                  (branchId: selectedBranchId!, itemName: itemName),
+                ));
+
+                return itemsAsync.when(
+                  loading: () => const Center(
+                    child: SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  error: (e, _) => Text(
+                    'Gagal memuat item: $e',
+                    style:
+                        const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                  data: (items) {
+                    if (items.isEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded,
+                                size: 14, color: Colors.orange.shade600),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Item "$itemName" tidak ditemukan di cabang $selectedBranchName',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return DropdownButtonFormField<String>(
+                      initialValue: selectedItemId,
+                      decoration: InputDecoration(
+                        labelText: 'Item Tujuan',
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.4),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                      ),
+                      items: items
+                          .map((i) => DropdownMenuItem<String>(
+                                value: i.id,
+                                child: Text(
+                                  '${i.name} (${_fmtStock(i.availableStock)} ${i.unit})',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (id) {
+                        if (id != null) onItemSelected(id);
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _fmtStock(double v) =>
+      v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
 }
