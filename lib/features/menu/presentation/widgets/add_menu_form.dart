@@ -37,6 +37,31 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
   Uint8List? _selectedImageBytes;
   bool _isLoading = false;
   String? _imageError;
+  bool _isSeasonal = false;
+  late final TextEditingController _prepTimeCtrl;
+  List<String> _selectedAllergens = [];
+  List<String> _selectedDietaryLabels = [];
+
+  static const _allergenOptions = [
+    ('gluten', 'Gluten', '🌾'),
+    ('dairy', 'Dairy', '🥛'),
+    ('eggs', 'Telur', '🥚'),
+    ('nuts', 'Kacang', '🥜'),
+    ('seafood', 'Seafood', '🦐'),
+    ('soy', 'Kedelai', '🫘'),
+    ('wheat', 'Gandum', '🌿'),
+    ('sesame', 'Wijen', '⚪'),
+  ];
+
+  static const _dietaryOptions = [
+    ('vegetarian', 'Vegetarian', '🥦'),
+    ('vegan', 'Vegan', '🌱'),
+    ('halal', 'Halal', '✅'),
+    ('gluten_free', 'Gluten-Free', '🚫'),
+    ('dairy_free', 'Dairy-Free', '🥛'),
+    ('spicy', 'Pedas', '🌶️'),
+    ('low_calorie', 'Low Kalori', '⚡'),
+  ];
 
   bool get _isEdit => widget.existingMenu != null;
 
@@ -49,7 +74,15 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     _priceCtrl = TextEditingController(
       text: menu?.price.toStringAsFixed(0) ?? '',
     );
-    if (menu != null) _selectedCategoryId = menu.categoryId;
+    if (menu != null) {
+      _selectedCategoryId = menu.categoryId;
+      _isSeasonal = menu.isSeasonal;
+      _selectedAllergens = List<String>.from(menu.allergens);
+      _selectedDietaryLabels = List<String>.from(menu.dietaryLabels);
+    }
+    _prepTimeCtrl = TextEditingController(
+      text: (widget.existingMenu?.preparationTimeMinutes ?? 15).toString(),
+    );
   }
 
   @override
@@ -57,6 +90,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     _nameCtrl.dispose();
     _descCtrl.dispose();
     _priceCtrl.dispose();
+    _prepTimeCtrl.dispose();
     super.dispose();
   }
 
@@ -253,6 +287,10 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
               description: _descCtrl.text.trim(),
               price: price,
               categoryId: _selectedCategoryId,
+              isSeasonal: _isSeasonal,
+              preparationTimeMinutes: int.tryParse(_prepTimeCtrl.text) ?? 15,
+              allergens: _selectedAllergens,
+              dietaryLabels: _selectedDietaryLabels,
             ),
             newImageFile: imageToUpload,
           );
@@ -263,6 +301,10 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
             description: _descCtrl.text.trim(),
             price: price,
             categoryId: _selectedCategoryId,
+            isSeasonal: _isSeasonal,
+            preparationTimeMinutes: int.tryParse(_prepTimeCtrl.text) ?? 15,
+            allergens: _selectedAllergens,
+            dietaryLabels: _selectedDietaryLabels,
             imageFile: imageToUpload,
           );
     }
@@ -429,6 +471,83 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                             setState(() => _selectedCategoryId = id),
                         onDelete: (cat) => _confirmDeleteCategory(context, cat),
                       ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Seasonal Toggle
+                    const _FormLabel('Status Seasonal'),
+                    const SizedBox(height: 8),
+                    _SeasonalToggle(
+                      value: _isSeasonal,
+                      onChanged: (val) => setState(() => _isSeasonal = val),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Prep Time
+                    const _FormLabel('Estimasi Waktu Persiapan (menit)'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _prepTimeCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: _inputDecoration('Contoh: 15').copyWith(
+                        suffixText: 'menit',
+                        helperText: 'Waktu rata-rata yang dibutuhkan untuk menyiapkan menu ini',
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                        final n = int.tryParse(v.trim());
+                        if (n == null || n <= 0) return 'Masukkan angka yang valid';
+                        if (n > 180) return 'Maksimal 180 menit';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Allergens
+                    const _FormLabel('Alergen'),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tandai bahan yang dapat memicu alergi',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _ChipSelector(
+                      options: _allergenOptions
+                          .map((e) => (e.$1, e.$2, e.$3))
+                          .toList(),
+                      selected: _selectedAllergens,
+                      activeColor: Colors.red.shade700,
+                      onToggle: (key) => setState(() {
+                        _selectedAllergens.contains(key)
+                            ? _selectedAllergens.remove(key)
+                            : _selectedAllergens.add(key);
+                      }),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Dietary Labels
+                    const _FormLabel('Label Dietary'),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tandai informasi diet yang sesuai',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _ChipSelector(
+                      options: _dietaryOptions
+                          .map((e) => (e.$1, e.$2, e.$3))
+                          .toList(),
+                      selected: _selectedDietaryLabels,
+                      activeColor: Colors.green.shade700,
+                      onToggle: (key) => setState(() {
+                        _selectedDietaryLabels.contains(key)
+                            ? _selectedDietaryLabels.remove(key)
+                            : _selectedDietaryLabels.add(key);
+                      }),
                     ),
                     const SizedBox(height: 28),
 
@@ -708,6 +827,152 @@ class _EditBadge extends StatelessWidget {
           Text('Ganti', style: TextStyle(color: Colors.white, fontSize: 11)),
         ],
       ),
+    );
+  }
+}
+
+// ─── SEASONAL TOGGLE ──────────────────────────────────────────────────────────
+
+class _SeasonalToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SeasonalToggle({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: value
+              ? Colors.orange.withValues(alpha: 0.08)
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: value
+                ? Colors.orange.withValues(alpha: 0.4)
+                : colorScheme.outlineVariant,
+            width: 1.2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              value ? Icons.wb_sunny_rounded : Icons.wb_sunny_outlined,
+              size: 20,
+              color: value ? Colors.orange : colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Menu Seasonal',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: value ? Colors.orange.shade800 : colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value
+                        ? 'Menu ini hanya tersedia di waktu tertentu'
+                        : 'Menu ini tersedia sepanjang waktu',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: Colors.orange,
+              activeTrackColor: Colors.orange.withValues(alpha: 0.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+// ─── CHIP SELECTOR ────────────────────────────────────────────────────────────
+
+class _ChipSelector extends StatelessWidget {
+  final List<(String, String, String)> options; // (key, label, emoji)
+  final List<String> selected;
+  final Color activeColor;
+  final ValueChanged<String> onToggle;
+
+  const _ChipSelector({
+    required this.options,
+    required this.selected,
+    required this.activeColor,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options.map((opt) {
+        final key = opt.$1;
+        final label = opt.$2;
+        final emoji = opt.$3;
+        final isSelected = selected.contains(key);
+
+        return GestureDetector(
+          onTap: () => onToggle(key),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? activeColor.withValues(alpha: 0.1)
+                  : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected
+                    ? activeColor.withValues(alpha: 0.5)
+                    : colorScheme.outlineVariant,
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? activeColor : colorScheme.onSurface,
+                  ),
+                ),
+                if (isSelected) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.check_circle, size: 14, color: activeColor),
+                ],
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

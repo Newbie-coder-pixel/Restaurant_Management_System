@@ -117,6 +117,8 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
     dynamic imageFile,
     bool isSeasonal = false,
     int preparationTimeMinutes = 15,
+    List<String> allergens = const [],
+    List<String> dietaryLabels = const [],
   }) async {
     try {
       String? imageUrl;
@@ -135,6 +137,8 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
         isAvailable: true,
         isSeasonal: isSeasonal,
         preparationTimeMinutes: preparationTimeMinutes,
+        allergens: allergens,
+        dietaryLabels: dietaryLabels,
       );
 
       await _service.addMenu(item);

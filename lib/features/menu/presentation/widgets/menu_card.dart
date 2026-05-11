@@ -7,6 +7,51 @@ import '../../providers/menu_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
 import 'add_menu_form.dart';
 
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+
+/// Icon mapping untuk setiap jenis alergen.
+/// Tambah atau ubah entry sesuai kebutuhan bisnis.
+const Map<String, IconData> _allergenIcons = {
+  'gluten': Icons.grain,
+  'dairy': Icons.water_drop_outlined,
+  'egg': Icons.egg_outlined,
+  'nut': Icons.eco_outlined,
+  'peanut': Icons.eco_outlined,
+  'soy': Icons.spa_outlined,
+  'fish': Icons.set_meal_outlined,
+  'shellfish': Icons.waves_outlined,
+  'sesame': Icons.circle_outlined,
+  'wheat': Icons.grass_outlined,
+};
+
+/// Icon mapping untuk label dietary.
+const Map<String, IconData> _dietaryIcons = {
+  'vegan': Icons.eco,
+  'vegetarian': Icons.local_florist,
+  'halal': Icons.verified,
+  'kosher': Icons.star_outline,
+  'gluten-free': Icons.do_not_disturb_alt_outlined,
+  'low-calorie': Icons.fitness_center,
+  'organic': Icons.nature,
+  'sugar-free': Icons.no_drinks_outlined,
+  'spicy': Icons.local_fire_department,
+};
+
+/// Warna per label dietary agar terasa kontekstual.
+const Map<String, Color> _dietaryColors = {
+  'vegan': Color(0xFF2E7D32),
+  'vegetarian': Color(0xFF388E3C),
+  'halal': Color(0xFF1565C0),
+  'kosher': Color(0xFF6A1B9A),
+  'gluten-free': Color(0xFFE65100),
+  'low-calorie': Color(0xFF00838F),
+  'organic': Color(0xFF558B2F),
+  'sugar-free': Color(0xFF00695C),
+  'spicy': Color(0xFFB71C1C),
+};
+
+// ─── MAIN WIDGET ──────────────────────────────────────────────────────────────
+
 class MenuCard extends ConsumerStatefulWidget {
   final MenuItem menu;
 
@@ -106,21 +151,27 @@ class _MenuCardState extends ConsumerState<MenuCard>
     );
   }
 
-  Color get _statusColor =>
-      widget.menu.isAvailable ? Colors.green : Colors.red;
+  Color get _statusColor {
+    if (widget.menu.isSeasonal) return Colors.orange;
+    return widget.menu.isAvailable ? Colors.green : Colors.red;
+  }
 
-  String get _statusLabel =>
-      widget.menu.isSeasonal
-          ? 'Musiman'
-          : widget.menu.isAvailable
-              ? 'Tersedia'
-              : 'Habis';
+  String get _statusLabel {
+    if (widget.menu.isSeasonal) return 'Musiman';
+    return widget.menu.isAvailable ? 'Tersedia' : 'Habis';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final menu = widget.menu;
+
+    // Cek apakah ada data allergen / dietary untuk ditampilkan
+    // allergens & dietaryLabels non-nullable (default const []), cukup cek isNotEmpty
+    final hasAllergens = menu.allergens.isNotEmpty;
+    final hasDietary = menu.dietaryLabels.isNotEmpty;
+    final hasBadgeSection = hasAllergens || hasDietary;
 
     return GestureDetector(
       onTapDown: _onTapDown,
@@ -139,9 +190,11 @@ class _MenuCardState extends ConsumerState<MenuCard>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(
-              color: menu.isAvailable
-                  ? Colors.transparent
-                  : Colors.red.shade200,
+              color: menu.isSeasonal
+                  ? Colors.orange.shade200
+                  : menu.isAvailable
+                      ? Colors.transparent
+                      : Colors.red.shade200,
               width: 1.5,
             ),
           ),
@@ -190,6 +243,20 @@ class _MenuCardState extends ConsumerState<MenuCard>
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+
+                      // ── Allergen & Dietary Badges ──────────────────────
+                      // Hanya render section ini jika ada data,
+                      // sehingga card tanpa data tidak punya gap kosong.
+                      if (hasBadgeSection) ...[
+                        const SizedBox(height: 6),
+                        _AllergenDietarySection(
+                          allergens: menu.allergens,
+                          dietaryLabels: menu.dietaryLabels,
+                        ),
+                      ],
+                      // ────────────────────────────────────────────────────
+
+                      const SizedBox(height: 6),
 
                       // Price + Actions
                       Row(
@@ -250,7 +317,156 @@ class _MenuCardState extends ConsumerState<MenuCard>
   }
 }
 
-// ─── SUB-WIDGETS ──────────────────────────────────────────────────────────────
+// ─── ALLERGEN & DIETARY SECTION ───────────────────────────────────────────────
+
+/// Wrapper yang menampilkan baris allergen (merah/warning) dan
+/// baris dietary (warna per-label) secara vertikal jika keduanya ada.
+class _AllergenDietarySection extends StatelessWidget {
+  final List<String> allergens;
+  final List<String> dietaryLabels;
+
+  const _AllergenDietarySection({
+    required this.allergens,
+    required this.dietaryLabels,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Allergen row
+        if (allergens.isNotEmpty) _AllergenBadges(allergens: allergens),
+        // Dietary row — tambah gap jika kedua row ada
+        if (dietaryLabels.isNotEmpty) ...[
+          if (allergens.isNotEmpty) const SizedBox(height: 4),
+          _DietaryBadges(labels: dietaryLabels),
+        ],
+      ],
+    );
+  }
+}
+
+// ─── ALLERGEN BADGES ──────────────────────────────────────────────────────────
+
+/// Baris chip kecil berwarna merah/amber untuk peringatan alergen.
+/// Tap chip → tampilkan tooltip nama alergen lengkap (capitalize).
+class _AllergenBadges extends StatelessWidget {
+  final List<String> allergens;
+
+  const _AllergenBadges({required this.allergens});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: allergens.map((allergen) {
+        final key = allergen.toLowerCase();
+        final icon = _allergenIcons[key] ?? Icons.warning_amber_rounded;
+        final label = _capitalize(allergen);
+
+        return Tooltip(
+          message: 'Mengandung: $label',
+          preferBelow: false,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              // Merah transparan → sinyal bahaya/warning
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: Colors.red.shade200,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 10, color: Colors.red.shade600),
+                const SizedBox(width: 3),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.red.shade700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─── DIETARY BADGES ───────────────────────────────────────────────────────────
+
+/// Baris chip kecil berwarna per-label untuk informasi dietary.
+/// Warna diambil dari [_dietaryColors]; fallback ke teal jika tidak ada.
+class _DietaryBadges extends StatelessWidget {
+  final List<String> labels;
+
+  const _DietaryBadges({required this.labels});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: labels.map((label) {
+        final key = label.toLowerCase();
+        final icon = _dietaryIcons[key] ?? Icons.label_outline;
+        final color = _dietaryColors[key] ?? const Color(0xFF00695C);
+        final displayLabel = _capitalize(label);
+
+        return Tooltip(
+          message: displayLabel,
+          preferBelow: false,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: color.withValues(alpha: 0.35),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 10, color: color),
+                const SizedBox(width: 3),
+                Text(
+                  displayLabel,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+String _capitalize(String s) {
+  if (s.isEmpty) return s;
+  return s[0].toUpperCase() + s.substring(1);
+}
+
+// ─── SUB-WIDGETS (tidak berubah) ──────────────────────────────────────────────
 
 class _MenuImage extends StatelessWidget {
   final String? imageUrl;
