@@ -32,6 +32,7 @@ class QrOrderRepository {
             'table_id': session.tableId,
             'table_name': session.tableName ?? 'Meja ${session.tableId}',
             'customer_name': session.customerName ?? 'Tamu',
+            if (session.customerPhone != null && session.customerPhone!.isNotEmpty) 'customer_phone': session.customerPhone,
             'subtotal': session.subtotal,
             'tax_amount': session.pb1Amount,
             'total_amount': session.totalAmount,
@@ -207,7 +208,7 @@ await _client.from('order_items').insert(orderItemsData);
         .from('orders')
         .select(
           'id, order_number, queue_number, table_id, table_name, '
-          'customer_name, total_amount, status, payment_status, '
+          'customer_name, customer_phone, total_amount, status, payment_status, '
           'payment_method, created_at, updated_at, branch_id, notes',
         )
         .eq('id', orderId)
@@ -233,7 +234,7 @@ await _client.from('order_items').insert(orderItemsData);
         .from('orders')
         .select(
           'id, order_number, queue_number, table_id, table_name, '
-          'customer_name, total_amount, status, payment_status, '
+          'customer_name, customer_phone, total_amount, status, payment_status, '
           'payment_method, created_at, updated_at, branch_id, notes',
         )
         .eq('queue_number', queueNumber)

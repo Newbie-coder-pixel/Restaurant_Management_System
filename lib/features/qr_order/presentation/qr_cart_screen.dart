@@ -14,8 +14,9 @@ class QrCartScreen extends ConsumerStatefulWidget {
 }
 
 class _QrCartScreenState extends ConsumerState<QrCartScreen> {
-  final _nameCtrl = TextEditingController();
-  final _formKey  = GlobalKey<FormState>();
+  final _nameCtrl  = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _formKey   = GlobalKey<FormState>();
   bool _isSubmitting = false;
 
   // ── ML state ────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -76,15 +78,147 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     }
   }
 
+  // ── Show confirmation dialog sebelum order ────────────────────────────────
+  Future<void> _showOrderConfirmationDialog() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.warning_amber_rounded,
+                  size: 30,
+                  color: colorScheme.error,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Konfirmasi Pesanan',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: colorScheme.error.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 16, color: colorScheme.error),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Pesanan yang telah dikirim ke dapur tidak dapat dibatalkan.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.check_circle_outline,
+                            size: 16, color: colorScheme.error),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Pastikan pesanan sudah benar sebelum melanjutkan.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Kembali'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Mengerti',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      _confirmOrder();
+    }
+  }
+
   // ── Confirm order ──────────────────────────────────────────────────────────
   Future<void> _confirmOrder() async {
-    if (!_formKey.currentState!.validate()) return;
     if (_isSubmitting) return;
 
     setState(() => _isSubmitting = true);
 
     final notifier = ref.read(activeQrCartNotifierProvider);
-    notifier.setCustomerInfo(name: _nameCtrl.text.trim());
+    notifier.setCustomerInfo(name: _nameCtrl.text.trim(), phone: _phoneCtrl.text.trim());
 
     final cart     = ref.read(activeQrCartProvider);
     final branchId = cart.branchId.trim();
@@ -355,6 +489,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                 padding: const EdgeInsets.all(16),
                 child: _CustomerInfoCard(
                   nameCtrl:  _nameCtrl,
+                  phoneCtrl: _phoneCtrl,
                   tableName: cart.tableName ?? 'Meja'),
               ),
             ),
@@ -370,7 +505,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       ),
       bottomNavigationBar: _CartBottomBar(
         cart:      cart,
-        onProceed: _confirmOrder,
+        onProceed: _showOrderConfirmationDialog,
         isLoading: _isSubmitting),
     );
   }
@@ -540,9 +675,14 @@ class _SmallQtyBtn extends StatelessWidget {
 // ─── Customer Info Card ───────────────────────────────────────────────────────
 class _CustomerInfoCard extends StatelessWidget {
   final TextEditingController nameCtrl;
+  final TextEditingController phoneCtrl;
   final String tableName;
 
-  const _CustomerInfoCard({required this.nameCtrl, required this.tableName});
+  const _CustomerInfoCard({
+    required this.nameCtrl,
+    required this.phoneCtrl,
+    required this.tableName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -588,6 +728,27 @@ class _CustomerInfoCard extends StatelessWidget {
           validator: (val) {
             if (val == null || val.trim().isEmpty) return 'Nama tidak boleh kosong';
             if (val.trim().length < 2) return 'Nama terlalu pendek';
+            return null;
+          }),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: phoneCtrl,
+          keyboardType: TextInputType.phone,
+          decoration: InputDecoration(
+            labelText: 'Nomor Telepon *',
+            hintText: 'Contoh: 08123456789',
+            prefixIcon: const Icon(Icons.phone_outlined),
+            helperText: 'Format: 08xxxxxxxxxx (10–13 digit)',
+            filled: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+          validator: (val) {
+            if (val == null || val.trim().isEmpty) return 'Nomor telepon tidak boleh kosong';
+            final digits = val.trim().replaceAll(RegExp(r'\s+'), '');
+            if (!RegExp(r'^08\d{8,11}$').hasMatch(digits)) {
+              return 'Masukkan nomor valid (08xxxxxxxxxx, 10–13 digit)';
+            }
             return null;
           }),
       ]),
