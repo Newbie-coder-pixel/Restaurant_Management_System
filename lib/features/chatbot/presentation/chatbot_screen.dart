@@ -428,7 +428,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
 // Fetch menu items tanpa join
 dynamic qMenu = sb
     .from('menu_items')
-    .select('id, name, price, description, is_available, prep_time_minutes, category_id');
+    .select('id, name, price, description, is_available, preparation_time_minutes, category_id');
 if (branchId != null) qMenu = (qMenu as dynamic).eq('branch_id', branchId);
 final menuRaw = ((await (qMenu as dynamic).order('name')) as List)
     .cast<Map<String, dynamic>>();
@@ -501,7 +501,7 @@ final catMap = <String, String>{
         final allergens = allergenMap[id] ?? [];
         final dietary = dietaryMap[id] ?? [];
         final category = catMap[m['category_id']] ?? 'Umum';
-        final prepTime = m['prep_time_minutes'] as int?;
+        final prepTime = m['preparation_time_minutes'] as int?;
 
         final item = {
           'nama': m['name'],
