@@ -195,7 +195,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           (await qToday as List).cast<Map<String, dynamic>>();
 
       final completedToday =
-          ordersToday.where((o) => o['status'] == 'completed').toList();
+          ordersToday.where((o) => (o['status'] == 'paid' || o['status'] == 'served')).toList();
       final revenueToday = completedToday.fold<double>(
           0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
       final cancelledToday =
@@ -237,7 +237,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       final ordersWeek =
           (await qWeek as List).cast<Map<String, dynamic>>();
       final revenueWeek = ordersWeek
-          .where((o) => o['status'] == 'completed')
+          .where((o) => (o['status'] == 'paid' || o['status'] == 'served'))
           .fold<double>(
               0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
@@ -251,7 +251,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       final ordersLastWeek =
           (await qLastWeek as List).cast<Map<String, dynamic>>();
       final revenueLastWeek = ordersLastWeek
-          .where((o) => o['status'] == 'completed')
+          .where((o) => (o['status'] == 'paid' || o['status'] == 'served'))
           .fold<double>(
               0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
@@ -265,7 +265,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       final ordersMonth =
           (await qMonth as List).cast<Map<String, dynamic>>();
       final revenueMonth = ordersMonth
-          .where((o) => o['status'] == 'completed')
+          .where((o) => (o['status'] == 'paid' || o['status'] == 'served'))
           .fold<double>(
               0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
@@ -274,7 +274,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       var qCompletedOrders = sb
           .from('orders')
           .select('id')
-          .eq('status', 'completed')
+          .inFilter('status', ['paid', 'served'])
           .gte('created_at', '${monthStart}T00:00:00')
           .lte('created_at', todayEnd);
       if (branchId != null) qCompletedOrders = qCompletedOrders.eq('branch_id', branchId);
