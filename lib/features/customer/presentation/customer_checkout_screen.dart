@@ -266,7 +266,7 @@ class _CustomerCheckoutScreenState
         'menu_item_name':  item.name,
         'quantity':        item.quantity,
         'unit_price':      item.price,
-        'subtotal':        item.price * item.quantity, // FIX: wajib untuk kalkulasi total di OrderModel
+        // subtotal tidak di-insert karena generated column di Supabase
         'status':          'pending',
         if (item.notes != null && item.notes!.isNotEmpty)
           'special_requests': item.notes,
