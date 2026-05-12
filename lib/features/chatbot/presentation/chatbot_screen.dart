@@ -203,6 +203,20 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       final avgOrderValue =
           completedToday.isEmpty ? 0.0 : revenueToday / completedToday.length;
 
+      // ── Hitung order berdasarkan order_type ──────────────────────────
+      final Map<String, int> orderTypeCount = {};
+      final Map<String, double> orderTypeRevenue = {};
+      for (final o in completedToday) {
+        final type = (o['order_type'] as String?) ?? 'unknown';
+        orderTypeCount[type] = (orderTypeCount[type] ?? 0) + 1;
+        orderTypeRevenue[type] = (orderTypeRevenue[type] ?? 0) +
+            ((o['total_amount'] as num?)?.toDouble() ?? 0);
+      }
+      final orderTypeSummary = orderTypeCount.entries
+          .map((e) =>
+              '${e.key}: ${e.value} transaksi (Rp ${orderTypeRevenue[e.key]!.toStringAsFixed(0)})')
+          .toList();
+
       final Map<String, int> paymentCount = {};
       final Map<String, double> paymentRevenue = {};
       for (final o in completedToday) {
@@ -270,7 +284,6 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
       // ── 5. Menu terlaris bulan ini ──────────────────────────────────
-      // Fetch completed orders bulan ini dulu, lalu ambil order_items-nya
       var qCompletedOrders = sb
           .from('orders')
           .select('id')
@@ -382,6 +395,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           'jam_paling_ramai':
               jamTerramai == '-' ? '-' : '$jamTerramai:00',
           'payment_method': paymentSummary,
+          'order_type': orderTypeSummary,  // ✅ DITAMBAHKAN
         },
         'minggu_ini': {
           'total_order': ordersWeek.length,
@@ -423,24 +437,22 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     final branchId = _isSuperadmin ? _selectedBranchId : _myBranchId;
 
     try {
-      // 1. Fetch semua menu items + kategori
-     // BARU
-// Fetch menu items tanpa join
-dynamic qMenu = sb
-    .from('menu_items')
-    .select('id, name, price, description, is_available, preparation_time_minutes, category_id');
-if (branchId != null) qMenu = (qMenu as dynamic).eq('branch_id', branchId);
-final menuRaw = ((await (qMenu as dynamic).order('name')) as List)
-    .cast<Map<String, dynamic>>();
+      // 1. Fetch menu items tanpa join
+      dynamic qMenu = sb
+          .from('menu_items')
+          .select('id, name, price, description, is_available, preparation_time_minutes, category_id');
+      if (branchId != null) qMenu = (qMenu as dynamic).eq('branch_id', branchId);
+      final menuRaw = ((await (qMenu as dynamic).order('name')) as List)
+          .cast<Map<String, dynamic>>();
 
-// Fetch kategori terpisah
-final catRaw = (await sb
-    .from('menu_categories')
-    .select('id, name')
-    .eq('branch_id', branchId ?? '')) as List;
-final catMap = <String, String>{
-  for (final c in catRaw) c['id'] as String: c['name'] as String
-};
+      // 2. Fetch kategori terpisah
+      final catRaw = (await sb
+          .from('menu_categories')
+          .select('id, name')
+          .eq('branch_id', branchId ?? '')) as List;
+      final catMap = <String, String>{
+        for (final c in catRaw) c['id'] as String: c['name'] as String
+      };
 
       if (menuRaw.isEmpty) {
         return {'total_menu': 0, 'menu_tersedia': [], 'menu_tidak_tersedia': [], 'ranking_margin': []};
@@ -448,7 +460,7 @@ final catMap = <String, String>{
 
       final menuIds = menuRaw.map((m) => m['id'] as String).toList();
 
-      // 2. Fetch allergens untuk semua menu
+      // 3. Fetch allergens untuk semua menu
       final allergensRaw = (await sb
           .from('menu_item_allergens')
           .select('menu_item_id, allergen')
@@ -461,7 +473,7 @@ final catMap = <String, String>{
         allergenMap.putIfAbsent(id, () => []).add(a['allergen'] as String);
       }
 
-      // 3. Fetch dietary tags untuk semua menu
+      // 4. Fetch dietary tags untuk semua menu
       final dietaryRaw = (await sb
           .from('menu_item_dietary')
           .select('menu_item_id, dietary_tag')
@@ -474,7 +486,7 @@ final catMap = <String, String>{
         dietaryMap.putIfAbsent(id, () => []).add(d['dietary_tag'] as String);
       }
 
-      // 4. Fetch menu_ingredients untuk hitung COGS
+      // 5. Fetch menu_ingredients untuk hitung COGS
       final ingredientsRaw = (await sb
           .from('menu_ingredients')
           .select('menu_item_id, quantity, cost_per_unit')
@@ -489,7 +501,7 @@ final catMap = <String, String>{
         cogsMap[id] = (cogsMap[id] ?? 0) + (qty * cost);
       }
 
-      // 5. Gabungkan semua data per menu item
+      // 6. Gabungkan semua data per menu item
       final List<Map<String, dynamic>> available = [];
       final List<String> unavailable = [];
 
@@ -525,7 +537,7 @@ final catMap = <String, String>{
         }
       }
 
-      // 6. Ranking margin terbaik (hanya yang sudah ada COGS-nya)
+      // 7. Ranking margin terbaik (hanya yang sudah ada COGS-nya)
       final withMargin = available
           .where((m) => (m['margin_raw'] as double?) != null && (m['cogs_raw'] as double) > 0)
           .toList()
@@ -538,7 +550,7 @@ final catMap = <String, String>{
       final rankingMargin = withMargin.take(5).map((m) =>
           '${m['nama']}: margin ${m['margin_persen']} (jual ${m['harga']}, COGS ${m['cogs']})').toList();
 
-      // 7. Format detail menu untuk AI (tanpa field raw)
+      // 8. Format detail menu untuk AI (tanpa field raw)
       final availableForAI = available.map((m) => {
         'nama': m['nama'],
         'harga': m['harga'],
@@ -722,6 +734,7 @@ KEMAMPUAN KAMU:
 - Info booking hari ini (confirmed, pending, no-show, daftar tamu)
 - Info lengkap menu: harga, kategori, allergen, dietary, COGS, margin
 - Rekomendasikan menu berdasarkan margin, kategori, atau dietary preference
+- Analisis order berdasarkan tipe (app, staff, qr_order, dll)
 - Berikan rekomendasi actionable berdasarkan data
 
 ATURAN MENU:
@@ -731,6 +744,11 @@ ATURAN MENU:
 - Jika ditanya COGS atau harga pokok, tampilkan dari data menu
 - Jika menu belum punya data COGS, sampaikan bahwa data belum diisi
 - Selalu rekomendasikan menu dengan margin tinggi jika relevan
+
+ATURAN ORDER TYPE:
+- Data order_type di hari_ini berisi breakdown per tipe: app, staff, qr_order, atau lainnya
+- Jika ditanya "paling banyak dari mana" atau "app/staff/qr", gunakan data order_type
+- Tampilkan jumlah transaksi dan revenue per tipe pemesanan
 
 ATURAN PROACTIVE INSIGHT:
 - Jika ada data di "stok_habis_atau_dibawah_minimum", SELALU tampilkan peringatan 🚨 di awal respons
