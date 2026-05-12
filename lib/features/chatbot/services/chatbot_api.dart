@@ -38,14 +38,10 @@ class OrderItemData {
 }
 
 class ChatbotApi {
-  // ✅ Panggil proxy Vercel, bukan Groq langsung
-  // Di local dev pakai localhost, di production otomatis pakai domain Vercel
   static String get _proxyUrl {
     if (kIsWeb) {
-      // Di web: pakai relative URL supaya otomatis sesuai domain
       return '/api/chat';
     }
-    // Di mobile/desktop local dev (opsional)
     return 'http://localhost:3000/api/chat';
   }
 
@@ -164,31 +160,46 @@ PENTING:
     return {'opening': '10:00', 'closing': '22:00'};
   }
 
+  // ✅ FIXED: Ganti join PostgREST dengan 2 query terpisah untuk hindari error 400
   static Future<String> _fetchMenu(String branchId) async {
     try {
+      // Query 1: Ambil menu items tanpa join
       final items = await Supabase.instance.client
           .from('menu_items')
-          .select(
-              'name, price, description, is_available, menu_categories(name)')
+          .select('name, price, description, is_available, category_id')
           .eq('branch_id', branchId)
           .eq('is_available', true)
           .order('name');
+
       if ((items as List).isEmpty) return '(belum ada menu)';
+
+      // Query 2: Ambil semua kategori untuk branch ini
+      final categories = await Supabase.instance.client
+          .from('menu_categories')
+          .select('id, name')
+          .eq('branch_id', branchId);
+
+      // Buat map id -> nama kategori
+      final catMap = <String, String>{};
+      for (final cat in (categories as List)) {
+        catMap[cat['id'] as String] = cat['name'] as String;
+      }
+
       final buf = StringBuffer();
       for (final item in items) {
-        final cat = (item['menu_categories'] as Map?)?['name'] ?? 'Umum';
+        final cat = catMap[item['category_id']] ?? 'Umum';
         final price = (item['price'] as num?)?.toStringAsFixed(0) ?? '0';
         final desc = item['description'] as String?;
         buf.writeln(
             '- ${item['name']} (Rp $price) [$cat]${desc != null ? " — $desc" : ""}');
       }
       return buf.toString().trim();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error fetch menu: $e');
       return '(gagal memuat menu)';
     }
   }
 
-  // ✅ Panggil proxy Vercel — API key tidak pernah ada di Flutter
   static Future<ChatResponse> _callGroqProxy(
       String branchId, String message, List<ChatMessage> history) async {
     final hours = await _fetchBranchHours(branchId);
