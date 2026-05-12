@@ -22,7 +22,7 @@ extension OrderStatusExt on OrderStatus {
     switch (this) {
       case OrderStatus.new_:    return 'new';
       case OrderStatus.created: return 'created';
-      default:                  return name; // preparing, ready, dll.
+      default:                  return name;
     }
   }
 
@@ -41,7 +41,6 @@ extension OrderStatusExt on OrderStatus {
   }
 }
 
-// ✅ TAMBAHAN: Extension untuk OrderSource
 extension OrderSourceExt on OrderSource {
   /// Nilai yang benar-benar disimpan ke database (snake_case)
   String get dbValue {
@@ -55,9 +54,9 @@ extension OrderSourceExt on OrderSource {
 
 OrderSource _orderSourceFromString(String s) {
   const map = {
-    'dine_in': OrderSource.dineIn,
-    'dinein':  OrderSource.dineIn, // ✅ FIX: lowercase agar cocok setelah toLowerCase()
-    'online':  OrderSource.online,
+    'dine_in':  OrderSource.dineIn,
+    'dinein':   OrderSource.dineIn,
+    'online':   OrderSource.online,
     'takeaway': OrderSource.takeaway,
   };
   return map[s.toLowerCase()] ?? OrderSource.dineIn;
@@ -71,7 +70,10 @@ class OrderItem {
   final String menuItemName;
   final int quantity;
   final double unitPrice;
-  final double subtotal;
+
+  // FIX Bug 2: simpan nilai DB mentah, expose getter yang tervalidasi
+  final double _subtotalFromDb;
+
   final OrderItemStatus status;
   final String? specialRequests;
   final DateTime? sentToKitchenAt;
@@ -84,12 +86,21 @@ class OrderItem {
     required this.menuItemName,
     required this.quantity,
     required this.unitPrice,
-    required this.subtotal,
+    required double subtotal,
     required this.status,
     this.specialRequests,
     this.sentToKitchenAt,
     this.inventoryItemId,
-  });
+  }) : _subtotalFromDb = subtotal;
+
+  /// Subtotal yang dihitung ulang dari quantity × unitPrice.
+  double get calculatedSubtotal => quantity * unitPrice;
+
+  /// Subtotal yang dipakai untuk semua kalkulasi:
+  /// pakai nilai DB kalau valid (> 0), fallback ke kalkulasi lokal.
+  /// Ini melindungi dari data korup di DB tanpa membuang nilai yang benar.
+  double get subtotal =>
+      _subtotalFromDb > 0 ? _subtotalFromDb : calculatedSubtotal;
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
         id: j['id'] ?? '',
@@ -126,15 +137,43 @@ class OrderModel {
   final String? notes;
   final List<OrderItem> items;
   final DateTime createdAt;
+  final int? estimatedPrepMinutes; // hasil prediksi ML
 
-  // Field yang dihitung otomatis dari items
-  double get subtotal => items.fold(0.0, (sum, item) => sum + item.subtotal);
-  double get pb1Amount => subtotal * 0.10;         // PB1 10%
-  double get serviceChargeAmount => subtotal * 0.03; // Service Charge 3%
-  double get taxAmount => pb1Amount + serviceChargeAmount; // total pajak & charge
-  double get totalAmount => subtotal + taxAmount - discountAmount;
+  // FIX Bug 1: simpan total dari DB sebagai fallback kalau items kosong
+  final double _totalAmountFromDb;
+  final double _subtotalFromDb;
+  final double _taxAmountFromDb;
 
-  const OrderModel({
+  // Kalkulasi dari items (sumber kebenaran utama)
+  double get subtotal => items.isNotEmpty
+      ? items.fold(0.0, (sum, item) => sum + item.subtotal)
+      : _subtotalFromDb; // fallback ke nilai DB
+
+  double get pb1Amount => subtotal * 0.10;
+  double get serviceChargeAmount => subtotal * 0.03;
+  double get taxAmount => pb1Amount + serviceChargeAmount;
+
+  /// Total yang dipakai di seluruh app.
+  /// Prioritas: kalkulasi dari items → fallback ke total_amount dari DB.
+  /// Mencegah Rp 0 di cashier screen saat join order_items gagal.
+  double get totalAmount {
+    if (items.isNotEmpty) {
+      return subtotal + taxAmount - discountAmount;
+    }
+    // Fallback: pakai nilai DB kalau items tidak ter-load
+    if (_totalAmountFromDb > 0) return _totalAmountFromDb;
+    // Last resort: estimasi dari subtotal DB + 13% - diskon
+    if (_subtotalFromDb > 0) {
+      return _subtotalFromDb * 1.13 - discountAmount;
+    }
+    return 0.0;
+  }
+
+  /// True kalau totalAmount berasal dari fallback DB, bukan dari items.
+  /// Berguna untuk UI yang perlu menampilkan indikator "data mungkin tidak lengkap".
+  bool get isTotalEstimated => items.isEmpty && _totalAmountFromDb <= 0 && _subtotalFromDb > 0;
+
+  OrderModel({
     required this.id,
     required this.branchId,
     this.tableId,
@@ -148,7 +187,13 @@ class OrderModel {
     this.notes,
     this.items = const [],
     required this.createdAt,
-  });
+    this.estimatedPrepMinutes,
+    double totalAmountFromDb = 0.0,
+    double subtotalFromDb = 0.0,
+    double taxAmountFromDb = 0.0,
+  })  : _totalAmountFromDb = totalAmountFromDb,
+        _subtotalFromDb = subtotalFromDb,
+        _taxAmountFromDb = taxAmountFromDb;
 
   factory OrderModel.fromJson(Map<String, dynamic> j) {
     final itemsList = j['order_items'] != null
@@ -156,6 +201,13 @@ class OrderModel {
             .map((i) => OrderItem.fromJson(i as Map<String, dynamic>))
             .toList()
         : <OrderItem>[];
+
+    // FIX Bug 4: gunakan createdAt dari DB kalau ada, jangan fallback ke now()
+    // karena itu akan merusak sorting history. Pakai epoch sebagai sentinel.
+    final createdAtRaw = j['created_at'] as String?;
+    final createdAt = createdAtRaw != null
+        ? DateTime.tryParse(createdAtRaw) ?? DateTime.fromMillisecondsSinceEpoch(0)
+        : DateTime.fromMillisecondsSinceEpoch(0);
 
     return OrderModel(
       id: j['id'] ?? '',
@@ -170,7 +222,51 @@ class OrderModel {
       discountAmount: (j['discount_amount'] ?? 0).toDouble(),
       notes: j['notes'],
       items: itemsList,
-      createdAt: DateTime.parse(j['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: createdAt,
+      estimatedPrepMinutes: (j['estimated_prep_minutes'] as num?)?.toInt(),
+      // FIX Bug 1: baca nilai finansial dari DB sebagai fallback
+      totalAmountFromDb: (j['total_amount'] ?? 0).toDouble(),
+      subtotalFromDb: (j['subtotal'] ?? 0).toDouble(),
+      taxAmountFromDb: (j['tax_amount'] ?? 0).toDouble(),
+    );
+  }
+
+  /// Buat salinan dengan field tertentu yang diubah.
+  /// Berguna untuk optimistic update status tanpa re-fetch dari DB.
+  OrderModel copyWith({
+    String? id,
+    String? branchId,
+    String? tableId,
+    String? tableNumber,
+    String? orderNumber,
+    OrderStatus? status,
+    OrderSource? source,
+    String? orderType,
+    String? customerName,
+    double? discountAmount,
+    String? notes,
+    List<OrderItem>? items,
+    DateTime? createdAt,
+    int? estimatedPrepMinutes,
+  }) {
+    return OrderModel(
+      id: id ?? this.id,
+      branchId: branchId ?? this.branchId,
+      tableId: tableId ?? this.tableId,
+      tableNumber: tableNumber ?? this.tableNumber,
+      orderNumber: orderNumber ?? this.orderNumber,
+      status: status ?? this.status,
+      source: source ?? this.source,
+      orderType: orderType ?? this.orderType,
+      customerName: customerName ?? this.customerName,
+      discountAmount: discountAmount ?? this.discountAmount,
+      notes: notes ?? this.notes,
+      items: items ?? this.items,
+      createdAt: createdAt ?? this.createdAt,
+      estimatedPrepMinutes: estimatedPrepMinutes ?? this.estimatedPrepMinutes,
+      totalAmountFromDb: _totalAmountFromDb,
+      subtotalFromDb: _subtotalFromDb,
+      taxAmountFromDb: _taxAmountFromDb,
     );
   }
 }

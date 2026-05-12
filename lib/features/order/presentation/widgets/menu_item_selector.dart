@@ -227,6 +227,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         'customer_name':  _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : null,
         'customer_phone': _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
         'discount_amount': 0,
+        // Simpan estimasi ML ke DB agar KDS bisa tampilkan tanpa re-predict
+        if (_estimatedMinutes != null)
+          'estimated_prep_minutes': _estimatedMinutes,
       }).select().single();
 
       final orderId = orderRes['id'] as String;
@@ -240,6 +243,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             'menu_item_name': m.name,
             'quantity':       e.value.qty,
             'unit_price':     m.price,
+            'subtotal':       m.price * e.value.qty,
             'status':         'pending',
             if (e.value.notes.isNotEmpty) 'special_requests': e.value.notes,
           };

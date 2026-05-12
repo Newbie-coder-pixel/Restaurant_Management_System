@@ -16,7 +16,7 @@ class KDSScreen extends ConsumerStatefulWidget {
 class _KDSScreenState extends ConsumerState<KDSScreen> {
   List<OrderModel> _orders = [];
   int _readyCount = 0;
-  final List<Map<String, dynamic>> _lowStockItems = [];
+  List<Map<String, dynamic>> _lowStockItems = [];
   bool _isLoading = true;
   String? _branchId;       // branch milik staff yang login
   StaffRole? _userRole;
@@ -96,6 +96,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             id, branch_id, table_id, order_number,
             status, source, order_type, customer_name,
             discount_amount, notes, created_at, updated_at,
+            estimated_prep_minutes,
             restaurant_tables(table_number),
             order_items(
               id, menu_item_id, menu_item_name, unit_price,
@@ -148,6 +149,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
         setState(() {
           _orders = (res as List).map((e) => OrderModel.fromJson(e)).toList();
           _readyCount = (readyRes as List).length;
+          _lowStockItems = lowStock; // FIX Bug 1: assign ke state agar banner muncul
           _isLoading = false;
         });
       }
@@ -159,21 +161,35 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
 
   void _subscribeRealtime() {
     _channel?.unsubscribe();
-    _channel = Supabase.instance.client
+
+    // Tentukan branch yang dipakai untuk filter realtime.
+    // Superadmin/manager tanpa filter branch → subscribe semua (null = no filter).
+    // Role lain → filter ke branch mereka sendiri.
+    final targetBranch = _isMultiBranchRole ? _selectedBranchId : _branchId;
+
+    var channelBuilder = Supabase.instance.client
         .channel('kds_realtime_${DateTime.now().millisecondsSinceEpoch}')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          callback: (_) => _load(),
+          // FIX Bug 3: filter per branch kalau bukan superadmin/manager "semua cabang"
+          filter: targetBranch != null
+              ? PostgresChangeFilter(
+                  type: PostgresChangeFilterType.eq,
+                  column: 'branch_id',
+                  value: targetBranch)
+              : null,
+          callback: (_) { if (mounted) _load(); },
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'order_items',
-          callback: (_) => _load(),
-        )
-        .subscribe();
+          callback: (_) { if (mounted) _load(); },
+        );
+
+    _channel = channelBuilder.subscribe();
   }
 
   @override
@@ -502,6 +518,27 @@ Widget _buildLowStockBanner() {
                     color: badgeColor)),
               ]),
             ),
+            // Badge estimasi ML — tampil kalau tersedia
+            if (order.estimatedPrepMinutes != null) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.35))),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.schedule_rounded, size: 11, color: Colors.orange.shade700),
+                  const SizedBox(width: 3),
+                  Text(
+                    '~${order.estimatedPrepMinutes} mnt',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.orange.shade700)),
+                ]),
+              ),
+            ],
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

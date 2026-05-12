@@ -839,77 +839,26 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   // ── TAB: ORDER BARU (Menu Selector) ──────────────────────────────────────
+  // Sidebar meja dihapus — pilihan Takeaway/Meja sudah ada di dalam
+  // MenuItemSelector (dropdown di header-nya). Sidebar lama tidak interaktif
+  // dan tidak sync dengan dropdown tersebut, sehingga membingungkan staff.
   Widget _buildNewOrder() {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Sidebar kiri: pilih meja
-      Container(
-        width: 120,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          color: Color(0xFF1A1F2E),
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(2, 0))],
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(14, 16, 14, 10),
-            child: Text('MEJA', style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700,
-              color: Colors.white38, letterSpacing: 1.5)),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 16),
-              children: [
-                // Takeaway option
-                const _TableSidebarItem(
-                  label: 'Takeaway',
-                  icon: Icons.takeout_dining_outlined,
-                  color: AppColors.accent,
-                  isSelected: false,
-                  count: null,
-                ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(14, 12, 14, 6),
-                  child: Text('MEJA', style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700,
-                    color: Colors.white24, letterSpacing: 1.5)),
-                ),
-                ..._tables.map((t) => _TableSidebarItem(
-                  label: 'Meja ${t.tableNumber}',
-                  icon: Icons.table_restaurant_outlined,
-                  color: t.status == TableStatus.available ? const Color(0xFF43A047) : Colors.orange,
-                  isSelected: false,
-                  count: t.capacity,
-                )),
-              ],
-            ),
-          ),
+    final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
+    if (effectiveBranchId == null || effectiveBranchId.isEmpty) {
+      return const Center(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(Icons.store_outlined, size: 48, color: AppColors.textHint),
+          SizedBox(height: 12),
+          Text('Pilih cabang terlebih dahulu',
+            style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
         ]),
-      ),
-
-      // Content kanan: menu selector
-      Expanded(
-        child: Builder(builder: (_) {
-          // Superadmin harus pilih branch dulu sebelum bisa buat order
-          final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
-          if (effectiveBranchId == null || effectiveBranchId.isEmpty) {
-            return const Center(
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.store_outlined, size: 48, color: AppColors.textHint),
-                SizedBox(height: 12),
-                Text('Pilih cabang terlebih dahulu',
-                  style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
-              ]),
-            );
-          }
-          return MenuItemSelector(
-            branchId: effectiveBranchId,
-            tables: _tables,
-            onOrderCreated: () { _load(); _tab.animateTo(0); },
-          );
-        }),
-      ),
-    ]);
+      );
+    }
+    return MenuItemSelector(
+      branchId: effectiveBranchId,
+      tables: _tables,
+      onOrderCreated: () { _load(); _tab.animateTo(0); },
+    );
   }
 
   // ── TAB: RIWAYAT ──────────────────────────────────────────────────────────
@@ -1078,45 +1027,4 @@ class _GroupDef {
   final IconData icon;
   final Color color;
   const _GroupDef(this.name, this.icon, this.color);
-}
-
-// ── Sidebar table item widget ──────────────────────────────────────────────────
-class _TableSidebarItem extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final bool isSelected;
-  final int? count;
-
-  const _TableSidebarItem({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.isSelected,
-    this.count,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
-        color: isSelected ? color.withValues(alpha: 0.2) : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        border: isSelected ? Border.all(color: color.withValues(alpha: 0.4)) : null,
-      ),
-      child: Row(children: [
-        Icon(icon, size: 13, color: isSelected ? color : Colors.white38),
-        const SizedBox(width: 7),
-        Expanded(child: Text(label, style: TextStyle(
-          fontFamily: 'Poppins', fontSize: 11,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-          color: isSelected ? color : Colors.white54),
-          overflow: TextOverflow.ellipsis)),
-        if (count != null)
-          Text('$count org', style: const TextStyle(fontFamily: 'Poppins', fontSize: 9, color: Colors.white24)),
-      ]),
-    );
-  }
 }
