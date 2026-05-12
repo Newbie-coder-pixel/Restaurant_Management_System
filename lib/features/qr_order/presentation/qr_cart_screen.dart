@@ -78,12 +78,42 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     }
   }
 
+  // ── Helper: Format price ───────────────────────────────────────────────────
+  String _formatPrice(double price) {
+    final formatted = price
+        .toStringAsFixed(0)
+        .replaceAllMapped(
+            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    return 'Rp $formatted';
+  }
+
+  // ── Helper: Info Row ───────────────────────────────────────────────────────
+  Widget _buildInfoRow(ThemeData theme, ColorScheme colorScheme,
+      String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: colorScheme.outline)),
+        Text(value,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
   // ── Show confirmation dialog sebelum order ────────────────────────────────
   Future<void> _showOrderConfirmationDialog() async {
     if (!_formKey.currentState!.validate()) return;
 
     final colorScheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+    final cart = ref.read(activeQrCartProvider);
+    final activeTable = ref.read(activeQrTableProvider);
+    final tableName = (activeTable.tableName?.isNotEmpty == true)
+        ? activeTable.tableName!
+        : widget.tableId;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -94,112 +124,127 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: colorScheme.errorContainer,
-                  shape: BoxShape.circle,
+              // ── Header ────────────────────────────────────────────
+              Row(children: [
+                Icon(Icons.shopping_cart_outlined,
+                    color: colorScheme.primary, size: 24),
+                const SizedBox(width: 10),
+                Text(
+                  'Konfirmasi Pesanan',
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
-                child: Icon(
-                  Icons.warning_amber_rounded,
-                  size: 30,
-                  color: colorScheme.error,
-                ),
-              ),
+              ]),
               const SizedBox(height: 16),
-              Text(
-                'Konfirmasi Pesanan',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
+
+              // ── Detail Info ───────────────────────────────────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Column(children: [
+                  _buildInfoRow(theme, colorScheme, 'Nama',
+                      _nameCtrl.text.trim()),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(theme, colorScheme, 'No. HP',
+                      _phoneCtrl.text.trim()),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(theme, colorScheme, 'Meja', tableName),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(theme, colorScheme, 'Total',
+                      _formatPrice(cart.totalAmount)),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(theme, colorScheme, 'Item',
+                      '${cart.items.length} item'),
+                ]),
               ),
               const SizedBox(height: 12),
+
+              // ── Warning ───────────────────────────────────────────
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: colorScheme.errorContainer.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: colorScheme.error.withValues(alpha: 0.2),
+                      color: colorScheme.error.withValues(alpha: 0.2)),
+                ),
+                child: Column(children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline,
+                          size: 16, color: colorScheme.error),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Pesanan yang telah dikirim ke dapur tidak dapat dibatalkan.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onErrorContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.info_outline,
-                            size: 16, color: colorScheme.error),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Pesanan yang telah dikirim ke dapur tidak dapat dibatalkan.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onErrorContainer,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          size: 16, color: colorScheme.error),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Pastikan pesanan sudah benar sebelum melanjutkan.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onErrorContainer,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.check_circle_outline,
-                            size: 16, color: colorScheme.error),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Pastikan pesanan sudah benar sebelum melanjutkan.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onErrorContainer,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ]),
               ),
               const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text('Kembali'),
+
+              // ── Buttons ───────────────────────────────────────────
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Cek Lagi'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Pesan Sekarang',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.primary,
-                        foregroundColor: colorScheme.onPrimary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Mengerti',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ]),
             ],
           ),
         ),
