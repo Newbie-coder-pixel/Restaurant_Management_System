@@ -425,13 +425,22 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     try {
       // 1. Fetch semua menu items + kategori
      // BARU
+// Fetch menu items tanpa join
 dynamic qMenu = sb
     .from('menu_items')
-    .select(
-        'id, name, price, description, is_available, prep_time_minutes, menu_categories(name)');
+    .select('id, name, price, description, is_available, prep_time_minutes, category_id');
 if (branchId != null) qMenu = (qMenu as dynamic).eq('branch_id', branchId);
 final menuRaw = ((await (qMenu as dynamic).order('name')) as List)
     .cast<Map<String, dynamic>>();
+
+// Fetch kategori terpisah
+final catRaw = (await sb
+    .from('menu_categories')
+    .select('id, name')
+    .eq('branch_id', branchId ?? '')) as List;
+final catMap = <String, String>{
+  for (final c in catRaw) c['id'] as String: c['name'] as String
+};
 
       if (menuRaw.isEmpty) {
         return {'total_menu': 0, 'menu_tersedia': [], 'menu_tidak_tersedia': [], 'ranking_margin': []};
@@ -491,7 +500,7 @@ final menuRaw = ((await (qMenu as dynamic).order('name')) as List)
         final margin = price > 0 ? ((price - cogs) / price * 100) : null;
         final allergens = allergenMap[id] ?? [];
         final dietary = dietaryMap[id] ?? [];
-        final category = (m['menu_categories'] as Map?)?['name'] ?? 'Umum';
+        final category = catMap[m['category_id']] ?? 'Umum';
         final prepTime = m['prep_time_minutes'] as int?;
 
         final item = {
