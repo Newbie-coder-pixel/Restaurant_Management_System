@@ -120,7 +120,9 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       barrierDismissible: false,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -247,6 +249,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
               ]),
             ],
           ),
+        ),
         ),
       ),
     );
