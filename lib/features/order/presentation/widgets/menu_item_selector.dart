@@ -244,7 +244,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             'menu_item_name': m.name,
             'quantity':       e.value.qty,
             'unit_price':     m.price,
-            'subtotal':       m.price * e.value.qty,
+            // subtotal tidak di-insert karena generated column di Supabase
             'status':         'pending',
             if (e.value.notes.isNotEmpty) 'special_requests': e.value.notes,
           };
