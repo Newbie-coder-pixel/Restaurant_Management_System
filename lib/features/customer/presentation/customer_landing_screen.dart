@@ -1269,6 +1269,10 @@ class _ResultCard extends StatelessWidget {
       final closeMin =
           int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
       final nowMin = now.hour * 60 + now.minute;
+      // Handle closing time melewati tengah malam (misal 10:00 - 01:00)
+      if (closeMin < openMin) {
+        return nowMin >= openMin || nowMin <= closeMin;
+      }
       return nowMin >= openMin && nowMin <= closeMin;
     } catch (_) {
       return true;
@@ -1636,6 +1640,10 @@ class _BranchCard extends StatelessWidget {
       final closeMin =
           int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
       final nowMin = now.hour * 60 + now.minute;
+      // Handle closing time melewati tengah malam (misal 10:00 - 01:00)
+      if (closeMin < openMin) {
+        return nowMin >= openMin || nowMin <= closeMin;
+      }
       return nowMin >= openMin && nowMin <= closeMin;
     } catch (_) {
       return true;
