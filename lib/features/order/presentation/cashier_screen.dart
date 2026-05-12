@@ -80,7 +80,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             order_items(*)
           ''')
           .inFilter('status', ['ready', 'served'])
-          .inFilter('payment_status', ['pending', 'unpaid']);
+          // FIX: tambah 'unpaid' (standar baru) dan null-check untuk order lama
+          // yang dibuat sebelum kolom payment_status diisi secara konsisten
+          .or('payment_status.eq.unpaid,payment_status.eq.pending,payment_status.is.null');
       if (effectiveBranchId != null) query = query.eq('branch_id', effectiveBranchId);
       final res = await query.order('created_at', ascending: true);
 
@@ -441,9 +443,11 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }
 
   // ─── CANCEL ORDER ─────────────────────────────────────────────────────────
+  // Cashier screen hanya load order berstatus ready/served,
+  // sehingga cancel hanya relevan untuk kedua status ini.
   bool _canCancel(OrderModel order) =>
-      order.status == OrderStatus.new_ ||
-      order.status == OrderStatus.preparing;
+      order.status == OrderStatus.ready ||
+      order.status == OrderStatus.served;
 
   Future<void> _onCancelOrder(OrderModel order) async {
     if (!_canCancel(order)) {
@@ -707,6 +711,11 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
     // Inventory sudah di-deduct di order_screen saat status → preparing.
     // Tidak perlu deduct lagi di sini untuk menghindari double deduction.
+
+    // FIX: sync status order_items agar konsisten dengan order yang sudah paid
+    await Supabase.instance.client.from('order_items').update({
+      'status': 'served',
+    }).eq('order_id', order.id);
 
     await Supabase.instance.client.from('payments').insert({
       'order_id': order.id,

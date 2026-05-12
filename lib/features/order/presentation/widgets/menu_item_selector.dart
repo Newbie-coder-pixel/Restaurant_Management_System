@@ -227,6 +227,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         'customer_name':  _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : null,
         'customer_phone': _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
         'discount_amount': 0,
+        'payment_status': 'unpaid', // wajib agar order muncul di cashier screen
         // Simpan estimasi ML ke DB agar KDS bisa tampilkan tanpa re-predict
         if (_estimatedMinutes != null)
           'estimated_prep_minutes': _estimatedMinutes,

@@ -37,7 +37,7 @@ class QrOrderRepository {
             'tax_amount': session.pb1Amount,
             'total_amount': session.totalAmount,
             'status': 'created',
-            'payment_status': 'pending',
+            'payment_status': 'unpaid', // FIX: konsisten dengan staff order
             'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
             'branch_id': branchId,
             'order_type': 'qr_order',
@@ -50,7 +50,7 @@ class QrOrderRepository {
 
       final String orderId = orderResponse['id'] as String;
 
-      // 2. Insert order_items — subtotal TIDAK di-insert (GENERATED column)
+      // 2. Insert order_items
       if (session.items.isNotEmpty) {
         final orderItemsData = session.items.map((cartItem) {
           final itemData = <String, dynamic>{
@@ -59,6 +59,7 @@ class QrOrderRepository {
             'menu_item_name': cartItem.menuItem.name,
             'unit_price': cartItem.menuItem.price,
             'quantity': cartItem.quantity,
+            'subtotal': cartItem.menuItem.price * cartItem.quantity, // FIX: bukan GENERATED column
           };
           if (cartItem.notes != null && cartItem.notes!.isNotEmpty) {
             itemData['special_requests'] = cartItem.notes;
@@ -69,26 +70,8 @@ class QrOrderRepository {
 await _client.from('order_items').insert(orderItemsData);
         debugPrint('✅ ${orderItemsData.length} items tersimpan');
 
-        // ── Deduct inventory ──────────────────────────────────────
-        try {
-          for (final cartItem in session.items) {
-            final invId = cartItem.menuItem.inventoryItemId;
-            if (invId != null) {
-              await _client.rpc('deduct_inventory_for_order', params: {
-                'p_branch_id': branchId,
-                'p_order_id': orderId,
-                'p_items': [{
-                  'inventory_item_id': invId,
-                  'quantity': cartItem.quantity,
-                }],
-              });
-            }
-          }
-          debugPrint('✅ Inventory terpotong untuk order $orderId');
-        } catch (e) {
-          debugPrint('⚠️ Gagal deduct inventory (order tetap dibuat): $e');
-        }
-        // ─────────────────────────────────────────────────────────
+        // Inventory di-deduct di order_screen.dart saat status → preparing.
+        // Tidak di-deduct di sini untuk menghindari double deduction.
       }
 
       // 3. Update status meja SEGERA setelah insert
