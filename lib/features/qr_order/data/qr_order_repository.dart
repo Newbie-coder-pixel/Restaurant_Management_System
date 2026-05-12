@@ -59,7 +59,7 @@ class QrOrderRepository {
             'menu_item_name': cartItem.menuItem.name,
             'unit_price': cartItem.menuItem.price,
             'quantity': cartItem.quantity,
-            'subtotal': cartItem.menuItem.price * cartItem.quantity, // FIX: bukan GENERATED column
+            // subtotal tidak di-insert karena generated column di Supabase
           };
           if (cartItem.notes != null && cartItem.notes!.isNotEmpty) {
             itemData['special_requests'] = cartItem.notes;
