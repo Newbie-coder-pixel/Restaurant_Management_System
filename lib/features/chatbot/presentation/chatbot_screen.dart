@@ -270,21 +270,29 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
       // ── 5. Menu terlaris bulan ini ──────────────────────────────────
-      var qItems = sb
-          .from('order_items')
-          .select(
-              'menu_item_name, quantity, orders!inner(status, created_at, branch_id)')
-          .gte('orders.created_at', '${monthStart}T00:00:00')
-          .lte('orders.created_at', todayEnd)
-          .eq('orders.status', 'completed');
-      if (branchId != null) qItems = qItems.eq('orders.branch_id', branchId);
+      // Fetch completed orders bulan ini dulu, lalu ambil order_items-nya
+      var qCompletedOrders = sb
+          .from('orders')
+          .select('id')
+          .eq('status', 'completed')
+          .gte('created_at', '${monthStart}T00:00:00')
+          .lte('created_at', todayEnd);
+      if (branchId != null) qCompletedOrders = qCompletedOrders.eq('branch_id', branchId);
+      final completedOrders = (await qCompletedOrders as List).cast<Map<String, dynamic>>();
+      final completedOrderIds = completedOrders.map((o) => o['id'] as String).toList();
 
-      final itemsRaw = (await qItems as List).cast<Map<String, dynamic>>();
       final Map<String, int> menuCount = {};
-      for (final item in itemsRaw) {
-        final name = (item['menu_item_name'] as String?) ?? 'Unknown';
-        final qty = (item['quantity'] as num?)?.toInt() ?? 1;
-        menuCount[name] = (menuCount[name] ?? 0) + qty;
+      if (completedOrderIds.isNotEmpty) {
+        final itemsRaw = (await sb
+            .from('order_items')
+            .select('menu_item_name, quantity')
+            .inFilter('order_id', completedOrderIds) as List)
+            .cast<Map<String, dynamic>>();
+        for (final item in itemsRaw) {
+          final name = (item['menu_item_name'] as String?) ?? 'Unknown';
+          final qty = (item['quantity'] as num?)?.toInt() ?? 1;
+          menuCount[name] = (menuCount[name] ?? 0) + qty;
+        }
       }
       final topMenu = (menuCount.entries.toList()
             ..sort((a, b) => b.value.compareTo(a.value)))
