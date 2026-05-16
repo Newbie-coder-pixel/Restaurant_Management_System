@@ -2,9 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
+import '../../../core/models/staff_role.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
+
+// Model sederhana untuk branch
+class _Branch {
+  final String id;
+  final String name;
+  const _Branch({required this.id, required this.name});
+}
 
 class RestaurantClosureScreen extends ConsumerStatefulWidget {
   const RestaurantClosureScreen({super.key});
@@ -16,23 +24,67 @@ class RestaurantClosureScreen extends ConsumerStatefulWidget {
 
 class _RestaurantClosureScreenState
     extends ConsumerState<RestaurantClosureScreen> {
-  String? _branchId;
+  // Branch aktif yang sedang ditampilkan
+  String? _selectedBranchId;
+  String _selectedBranchName = '';
+
+  // Daftar cabang (hanya diisi untuk Super Admin)
+  List<_Branch> _branches = [];
+  bool _isSuperAdmin = false;
+
   bool _isLoading = true;
   bool _isSaving = false;
 
-  // Tanggal yang dipilih di kalender
   DateTime _focusedDay = DateTime.now();
-
-  // Set tanggal tutup yang sudah tersimpan: key = 'yyyy-MM-dd'
   Map<String, Map<String, dynamic>> _closures = {};
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final staff = ref.read(currentStaffProvider);
-    if (staff != null && _branchId == null) {
-      _branchId = staff.branchId;
-      _loadClosures();
+    if (staff != null && _selectedBranchId == null) {
+      _isSuperAdmin = staff.role == StaffRole.superadmin;
+
+      if (_isSuperAdmin) {
+        // Super Admin: load semua branch dulu, lalu pilih pertama
+        _loadBranches();
+      } else {
+        // Staff biasa: langsung pakai branch sendiri
+        _selectedBranchId = staff.branchId;
+        _selectedBranchName = 'Cabang Anda';
+        _loadClosures();
+      }
+    }
+  }
+
+  /// Load semua branch dari Supabase (hanya Super Admin)
+  Future<void> _loadBranches() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name');
+
+      final list = (res as List)
+          .cast<Map<String, dynamic>>()
+          .map((e) => _Branch(id: e['id'], name: e['name']))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _branches = list;
+          if (list.isNotEmpty) {
+            _selectedBranchId = list.first.id;
+            _selectedBranchName = list.first.name;
+          }
+        });
+        await _loadClosures();
+      }
+    } catch (e) {
+      debugPrint('error load branches: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -40,13 +92,13 @@ class _RestaurantClosureScreenState
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> _loadClosures() async {
-    if (_branchId == null) return;
+    if (_selectedBranchId == null) return;
     setState(() => _isLoading = true);
     try {
       final res = await Supabase.instance.client
           .from('restaurant_closures')
           .select()
-          .eq('branch_id', _branchId!)
+          .eq('branch_id', _selectedBranchId!)
           .order('closure_date');
 
       final map = <String, Map<String, dynamic>>{};
@@ -67,11 +119,22 @@ class _RestaurantClosureScreenState
     }
   }
 
+  /// Dipanggil saat Super Admin ganti branch dari dropdown
+  void _onBranchChanged(_Branch branch) {
+    if (_selectedBranchId == branch.id) return;
+    setState(() {
+      _selectedBranchId = branch.id;
+      _selectedBranchName = branch.name;
+      _closures = {};
+      _focusedDay = DateTime.now();
+    });
+    _loadClosures();
+  }
+
   Future<void> _toggleClosure(DateTime day) async {
-    if (_branchId == null) return;
+    if (_selectedBranchId == null) return;
     final dateStr = _fmtDate(day);
 
-    // Tidak boleh block tanggal yang sudah lewat
     final today = DateTime.now();
     final todayStr = _fmtDate(today);
     if (dateStr.compareTo(todayStr) < 0) {
@@ -80,33 +143,30 @@ class _RestaurantClosureScreenState
     }
 
     if (_closures.containsKey(dateStr)) {
-      // Sudah tutup → hapus (buka kembali)
       await _removeClosure(dateStr);
     } else {
-      // Belum tutup → tambah
       await _addClosure(day, dateStr);
     }
   }
 
   Future<void> _addClosure(DateTime day, String dateStr) async {
-    // Cek apakah ada booking aktif di tanggal ini
     final bookings = await Supabase.instance.client
         .from('bookings')
         .select('id')
-        .eq('branch_id', _branchId!)
+        .eq('branch_id', _selectedBranchId!)
         .eq('booking_date', dateStr)
-        .inFilter('status', ['pending', 'confirmed', 'seated'])
-        .limit(1);
+        .inFilter('status', ['pending', 'confirmed', 'seated']).limit(1);
 
     if ((bookings as List).isNotEmpty) {
       if (!mounted) return;
-      // Ada booking aktif — minta konfirmasi
       final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Ada Booking Aktif',
-              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
           content: Text(
             'Tanggal ${_fmtDisplayDate(day)} masih ada booking aktif.\n\n'
             'Apakah tetap ingin menutup restoran di tanggal ini?',
@@ -115,13 +175,16 @@ class _RestaurantClosureScreenState
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins')),
+              child:
+                  const Text('Batal', style: TextStyle(fontFamily: 'Poppins')),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Tetap Tutup',
-                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
+                  style:
+                      TextStyle(fontFamily: 'Poppins', color: Colors.white)),
             ),
           ],
         ),
@@ -129,19 +192,18 @@ class _RestaurantClosureScreenState
       if (confirm != true) return;
     }
 
-    // Minta alasan tutup (opsional)
     if (!mounted) return;
     final reason = await _showReasonDialog(day);
-    if (reason == null) return; // user batal
+    if (reason == null) return;
 
     setState(() => _isSaving = true);
     try {
       final staff = ref.read(currentStaffProvider);
       await Supabase.instance.client.from('restaurant_closures').insert({
-        'branch_id':    _branchId,
+        'branch_id': _selectedBranchId,
         'closure_date': dateStr,
-        'reason':       reason.isEmpty ? null : reason,
-        'created_by':   staff?.id,
+        'reason': reason.isEmpty ? null : reason,
+        'created_by': staff?.id,
       });
       await _loadClosures();
       _showSnack('✅ ${_fmtDisplayDate(day)} ditandai sebagai hari tutup',
@@ -159,10 +221,11 @@ class _RestaurantClosureScreenState
       await Supabase.instance.client
           .from('restaurant_closures')
           .delete()
-          .eq('branch_id', _branchId!)
+          .eq('branch_id', _selectedBranchId!)
           .eq('closure_date', dateStr);
       await _loadClosures();
-      _showSnack('✅ Tanggal tutup dihapus — restoran kembali buka', AppColors.available);
+      _showSnack(
+          '✅ Tanggal tutup dihapus — restoran kembali buka', AppColors.available);
     } catch (e) {
       _showSnack('Gagal hapus: $e', Colors.red);
     } finally {
@@ -197,21 +260,26 @@ class _RestaurantClosureScreenState
             maxLines: 2,
             decoration: InputDecoration(
               hintText: 'Contoh: Hari Raya, Renovasi, Private Event...',
-              hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              hintStyle:
+                  const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
         ]),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins')),
+            child:
+                const Text('Batal', style: TextStyle(fontFamily: 'Poppins')),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
             child: const Text('Simpan',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
+                style:
+                    TextStyle(fontFamily: 'Poppins', color: Colors.white)),
           ),
         ],
       ),
@@ -228,10 +296,8 @@ class _RestaurantClosureScreenState
     ));
   }
 
-  String _fmtDisplayDate(DateTime d) =>
-      '${d.day}/${d.month}/${d.year}';
+  String _fmtDisplayDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
 
-  // Closure yang akan datang (≥ hari ini), urut asc
   List<MapEntry<String, Map<String, dynamic>>> get _upcomingClosures {
     final todayStr = _fmtDate(DateTime.now());
     return _closures.entries
@@ -239,6 +305,10 @@ class _RestaurantClosureScreenState
         .toList()
       ..sort((a, b) => a.key.compareTo(b.key));
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +330,8 @@ class _RestaurantClosureScreenState
               padding: EdgeInsets.only(right: 16),
               child: Center(
                 child: SizedBox(
-                  width: 20, height: 20,
+                  width: 20,
+                  height: 20,
                   child: CircularProgressIndicator(
                       strokeWidth: 2, color: Colors.white),
                 ),
@@ -280,6 +351,11 @@ class _RestaurantClosureScreenState
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  // ── Branch selector (Super Admin only) ──
+                  if (_isSuperAdmin) ...[
+                    _buildBranchSelector(),
+                    const SizedBox(height: 12),
+                  ],
                   _buildInfoBanner(),
                   const SizedBox(height: 16),
                   _buildCalendar(),
@@ -292,23 +368,132 @@ class _RestaurantClosureScreenState
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // BRANCH SELECTOR (Super Admin only)
+  // ─────────────────────────────────────────────────────────────
+
+  Widget _buildBranchSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.store_mall_directory_rounded,
+                color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pilih Cabang',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedBranchId,
+                    isExpanded: true,
+                    isDense: true,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                    items: _branches
+                        .map((b) => DropdownMenuItem(
+                              value: b.id,
+                              child: Text(b.name,
+                                  style: const TextStyle(
+                                      fontFamily: 'Poppins', fontSize: 14)),
+                            ))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val == null) return;
+                      final branch =
+                          _branches.firstWhere((b) => b.id == val);
+                      _onBranchChanged(branch);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Badge jumlah hari tutup cabang ini
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _upcomingClosures.isEmpty
+                  ? AppColors.available.withValues(alpha: 0.15)
+                  : AppColors.accent.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${_upcomingClosures.length} tutup',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _upcomingClosures.isEmpty
+                    ? AppColors.available
+                    : AppColors.accent,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // INFO BANNER
+  // ─────────────────────────────────────────────────────────────
+
   Widget _buildInfoBanner() => Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+          border:
+              Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
         ),
-        child: const Row(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.touch_app_rounded, color: AppColors.primary, size: 20),
-            SizedBox(width: 10),
+            const Icon(Icons.touch_app_rounded,
+                color: AppColors.primary, size: 20),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Ketuk tanggal di kalender untuk menandai/membatalkan hari tutup restoran. '
-                'Booking baru tidak bisa dibuat di tanggal yang ditandai tutup.',
-                style: TextStyle(
+                _isSuperAdmin
+                    ? 'Pilih cabang di atas, lalu ketuk tanggal untuk menandai/membatalkan hari tutup. '
+                        'Perubahan hanya berlaku untuk cabang yang dipilih.'
+                    : 'Ketuk tanggal di kalender untuk menandai/membatalkan hari tutup restoran. '
+                        'Booking baru tidak bisa dibuat di tanggal yang ditandai tutup.',
+                style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
                     color: AppColors.primary),
@@ -317,6 +502,10 @@ class _RestaurantClosureScreenState
           ],
         ),
       );
+
+  // ─────────────────────────────────────────────────────────────
+  // CALENDAR
+  // ─────────────────────────────────────────────────────────────
 
   Widget _buildCalendar() => Container(
         decoration: BoxDecoration(
@@ -337,7 +526,8 @@ class _RestaurantClosureScreenState
             setState(() => _focusedDay = focused);
             _toggleClosure(selected);
           },
-          onPageChanged: (focused) => setState(() => _focusedDay = focused),
+          onPageChanged: (focused) =>
+              setState(() => _focusedDay = focused),
           calendarBuilders: CalendarBuilders(
             defaultBuilder: (ctx, day, focusedDay) {
               final isWeekend = day.weekday == DateTime.saturday ||
@@ -363,7 +553,8 @@ class _RestaurantClosureScreenState
         ),
       );
 
-  Widget _dayCell(DateTime day, {
+  Widget _dayCell(
+    DateTime day, {
     bool isWeekend = false,
     bool isToday = false,
     bool isOutside = false,
@@ -398,7 +589,8 @@ class _RestaurantClosureScreenState
         border: isClosed
             ? Border.all(color: AppColors.accent.withValues(alpha: 0.5))
             : isToday
-                ? Border.all(color: AppColors.primary.withValues(alpha: 0.4))
+                ? Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.4))
                 : null,
       ),
       child: Column(
@@ -412,7 +604,8 @@ class _RestaurantClosureScreenState
                   color: textColor)),
           if (isClosed)
             Container(
-              width: 4, height: 4,
+              width: 4,
+              height: 4,
               decoration: const BoxDecoration(
                 color: AppColors.accent,
                 shape: BoxShape.circle,
@@ -423,23 +616,29 @@ class _RestaurantClosureScreenState
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // UPCOMING LIST
+  // ─────────────────────────────────────────────────────────────
+
   Widget _buildUpcomingList() {
     final upcoming = _upcomingClosures;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        const Icon(Icons.event_busy_rounded, color: AppColors.accent, size: 18),
+        const Icon(Icons.event_busy_rounded,
+            color: AppColors.accent, size: 18),
         const SizedBox(width: 8),
-        Text(
-          'Jadwal Tutup (${upcoming.length})',
-          style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w700,
-              fontSize: 15),
+        Expanded(
+          child: Text(
+            'Jadwal Tutup${_isSuperAdmin ? ' — $_selectedBranchName' : ''} (${upcoming.length})',
+            style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w700,
+                fontSize: 15),
+          ),
         ),
       ]),
       const SizedBox(height: 12),
-
       if (upcoming.isEmpty)
         Container(
           padding: const EdgeInsets.all(24),
@@ -467,11 +666,11 @@ class _RestaurantClosureScreenState
       else
         ...upcoming.map((e) {
           final dateStr = e.key;
-          final row     = e.value;
-          final reason  = row['reason'] as String?;
-          final parts   = dateStr.split('-');
-          final dt      = DateTime(
-              int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          final row = e.value;
+          final reason = row['reason'] as String?;
+          final parts = dateStr.split('-');
+          final dt = DateTime(int.parse(parts[0]), int.parse(parts[1]),
+              int.parse(parts[2]));
           final dayName = _dayName(dt.weekday);
           final isToday = dateStr == _fmtDate(DateTime.now());
 
@@ -491,7 +690,8 @@ class _RestaurantClosureScreenState
             ),
             child: ListTile(
               leading: Container(
-                width: 44, height: 44,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: AppColors.accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
