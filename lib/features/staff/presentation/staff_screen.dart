@@ -97,7 +97,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
   // ── data ───────────────────────────────────────────────
   Future<void> _load() async {
-    if (_branchId == null) {
+    // Non-superadmin wajib punya branchId
+    if (_userRole != StaffRole.superadmin && _branchId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
@@ -105,6 +106,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
     List res;
     if (_userRole != StaffRole.superadmin) {
+      // Role biasa: hanya lihat branch sendiri
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -112,6 +114,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           .eq('is_active', !_showArchived)
           .order('full_name');
     } else if (_selectedFilterBranchId != null) {
+      // Superadmin filter per branch tertentu
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -119,6 +122,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           .eq('is_active', !_showArchived)
           .order('full_name');
     } else {
+      // Superadmin semua cabang
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -148,9 +152,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
   bool _isValidEmail(String email) =>
       RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$').hasMatch(email);
-
-  bool _isValidPhone(String phone) =>
-      RegExp(r'^(\+62|62|0)[0-9]{8,12}$').hasMatch(phone.replaceAll(RegExp(r'[\s\-]'), ''));
 
   List<StaffMember> get _filteredStaff {
     if (_searchQuery.isEmpty) return _staff;
@@ -327,7 +328,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                 controller: phoneCtrl,
                 decoration: InputDecoration(
-                    labelText: 'No. HP *',
+                    labelText: 'No. HP',
                     prefixIcon: const Icon(Icons.phone_outlined),
                     hintText: '08xx-xxxx-xxxx',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
@@ -437,25 +438,18 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               onPressed: isLoading
                   ? null
                   : () async {
-                      final name  = nameCtrl.text.trim();
-                      final phone = phoneCtrl.text.trim();
+                      final name = nameCtrl.text.trim();
                       if (name.isEmpty) {
                         ss(() => errorMsg = 'Nama wajib diisi.');
-                        return;
-                      }
-                      if (phone.isEmpty) {
-                        ss(() => errorMsg = 'No. HP wajib diisi.');
-                        return;
-                      }
-                      if (!_isValidPhone(phone)) {
-                        ss(() => errorMsg = 'Format No. HP tidak valid.\nContoh: 08123456789 atau +628123456789');
                         return;
                       }
                       ss(() { isLoading = true; errorMsg = null; });
                       try {
                         await Supabase.instance.client.from('staff').update({
                           'full_name': name,
-                          'phone': phone,
+                          'phone': phoneCtrl.text.trim().isEmpty
+                              ? null
+                              : phoneCtrl.text.trim(),
                           'role': selectedRole.name,
                           if (_userRole == StaffRole.superadmin && selectedBranchId != null)
                             'branch_id': selectedBranchId,
@@ -844,8 +838,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                   controller: phoneCtrl,
                   decoration: InputDecoration(
-                      labelText: 'No. HP *',
-                      hintText: '08xx-xxxx-xxxx',
+                      labelText: 'No. HP (opsional)',
                       prefixIcon: const Icon(Icons.phone_outlined),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   keyboardType: TextInputType.phone),
@@ -988,15 +981,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         ss(() => errorMsg = 'Password minimal 6 karakter.');
                         return;
                       }
-                      final phone = phoneCtrl.text.trim();
-                      if (phone.isEmpty) {
-                        ss(() => errorMsg = 'No. HP wajib diisi.');
-                        return;
-                      }
-                      if (!_isValidPhone(phone)) {
-                        ss(() => errorMsg = 'Format No. HP tidak valid.\nContoh: 08123456789 atau +628123456789');
-                        return;
-                      }
 
                       ss(() { isLoading = true; errorMsg = null; });
 
@@ -1015,7 +999,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                             'email':     email,
                             'password':  pass,
                             'fullName':  name,
-                            'phone':     phone,
+                            'phone':     phoneCtrl.text.trim().isEmpty
+                                ? null
+                                : phoneCtrl.text.trim(),
                             'role':      selectedRole.name,
                             'branchId':  selectedBranchId,
                           },
