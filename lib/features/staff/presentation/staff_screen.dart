@@ -153,6 +153,13 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   bool _isValidEmail(String email) =>
       RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$').hasMatch(email);
 
+  // Validasi format nomor HP Indonesia
+  // Format valid: 08xx-xxxx-xxxx, 08xxxxxxxxxx, +628xx-xxxx-xxxx, +628xxxxxxxxxx
+  bool _isValidPhone(String phone) {
+    final cleaned = phone.replaceAll(RegExp(r'[\s\-]'), '');
+    return RegExp(r'^(\+62|62|0)8[1-9][0-9]{6,10}$').hasMatch(cleaned);
+  }
+
   List<StaffMember> get _filteredStaff {
     if (_searchQuery.isEmpty) return _staff;
     return _staff.where((s) =>
@@ -838,8 +845,11 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                   controller: phoneCtrl,
                   decoration: InputDecoration(
-                      labelText: 'No. HP (opsional)',
+                      labelText: 'No. HP *',
+                      hintText: '08xx-xxxx-xxxx',
                       prefixIcon: const Icon(Icons.phone_outlined),
+                      helperText: 'Format: 08xx-xxxx-xxxx atau +628xx-xxxx-xxxx',
+                      helperStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 11),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   keyboardType: TextInputType.phone),
               const SizedBox(height: 16),
@@ -981,6 +991,16 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         ss(() => errorMsg = 'Password minimal 6 karakter.');
                         return;
                       }
+                      final phone = phoneCtrl.text.trim();
+                      if (phone.isEmpty) {
+                        ss(() => errorMsg = 'No. HP wajib diisi.');
+                        return;
+                      }
+                      if (!_isValidPhone(phone)) {
+                        ss(() => errorMsg =
+                            'Format No. HP tidak valid.\nContoh: 0812-3456-7890 atau +6281234567890');
+                        return;
+                      }
 
                       ss(() { isLoading = true; errorMsg = null; });
 
@@ -999,9 +1019,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                             'email':     email,
                             'password':  pass,
                             'fullName':  name,
-                            'phone':     phoneCtrl.text.trim().isEmpty
-                                ? null
-                                : phoneCtrl.text.trim(),
+                            'phone':     phone, // sudah divalidasi wajib diisi
                             'role':      selectedRole.name,
                             'branchId':  selectedBranchId,
                           },
