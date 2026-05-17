@@ -631,7 +631,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => StaffPerformanceScreen(
-                                    branchId: s.branchId ?? _branchId ?? '',
+                                    branchId: _selectedFilterBranchId ?? _branchId ?? '',
                                   ),
                                 ),
                               );
