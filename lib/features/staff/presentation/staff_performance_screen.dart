@@ -137,11 +137,46 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
   String _selectedRole = 'all';
   static const _roles = ['all', 'waiter', 'cashier', 'manager', 'kitchen', 'host'];
 
+  // ── Branch filter ──────────────────────────────────────
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId;
+  bool _isSuperAdmin = false;
+
   @override
   void initState() {
     super.initState();
-    // FIX: inisialisasi locale id_ID sebelum load data
-    initializeDateFormatting('id_ID', null).then((_) => _loadData());
+    _selectedBranchId = widget.branchId.isEmpty ? null : widget.branchId;
+    initializeDateFormatting('id_ID', null).then((_) async {
+      await _checkSuperAdminAndFetchBranches();
+      _loadData();
+    });
+  }
+
+  Future<void> _checkSuperAdminAndFetchBranches() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+      final res = await Supabase.instance.client
+          .from('staff')
+          .select('role')
+          .eq('id', userId)
+          .maybeSingle();
+      if (res != null && res['role'] == 'superadmin') {
+        _isSuperAdmin = true;
+        final branches = await Supabase.instance.client
+            .from('branches')
+            .select('id, name')
+            .eq('is_active', true)
+            .order('name');
+        if (mounted) {
+          setState(() {
+            _branches = List<Map<String, dynamic>>.from(branches);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('_checkSuperAdminAndFetchBranches error: $e');
+    }
   }
 
   Future<void> _loadData() async {
@@ -157,7 +192,7 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
       final response = await Supabase.instance.client.rpc(
         'get_staff_performance',
         params: {
-          'p_branch_id': widget.branchId,
+          'p_branch_id': _selectedBranchId ?? widget.branchId,
           'p_month_start': monthStart.toIso8601String(),
           'p_month_end': monthEnd.toIso8601String(),
         },
@@ -194,6 +229,34 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
         title: const Text('Staff Performance'),
         centerTitle: false,
         actions: [
+          // ── Branch filter dropdown (superadmin only) ──
+          if (_isSuperAdmin && _branches.isNotEmpty)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: [
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                    value: b['id'] as String,
+                    child: Text(b['name'] as String,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 11, color: Colors.white)))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                    _data = [];
+                  });
+                  _loadData();
+                },
+              ),
+            ),
+          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
