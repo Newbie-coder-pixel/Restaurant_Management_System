@@ -25,15 +25,24 @@ class _BranchItem {
 
 // ── Quick Actions ──────────────────────────────────────────────────────
 const _quickActions = [
-  ('📊 Report Harian', 'Buatkan report harian lengkap hari ini'),
-  ('📈 Bandingkan Minggu', 'Bandingkan revenue minggu ini vs minggu lalu'),
-  ('🏆 Menu Terlaris', 'Menu apa yang paling terlaris bulan ini?'),
-  ('📅 Booking Hari Ini', 'Tampilkan semua booking hari ini beserta detailnya'),
-  ('💰 Revenue Bulan Ini', 'Berapa total revenue bulan ini dan tren pertumbuhannya?'),
-  ('🍽️ Info Menu', 'Tampilkan semua menu beserta harga, kategori, dan info allergen/dietary-nya'),
-  ('💡 Margin Menu', 'Menu mana yang margin keuntungannya paling tinggi? Tampilkan perbandingannya'),
-  ('📥 Export Laporan', '__export__'),
+ const _quickActionsV2 = [
+  _QuickAction(label: 'Report Harian',      emoji: '📊', prompt: 'Buatkan report harian lengkap hari ini',                                                          category: 'analytics'),
+  _QuickAction(label: 'Bandingkan Minggu',  emoji: '📈', prompt: 'Bandingkan revenue minggu ini vs minggu lalu',                                                    category: 'analytics'),
+  _QuickAction(label: 'Menu Terlaris',      emoji: '🏆', prompt: 'Menu apa yang paling terlaris bulan ini?',                                                        category: 'menu'),
+  _QuickAction(label: 'Booking Hari Ini',   emoji: '📅', prompt: 'Tampilkan semua booking hari ini beserta detailnya',                                              category: 'booking'),
+  _QuickAction(label: 'Revenue Bulan Ini',  emoji: '💰', prompt: 'Berapa total revenue bulan ini dan tren pertumbuhannya?',                                         category: 'analytics'),
+  _QuickAction(label: 'Info Menu',          emoji: '🍽️', prompt: 'Tampilkan semua menu beserta harga, kategori, dan info allergen/dietary-nya',                    category: 'menu'),
+  _QuickAction(label: 'Margin Menu',        emoji: '💡', prompt: 'Menu mana yang margin keuntungannya paling tinggi? Tampilkan perbandingannya',                    category: 'menu'),
+  _QuickAction(label: 'Export Laporan',     emoji: '📥', prompt: '__export__',                                                                                      category: 'export'),
 ];
+
+class _QuickAction {
+  final String label;
+  final String emoji;
+  final String prompt;
+  final String category;
+  const _QuickAction({required this.label, required this.emoji, required this.prompt, required this.category});
+}
 
 // Keyword trigger export
 const _exportKeywords = [
@@ -55,6 +64,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final _scrollCtrl = ScrollController();
 
   List<String> _lowStockAlert = [];
+bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
 
   // ── Sentiment Detection ────────────────────────────────────────────
   static const _negativeKeywords = [
@@ -1126,57 +1136,110 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
   }
 
   // ── Quick Actions ──────────────────────────────────────────────────
-  Widget _buildQuickActions() => Container(
-        color: AppColors.surface,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _quickActions.map((e) {
-              final isExport = e.$2 == '__export__';
-              final isMenu = e.$1.contains('🍽️') || e.$1.contains('💡');
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () => _send(e.$2),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: isExport
-                          ? Colors.green.withValues(alpha: 0.12)
-                          : isMenu
-                              ? Colors.orange.withValues(alpha: 0.12)
-                              : AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isExport
-                            ? Colors.green.withValues(alpha: 0.5)
-                            : isMenu
-                                ? Colors.orange.withValues(alpha: 0.5)
-                                : AppColors.primary.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      e.$1,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isExport
-                            ? Colors.green[700]
-                            : isMenu
-                                ? Colors.orange[800]
-                                : AppColors.primary,
-                      ),
-                    ),
-                  ),
+  Widget _buildQuickActions() {
+  return AnimatedContainer(
+    duration: const Duration(milliseconds: 250),
+    curve: Curves.easeInOut,
+    color: AppColors.surface,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── Header toggle ──────────────────────────────────────
+        InkWell(
+          onTap: () => setState(() => _quickActionsExpanded = !_quickActionsExpanded),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: const BoxDecoration(
+              border: Border(
+                top: BorderSide(color: AppColors.border),
+                bottom: BorderSide(color: AppColors.border),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.flash_on_rounded, size: 14, color: AppColors.primary),
+                const SizedBox(width: 6),
+                const Text('Quick Actions',
+                  style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12,
+                    fontWeight: FontWeight.w600, color: AppColors.primary)),
+                const Spacer(),
+                AnimatedRotation(
+                  turns: _quickActionsExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 250),
+                  child: const Icon(Icons.expand_more, size: 18, color: AppColors.textSecondary),
                 ),
-              );
-            }).toList(),
+              ],
+            ),
           ),
         ),
-      );
+
+        // ── Grid 2 kolom (hanya saat expanded) ────────────────
+        if (_quickActionsExpanded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 3.0,
+              ),
+              itemCount: _quickActionsV2.length,
+              itemBuilder: (_, i) {
+                final action = _quickActionsV2[i];
+                return _QuickActionButton(
+                  action: action,
+                  onTap: () => _send(action.prompt),
+                );
+              },
+            ),
+          ),
+
+        // ── Horizontal scroll kecil saat collapsed ─────────────
+        if (!_quickActionsExpanded)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+            child: Row(
+              children: _quickActionsV2.map((action) {
+                final color = _categoryColor(action.category);
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => _send(action.prompt),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: color.withValues(alpha: 0.4)),
+                      ),
+                      child: Text('${action.emoji} ${action.label}',
+                        style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 12,
+                          fontWeight: FontWeight.w600, color: color)),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+Color _categoryColor(String category) {
+  switch (category) {
+    case 'menu':    return Colors.orange;
+    case 'booking': return Colors.purple;
+    case 'export':  return Colors.green;
+    default:        return AppColors.primary;
+  }
+}
 
   // ── Input ──────────────────────────────────────────────────────────
   Widget _buildInput(bool isTyping) => Container(
@@ -1327,5 +1390,50 @@ class _SidebarItem extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+// ── Quick Action Button Widget ────────────────────────────────────────────────
+class _QuickActionButton extends StatelessWidget {
+  final _QuickAction action;
+  final VoidCallback onTap;
+  const _QuickActionButton({required this.action, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFor(action.category);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            Text(action.emoji, style: const TextStyle(fontSize: 16)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(action.label,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 12,
+                  fontWeight: FontWeight.w600, color: color)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Color _colorFor(String category) {
+    switch (category) {
+      case 'menu':    return Colors.orange;
+      case 'booking': return Colors.purple;
+      case 'export':  return Colors.green;
+      default:        return AppColors.primary;
+    }
   }
 }

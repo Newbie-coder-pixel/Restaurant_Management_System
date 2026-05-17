@@ -1,3 +1,5 @@
+============================================================
+
 import 'package:flutter/material.dart';
 
 enum TableStatus { available, occupied, reserved, cleaning }
@@ -36,12 +38,15 @@ class TableModel {
   final int floorLevel;
   final bool isMergeable;
   final String? notes;
+  // ── IMPROVEMENT: tambah updatedAt untuk occupied timer ──
+  final DateTime? updatedAt;
 
   const TableModel({
     required this.id, required this.branchId, required this.tableNumber,
     required this.capacity, required this.status, required this.shape,
     required this.positionX, required this.positionY, required this.floorLevel,
     required this.isMergeable, this.notes,
+    this.updatedAt, // ← BARU
   });
 
   factory TableModel.fromJson(Map<String, dynamic> j) => TableModel(
@@ -55,6 +60,10 @@ class TableModel {
     floorLevel: j['floor_level'] ?? 1,
     isMergeable: j['is_mergeable'] ?? true,
     notes: j['notes'],
+    // ── IMPROVEMENT: baca updated_at dari database ──
+    updatedAt: j['updated_at'] != null
+        ? DateTime.tryParse(j['updated_at'])?.toLocal()
+        : null,
   );
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +78,7 @@ class TableModel {
       id: id, branchId: branchId, tableNumber: tableNumber,
       capacity: capacity, shape: shape, floorLevel: floorLevel,
       isMergeable: isMergeable, notes: notes,
+      updatedAt: updatedAt, // ← BARU
       status: status ?? this.status,
       positionX: positionX ?? this.positionX,
       positionY: positionY ?? this.positionY,

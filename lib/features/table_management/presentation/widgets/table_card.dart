@@ -1,13 +1,58 @@
+
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/models/table_model.dart';
 import '../../../../core/theme/app_theme.dart';
 
-class TableCard extends StatelessWidget {
+class TableCard extends StatefulWidget {          // ← GANTI jadi StatefulWidget
   final TableModel table;
   final void Function(TableStatus) onStatusChange;
 
   const TableCard({super.key, required this.table, required this.onStatusChange});
+
+  @override
+  State<TableCard> createState() => _TableCardState();
+}
+
+class _TableCardState extends State<TableCard> {
+  Timer? _timer;
+  int _minutesOccupied = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateTimer();
+    // Refresh timer tiap 60 detik
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (mounted) setState(_updateTimer);
+    });
+  }
+
+  void _updateTimer() {
+    if (widget.table.status == TableStatus.occupied &&
+        widget.table.updatedAt != null) {
+      final diff = DateTime.now().difference(widget.table.updatedAt!);
+      _minutesOccupied = diff.inMinutes;
+    } else {
+      _minutesOccupied = 0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(TableCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.table.status != widget.table.status ||
+        oldWidget.table.updatedAt != widget.table.updatedAt) {
+      setState(_updateTimer);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   void _showMenu(BuildContext context) {
     showModalBottomSheet(
@@ -16,87 +61,151 @@ class TableCard extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _StatusBottomSheet(table: table, onStatusChange: onStatusChange),
+      builder: (_) => _StatusBottomSheet(
+          table: widget.table, onStatusChange: widget.onStatusChange),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final table = widget.table;
     final color = table.status.color;
     final isCleaning = table.status == TableStatus.cleaning;
+    final isOccupied = table.status == TableStatus.occupied;
+
+    // Warna timer: hijau < 60 mnt, kuning 60-90, merah > 90
+    Color timerColor = const Color(0xFF4CAF50);
+    if (_minutesOccupied >= 90) {
+      timerColor = Colors.red;
+    } else if (_minutesOccupied >= 60) {
+      timerColor = Colors.orange;
+    }
 
     return GestureDetector(
       onTap: () => _showMenu(context),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: color.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withValues(alpha: 0.5), width: 2),
           boxShadow: [
             BoxShadow(
               color: color.withValues(alpha: 0.15),
-              blurRadius: 8, offset: const Offset(0, 3)),
+              blurRadius: 8,
+              offset: const Offset(0, 3)),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
           children: [
-            _buildTableIcon(),
-            const SizedBox(height: 8),
-            Text('Meja ${table.tableNumber}',
-              style: TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-                fontSize: 15, color: color)),
-            const SizedBox(height: 4),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
-              const SizedBox(width: 3),
-              Text('${table.capacity} orang',
-                style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
-            ]),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: color, borderRadius: BorderRadius.circular(12)),
-              child: Text(table.status.label,
-                style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 10,
-                  fontWeight: FontWeight.w600, color: Colors.white)),
-            ),
-            if (isCleaning) ...[
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => _confirmCleaningDone(context),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            // ── Main content ──────────────────────────────────────
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 8),
+                _buildTableIcon(table),
+                const SizedBox(height: 8),
+                Text('Meja ${table.tableNumber}',
+                  style: TextStyle(
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                    fontSize: 15, color: color)),
+                const SizedBox(height: 4),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.person_outline,
+                      size: 12, color: AppColors.textSecondary),
+                  const SizedBox(width: 3),
+                  Text('${table.capacity} orang',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: AppColors.textSecondary)),
+                ]),
+                const SizedBox(height: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF4CAF50),
-                    borderRadius: BorderRadius.circular(10),
+                    color: color, borderRadius: BorderRadius.circular(12)),
+                  child: Text(table.status.label,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 10,
+                      fontWeight: FontWeight.w600, color: Colors.white)),
+                ),
+                if (isCleaning) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => _confirmCleaningDone(context),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 10),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4CAF50),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF4CAF50).withValues(alpha: 0.35),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2)),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle_rounded,
+                              size: 12, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text('Siap Dipakai',
+                            style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 10,
+                              fontWeight: FontWeight.w700, color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+              ],
+            ),
+
+            // ── IMPROVEMENT: Occupied timer badge di pojok kanan atas ──
+            if (isOccupied && _minutesOccupied > 0)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: timerColor,
+                    borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF4CAF50).withValues(alpha: 0.35),
-                        blurRadius: 6, offset: const Offset(0, 2)),
+                        color: timerColor.withValues(alpha: 0.4),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1)),
                     ],
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_circle_rounded, size: 12, color: Colors.white),
-                      SizedBox(width: 4),
-                      Text('Siap Dipakai',
-                        style: TextStyle(
-                          fontFamily: 'Poppins', fontSize: 10,
-                          fontWeight: FontWeight.w700, color: Colors.white)),
+                      const Icon(Icons.timer_outlined,
+                          size: 10, color: Colors.white),
+                      const SizedBox(width: 2),
+                      Text(
+                        _minutesOccupied >= 60
+                            ? '${(_minutesOccupied / 60).toStringAsFixed(0)}j ${_minutesOccupied % 60}m'
+                            : '${_minutesOccupied}m',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
                     ],
                   ),
                 ),
               ),
-            ],
           ],
         ),
       ),
@@ -129,13 +238,15 @@ class TableCard extends StatelessWidget {
             children: [
               const TextSpan(text: 'Tandai '),
               TextSpan(
-                text: 'Meja ${table.tableNumber}',
+                text: 'Meja ${widget.table.tableNumber}',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
               const TextSpan(text: ' sebagai '),
               const TextSpan(
                 text: 'Tersedia',
-                style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
-              const TextSpan(text: '?\n\nPastikan meja sudah bersih dan siap untuk tamu berikutnya.'),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
+              const TextSpan(
+                  text: '?\n\nPastikan meja sudah bersih dan siap untuk tamu berikutnya.'),
             ],
           ),
         ),
@@ -143,52 +254,68 @@ class TableCard extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Belum',
-              style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary))),
+              style: TextStyle(
+                  fontFamily: 'Poppins', color: AppColors.textSecondary))),
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
-              onStatusChange(TableStatus.available);
+              widget.onStatusChange(TableStatus.available);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10))),
             icon: const Icon(Icons.check_rounded, size: 16),
             label: const Text('Ya, Siap!',
-              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700))),
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w700))),
         ],
       ),
     );
   }
 
-  Widget _buildTableIcon() {
+  // ── IMPROVEMENT: Icon shape dengan gradient fill ──────────────────
+  Widget _buildTableIcon(TableModel table) {
     final color = table.status.color;
     switch (table.shape) {
       case TableShape.round:
         return Container(
-          width: 44, height: 44,
+          width: 46, height: 46,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: color.withValues(alpha: 0.2),
+            gradient: LinearGradient(
+              colors: [color.withValues(alpha: 0.3), color.withValues(alpha: 0.1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             border: Border.all(color: color, width: 2)),
           child: Icon(Icons.table_restaurant, color: color, size: 22),
         );
       case TableShape.rectangle:
         return Container(
-          width: 54, height: 36,
+          width: 56, height: 38,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(6),
-            color: color.withValues(alpha: 0.2),
+            gradient: LinearGradient(
+              colors: [color.withValues(alpha: 0.3), color.withValues(alpha: 0.1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             border: Border.all(color: color, width: 2)),
           child: Icon(Icons.table_restaurant, color: color, size: 20),
         );
       case TableShape.square:
         return Container(
-          width: 44, height: 44,
+          width: 46, height: 46,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            color: color.withValues(alpha: 0.2),
+            gradient: LinearGradient(
+              colors: [color.withValues(alpha: 0.3), color.withValues(alpha: 0.1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             border: Border.all(color: color, width: 2)),
           child: Icon(Icons.table_restaurant, color: color, size: 22),
         );
@@ -196,7 +323,9 @@ class TableCard extends StatelessWidget {
   }
 }
 
-// ── Model sederhana untuk data booking ──────────────────────────
+// ── Semua kode di bawah ini TIDAK BERUBAH dari versi aslinya ─────────────────
+// (copy paste model classes & bottom sheet dari file asli lo ke sini)
+
 class _BookingDetail {
   final String customerName;
   final String? customerPhone;
@@ -236,7 +365,6 @@ class _BookingDetail {
   );
 }
 
-// ── Model sederhana untuk data order ────────────────────────────
 class _OrderDetail {
   final String orderNumber;
   final String? customerName;
@@ -280,16 +408,17 @@ class _OrderDetail {
     taxAmount: (j['tax_amount'] ?? 0).toDouble(),
     totalAmount: (j['total_amount'] ?? 0).toDouble(),
     notes: j['notes'],
-    createdAt: (DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now()).toLocal(),
+    createdAt:
+        (DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now()).toLocal(),
     items: j['items'] ?? [],
   );
 }
 
-// ── Bottom sheet utama ───────────────────────────────────────────
 class _StatusBottomSheet extends StatefulWidget {
   final TableModel table;
   final void Function(TableStatus) onStatusChange;
-  const _StatusBottomSheet({required this.table, required this.onStatusChange});
+  const _StatusBottomSheet(
+      {required this.table, required this.onStatusChange});
 
   @override
   State<_StatusBottomSheet> createState() => _StatusBottomSheetState();
@@ -314,7 +443,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
   Future<void> _fetchOrder() async {
     setState(() => _loadingOrder = true);
     try {
-      // ✅ FIX: fetch order beserta order_items sekaligus
       final res = await Supabase.instance.client
           .from('orders')
           .select('''
@@ -332,7 +460,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
 
       if (mounted) {
         if (res != null) {
-          // ✅ Normalize items dari order_items join
           final rawItems = (res['order_items'] as List<dynamic>? ?? []);
           final normalizedItems = rawItems.map((item) => {
             'name': item['menu_item_name'] ?? '-',
@@ -401,7 +528,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header ──────────────────────────────────────────
           Row(children: [
             Text('Meja ${table.tableNumber}', style: AppTextStyles.heading3),
             const Spacer(),
@@ -416,36 +542,36 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             ),
           ]),
           const SizedBox(height: 4),
-          Text('Kapasitas: ${table.capacity} orang', style: AppTextStyles.bodySecondary),
+          Text('Kapasitas: ${table.capacity} orang',
+              style: AppTextStyles.bodySecondary),
 
-          // ── Detail Reservasi ─────────────────────────────────
           if (table.status == TableStatus.reserved) ...[
             const SizedBox(height: 16),
             _buildReservationSection(color),
           ],
 
-          // ── Detail Order / Terisi ─────────────────────────────
           if (table.status == TableStatus.occupied) ...[
             const SizedBox(height: 16),
             _buildOrderSection(color),
           ],
 
-          // ── Ubah Status ──────────────────────────────────────
           const SizedBox(height: 20),
           const Text('Ubah Status:',
             style: TextStyle(
               fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
           const SizedBox(height: 12),
-          ...TableStatus.values.where((s) => s != table.status).map((s) => ListTile(
-            leading: CircleAvatar(backgroundColor: s.color, radius: 8),
-            title: Text(s.label,
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.pop(context);
-              widget.onStatusChange(s);
-            },
-          )),
+          ...TableStatus.values
+              .where((s) => s != table.status)
+              .map((s) => ListTile(
+                leading: CircleAvatar(backgroundColor: s.color, radius: 8),
+                title: Text(s.label,
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onStatusChange(s);
+                },
+              )),
         ],
       ),
     );
@@ -453,38 +579,11 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
 
   Widget _buildOrderSection(Color color) {
     if (_loadingOrder) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: const Center(
-          child: SizedBox(
-            height: 20, width: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
+      return _loadingBox(color);
     }
 
     if (_order == null) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(children: [
-          Icon(Icons.info_outline, color: color, size: 18),
-          const SizedBox(width: 8),
-          const Text('Tidak ada data order aktif',
-            style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
-        ]),
-      );
+      return _emptyBox(color, 'Tidak ada data order aktif');
     }
 
     final o = _order!;
@@ -492,8 +591,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
         ? const Color(0xFF4CAF50)
         : const Color(0xFFE94560);
     final payLabel = o.paymentStatus == 'paid' ? 'Lunas' : 'Belum Bayar';
-
-    // Konversi ke local time (otomatis ikut timezone device)
     final localTime = o.createdAt.toLocal();
     final jamMasuk =
         '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')} WIB';
@@ -508,7 +605,6 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Judul seksi ──
           Row(children: [
             Icon(Icons.receipt_long_rounded, color: color, size: 16),
             const SizedBox(width: 6),
@@ -531,44 +627,47 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           ]),
           const SizedBox(height: 12),
 
-          // ✅ Nama pemesan
           if (o.customerName != null && o.customerName!.isNotEmpty)
             _detailRow(Icons.person_rounded, 'Pemesan', o.customerName!),
           if (o.customerPhone != null && o.customerPhone!.isNotEmpty)
             _detailRow(Icons.phone_rounded, 'No. HP', o.customerPhone!),
-
-          // ✅ Jam mulai memesan (WIB)
           _detailRow(Icons.access_time_rounded, 'Mulai Pesan', jamMasuk),
 
           const Divider(height: 16),
 
-          // ── Items (maks 3 item) ──
           if (o.items.isNotEmpty) ...[
             Row(children: [
-              const Icon(Icons.fastfood_rounded, size: 14, color: AppColors.textSecondary),
+              const Icon(Icons.fastfood_rounded,
+                  size: 14, color: AppColors.textSecondary),
               const SizedBox(width: 8),
               Text('Item (${o.items.length})',
                 style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: AppColors.textSecondary)),
             ]),
             const SizedBox(height: 6),
             ...o.items.take(3).map((item) {
               final name = item['name'] ?? item['menu_item_name'] ?? '-';
               final qty = item['quantity'] ?? 1;
-              final price = (item['price'] ?? item['unit_price'] ?? 0).toDouble();
+              final price =
+                  (item['price'] ?? item['unit_price'] ?? 0).toDouble();
               return Padding(
                 padding: const EdgeInsets.only(left: 22, bottom: 4),
                 child: Row(children: [
                   Expanded(
                     child: Text('$qty× $name',
                       style: const TextStyle(
-                        fontFamily: 'Poppins', fontSize: 12,
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
                         color: AppColors.textPrimary)),
                   ),
                   Text(_formatCurrency(price * qty),
                     style: const TextStyle(
-                      fontFamily: 'Poppins', fontSize: 12,
-                      fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary)),
                 ]),
               );
             }),
@@ -577,25 +676,24 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
                 padding: const EdgeInsets.only(left: 22),
                 child: Text('+ ${o.items.length - 3} item lainnya',
                   style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11,
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
                     color: AppColors.textHint)),
               ),
             const Divider(height: 16),
           ],
 
-          // ── Total & payment ──
           if (o.discountAmount > 0)
             _detailRow(Icons.discount_rounded, 'Diskon',
               '- ${_formatCurrency(o.discountAmount)}'),
           if (o.taxAmount > 0)
-            _detailRow(Icons.percent_rounded, 'Pajak',
-              _formatCurrency(o.taxAmount)),
-          _detailRow(Icons.payments_rounded, 'Total',
-            _formatCurrency(o.totalAmount)),
+            _detailRow(
+                Icons.percent_rounded, 'Pajak', _formatCurrency(o.taxAmount)),
+          _detailRow(
+              Icons.payments_rounded, 'Total', _formatCurrency(o.totalAmount)),
 
           const SizedBox(height: 8),
 
-          // ── Status pembayaran badge ──
           Row(children: [
             const SizedBox(width: 22),
             Container(
@@ -622,12 +720,10 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
               const SizedBox(width: 8),
               Text('via ${o.paymentMethod}',
                 style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11,
-                  color: AppColors.textHint)),
+                  fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
             ],
           ]),
 
-          // ── Notes ──
           if (o.notes != null && o.notes!.isNotEmpty) ...[
             const Divider(height: 16),
             _detailRow(Icons.note_rounded, 'Catatan', o.notes!),
@@ -637,48 +733,10 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
     );
   }
 
-  String _formatCurrency(double amount) {
-    final formatted = amount.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]}.',
-    );
-    return 'Rp $formatted';
-  }
-
   Widget _buildReservationSection(Color color) {
-    if (_loadingBooking) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: const Center(
-          child: SizedBox(
-            height: 20, width: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-
+    if (_loadingBooking) return _loadingBox(color);
     if (_booking == null) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(children: [
-          Icon(Icons.info_outline, color: color, size: 18),
-          const SizedBox(width: 8),
-          const Text('Tidak ada data reservasi aktif',
-            style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
-        ]),
-      );
+      return _emptyBox(color, 'Tidak ada data reservasi aktif');
     }
 
     final b = _booking!;
@@ -702,7 +760,8 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             if (b.confirmationCode != null) ...[
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -724,9 +783,12 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
 
           const Divider(height: 16),
 
-          _detailRow(Icons.calendar_today_rounded, 'Tanggal', _formatDate(b.bookingDate)),
-          _detailRow(Icons.access_time_rounded, 'Jam', '${b.bookingTime} (${b.durationMinutes} menit)'),
-          _detailRow(Icons.people_rounded, 'Jumlah Tamu', '${b.guestCount} orang'),
+          _detailRow(Icons.calendar_today_rounded, 'Tanggal',
+              _formatDate(b.bookingDate)),
+          _detailRow(Icons.access_time_rounded, 'Jam',
+              '${b.bookingTime} (${b.durationMinutes} menit)'),
+          _detailRow(
+              Icons.people_rounded, 'Jumlah Tamu', '${b.guestCount} orang'),
 
           if (b.specialRequests != null && b.specialRequests!.isNotEmpty) ...[
             const Divider(height: 16),
@@ -734,6 +796,43 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _loadingBox(Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: const Center(
+        child: SizedBox(
+          height: 20, width: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyBox(Color color, String message) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        Icon(Icons.info_outline, color: color, size: 18),
+        const SizedBox(width: 8),
+        Text(message,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            color: AppColors.textSecondary)),
+      ]),
     );
   }
 
@@ -749,26 +848,41 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             width: 80,
             child: Text(label,
               style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                color: AppColors.textSecondary)),
           ),
           const Text(': ',
             style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           Expanded(
             child: Text(value,
               style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 12,
-                fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
           ),
         ],
       ),
     );
   }
 
+  String _formatCurrency(double amount) {
+    final formatted = amount.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]}.',
+    );
+    return 'Rp $formatted';
+  }
+
   String _formatDate(String raw) {
     try {
       final dt = DateTime.parse(raw);
       const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-      const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+        'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      ];
       return '${days[dt.weekday - 1]}, ${dt.day} ${months[dt.month - 1]} ${dt.year}';
     } catch (_) {
       return raw;
