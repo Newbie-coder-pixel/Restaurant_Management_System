@@ -159,7 +159,7 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
       final res = await Supabase.instance.client
           .from('staff')
           .select('role')
-          .eq('id', userId)
+          .eq('user_id', userId)
           .maybeSingle();
       if (res != null && res['role'] == 'superadmin') {
         _isSuperAdmin = true;
