@@ -24,8 +24,7 @@ class _BranchItem {
 }
 
 // ── Quick Actions ──────────────────────────────────────────────────────
-const _quickActions = [
- const _quickActionsV2 = [
+const _quickActionsV2 = [
   _QuickAction(label: 'Report Harian',      emoji: '📊', prompt: 'Buatkan report harian lengkap hari ini',                                                          category: 'analytics'),
   _QuickAction(label: 'Bandingkan Minggu',  emoji: '📈', prompt: 'Bandingkan revenue minggu ini vs minggu lalu',                                                    category: 'analytics'),
   _QuickAction(label: 'Menu Terlaris',      emoji: '🏆', prompt: 'Menu apa yang paling terlaris bulan ini?',                                                        category: 'menu'),
