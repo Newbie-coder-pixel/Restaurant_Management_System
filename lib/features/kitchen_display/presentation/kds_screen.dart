@@ -103,7 +103,8 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               quantity, subtotal, special_requests, status
             )
           ''')
-          .inFilter('status', ['new', 'created', 'preparing']);
+          .inFilter('status', ['new', 'created', 'preparing'])
+          .gt('total_amount', 0); // exclude order kosong (0 item / Rp 0)
 
       if (targetBranch != null) {
         query = query.eq('branch_id', targetBranch);
@@ -147,7 +148,10 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
 
       if (mounted) {
         setState(() {
-          _orders = (res as List).map((e) => OrderModel.fromJson(e)).toList();
+          _orders = (res as List)
+              .map((e) => OrderModel.fromJson(e))
+              .where((o) => o.items.isNotEmpty) // double-check: skip order tanpa item
+              .toList();
           _readyCount = (readyRes as List).length;
           _lowStockItems = lowStock; // FIX Bug 1: assign ke state agar banner muncul
           _isLoading = false;
