@@ -470,67 +470,48 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                   Builder(builder: (ctx) => IconButton(
                     icon: const Icon(Icons.menu, color: Colors.white),
                     onPressed: () => Scaffold.of(ctx).openDrawer())),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Order Management',
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
-                            fontWeight: FontWeight.w600, color: Colors.white)),
-                        // ── Branch dropdown untuk superadmin ─────────────────
-                        if (_isSuperAdmin)
-                          DropdownButtonHideUnderline(
-                            child: DropdownButton<String?>(
-                              value: _selectedBranchId,
-                              isDense: true,
-                              dropdownColor: const Color(0xFF1A1A2E),
-                              iconEnabledColor: Colors.white60,
-                              icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.white70,
-                              ),
-                              items: [
-                                const DropdownMenuItem<String?>(
-                                  value: null,
-                                  child: Text(
-                                    'Semua Cabang',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 11,
-                                      color: Colors.white70,
-                                    ),
-                                  ),
-                                ),
-                                ..._branches.map((b) => DropdownMenuItem<String?>(
-                                  value: b['id'] as String,
-                                  child: Text(
-                                    b['name'] as String,
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 11,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                )),
-                              ],
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedBranchId = val;
-                                  _orders = [];
-                                  _history = [];
-                                  _selectedGroup = '';
-                                });
-                                _load();
-                                _subscribeRealtime();
-                                if (_tab.index == 2) _loadHistory();
-                              },
-                            ),
-                          ),
-                      ],
-                    ),
+                  const Expanded(
+                    child: Text('Order Management',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                        fontWeight: FontWeight.w600, color: Colors.white)),
                   ),
+                  // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+                  if (_isSuperAdmin)
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: _selectedBranchId,
+                        isDense: true,
+                        dropdownColor: const Color(0xFF1A1A2E),
+                        iconEnabledColor: Colors.white60,
+                        icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                        style: const TextStyle(
+                          fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Semua Cabang',
+                              style: TextStyle(
+                                fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
+                          ..._branches.map((b) => DropdownMenuItem<String?>(
+                            value: b['id'] as String,
+                            child: Text(b['name'] as String,
+                              style: const TextStyle(
+                                fontFamily: 'Poppins', fontSize: 11, color: Colors.white)))),
+                        ],
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedBranchId = val;
+                            _orders = [];
+                            _history = [];
+                            _selectedGroup = '';
+                          });
+                          _load();
+                          _subscribeRealtime();
+                          if (_tab.index == 2) _loadHistory();
+                        },
+                      ),
+                    ),
+                  const SizedBox(width: 4),
                   IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _load),
                 ]),
               ),

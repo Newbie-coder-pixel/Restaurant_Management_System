@@ -239,6 +239,37 @@ class _TableScreenState extends ConsumerState<TableScreen> {
                   fontWeight: FontWeight.w700, color: Color(0xFF4CAF50)),
               ),
             ),
+          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+          if (_userRole == StaffRole.superadmin)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                    value: b.id,
+                    child: Text(b.name,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white)))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                    _isLoading = true;
+                  });
+                  _load();
+                },
+              ),
+            ),
+          const SizedBox(width: 4),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           const SizedBox(width: 4),
         ],
@@ -304,49 +335,31 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Row(
+          : Column(
               children: [
-                // ── Sidebar branch (superadmin only) ──────────────
-                if (_userRole == StaffRole.superadmin)
-                  _BranchSidebar(
-                    branches: _branches,
-                    selectedBranchId: _selectedBranchId,
-                    onSelect: (id) {
-                      setState(() {
-                        _selectedBranchId = id;
-                        _isLoading = true;
-                      });
-                      _load();
-                    },
-                  ),
-                // ── Main content ───────────────────────────────────
+                _buildSummaryBar(),
+                _buildFilterChips(),
                 Expanded(
-                  child: Column(children: [
-                    _buildSummaryBar(),
-                    _buildFilterChips(),
-                    Expanded(
-                      child: _filtered.isEmpty && _tables.isEmpty
-                          ? _buildEmptyState()
-                          : _filtered.isEmpty
-                              ? _buildNoFilterResult()
-                              : GridView.builder(
-                                  padding: const EdgeInsets.all(16),
-                                  gridDelegate:
-                                    const SliverGridDelegateWithMaxCrossAxisExtent(
-                                      maxCrossAxisExtent: 200,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                      childAspectRatio: 0.85,
-                                    ),
-                                  itemCount: _filtered.length,
-                                  itemBuilder: (ctx, i) => TableCard(
-                                    table: _filtered[i],
-                                    onStatusChange: (s) =>
-                                      _updateStatus(_filtered[i].id, s),
-                                  ),
+                  child: _filtered.isEmpty && _tables.isEmpty
+                      ? _buildEmptyState()
+                      : _filtered.isEmpty
+                          ? _buildNoFilterResult()
+                          : GridView.builder(
+                              padding: const EdgeInsets.all(16),
+                              gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 200,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 0.85,
                                 ),
-                    ),
-                  ]),
+                              itemCount: _filtered.length,
+                              itemBuilder: (ctx, i) => TableCard(
+                                table: _filtered[i],
+                                onStatusChange: (s) =>
+                                  _updateStatus(_filtered[i].id, s),
+                              ),
+                            ),
                 ),
               ],
             ),
@@ -494,93 +507,4 @@ class _BranchItem {
   final String id;
   final String name;
   _BranchItem({required this.id, required this.name});
-}
-
-// ── Branch sidebar widget ──────────────────────────────────────────────
-class _BranchSidebar extends StatelessWidget {
-  final List<_BranchItem> branches;
-  final String? selectedBranchId;
-  final void Function(String?) onSelect;
-
-  const _BranchSidebar({
-    required this.branches,
-    required this.selectedBranchId,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 100,
-      color: AppColors.primary,
-      child: Column(
-        children: [
-          // "Semua" item
-          _SidebarItem(
-            label: 'Semua',
-            isSelected: selectedBranchId == null,
-            onTap: () => onSelect(null),
-          ),
-          const Divider(color: Colors.white24, height: 1),
-          // Per-branch items
-          Expanded(
-            child: ListView.builder(
-              itemCount: branches.length,
-              itemBuilder: (ctx, i) => _SidebarItem(
-                label: branches[i].name,
-                isSelected: selectedBranchId == branches[i].id,
-                onTap: () => onSelect(branches[i].id),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarItem extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _SidebarItem({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withValues(alpha: 0.15)
-              : Colors.transparent,
-          border: isSelected
-              ? const Border(
-                  left: BorderSide(color: Colors.white, width: 3),
-                )
-              : null,
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            color: isSelected ? Colors.white : Colors.white60,
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
 }

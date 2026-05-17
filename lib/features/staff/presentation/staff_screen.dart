@@ -1040,6 +1040,42 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
             fontWeight: FontWeight.w600,
             color: Colors.white),
         actions: [
+          // ── Branch filter dropdown (superadmin only) — sejajar sebelum refresh ──
+          if (isSuperadmin && _allBranches.isNotEmpty)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedFilterBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.white70)),
+                  ),
+                  ..._allBranches.map((b) => DropdownMenuItem<String?>(
+                        value: b['id'] as String,
+                        child: Text(b['name'] as String,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white)),
+                      )),
+                ],
+                onChanged: (val) {
+                  setState(() => _selectedFilterBranchId = val);
+                  _load();
+                },
+              ),
+            ),
+          const SizedBox(width: 4),
           IconButton(
               icon: const Icon(Icons.bar_chart_outlined),
               tooltip: 'Performa Staff',
@@ -1068,90 +1104,24 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
         bottom: PreferredSize(
-          preferredSize: Size.fromHeight(isSuperadmin && _allBranches.isNotEmpty ? 104 : 48),
-          child: Column(
-            children: [
-              if (isSuperadmin && _allBranches.isNotEmpty)
-                Container(
-                  color: AppColors.primary.withValues(alpha: 0.85),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.store_outlined, color: Colors.white70, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String?>(
-                            value: _selectedFilterBranchId,
-                            dropdownColor: const Color(0xFF3D2C8D),
-                            iconEnabledColor: Colors.white,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 13,
-                                color: Colors.white),
-                            items: [
-                              const DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('🏢 Semua Branch',
-                                    style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 13,
-                                        color: Colors.white)),
-                              ),
-                              ..._allBranches.map((b) => DropdownMenuItem<String?>(
-                                value: b['id'] as String,
-                                child: Text('📍 ${b['name']}',
-                                    style: const TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 13,
-                                        color: Colors.white)),
-                              )),
-                            ],
-                            onChanged: (value) {
-                              setState(() => _selectedFilterBranchId = value);
-                              _load();
-                            },
-                          ),
-                        ),
-                      ),
-                      if (!_isLoading)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${_staff.length} staff',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white70,
-                  indicator: const UnderlineTabIndicator(
-                    borderSide: BorderSide(color: Colors.white, width: 2),
-                    insets: EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                  labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14),
-                  unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-                  tabs: const [
-                    Tab(text: 'Staff', icon: Icon(Icons.people_outline, size: 18)),
-                    Tab(text: 'Rekap Shift', icon: Icon(Icons.calendar_today_outlined, size: 18)),
-                  ],
-                ),
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TabBar(
+              controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              indicator: const UnderlineTabIndicator(
+                borderSide: BorderSide(color: Colors.white, width: 2),
+                insets: EdgeInsets.symmetric(horizontal: 16),
               ),
-            ],
+              labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14),
+              unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+              tabs: const [
+                Tab(text: 'Staff', icon: Icon(Icons.people_outline, size: 18)),
+                Tab(text: 'Rekap Shift', icon: Icon(Icons.calendar_today_outlined, size: 18)),
+              ],
+            ),
           ),
         ),
       ),

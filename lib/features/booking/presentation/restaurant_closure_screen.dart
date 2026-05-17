@@ -26,7 +26,6 @@ class _RestaurantClosureScreenState
     extends ConsumerState<RestaurantClosureScreen> {
   // Branch aktif yang sedang ditampilkan
   String? _selectedBranchId;
-  String _selectedBranchName = '';
 
   // Daftar cabang (hanya diisi untuk Super Admin)
   List<_Branch> _branches = [];
@@ -51,7 +50,6 @@ class _RestaurantClosureScreenState
       } else {
         // Staff biasa: langsung pakai branch sendiri
         _selectedBranchId = staff.branchId;
-        _selectedBranchName = 'Cabang Anda';
         _loadClosures();
       }
     }
@@ -77,7 +75,6 @@ class _RestaurantClosureScreenState
           _branches = list;
           if (list.isNotEmpty) {
             _selectedBranchId = list.first.id;
-            _selectedBranchName = list.first.name;
           }
         });
         await _loadClosures();
@@ -119,17 +116,6 @@ class _RestaurantClosureScreenState
     }
   }
 
-  /// Dipanggil saat Super Admin ganti branch dari dropdown
-  void _onBranchChanged(_Branch branch) {
-    if (_selectedBranchId == branch.id) return;
-    setState(() {
-      _selectedBranchId = branch.id;
-      _selectedBranchName = branch.name;
-      _closures = {};
-      _focusedDay = DateTime.now();
-    });
-    _loadClosures();
-  }
 
   Future<void> _toggleClosure(DateTime day) async {
     if (_selectedBranchId == null) return;
@@ -325,6 +311,38 @@ class _RestaurantClosureScreenState
             fontWeight: FontWeight.w600,
             color: Colors.white),
         actions: [
+          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+          if (_isSuperAdmin)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: _branches
+                    .map((b) => DropdownMenuItem<String>(
+                          value: b.id,
+                          child: Text(b.name,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 11,
+                                  color: Colors.white))))
+                    .toList(),
+                onChanged: (val) {
+                  if (val == null || val == _selectedBranchId) return;
+                  setState(() {
+                    _selectedBranchId = val;
+                    _closures = {};
+                    _focusedDay = DateTime.now();
+                  });
+                  _loadClosures();
+                },
+              ),
+            ),
+          const SizedBox(width: 4),
           if (_isSaving)
             const Padding(
               padding: EdgeInsets.only(right: 16),
@@ -351,11 +369,6 @@ class _RestaurantClosureScreenState
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // ── Branch selector (Super Admin only) ──
-                  if (_isSuperAdmin) ...[
-                    _buildBranchSelector(),
-                    const SizedBox(height: 12),
-                  ],
                   _buildInfoBanner(),
                   const SizedBox(height: 16),
                   _buildCalendar(),
@@ -368,105 +381,6 @@ class _RestaurantClosureScreenState
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // BRANCH SELECTOR (Super Admin only)
-  // ─────────────────────────────────────────────────────────────
-
-  Widget _buildBranchSelector() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.store_mall_directory_rounded,
-                color: AppColors.primary, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Pilih Cabang',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedBranchId,
-                    isExpanded: true,
-                    isDense: true,
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                    items: _branches
-                        .map((b) => DropdownMenuItem(
-                              value: b.id,
-                              child: Text(b.name,
-                                  style: const TextStyle(
-                                      fontFamily: 'Poppins', fontSize: 14)),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val == null) return;
-                      final branch =
-                          _branches.firstWhere((b) => b.id == val);
-                      _onBranchChanged(branch);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Badge jumlah hari tutup cabang ini
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: _upcomingClosures.isEmpty
-                  ? AppColors.available.withValues(alpha: 0.15)
-                  : AppColors.accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '${_upcomingClosures.length} tutup',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: _upcomingClosures.isEmpty
-                    ? AppColors.available
-                    : AppColors.accent,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ─────────────────────────────────────────────────────────────
   // INFO BANNER
@@ -489,7 +403,7 @@ class _RestaurantClosureScreenState
             Expanded(
               child: Text(
                 _isSuperAdmin
-                    ? 'Pilih cabang di atas, lalu ketuk tanggal untuk menandai/membatalkan hari tutup. '
+                    ? 'Pilih cabang di pojok kanan atas, lalu ketuk tanggal untuk menandai/membatalkan hari tutup. '
                         'Perubahan hanya berlaku untuk cabang yang dipilih.'
                     : 'Ketuk tanggal di kalender untuk menandai/membatalkan hari tutup restoran. '
                         'Booking baru tidak bisa dibuat di tanggal yang ditandai tutup.',
@@ -630,7 +544,7 @@ class _RestaurantClosureScreenState
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Jadwal Tutup${_isSuperAdmin ? ' — $_selectedBranchName' : ''} (${upcoming.length})',
+          'Jadwal Tutup${_isSuperAdmin && _selectedBranchId != null ? ' — ${_branches.where((b) => b.id == _selectedBranchId).map((b) => b.name).firstOrNull ?? ""}' : ''} (${upcoming.length})',
             style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,

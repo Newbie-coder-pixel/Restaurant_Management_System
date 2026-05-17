@@ -920,69 +920,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Kasir'),
-            if (_isSuperAdmin)
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String?>(
-                  value: _selectedBranchId,
-                  isDense: true,
-                  dropdownColor: const Color(0xFF1A1A2E),
-                  iconEnabledColor: Colors.white60,
-                  icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: Colors.white70,
-                  ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text(
-                        'Semua Cabang',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 11,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ),
-                    ..._branches.map((b) => DropdownMenuItem<String?>(
-                      value: b['id'] as String,
-                      child: Text(
-                        b['name'] as String,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 11,
-                          color: Colors.white,
-                        ),
-                      ),
-                    )),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedBranchId = val;
-                      _orders = [];
-                      _selected = null;
-                    });
-                    _load();
-                    _subscribeRealtime();
-                  },
-                ),
-              )
-            else
-              const Text(
-                'Kasir',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.white60),
-              ),
-          ],
-        ),
+        title: const Text('Kasir'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         titleTextStyle: const TextStyle(
@@ -991,7 +929,46 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             fontWeight: FontWeight.w600,
             color: Colors.white),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load)
+          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+          if (_isSuperAdmin)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.white70))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                        value: b['id'] as String,
+                        child: Text(b['name'] as String,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white)))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                    _orders = [];
+                    _selected = null;
+                  });
+                  _load();
+                  _subscribeRealtime();
+                },
+              ),
+            ),
+          const SizedBox(width: 4),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
       body: body,

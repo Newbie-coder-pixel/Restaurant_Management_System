@@ -16,6 +16,11 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
   bool _isLoading = true;
   String? _branchId;
 
+  // ── Branch filter (superadmin only) ──────────────────
+  bool _isSuperAdmin = false;
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId; // null = semua cabang
+
   // ── Periode yang dipilih ──────────────────────────────
   _Period _period = _Period.week;
 
@@ -45,8 +50,29 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
     super.didChangeDependencies();
     final staff = ref.read(currentStaffProvider);
     if (staff != null && _branchId == null) {
-      _branchId = staff.branchId;
+      _branchId     = staff.branchId;
+      _isSuperAdmin = staff.role.name == 'superadmin';
+      if (_isSuperAdmin) {
+        _loadBranches();
+      }
       _loadStats();
+    }
+  }
+
+  // ── Load semua branch (superadmin only) ───────────────
+  Future<void> _loadBranches() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name');
+      if (mounted) {
+        setState(() =>
+            _branches = (res as List).cast<Map<String, dynamic>>());
+      }
+    } catch (e) {
+      debugPrint('_loadBranches error: $e');
     }
   }
 
@@ -67,19 +93,27 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<void> _loadStats() async {
-    if (_branchId == null) return;
+    if (!_isSuperAdmin && _branchId == null) return;
     setState(() => _isLoading = true);
+
+    // Superadmin: pakai _selectedBranchId (null = semua cabang)
+    // Role lain: wajib pakai _branchId sendiri
+    final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
 
     try {
       final (start, end) = _dateRange();
-      final res = await Supabase.instance.client
+      var q = Supabase.instance.client
           .from('bookings')
           .select(
               'status, guest_count, booking_date, booking_time, source, created_at')
-          .eq('branch_id', _branchId!)
           .gte('booking_date', _fmtDate(start))
           .lte('booking_date', _fmtDate(end));
 
+      if (effectiveBranchId != null) {
+        q = q.eq('branch_id', effectiveBranchId);
+      }
+
+      final res = await q;
       final rows = (res as List).cast<Map<String, dynamic>>();
 
       // Reset semua counter
@@ -172,6 +206,40 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
             fontWeight: FontWeight.w600,
             color: Colors.white),
         actions: [
+          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+          if (_isSuperAdmin)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.white70))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                        value: b['id'] as String,
+                        child: Text(b['name'] as String,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white)))),
+                ],
+                onChanged: (val) {
+                  setState(() => _selectedBranchId = val);
+                  _loadStats();
+                },
+              ),
+            ),
+          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadStats,

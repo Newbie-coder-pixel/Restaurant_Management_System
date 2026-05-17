@@ -2,10 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/menu_provider.dart';
 import 'widgets/menu_card.dart';
 import 'widgets/add_menu_form.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../core/models/staff_role.dart';
 import '../../../shared/widgets/app_drawer.dart';
 
 class MenuScreen extends ConsumerWidget {
@@ -14,14 +16,23 @@ class MenuScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final branchId = ref.watch(currentBranchIdProvider) ?? '';
+    final staff = ref.watch(currentStaffProvider);
+    final isSuperAdmin = staff?.role == StaffRole.superadmin;
 
-    return _MenuScreenContent(branchId: branchId);
+    return _MenuScreenContent(
+      branchId: branchId,
+      isSuperAdmin: isSuperAdmin,
+    );
   }
 }
 
 class _MenuScreenContent extends ConsumerStatefulWidget {
   final String branchId;
-  const _MenuScreenContent({required this.branchId});
+  final bool isSuperAdmin;
+  const _MenuScreenContent({
+    required this.branchId,
+    required this.isSuperAdmin,
+  });
 
   @override
   ConsumerState<_MenuScreenContent> createState() => _MenuScreenContentState();
@@ -30,19 +41,65 @@ class _MenuScreenContent extends ConsumerStatefulWidget {
 class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
   final _searchCtrl = TextEditingController();
 
+  String? _selectedBranchId;
+  List<Map<String, dynamic>> _branches = [];
+
   @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    if (widget.isSuperAdmin) {
+      _loadBranches();
+    } else {
+      // Non-superadmin: langsung set filter ke branch sendiri
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(menuFilterProvider.notifier).update(
+              (s) => s.copyWith(branchId: widget.branchId),
+            );
+      });
+    }
   }
+
+  Future<void> _loadBranches() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .order('name');
+      if (!mounted) return;
+      setState(() => _branches = List<Map<String, dynamic>>.from(res));
+    } catch (_) {}
+  }
+
+  void _onBranchChanged(String? branchId) {
+    setState(() => _selectedBranchId = branchId);
+    ref.read(menuFilterProvider.notifier).update(
+          (s) => s.copyWith(
+            branchId: branchId,
+            // reset category saat ganti branch
+            clearCategory: true,
+          ),
+        );
+  }
+
+  /// branchId efektif untuk widget yang butuh branchId eksplisit
+  /// (AddMenuForm, CategoryTabs)
+  String get _effectiveBranchId =>
+      _selectedBranchId ?? widget.branchId;
 
   void _openAddMenu() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddMenuForm(branchId: widget.branchId),
+      builder: (_) => AddMenuForm(branchId: _effectiveBranchId),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -52,12 +109,18 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
       drawer: const AppDrawer(),
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
-          _MenuAppBar(onAddMenu: _openAddMenu),
+          _MenuAppBar(
+            onAddMenu: _openAddMenu,
+            isSuperAdmin: widget.isSuperAdmin,
+            branches: _branches,
+            selectedBranchId: _selectedBranchId,
+            onBranchChanged: _onBranchChanged,
+          ),
         ],
         body: Column(
           children: [
             _SearchFilterBar(searchCtrl: _searchCtrl),
-            _CategoryTabs(branchId: widget.branchId),
+            _CategoryTabs(branchId: _effectiveBranchId),
             const _StatsRow(),
             const Expanded(child: _MenuGrid()),
           ],
@@ -77,7 +140,18 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
 
 class _MenuAppBar extends StatelessWidget {
   final VoidCallback onAddMenu;
-  const _MenuAppBar({required this.onAddMenu});
+  final bool isSuperAdmin;
+  final List<Map<String, dynamic>> branches;
+  final String? selectedBranchId;
+  final ValueChanged<String?> onBranchChanged;
+
+  const _MenuAppBar({
+    required this.onAddMenu,
+    required this.isSuperAdmin,
+    required this.branches,
+    required this.selectedBranchId,
+    required this.onBranchChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +187,51 @@ class _MenuAppBar extends StatelessWidget {
         ),
       ),
       actions: [
+        // ── Branch filter dropdown (superadmin only) ──
+        if (isSuperAdmin && branches.isNotEmpty)
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              value: selectedBranchId,
+              isDense: true,
+              dropdownColor: colorScheme.surfaceContainerHighest,
+              iconEnabledColor: colorScheme.onSurface.withValues(alpha: 0.6),
+              icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: colorScheme.onSurface.withValues(alpha: 0.8),
+              ),
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(
+                    'Semua Cabang',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: colorScheme.onSurface.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+                ...branches.map(
+                  (b) => DropdownMenuItem<String?>(
+                    value: b['id'] as String,
+                    child: Text(
+                      b['name'] as String,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: colorScheme.onSurface.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: onBranchChanged,
+            ),
+          ),
+        const SizedBox(width: 4),
+        // ── Refresh ──
         Consumer(
           builder: (_, ref, __) => IconButton(
             onPressed: () => ref.read(menuProvider.notifier).refresh(),
@@ -259,11 +378,9 @@ class _CategoryTabs extends ConsumerWidget {
                       ),
                 );
               }
-
               final cat = categories[i - 1];
               final isSelected = filter.categoryId == cat.id;
               final count = counts[cat.id] ?? 0;
-
               return _categoryChip(
                 context: context,
                 colorScheme: colorScheme,
@@ -271,9 +388,10 @@ class _CategoryTabs extends ConsumerWidget {
                 label: cat.name,
                 count: count,
                 isSelected: isSelected,
-                onTap: () => ref.read(menuFilterProvider.notifier).update(
-                      (s) => s.copyWith(categoryId: cat.id),
-                    ),
+                onTap: () =>
+                    ref.read(menuFilterProvider.notifier).update(
+                          (s) => s.copyWith(categoryId: cat.id),
+                        ),
               );
             },
           );
@@ -349,7 +467,7 @@ class _StatsRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final menus = ref.watch(menuProvider).valueOrNull ?? [];
+    final menus = ref.watch(filteredMenuProvider).valueOrNull ?? [];
     final available = menus.where((m) => m.isAvailable).length;
     final total = menus.length;
     final unavailable = total - available;

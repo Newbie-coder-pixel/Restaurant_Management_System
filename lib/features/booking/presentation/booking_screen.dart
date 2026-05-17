@@ -649,23 +649,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Booking Management'),
-            if (canFilterBranch && _selectedBranchId != null)
-              Text(
-                _branches.firstWhere(
-                  (b) => b['id'] == _selectedBranchId,
-                  orElse: () => {'name': ''},
-                )['name'] ?? '',
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    fontFamily: 'Poppins'),
-              ),
-          ],
-        ),
+        title: const Text('Booking Management'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         titleTextStyle: const TextStyle(
@@ -674,6 +658,53 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
             fontWeight: FontWeight.w600,
             color: Colors.white),
         actions: [
+          // ── BRANCH FILTER DROPDOWN (superadmin/manager only) ──
+          if (canFilterBranch)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.white70))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                        value: b['id'] as String,
+                        child: Text(b['name'] as String,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white)))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                    _bookings = [];
+                    _history = [];
+                    _datesWithBooking = {};
+                  });
+                  _load();
+                  _loadDatesWithBooking();
+                  if (_history.isNotEmpty) _loadHistory();
+                  if (val != null) {
+                    _setupRealtime(val);
+                  } else {
+                    _realtimeChannel?.unsubscribe();
+                    _realtimeChannel = null;
+                  }
+                },
+              ),
+            ),
+          const SizedBox(width: 4),
           IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: () {
@@ -712,100 +743,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       ),
     );
 
-    if (!canFilterBranch) return mainContent;
-
-    // Superadmin / manager → tampilkan sidebar branch di kiri
-    return Row(children: [
-      _buildBranchSidebar(),
-      Expanded(child: mainContent),
-    ]);
+    return mainContent;
   }
 
-  Widget _buildBranchSidebar() {
-    final items = <(String?, String, IconData)>[
-      (null, 'Semua', Icons.store_rounded),
-      for (final b in _branches)
-        (b['id'] as String, b['name'] as String, Icons.storefront_outlined),
-    ];
-
-    return Container(
-      width: 90,
-      color: const Color(0xFF1A1A2E),
-      child: SafeArea(
-        child: Column(children: [
-          const SizedBox(height: 56), // tinggi appbar
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: items.map((item) {
-                final isSelected = _selectedBranchId == item.$1;
-                return GestureDetector(
-                  onTap: () {
-                    if (_selectedBranchId == item.$1) return;
-                    setState(() {
-                      _selectedBranchId = item.$1;
-                      _bookings = [];
-                      _history = [];
-                      _datesWithBooking = {};
-                    });
-                    _load();
-                    _loadDatesWithBooking();
-                    if (_history.isNotEmpty) _loadHistory();
-                    // Setup realtime hanya jika branch spesifik dipilih
-                    if (item.$1 != null) {
-                      _setupRealtime(item.$1!);
-                    } else {
-                      _realtimeChannel?.unsubscribe();
-                      _realtimeChannel = null;
-                    }
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 12, horizontal: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.accent.withValues(alpha: 0.15)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      border: isSelected
-                          ? Border.all(
-                              color: AppColors.accent.withValues(alpha: 0.4))
-                          : null,
-                    ),
-                    child: Column(children: [
-                      Icon(item.$3,
-                          size: 20,
-                          color: isSelected
-                              ? AppColors.accent
-                              : Colors.white54),
-                      const SizedBox(height: 6),
-                      Text(
-                        item.$2,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            color: isSelected
-                                ? AppColors.accent
-                                : Colors.white54),
-                      ),
-                    ]),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
 
   Future<void> _showAddBooking() async {
     // Untuk "Semua" cabang, gunakan branchId staff sendiri

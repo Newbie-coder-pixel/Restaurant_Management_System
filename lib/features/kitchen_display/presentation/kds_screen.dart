@@ -273,6 +273,46 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             )),
         ]),
         actions: [
+          // ── BRANCH FILTER DROPDOWN (superadmin & manager only) ──
+          if (_isMultiBranchRole)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: colorScheme.onSurface.withValues(alpha: 0.5),
+                icon: Icon(Icons.keyboard_arrow_down,
+                    size: 16, color: colorScheme.onSurface.withValues(alpha: 0.6)),
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: colorScheme.onSurface),
+                items: [
+                  DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: colorScheme.onSurface.withValues(alpha: 0.7)))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                        value: b.id,
+                        child: Text(b.name,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white)))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                    _isLoading = true;
+                  });
+                  _load();
+                  _subscribeRealtime();
+                },
+              ),
+            ),
           if (_readyCount > 0)
             Container(
               margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -311,23 +351,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             onPressed: _load),
         ],
       ),
-      body: Row(children: [
-        // ── Sidebar branch (superadmin & manager only) ──────────────
-        if (_isMultiBranchRole)
-          _KDSBranchSidebar(
-            branches: _branches,
-            selectedBranchId: _selectedBranchId,
-            onSelect: (id) {
-              setState(() {
-                _selectedBranchId = id;
-                _isLoading = true;
-              });
-              _load();
-            },
-          ),
-        // ── Main content ────────────────────────────────────────────
-        Expanded(
-          child: Column(children: [
+      body: Column(children: [
             if (_readyCount > 0) _buildReadyBanner(colorScheme),
             if (_lowStockItems.isNotEmpty) _buildLowStockBanner(),
             Expanded(
@@ -351,8 +375,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
                         ),
             ),
           ]),
-        ),
-      ]),
     );
   }
 
@@ -659,89 +681,4 @@ class _BranchItem {
   final String id;
   final String name;
   _BranchItem({required this.id, required this.name});
-}
-
-// ── KDS Branch Sidebar ─────────────────────────────────────────────────
-class _KDSBranchSidebar extends StatelessWidget {
-  final List<_BranchItem> branches;
-  final String? selectedBranchId;
-  final void Function(String?) onSelect;
-
-  const _KDSBranchSidebar({
-    required this.branches,
-    required this.selectedBranchId,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 90,
-      color: AppColors.primary,
-      child: Column(
-        children: [
-          _SidebarItem(
-            label: 'Semua',
-            isSelected: selectedBranchId == null,
-            onTap: () => onSelect(null),
-          ),
-          const Divider(color: Colors.white24, height: 1),
-          Expanded(
-            child: ListView.builder(
-              itemCount: branches.length,
-              itemBuilder: (ctx, i) => _SidebarItem(
-                label: branches[i].name,
-                isSelected: selectedBranchId == branches[i].id,
-                onTap: () => onSelect(branches[i].id),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarItem extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _SidebarItem({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withValues(alpha: 0.15)
-              : Colors.transparent,
-          border: isSelected
-              ? const Border(left: BorderSide(color: Colors.white, width: 3))
-              : null,
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            color: isSelected ? Colors.white : Colors.white60,
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
 }

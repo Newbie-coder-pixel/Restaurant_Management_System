@@ -2,8 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/inventory_provider.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../core/models/staff_role.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import 'widgets/inventory_card.dart';
 import 'widgets/add_inventory_form.dart';
@@ -14,13 +16,23 @@ class InventoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final branchId = ref.watch(currentBranchIdProvider) ?? '';
-    return _InventoryScreenContent(branchId: branchId);
+    final staff = ref.watch(currentStaffProvider);
+    final isSuperAdmin = staff?.role == StaffRole.superadmin;
+
+    return _InventoryScreenContent(
+      branchId: branchId,
+      isSuperAdmin: isSuperAdmin,
+    );
   }
 }
 
 class _InventoryScreenContent extends ConsumerStatefulWidget {
   final String branchId;
-  const _InventoryScreenContent({required this.branchId});
+  final bool isSuperAdmin;
+  const _InventoryScreenContent({
+    required this.branchId,
+    required this.isSuperAdmin,
+  });
 
   @override
   ConsumerState<_InventoryScreenContent> createState() =>
@@ -31,19 +43,48 @@ class _InventoryScreenContentState
     extends ConsumerState<_InventoryScreenContent> {
   final _searchCtrl = TextEditingController();
 
+  String? _selectedBranchId;
+  List<Map<String, dynamic>> _branches = [];
+
   @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    if (widget.isSuperAdmin) {
+      _loadBranches();
+    }
   }
+
+  Future<void> _loadBranches() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .order('name');
+      if (!mounted) return;
+      setState(() => _branches = List<Map<String, dynamic>>.from(res));
+    } catch (_) {}
+  }
+
+  void _onBranchChanged(String? branchId) {
+    setState(() => _selectedBranchId = branchId);
+  }
+
+  /// branchId efektif: superadmin bisa pilih branch tertentu atau semua (null → pakai branchId sendiri sebagai fallback untuk widget yang wajib punya branchId)
+  String get _effectiveBranchId => _selectedBranchId ?? widget.branchId;
 
   void _openAddItem() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddInventoryForm(branchId: widget.branchId),
+      builder: (_) => AddInventoryForm(branchId: _effectiveBranchId),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -53,18 +94,25 @@ class _InventoryScreenContentState
       drawer: const AppDrawer(),
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
-          _InventoryAppBar(branchId: widget.branchId, onAdd: _openAddItem),
+          _InventoryAppBar(
+            branchId: _effectiveBranchId,
+            onAdd: _openAddItem,
+            isSuperAdmin: widget.isSuperAdmin,
+            branches: _branches,
+            selectedBranchId: _selectedBranchId,
+            onBranchChanged: _onBranchChanged,
+          ),
         ],
         body: Column(
           children: [
-            _SummaryBanner(branchId: widget.branchId),
+            _SummaryBanner(branchId: _effectiveBranchId),
             _SearchFilterBar(
               searchCtrl: _searchCtrl,
-              branchId: widget.branchId,
+              branchId: _effectiveBranchId,
             ),
-            _CategoryFilterTabs(branchId: widget.branchId),
+            _CategoryFilterTabs(branchId: _effectiveBranchId),
             _DateSelector(),
-            Expanded(child: _InventoryGrid(branchId: widget.branchId)),
+            Expanded(child: _InventoryGrid(branchId: _effectiveBranchId)),
           ],
         ),
       ),
@@ -89,8 +137,19 @@ class _InventoryScreenContentState
 class _InventoryAppBar extends ConsumerWidget {
   final String branchId;
   final VoidCallback onAdd;
+  final bool isSuperAdmin;
+  final List<Map<String, dynamic>> branches;
+  final String? selectedBranchId;
+  final ValueChanged<String?> onBranchChanged;
 
-  const _InventoryAppBar({required this.branchId, required this.onAdd});
+  const _InventoryAppBar({
+    required this.branchId,
+    required this.onAdd,
+    required this.isSuperAdmin,
+    required this.branches,
+    required this.selectedBranchId,
+    required this.onBranchChanged,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -147,18 +206,64 @@ class _InventoryAppBar extends ConsumerWidget {
         ),
       ),
       actions: [
+        // ── Branch filter dropdown (superadmin only) ──
+        if (isSuperAdmin && branches.isNotEmpty)
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              value: selectedBranchId,
+              isDense: true,
+              dropdownColor: colorScheme.surfaceContainerHighest,
+              iconEnabledColor: colorScheme.onSurface.withValues(alpha: 0.6),
+              icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: colorScheme.onSurface.withValues(alpha: 0.8),
+              ),
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(
+                    'Semua Cabang',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: colorScheme.onSurface.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+                ...branches.map(
+                  (b) => DropdownMenuItem<String?>(
+                    value: b['id'] as String,
+                    child: Text(
+                      b['name'] as String,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: colorScheme.onSurface.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: onBranchChanged,
+            ),
+          ),
+        const SizedBox(width: 4),
+        // ── Refresh ──
         IconButton(
           onPressed: () =>
               ref.read(inventoryNotifierProvider.notifier).refresh(),
           icon: Icon(Icons.refresh, color: colorScheme.onSurface),
           tooltip: 'Refresh',
         ),
+        // ── Rollover ──
         IconButton(
           onPressed: () => _showRolloverDialog(context, ref),
           icon: Icon(Icons.date_range_outlined, color: colorScheme.onSurface),
           tooltip: 'Rollover Harian',
         ),
-      const SizedBox(width: 8),
+        const SizedBox(width: 8),
       ],
     );
   }
@@ -314,8 +419,7 @@ class _VerticalDivider extends StatelessWidget {
     return Container(
       width: 1,
       height: 36,
-      color:
-          Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
     );
   }
 }
