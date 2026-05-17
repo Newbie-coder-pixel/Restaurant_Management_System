@@ -23,12 +23,11 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   RealtimeChannel? _channel;
   bool _initialized = false;
 
-  // Multi-branch (superadmin & manager only)
+  // Multi-branch (superadmin only)
   List<_BranchItem> _branches = [];
   String? _selectedBranchId; // null = semua branch
 
-  bool get _isMultiBranchRole =>
-      _userRole == StaffRole.superadmin || _userRole == StaffRole.manager;
+  bool get _isMultiBranchRole => _userRole == StaffRole.superadmin;
 
   @override
   void initState() {
@@ -79,7 +78,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   }
 
   Future<void> _load() async {
-    // superadmin/manager: pakai _selectedBranchId (null = semua branch)
+    // superadmin: pakai _selectedBranchId (null = semua branch)
     // role lain: wajib pakai _branchId sendiri
     final targetBranch = _isMultiBranchRole ? _selectedBranchId : _branchId;
 
@@ -167,7 +166,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     _channel?.unsubscribe();
 
     // Tentukan branch yang dipakai untuk filter realtime.
-    // Superadmin/manager tanpa filter branch → subscribe semua (null = no filter).
+    // Superadmin tanpa filter branch → subscribe semua (null = no filter).
     // Role lain → filter ke branch mereka sendiri.
     final targetBranch = _isMultiBranchRole ? _selectedBranchId : _branchId;
 
@@ -177,7 +176,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          // FIX Bug 3: filter per branch kalau bukan superadmin/manager "semua cabang"
+          // filter per branch kalau bukan superadmin "semua cabang"
           filter: targetBranch != null
               ? PostgresChangeFilter(
                   type: PostgresChangeFilterType.eq,
@@ -277,7 +276,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             )),
         ]),
         actions: [
-          // ── BRANCH FILTER DROPDOWN (superadmin & manager only) ──
+          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
           if (_isMultiBranchRole)
             DropdownButtonHideUnderline(
               child: DropdownButton<String?>(

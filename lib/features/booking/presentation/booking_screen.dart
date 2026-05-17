@@ -31,9 +31,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   String? _branchId; // branch milik staff yang login
 
-  // ── Branch filter (hanya untuk superadmin & manager) ──
+  // ── Branch filter (hanya untuk superadmin) ──
   List<Map<String, dynamic>> _branches = [];
-  String? _selectedBranchId; // null = "Semua" (hanya superadmin/manager)
+  String? _selectedBranchId; // null = "Semua" (hanya superadmin)
 
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
@@ -70,9 +70,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     final staff = ref.read(currentStaffProvider);
     if (staff != null && _branchId == null) {
       _branchId = staff.branchId;
-      final canFilterBranch = staff.role == StaffRole.superadmin ||
-          staff.role == StaffRole.manager;
-      if (canFilterBranch) {
+      final isSuperadmin = staff.role == StaffRole.superadmin;
+      if (isSuperadmin) {
         _selectedBranchId = null; // default "Semua"
         _loadBranches();
       } else {
@@ -137,7 +136,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         .subscribe();
   }
 
-  // ── Load semua branch (untuk superadmin / manager) ────────
+  // ── Load semua branch (untuk superadmin only) ────────
   Future<void> _loadBranches() async {
     try {
       final res = await Supabase.instance.client
@@ -630,20 +629,19 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   @override
   Widget build(BuildContext context) {
     final staff = ref.watch(currentStaffProvider);
+    final isSuperadmin = staff != null && staff.role == StaffRole.superadmin;
+
     if (staff != null && _branchId == null) {
       _branchId = staff.branchId;
-      final canFilterBranch = staff.role == StaffRole.superadmin ||
-          staff.role == StaffRole.manager;
-      _selectedBranchId = canFilterBranch ? null : _branchId;
+      _selectedBranchId = isSuperadmin ? null : _branchId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (canFilterBranch) _loadBranches();
+        if (isSuperadmin) _loadBranches();
         _load();
         _loadDatesWithBooking();
       });
     }
 
-    final canFilterBranch = staff != null &&
-        (staff.role == StaffRole.superadmin || staff.role == StaffRole.manager);
+    final canFilterBranch = isSuperadmin;
 
     final mainContent = Scaffold(
       drawer: const AppDrawer(),
@@ -658,7 +656,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
             fontWeight: FontWeight.w600,
             color: Colors.white),
         actions: [
-          // ── BRANCH FILTER DROPDOWN (superadmin/manager only) ──
+          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
           if (canFilterBranch)
             DropdownButtonHideUnderline(
               child: DropdownButton<String?>(
