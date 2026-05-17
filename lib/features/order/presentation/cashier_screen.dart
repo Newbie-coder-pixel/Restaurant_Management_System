@@ -82,7 +82,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           .inFilter('status', ['ready', 'served'])
           // FIX: tambah 'unpaid' (standar baru) dan null-check untuk order lama
           // yang dibuat sebelum kolom payment_status diisi secara konsisten
-          .or('payment_status.eq.unpaid,payment_status.eq.pending,payment_status.is.null');
+          .or('payment_status.eq.unpaid,payment_status.eq.pending,payment_status.is.null')
+          .gt('total_amount', 0); // exclude order kosong (Rp 0)
       if (effectiveBranchId != null) query = query.eq('branch_id', effectiveBranchId);
       final res = await query.order('created_at', ascending: true);
 
