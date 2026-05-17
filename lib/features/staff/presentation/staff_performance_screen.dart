@@ -113,9 +113,12 @@ class StaffPerformance {
 // Screen
 // ─────────────────────────────────────────────
 class StaffPerformanceScreen extends StatefulWidget {
-  final String branchId;
+  // null  = semua branch (superadmin "Semua Cabang")
+  // ''    = non-superadmin tanpa branch (edge case, anggap semua)
+  // id    = branch tertentu
+  final String? branchId;
 
-  const StaffPerformanceScreen({super.key, required this.branchId});
+  const StaffPerformanceScreen({super.key, this.branchId});
 
   @override
   State<StaffPerformanceScreen> createState() => _StaffPerformanceScreenState();
@@ -145,7 +148,10 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedBranchId = widget.branchId.isEmpty ? null : widget.branchId;
+    // null atau string kosong keduanya berarti "semua branch"
+    _selectedBranchId = (widget.branchId == null || widget.branchId!.isEmpty)
+        ? null
+        : widget.branchId;
     initializeDateFormatting('id_ID', null).then((_) async {
       await _checkSuperAdminAndFetchBranches();
       _loadData();
@@ -180,13 +186,6 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
   }
 
   Future<void> _loadData() async {
-    final effectiveBranchId = _selectedBranchId ?? (widget.branchId.isNotEmpty ? widget.branchId : null);
-    if (effectiveBranchId == null) {
-      // Semua Cabang dipilih tapi tidak ada default branch — tampilkan kosong
-      setState(() { _data = []; _isLoading = false; });
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _error = null;
@@ -196,10 +195,12 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
       final monthStart = DateTime(_selectedMonth.year, _selectedMonth.month);
       final monthEnd = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
 
+      // _selectedBranchId == null → semua branch (superadmin "Semua Cabang")
+      // _selectedBranchId != null → filter ke branch tertentu
       final response = await Supabase.instance.client.rpc(
         'get_staff_performance',
         params: {
-          'p_branch_id': effectiveBranchId,
+          'p_branch_id': _selectedBranchId, // null dikirim apa adanya ke RPC
           'p_month_start': monthStart.toIso8601String(),
           'p_month_end': monthEnd.toIso8601String(),
         },

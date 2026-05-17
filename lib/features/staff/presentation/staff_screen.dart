@@ -1106,7 +1106,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 context,
                 MaterialPageRoute(
                   builder: (_) => StaffPerformanceScreen(
-                    branchId: _selectedFilterBranchId ?? _branchId ?? '',
+                    // Superadmin: kirim null saat "Semua Cabang", atau id branch tertentu
+                    // Non-superadmin: selalu pakai branchId sendiri
+                    branchId: isSuperadmin ? _selectedFilterBranchId : (_branchId ?? ''),
                   ),
                 ),
               )),
