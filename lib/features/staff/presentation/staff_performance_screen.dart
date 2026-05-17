@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/models/staff_role.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 
 // ─────────────────────────────────────────────
 // Model
@@ -112,7 +115,7 @@ class StaffPerformance {
 // ─────────────────────────────────────────────
 // Screen
 // ─────────────────────────────────────────────
-class StaffPerformanceScreen extends StatefulWidget {
+class StaffPerformanceScreen extends ConsumerStatefulWidget {
   // null  = semua branch (superadmin "Semua Cabang")
   // ''    = non-superadmin tanpa branch (edge case, anggap semua)
   // id    = branch tertentu
@@ -121,10 +124,10 @@ class StaffPerformanceScreen extends StatefulWidget {
   const StaffPerformanceScreen({super.key, this.branchId});
 
   @override
-  State<StaffPerformanceScreen> createState() => _StaffPerformanceScreenState();
+  ConsumerState<StaffPerformanceScreen> createState() => _StaffPerformanceScreenState();
 }
 
-class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
+class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen> {
   final _currency = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
@@ -145,6 +148,8 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
   String? _selectedBranchId;
   bool _isSuperAdmin = false;
 
+  bool _initialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -152,36 +157,48 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
     _selectedBranchId = (widget.branchId == null || widget.branchId!.isEmpty)
         ? null
         : widget.branchId;
-    initializeDateFormatting('id_ID', null).then((_) async {
-      await _checkSuperAdminAndFetchBranches();
-      _loadData();
-    });
   }
 
-  Future<void> _checkSuperAdminAndFetchBranches() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
-      final res = await Supabase.instance.client
-          .from('staff')
-          .select('role')
-          .eq('user_id', userId)
-          .maybeSingle();
-      if (res != null && res['role'] == 'superadmin') {
-        _isSuperAdmin = true;
-        final branches = await Supabase.instance.client
-            .from('branches')
-            .select('id, name')
-            .eq('is_active', true)
-            .order('name');
-        if (mounted) {
-          setState(() {
-            _branches = List<Map<String, dynamic>>.from(branches);
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    final staff = ref.read(currentStaffProvider);
+    if (staff != null) {
+      _isSuperAdmin = staff.role == StaffRole.superadmin;
+      _initialized = true;
+      initializeDateFormatting('id_ID', null).then((_) async {
+        if (_isSuperAdmin) await _fetchBranches();
+        _loadData();
+      });
+    } else {
+      _initialized = true;
+      ref.listenManual(currentStaffProvider, (_, next) {
+        if (next != null && mounted) {
+          setState(() => _isSuperAdmin = next.role == StaffRole.superadmin);
+          initializeDateFormatting('id_ID', null).then((_) async {
+            if (_isSuperAdmin) await _fetchBranches();
+            _loadData();
           });
         }
+      });
+    }
+  }
+
+  Future<void> _fetchBranches() async {
+    try {
+      final branches = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name');
+      if (mounted) {
+        setState(() {
+          _branches = List<Map<String, dynamic>>.from(branches);
+        });
       }
     } catch (e) {
-      debugPrint('_checkSuperAdminAndFetchBranches error: $e');
+      debugPrint('_fetchBranches error: \$e');
     }
   }
 
