@@ -149,6 +149,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   bool _isValidEmail(String email) =>
       RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$').hasMatch(email);
 
+  bool _isValidPhone(String phone) =>
+      RegExp(r'^(\+62|62|0)[0-9]{8,12}$').hasMatch(phone.replaceAll(RegExp(r'[\s\-]'), ''));
+
   List<StaffMember> get _filteredStaff {
     if (_searchQuery.isEmpty) return _staff;
     return _staff.where((s) =>
@@ -262,6 +265,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     final nameCtrl  = TextEditingController(text: s.fullName);
     final phoneCtrl = TextEditingController(text: s.phone ?? '');
     StaffRole selectedRole = s.role;
+    String? selectedBranchId = s.branchId;
     bool isLoading = false;
     String? errorMsg;
 
@@ -323,7 +327,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                 controller: phoneCtrl,
                 decoration: InputDecoration(
-                    labelText: 'No. HP',
+                    labelText: 'No. HP *',
                     prefixIcon: const Icon(Icons.phone_outlined),
                     hintText: '08xx-xxxx-xxxx',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
@@ -348,6 +352,22 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 )).toList(),
                 onChanged: (v) { if (v != null) ss(() => selectedRole = v); },
               ),
+              const SizedBox(height: 16),
+              // ── Branch dropdown (superadmin only) ──
+              if (_userRole == StaffRole.superadmin && _allBranches.isNotEmpty)
+                DropdownButtonFormField<String?>(
+                  initialValue: selectedBranchId,
+                  decoration: InputDecoration(
+                    labelText: 'Branch',
+                    prefixIcon: const Icon(Icons.store_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                  items: _allBranches.map((b) => DropdownMenuItem<String?>(
+                    value: b['id'] as String,
+                    child: Text(b['name'] as String,
+                        style: const TextStyle(fontFamily: 'Poppins')),
+                  )).toList(),
+                  onChanged: (v) => ss(() => selectedBranchId = v),
+                ),
               const SizedBox(height: 12),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -417,19 +437,28 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               onPressed: isLoading
                   ? null
                   : () async {
-                      final name = nameCtrl.text.trim();
+                      final name  = nameCtrl.text.trim();
+                      final phone = phoneCtrl.text.trim();
                       if (name.isEmpty) {
                         ss(() => errorMsg = 'Nama wajib diisi.');
+                        return;
+                      }
+                      if (phone.isEmpty) {
+                        ss(() => errorMsg = 'No. HP wajib diisi.');
+                        return;
+                      }
+                      if (!_isValidPhone(phone)) {
+                        ss(() => errorMsg = 'Format No. HP tidak valid.\nContoh: 08123456789 atau +628123456789');
                         return;
                       }
                       ss(() { isLoading = true; errorMsg = null; });
                       try {
                         await Supabase.instance.client.from('staff').update({
                           'full_name': name,
-                          'phone': phoneCtrl.text.trim().isEmpty
-                              ? null
-                              : phoneCtrl.text.trim(),
+                          'phone': phone,
                           'role': selectedRole.name,
+                          if (_userRole == StaffRole.superadmin && selectedBranchId != null)
+                            'branch_id': selectedBranchId,
                           'updated_at': DateTime.now().toIso8601String(),
                         }).eq('id', s.id);
 
@@ -815,7 +844,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                   controller: phoneCtrl,
                   decoration: InputDecoration(
-                      labelText: 'No. HP (opsional)',
+                      labelText: 'No. HP *',
+                      hintText: '08xx-xxxx-xxxx',
                       prefixIcon: const Icon(Icons.phone_outlined),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   keyboardType: TextInputType.phone),
@@ -958,6 +988,15 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         ss(() => errorMsg = 'Password minimal 6 karakter.');
                         return;
                       }
+                      final phone = phoneCtrl.text.trim();
+                      if (phone.isEmpty) {
+                        ss(() => errorMsg = 'No. HP wajib diisi.');
+                        return;
+                      }
+                      if (!_isValidPhone(phone)) {
+                        ss(() => errorMsg = 'Format No. HP tidak valid.\nContoh: 08123456789 atau +628123456789');
+                        return;
+                      }
 
                       ss(() { isLoading = true; errorMsg = null; });
 
@@ -976,9 +1015,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                             'email':     email,
                             'password':  pass,
                             'fullName':  name,
-                            'phone':     phoneCtrl.text.trim().isEmpty
-                                ? null
-                                : phoneCtrl.text.trim(),
+                            'phone':     phone,
                             'role':      selectedRole.name,
                             'branchId':  selectedBranchId,
                           },

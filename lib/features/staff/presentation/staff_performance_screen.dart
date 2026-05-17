@@ -180,6 +180,13 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
   }
 
   Future<void> _loadData() async {
+    final effectiveBranchId = _selectedBranchId ?? (widget.branchId.isNotEmpty ? widget.branchId : null);
+    if (effectiveBranchId == null) {
+      // Semua Cabang dipilih tapi tidak ada default branch — tampilkan kosong
+      setState(() { _data = []; _isLoading = false; });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -192,7 +199,7 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
       final response = await Supabase.instance.client.rpc(
         'get_staff_performance',
         params: {
-          'p_branch_id': _selectedBranchId ?? widget.branchId,
+          'p_branch_id': effectiveBranchId,
           'p_month_start': monthStart.toIso8601String(),
           'p_month_end': monthEnd.toIso8601String(),
         },
@@ -241,6 +248,11 @@ class _StaffPerformanceScreenState extends State<StaffPerformanceScreen> {
                 style: const TextStyle(
                   fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
                 items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
                   ..._branches.map((b) => DropdownMenuItem<String?>(
                     value: b['id'] as String,
                     child: Text(b['name'] as String,
