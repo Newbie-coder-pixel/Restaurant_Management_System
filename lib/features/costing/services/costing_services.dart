@@ -16,6 +16,7 @@ abstract class ICostingService {
   Future<OperatingExpenseModel?> getLatestOperatingExpense();
   Future<OperatingExpenseModel> upsertOperatingExpense(OperatingExpenseModel expense);
   Future<List<CostingModel>> getCostingsWithLowMargin(double thresholdPercent);
+  Future<void> recalculateAllocatedCosts(OperatingExpenseModel expense);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -540,3 +540,10 @@ class CostingSummaryModel {
     );
   }
 }
+
+enum CostingViewState {
+  initial,
+  loading,
+  success,
+  error,
+}

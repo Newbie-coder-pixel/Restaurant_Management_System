@@ -71,15 +71,15 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
   }
 
   // ✅ RIVERPOD: parameter sekarang CostingState (bukan CostingProvider)
-  void _syncFromState(CostingState state) {
-    final c = state.activeCosting;
-    _menuNameCtrl.text = c.menuItemName;
-    _ingredientCtrl.text = c.ingredientCost.toStringAsFixed(0);
-    _packagingCtrl.text = c.packagingCost.toStringAsFixed(0);
-    _allocatedOpCtrl.text = c.allocatedOperatingCost.toStringAsFixed(0);
-    _currentPriceCtrl.text = c.currentSellingPrice.toStringAsFixed(0);
-    _targetMarginCtrl.text = c.targetProfitMarginPercent.toStringAsFixed(0);
-  }
+  void _syncFromState(CostingNotifier state) {
+  final c = state.activeCosting;
+  _menuNameCtrl.text = c.menuItemName;
+  _ingredientCtrl.text = c.ingredientCost.toStringAsFixed(0);
+  _packagingCtrl.text = c.packagingCost.toStringAsFixed(0);
+  _allocatedOpCtrl.text = c.allocatedOperatingCost.toStringAsFixed(0);
+  _currentPriceCtrl.text = c.currentSellingPrice.toStringAsFixed(0);
+  _targetMarginCtrl.text = c.targetProfitMarginPercent.toStringAsFixed(0);
+}
 
   @override
   void dispose() {
