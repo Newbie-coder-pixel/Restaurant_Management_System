@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/costing_providers.dart';
 import 'costing_widgets.dart';
+import '../../../shared/widgets/app_drawer.dart';
 
 // ✅ RIVERPOD: StatefulWidget → ConsumerStatefulWidget
 class OperatingExpenseScreen extends ConsumerStatefulWidget {
@@ -43,7 +44,9 @@ class _OperatingExpenseScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // ✅ RIVERPOD: context.read<X>() → ref.read(xProvider)
+      final notifier = ref.read(costingProvider.notifier);
+      notifier.init();
+
       final expense = ref.read(costingProvider).operatingExpense;
       if (expense.id.isNotEmpty) {
         _laborCtrl.text = expense.totalLaborCost.toStringAsFixed(0);
@@ -130,16 +133,53 @@ class _OperatingExpenseScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // ✅ RIVERPOD: Consumer<X> wrapper di tombol save → ref.watch di build
     final isSaving = ref.watch(costingProvider).isSaving;
+    final notifier = ref.watch(costingProvider.notifier);
 
     return Scaffold(
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text(
           'Biaya Operasional Bulanan',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
         ),
         centerTitle: false,
+        actions: [
+          if (notifier.isSuperAdmin)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: notifier.selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.white70)),
+                  ),
+                  ...notifier.branches.map((b) => DropdownMenuItem<String?>(
+                        value: b['id'] as String,
+                        child: Text(b['name'] as String,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white)),
+                      )),
+                ],
+                onChanged: (val) => notifier.selectBranch(val),
+              ),
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
