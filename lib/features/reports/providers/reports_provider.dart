@@ -100,30 +100,27 @@ class ReportsNotifier extends ChangeNotifier {
 
   // ── Init ─────────────────────────────────────────────────────────────────
 
-  Future<void> init() async {
+Future<void> init() async {
   if (_initialized) return;
-  
+  _initialized = true;
+
   final staff = _ref.read(currentStaffProvider);
   if (staff == null) {
-    // Staff belum ready, pasang listener dan tunggu
-    _ref.listenManual(currentStaffProvider, (_, next) {
-      if (next != null && !_initialized) {
-        _initialized = true;
-        _state = _state.copyWith(
-          isSuperAdmin: next.role == StaffRole.superadmin,
-          branchId: next.role == StaffRole.superadmin ? null : next.branchId,
-        );
-        _loadBranches().then((_) => load());
-      }
-    });
-    return;
+    // Staff belum ready, coba lagi setelah delay singkat
+    await Future.delayed(const Duration(milliseconds: 300));
+    final retryStaff = _ref.read(currentStaffProvider);
+    if (retryStaff == null) return;
+    _state = _state.copyWith(
+      isSuperAdmin: retryStaff.role == StaffRole.superadmin,
+      branchId: retryStaff.role == StaffRole.superadmin ? null : retryStaff.branchId,
+    );
+  } else {
+    _state = _state.copyWith(
+      isSuperAdmin: staff.role == StaffRole.superadmin,
+      branchId: staff.role == StaffRole.superadmin ? null : staff.branchId,
+    );
   }
 
-  _initialized = true;
-  _state = _state.copyWith(
-    isSuperAdmin: staff.role == StaffRole.superadmin,
-    branchId: staff.role == StaffRole.superadmin ? null : staff.branchId,
-  );
   await _loadBranches();
   await load();
 }

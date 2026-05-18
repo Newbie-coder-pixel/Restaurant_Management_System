@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/models/order_model.dart'; // ← tambah ini
 import '../providers/reports_provider.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
