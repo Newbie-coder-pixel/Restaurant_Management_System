@@ -146,39 +146,54 @@ class _OperatingExpenseScreenState
         centerTitle: false,
         actions: [
           if (notifier.isSuperAdmin)
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String?>(
-                value: notifier.selectedBranchId,
-                isDense: true,
-                dropdownColor: const Color(0xFF1A1A2E),
-                iconEnabledColor: Colors.white60,
-                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: Colors.white70),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Semua Cabang',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Colors.white70)),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
                   ),
-                  ...notifier.branches.map((b) => DropdownMenuItem<String?>(
-                        value: b['id'] as String,
-                        child: Text(b['name'] as String,
-                            style: const TextStyle(
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String?>(
+                    value: notifier.selectedBranchId,
+                    isDense: true,
+                    dropdownColor: Theme.of(context).colorScheme.surface,
+                    iconEnabledColor: Theme.of(context).colorScheme.primary,
+                    icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer),
+                    items: [
+                      DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Semua Cabang',
+                            style: TextStyle(
                                 fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.white)),
-                      )),
-                ],
-                onChanged: (val) => notifier.selectBranch(val),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onPrimaryContainer)),
+                      ),
+                      ...notifier.branches.map((b) => DropdownMenuItem<String?>(
+                            value: b['id'] as String,
+                            child: Text(b['name'] as String,
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context).colorScheme.onSurface)),
+                          )),
+                    ],
+                    onChanged: (val) => notifier.selectBranch(val),
+                  ),
+                ),
               ),
             ),
-          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
