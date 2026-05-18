@@ -16,5 +16,5 @@ export 'multi_branch/presentation/branch_dashboard_screen.dart';
 export 'multi_branch/presentation/transfer_stock_list_screen.dart';
 export 'chatbot/presentation/chatbot_screen.dart';
 export 'booking/presentation/restaurant_closure_screen.dart';
-export 'costing/presentation/screens/costing_calculator_screen.dart';
-export 'costing/presentation/screens/operating_expense_screen.dart';
+export 'costing/presentation/costing_calculator_screen.dart';
+export 'costing/presentation/operating_expense_screen.dart';
