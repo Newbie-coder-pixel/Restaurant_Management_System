@@ -7,13 +7,13 @@ import '../models/costing_model.dart';
 // ABSTRACT: Interface
 // ─────────────────────────────────────────────────────────────────────────────
 abstract class ICostingService {
-  Future<List<CostingModel>> getAllCostings();
+  Future<List<CostingModel>> getAllCostings({String? branchId});
   Future<CostingModel?> getCostingById(String id);
   Future<CostingModel?> getCostingByMenuItemId(String menuItemId);
   Future<CostingModel> createCosting(CostingModel costing);
   Future<CostingModel> updateCosting(CostingModel costing);
   Future<void> deleteCosting(String id);
-  Future<OperatingExpenseModel?> getLatestOperatingExpense();
+  Future<OperatingExpenseModel?> getLatestOperatingExpense({String? branchId});
   Future<OperatingExpenseModel> upsertOperatingExpense(OperatingExpenseModel expense);
   Future<List<CostingModel>> getCostingsWithLowMargin(double thresholdPercent);
   Future<void> recalculateAllocatedCosts(OperatingExpenseModel expense);
@@ -33,11 +33,12 @@ class CostingService implements ICostingService {
   // ─────────────────────────────────────────────────
 
   @override
-  Future<List<CostingModel>> getAllCostings() async {
-    final res = await _supabase
-        .from(_costingsTable)
-        .select()
-        .order('updated_at', ascending: false);
+  Future<List<CostingModel>> getAllCostings({String? branchId}) async {
+    var query = _supabase.from(_costingsTable).select();
+    if (branchId != null) {
+      query = query.eq('branch_id', branchId);
+    }
+    final res = await query.order('updated_at', ascending: false);
     return (res as List).map((e) => CostingModel.fromJson(e)).toList();
   }
 
@@ -99,7 +100,7 @@ class CostingService implements ICostingService {
   // ─────────────────────────────────────────────────
 
   @override
-  Future<OperatingExpenseModel?> getLatestOperatingExpense() async {
+  Future<OperatingExpenseModel?> getLatestOperatingExpense({String? branchId}) async {
     final res = await _supabase
         .from(_operatingExpensesTable)
         .select()
@@ -195,7 +196,7 @@ class MockCostingService implements ICostingService {
   }
 
   @override
-  Future<List<CostingModel>> getAllCostings() async {
+  Future<List<CostingModel>> getAllCostings({String? branchId}) async {
     return _costingsDb.values.map((e) => CostingModel.fromJson(e)).toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
@@ -235,15 +236,15 @@ class MockCostingService implements ICostingService {
   }
 
   @override
-Future<OperatingExpenseModel?> getLatestOperatingExpense() async {
-  if (_expensesDb.isEmpty) return null;
-  final sorted = _expensesDb.values
-      .map((e) => OperatingExpenseModel.fromJson(e))
-      .toList()
-    ..sort((a, b) => DateTime(b.periodYear, b.periodMonth)
-        .compareTo(DateTime(a.periodYear, a.periodMonth)));
-  return sorted.first;
-}
+  Future<OperatingExpenseModel?> getLatestOperatingExpense({String? branchId}) async {
+    if (_expensesDb.isEmpty) return null;
+    final sorted = _expensesDb.values
+        .map((e) => OperatingExpenseModel.fromJson(e))
+        .toList()
+      ..sort((a, b) => DateTime(b.periodYear, b.periodMonth)
+          .compareTo(DateTime(a.periodYear, a.periodMonth)));
+    return sorted.first;
+  }
 
   @override
   Future<OperatingExpenseModel> upsertOperatingExpense(

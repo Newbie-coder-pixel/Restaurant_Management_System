@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/costing_model.dart';
 import '../providers/costing_providers.dart';
 import 'costing_widgets.dart';
+import '../../../shared/widgets/app_drawer.dart';
 
 // ✅ RIVERPOD: StatefulWidget → ConsumerStatefulWidget
 class CostingCalculatorScreen extends ConsumerStatefulWidget {
@@ -46,6 +47,9 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // ✅ RIVERPOD: context.read<X>() → ref.read(xProvider.notifier)
       final notifier = ref.read(costingProvider.notifier);
+
+      // Init branch filter (superadmin check)
+      notifier.init();
 
       if (widget.menuItemId != null) {
         notifier.loadCostingForMenu(widget.menuItemId!).then((_) {
@@ -131,8 +135,10 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
 
   @override
   Widget build(BuildContext context) {
+    final notifier = ref.watch(costingProvider.notifier);
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text(
           'Costing & Profit Calculator',
@@ -141,6 +147,46 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 1,
+        actions: [
+          if (notifier.isSuperAdmin)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: notifier.selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua Cabang',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.white70)),
+                  ),
+                  ...notifier.branches.map((b) => DropdownMenuItem<String?>(
+                        value: b['id'] as String,
+                        child: Text(b['name'] as String,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.white)),
+                      )),
+                ],
+                onChanged: (val) => notifier.selectBranch(val),
+              ),
+            ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => notifier.loadAll(),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [

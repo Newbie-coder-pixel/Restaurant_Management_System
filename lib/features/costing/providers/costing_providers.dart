@@ -2,8 +2,11 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/costing_model.dart';
 import '../services/costing_services.dart';
+import '../../../core/models/staff_role.dart';
+import '../../auth/providers/auth_provider.dart';
 
 // ─── Service Provider ──────────────────────────────────────────────────────
 final costingServiceProvider = Provider<CostingService>((ref) {
@@ -14,14 +17,17 @@ final costingServiceProvider = Provider<CostingService>((ref) {
 final costingProvider =
     ChangeNotifierProvider<CostingNotifier>((ref) {
   final service = ref.watch(costingServiceProvider);
-  return CostingNotifier(service: service);
+  return CostingNotifier(service: service, ref: ref);
 });
 
 // ─── Notifier (wrapper tipis di atas CostingProvider lama) ────────────────
 class CostingNotifier extends ChangeNotifier {
   final ICostingService _service;
+  final Ref _ref;
 
-  CostingNotifier({required ICostingService service}) : _service = service;
+  CostingNotifier({required ICostingService service, required Ref ref})
+      : _service = service,
+        _ref = ref;
 
   // ── State ──────────────────────────────────────────────────────────────
   CostingViewState _state = CostingViewState.initial;
@@ -31,6 +37,13 @@ class CostingNotifier extends ChangeNotifier {
   CostingModel _activeCosting = CostingModel.empty();
   CostingSummaryModel _summary = CostingSummaryModel.fromCostings([], 100);
   bool _isSaving = false;
+
+  // ── Branch filter state (sama seperti reports) ─────────────────────────
+  bool _isSuperAdmin = false;
+  String? _branchId;          // branch user yang login (non-superadmin)
+  String? _selectedBranchId; // branch yang dipilih superadmin di dropdown
+  List<Map<String, dynamic>> _branches = [];
+  bool _initialized = false;
 
   double _liveIngredientCost = 0;
   double _livePackagingCost = 0;
@@ -48,6 +61,11 @@ class CostingNotifier extends ChangeNotifier {
   bool get isSaving => _isSaving;
   bool get isLoading => _state == CostingViewState.loading;
 
+  // Branch getters
+  bool get isSuperAdmin => _isSuperAdmin;
+  String? get selectedBranchId => _selectedBranchId;
+  List<Map<String, dynamic>> get branches => _branches;
+
   CostingModel get liveCalcResult => CostingModel(
         id: _activeCosting.id,
         menuItemId: _activeCosting.menuItemId,
@@ -61,13 +79,59 @@ class CostingNotifier extends ChangeNotifier {
         updatedAt: DateTime.now(),
       );
 
+  // ── Init (sama seperti reports) ────────────────────────────────────────
+  Future<void> init() async {
+    if (_initialized) return;
+    _initialized = true;
+
+    final staff = _ref.read(currentStaffProvider);
+    if (staff == null) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      final retryStaff = _ref.read(currentStaffProvider);
+      if (retryStaff == null) return;
+      _isSuperAdmin = retryStaff.role == StaffRole.superadmin;
+      _branchId = retryStaff.role == StaffRole.superadmin ? null : retryStaff.branchId;
+    } else {
+      _isSuperAdmin = staff.role == StaffRole.superadmin;
+      _branchId = staff.role == StaffRole.superadmin ? null : staff.branchId;
+    }
+
+    await _loadBranches();
+    await loadAll();
+  }
+
+  // ── Branch filter ──────────────────────────────────────────────────────
+  Future<void> selectBranch(String? branchId) async {
+    _selectedBranchId = branchId;
+    notifyListeners();
+    await loadAll();
+  }
+
+  Future<void> _loadBranches() async {
+    if (!_isSuperAdmin) return;
+    try {
+      final res = await Supabase.instance.client
+          .from('branches')
+          .select('id, name')
+          .order('name');
+      _branches = List<Map<String, dynamic>>.from(res);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('_loadBranches error: $e');
+    }
+  }
+
+  // ── Effective branch untuk query ───────────────────────────────────────
+  String? get _effectiveBranchId =>
+      _isSuperAdmin ? _selectedBranchId : _branchId;
+
   // ── Load ───────────────────────────────────────────────────────────────
   Future<void> loadAll() async {
     _setState(CostingViewState.loading);
     try {
       final results = await Future.wait([
-        _service.getAllCostings(),
-        _service.getLatestOperatingExpense(),
+        _service.getAllCostings(branchId: _effectiveBranchId),
+        _service.getLatestOperatingExpense(branchId: _effectiveBranchId),
       ]);
       _costings = results[0] as List<CostingModel>;
       _operatingExpense =
@@ -101,6 +165,7 @@ class CostingNotifier extends ChangeNotifier {
     notifyListeners();
     try {
       final allocatedCost = _operatingExpense.operatingCostPerPortion;
+      final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
       final existing =
           _costings.where((c) => c.menuItemId == menuItemId).firstOrNull;
       CostingModel saved;
@@ -112,6 +177,7 @@ class CostingNotifier extends ChangeNotifier {
           allocatedOperatingCost: allocatedCost,
           targetProfitMarginPercent: targetMarginPercent,
           currentSellingPrice: currentSellingPrice,
+          branchId: effectiveBranchId,
         ));
         final idx = _costings.indexWhere((c) => c.id == saved.id);
         if (idx != -1) _costings[idx] = saved;
@@ -126,6 +192,7 @@ class CostingNotifier extends ChangeNotifier {
           allocatedOperatingCost: allocatedCost,
           targetProfitMarginPercent: targetMarginPercent,
           currentSellingPrice: currentSellingPrice,
+          branchId: effectiveBranchId,
           createdAt: now,
           updatedAt: now,
         ));

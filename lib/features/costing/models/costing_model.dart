@@ -239,6 +239,9 @@ class CostingModel {
   final double targetProfitMarginPercent; // e.g., 30.0 → berarti 30%
   final double currentSellingPrice;       // Harga jual yang sedang dipakai (opsional)
 
+  // === BRANCH ===
+  final String? branchId;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -251,6 +254,7 @@ class CostingModel {
     required this.allocatedOperatingCost,
     required this.targetProfitMarginPercent,
     required this.currentSellingPrice,
+    this.branchId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -356,6 +360,8 @@ class CostingModel {
     double? allocatedOperatingCost,
     double? targetProfitMarginPercent,
     double? currentSellingPrice,
+    String? branchId,
+    bool clearBranchId = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -370,6 +376,7 @@ class CostingModel {
       targetProfitMarginPercent:
           targetProfitMarginPercent ?? this.targetProfitMarginPercent,
       currentSellingPrice: currentSellingPrice ?? this.currentSellingPrice,
+      branchId: clearBranchId ? null : branchId ?? this.branchId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -384,6 +391,7 @@ class CostingModel {
         'allocated_operating_cost': allocatedOperatingCost,
         'target_profit_margin_percent': targetProfitMarginPercent,
         'current_selling_price': currentSellingPrice,
+        if (branchId != null) 'branch_id': branchId,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
       };
@@ -400,6 +408,7 @@ class CostingModel {
       targetProfitMarginPercent:
           (json['target_profit_margin_percent'] as num).toDouble(),
       currentSellingPrice: (json['current_selling_price'] as num).toDouble(),
+      branchId: json['branch_id'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
