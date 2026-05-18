@@ -2,9 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import '../../providers/costing_provider.dart';
-import '../widgets/costing_widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/costing_model.dart';
+import '../providers/costing_providers.dart';
+import 'costing_widgets.dart';
 
 class OperatingExpenseScreen extends StatefulWidget {
   const OperatingExpenseScreen({super.key});
