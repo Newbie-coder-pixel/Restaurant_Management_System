@@ -45,6 +45,8 @@ abstract class AppRoutes {
   static const branches       = '/branches';
   static const transferStock  = '/branches/transfer-stock';
   static const chatbot        = '/chatbot';
+  static const costing          = '/costing';
+  static const operatingExpense = '/operating-expense';
 
   // Customer PWA
   static const customer               = '/customer';
@@ -300,6 +302,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.inventory,    builder: (_, __) => const InventoryScreen()),
       GoRoute(path: AppRoutes.staff,        builder: (_, __) => const StaffScreen()),
       GoRoute(path: AppRoutes.reports,      builder: (_, __) => const ReportsScreen()),
+      GoRoute(path: '/costing',           builder: (_, __) => const CostingCalculatorScreen()),
+      GoRoute(path: '/operating-expense', builder: (_, __) => const OperatingExpenseScreen()),
 
       // ── Multi Branch Routes ───────────────────────────────────────────────
       GoRoute(
