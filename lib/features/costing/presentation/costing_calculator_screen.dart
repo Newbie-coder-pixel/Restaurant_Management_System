@@ -132,7 +132,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text(
           'Costing & Profit Calculator',
@@ -225,7 +225,7 @@ class _CalculatorTab extends ConsumerWidget {
                 hintText: 'Nama menu item (e.g. Nasi Goreng Spesial)',
                 prefixIcon: const Icon(Icons.label_rounded, size: 18),
                 filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none,
@@ -462,8 +462,8 @@ class _MenuListTabState extends ConsumerState<_MenuListTab> {
                     filled: true,
                     fillColor: Theme.of(context)
                         .colorScheme
-                        .surfaceVariant
-                        .withOpacity(0.4),
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.4),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none,
@@ -495,8 +495,8 @@ class _MenuListTabState extends ConsumerState<_MenuListTab> {
                   decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
-                        .surfaceVariant
-                        .withOpacity(0.4),
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -600,9 +600,9 @@ class _SubtotalRow extends StatelessWidget {
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -655,13 +655,13 @@ class _MarginSlider extends StatelessWidget {
               label,
               style: theme.textTheme.labelMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.75),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
               ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF2E7D32).withOpacity(0.12),
+                color: const Color(0xFF2E7D32).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -712,10 +712,10 @@ class _RecommendedPriceBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF2E7D32).withOpacity(0.08),
+        color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: const Color(0xFF2E7D32).withOpacity(0.4), width: 1.5),
+            color: const Color(0xFF2E7D32).withValues(alpha: 0.4), width: 1.5),
       ),
       child: Row(
         children: [
@@ -746,7 +746,7 @@ class _RecommendedPriceBox extends StatelessWidget {
                 Text(
                   'Sudah dibulatkan ke kelipatan Rp 500',
                   style: TextStyle(
-                    color: const Color(0xFF2E7D32).withOpacity(0.7),
+                    color: const Color(0xFF2E7D32).withValues(alpha: 0.7),
                     fontSize: 11,
                   ),
                 ),
@@ -773,9 +773,9 @@ class _OperatingExpenseInfoCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF6A1B9A).withOpacity(0.06),
+        color: const Color(0xFF6A1B9A).withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF6A1B9A).withOpacity(0.2)),
+        border: Border.all(color: const Color(0xFF6A1B9A).withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -141,6 +141,7 @@ class CostingService implements ICostingService {
         .toList();
   }
 
+  @override
   Future<void> recalculateAllocatedCosts(OperatingExpenseModel expense) async {
     final all = await getAllCostings();
     final costPerPortion = expense.operatingCostPerPortion;
@@ -266,6 +267,7 @@ Future<OperatingExpenseModel?> getLatestOperatingExpense() async {
         c.actualProfitMarginPercent < thresholdPercent).toList();
   }
 
+  @override
   Future<void> recalculateAllocatedCosts(OperatingExpenseModel expense) async {
     final all = await getAllCostings();
     for (final c in all) {

@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/costing_model.dart';
 import '../providers/costing_providers.dart';
 import 'costing_widgets.dart';
 
@@ -256,7 +255,7 @@ class _OperatingExpenseScreenState
                     'Estimasi Total Porsi Terjual / bulan',
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface.withOpacity(0.75),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -272,7 +271,7 @@ class _OperatingExpenseScreenState
                       suffixText: 'porsi',
                       filled: true,
                       fillColor:
-                          theme.colorScheme.surfaceVariant.withOpacity(0.4),
+                          theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -412,7 +411,7 @@ class _PeriodSelector extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<int>(
-                value: month,
+                initialValue: month,
                 items: List.generate(
                   12,
                   (i) => DropdownMenuItem(
@@ -422,7 +421,7 @@ class _PeriodSelector extends StatelessWidget {
                 decoration: InputDecoration(
                   filled: true,
                   fillColor:
-                      theme.colorScheme.surfaceVariant.withOpacity(0.4),
+                      theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none),
@@ -444,7 +443,7 @@ class _PeriodSelector extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<int>(
-                value: year,
+                initialValue: year,
                 items: List.generate(5, (i) {
                   final y = DateTime.now().year - 2 + i;
                   return DropdownMenuItem(value: y, child: Text('$y'));
@@ -453,7 +452,7 @@ class _PeriodSelector extends StatelessWidget {
                 decoration: InputDecoration(
                   filled: true,
                   fillColor:
-                      theme.colorScheme.surfaceVariant.withOpacity(0.4),
+                      theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none),
