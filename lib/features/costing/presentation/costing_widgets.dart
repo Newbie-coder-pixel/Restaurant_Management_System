@@ -47,7 +47,7 @@ class CurrencyInputField extends StatelessWidget {
           label,
           style: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface.withOpacity(0.75),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
           ),
         ),
         const SizedBox(height: 6),
@@ -78,7 +78,7 @@ class CurrencyInputField extends StatelessWidget {
             helperStyle: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.outline),
             filled: true,
-            fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+            fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none,
@@ -122,7 +122,7 @@ class CostingResultCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.15),
+            color: theme.colorScheme.primary.withValues(alpha: 0.15),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -137,7 +137,7 @@ class CostingResultCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.15),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(Icons.analytics_rounded,
@@ -241,7 +241,7 @@ class _ResultTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withOpacity(0.75),
+          color: theme.colorScheme.surface.withValues(alpha: 0.75),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
@@ -304,9 +304,9 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         '${status.emoji} ${status.label}',
@@ -344,7 +344,7 @@ class _HealthScoreBar extends StatelessWidget {
               'Financial Health Score',
               style: theme.textTheme.labelSmall?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withOpacity(0.75),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
               ),
             ),
             Text(
@@ -362,7 +362,7 @@ class _HealthScoreBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: score / 100,
             minHeight: 6,
-            backgroundColor: theme.colorScheme.outline.withOpacity(0.2),
+            backgroundColor: theme.colorScheme.outline.withValues(alpha: 0.2),
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),
@@ -416,7 +416,7 @@ class CostingListTile extends StatelessWidget {
             color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: statusColor.withOpacity(0.3),
+              color: statusColor.withValues(alpha: 0.3),
               width: 1,
             ),
           ),
@@ -613,7 +613,7 @@ class _SummaryMetric extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onInverseSurface.withOpacity(0.6),
+              color: theme.colorScheme.onInverseSurface.withValues(alpha: 0.6),
             ),
           ),
           Text(
@@ -640,7 +640,7 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: color.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -682,7 +682,7 @@ class CostingSectionHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: c.withOpacity(0.12),
+            color: c.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, color: c, size: 18),
