@@ -205,7 +205,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(text: 'Kalkulator', icon: Icon(Icons.calculate_rounded, size: 18)),
+            Tab(text: 'Kalkulator', icon: Icon(Icons.attach_money_rounded, size: 18)),
             Tab(text: 'Daftar Menu', icon: Icon(Icons.list_alt_rounded, size: 18)),
           ],
           labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
