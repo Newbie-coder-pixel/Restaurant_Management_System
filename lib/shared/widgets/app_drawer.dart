@@ -110,13 +110,13 @@ const _navItems = [
   ),
  _NavItem(
     label: 'Costing & HPP',
-    icon: Icons.calculate_rounded,
+    icon: Icons.monetization_on,
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
     label: 'Biaya Operasional',
-    icon: Icons.business_center_rounded,
+    icon: Icons.payments, 
     route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
