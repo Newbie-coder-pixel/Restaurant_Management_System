@@ -108,15 +108,15 @@ const _navItems = [
     route: AppRoutes.chatbot,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
-  _NavItem(
+    _NavItem(
     label: 'Costing & HPP',
-    icon: Icons.functions,       
+    icon: Icons.monetization_on_rounded,
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
     label: 'Biaya Operasional',
-    icon: Icons.wallet,           
+    icon: Icons.paid_rounded,
     route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
