@@ -110,7 +110,7 @@ const _navItems = [
   ),
     _NavItem(
     label: 'Costing & HPP',
-    icon: Icons.attach_money_rounded,  // ← ini ada di list kamu
+    icon: Icons.receipt_long_rounded,  // ← ini ada di list kamu
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
