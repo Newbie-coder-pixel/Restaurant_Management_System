@@ -108,21 +108,18 @@ const _navItems = [
     route: AppRoutes.chatbot,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
+ _NavItem(
+    label: 'Costing & HPP',
+    icon: Icons.calculate_rounded,
+    route: AppRoutes.costing,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
+  ),
   _NavItem(
-  label: 'Costing & HPP',
-  icon: Icons.calculate_rounded,
-  route: AppRoutes.costing,
-  allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-),
-_NavItem(
-  label: 'Biaya Operasional',
-  icon: Icons.business_center_rounded,
-  route: AppRoutes.operatingExpense,
-  allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-),
-
-
-
+    label: 'Biaya Operasional',
+    icon: Icons.business_center_rounded,
+    route: AppRoutes.operatingExpense,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
+  ),
 ];
 
 class AppDrawer extends ConsumerWidget {
