@@ -1,9 +1,9 @@
 // lib/features/costing/providers/costing_providers.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/costing_model.dart';
 import '../services/costing_services.dart';
-import '../../../core/supabase_client.dart';
 
 // ─── Service Provider ──────────────────────────────────────────────────────
 final costingServiceProvider = Provider<CostingService>((ref) {

@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../../models/costing_model.dart';
+import '../models/costing_model.dart';
 
 // ─── Formatter IDR ──────────────────────────────────────────────────────────
 final _idrFormat = NumberFormat('#,##0', 'id_ID');

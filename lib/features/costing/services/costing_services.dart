@@ -233,15 +233,15 @@ class MockCostingService implements ICostingService {
   }
 
   @override
-  Future<OperatingExpenseModel?> getLatestOperatingExpense() async {
-    if (_expensesDb.isEmpty) return null;
-    return _expensesDb.values
-        .map((e) => OperatingExpenseModel.fromJson(e))
-        .toList()
-      ..sort((a, b) => DateTime(b.periodYear, b.periodMonth)
-          .compareTo(DateTime(a.periodYear, a.periodMonth)));
-    return OperatingExpenseModel.fromJson(_expensesDb.values.first);
-  }
+Future<OperatingExpenseModel?> getLatestOperatingExpense() async {
+  if (_expensesDb.isEmpty) return null;
+  final sorted = _expensesDb.values
+      .map((e) => OperatingExpenseModel.fromJson(e))
+      .toList()
+    ..sort((a, b) => DateTime(b.periodYear, b.periodMonth)
+        .compareTo(DateTime(a.periodYear, a.periodMonth)));
+  return sorted.first;
+}
 
   @override
   Future<OperatingExpenseModel> upsertOperatingExpense(

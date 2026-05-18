@@ -6,10 +6,11 @@ import '../models/costing_model.dart';
 import '../providers/costing_providers.dart';
 import 'costing_widgets.dart';
 
-class CostingCalculatorScreen extends StatefulWidget {
+// ✅ RIVERPOD: StatefulWidget → ConsumerStatefulWidget
+class CostingCalculatorScreen extends ConsumerStatefulWidget {
   final String? menuItemId;
   final String? menuItemName;
-  final double? prefillIngredientCost; // Dari inventory
+  final double? prefillIngredientCost;
 
   const CostingCalculatorScreen({
     super.key,
@@ -19,11 +20,12 @@ class CostingCalculatorScreen extends StatefulWidget {
   });
 
   @override
-  State<CostingCalculatorScreen> createState() =>
+  ConsumerState<CostingCalculatorScreen> createState() =>
       _CostingCalculatorScreenState();
 }
 
-class _CostingCalculatorScreenState extends State<CostingCalculatorScreen>
+// ✅ RIVERPOD: State<T> → ConsumerState<T>  (dapat akses `ref` langsung)
+class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScreen>
     with SingleTickerProviderStateMixin {
   // ─── Controllers ───────────────────────────────────────────────────────────
   final _menuNameCtrl = TextEditingController();
@@ -42,27 +44,24 @@ class _CostingCalculatorScreenState extends State<CostingCalculatorScreen>
     _tabController = TabController(length: 2, vsync: this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<CostingProvider>();
+      // ✅ RIVERPOD: context.read<X>() → ref.read(xProvider.notifier)
+      final notifier = ref.read(costingProvider.notifier);
 
       if (widget.menuItemId != null) {
-        provider.loadCostingForMenu(widget.menuItemId!).then((_) {
-          _syncFromProvider(provider);
+        notifier.loadCostingForMenu(widget.menuItemId!).then((_) {
+          // ✅ RIVERPOD: baca state terkini via ref.read(costingProvider)
+          _syncFromState(ref.read(costingProvider));
         });
       } else {
-        provider.clearActiveCosting();
-        // Auto-fill allocated cost dari operating expense terkini
-        final opCost =
-            provider.operatingExpense.operatingCostPerPortion;
+        notifier.clearActiveCosting();
+        final opCost = ref.read(costingProvider).operatingExpense.operatingCostPerPortion;
         _allocatedOpCtrl.text = opCost.toStringAsFixed(0);
-        provider.updateLiveAllocatedOpCost(opCost);
+        notifier.updateLiveAllocatedOpCost(opCost);
       }
 
-      // Pre-fill dari inventory jika ada
       if (widget.prefillIngredientCost != null) {
-        _ingredientCtrl.text =
-            widget.prefillIngredientCost!.toStringAsFixed(0);
-        provider
-            .updateLiveIngredientCost(widget.prefillIngredientCost!);
+        _ingredientCtrl.text = widget.prefillIngredientCost!.toStringAsFixed(0);
+        notifier.updateLiveIngredientCost(widget.prefillIngredientCost!);
       }
 
       if (widget.menuItemName != null) {
@@ -71,15 +70,15 @@ class _CostingCalculatorScreenState extends State<CostingCalculatorScreen>
     });
   }
 
-  void _syncFromProvider(CostingProvider provider) {
-    final c = provider.activeCosting;
+  // ✅ RIVERPOD: parameter sekarang CostingState (bukan CostingProvider)
+  void _syncFromState(CostingState state) {
+    final c = state.activeCosting;
     _menuNameCtrl.text = c.menuItemName;
     _ingredientCtrl.text = c.ingredientCost.toStringAsFixed(0);
     _packagingCtrl.text = c.packagingCost.toStringAsFixed(0);
     _allocatedOpCtrl.text = c.allocatedOperatingCost.toStringAsFixed(0);
     _currentPriceCtrl.text = c.currentSellingPrice.toStringAsFixed(0);
-    _targetMarginCtrl.text =
-        c.targetProfitMarginPercent.toStringAsFixed(0);
+    _targetMarginCtrl.text = c.targetProfitMarginPercent.toStringAsFixed(0);
   }
 
   @override
@@ -97,10 +96,9 @@ class _CostingCalculatorScreenState extends State<CostingCalculatorScreen>
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final provider = context.read<CostingProvider>();
-    final success = await provider.saveCosting(
-      menuItemId:
-          widget.menuItemId ?? 'custom-${DateTime.now().millisecondsSinceEpoch}',
+    // ✅ RIVERPOD: ref.read(costingProvider.notifier) untuk aksi/mutation
+    final success = await ref.read(costingProvider.notifier).saveCosting(
+      menuItemId: widget.menuItemId ?? 'custom-${DateTime.now().millisecondsSinceEpoch}',
       menuItemName: _menuNameCtrl.text.trim(),
       ingredientCost: double.tryParse(_ingredientCtrl.text) ?? 0,
       packagingCost: double.tryParse(_packagingCtrl.text) ?? 0,
@@ -115,15 +113,15 @@ class _CostingCalculatorScreenState extends State<CostingCalculatorScreen>
           content: const Text('✅ Data costing berhasil disimpan'),
           backgroundColor: const Color(0xFF2E7D32),
           behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } else {
+      // ✅ RIVERPOD: baca error dari state, bukan dari provider instance
+      final errorMsg = ref.read(costingProvider).errorMessage;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('❌ ${provider.errorMessage.isEmpty ? "Gagal menyimpan" : provider.errorMessage}'),
+          content: Text('❌ ${errorMsg.isEmpty ? "Gagal menyimpan" : errorMsg}'),
           backgroundColor: Theme.of(context).colorScheme.error,
           behavior: SnackBarBehavior.floating,
         ),
@@ -149,8 +147,7 @@ class _CostingCalculatorScreenState extends State<CostingCalculatorScreen>
             Tab(text: 'Kalkulator', icon: Icon(Icons.calculate_rounded, size: 18)),
             Tab(text: 'Daftar Menu', icon: Icon(Icons.list_alt_rounded, size: 18)),
           ],
-          labelStyle:
-              const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
         ),
       ),
       body: TabBarView(
@@ -175,8 +172,9 @@ class _CostingCalculatorScreenState extends State<CostingCalculatorScreen>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TAB 1: KALKULATOR
+// ✅ RIVERPOD: StatelessWidget → ConsumerWidget (butuh ref untuk watch state)
 // ─────────────────────────────────────────────────────────────────────────────
-class _CalculatorTab extends StatelessWidget {
+class _CalculatorTab extends ConsumerWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController menuNameCtrl;
   final TextEditingController ingredientCtrl;
@@ -198,236 +196,221 @@ class _CalculatorTab extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<CostingProvider>(
-      builder: (context, provider, _) {
-        final result = provider.liveCalcResult;
+  // ✅ RIVERPOD: build(context) → build(context, ref)
+  Widget build(BuildContext context, WidgetRef ref) {
+    // ✅ RIVERPOD: Consumer<X> builder → ref.watch(xProvider)
+    final state = ref.watch(costingProvider);
+    final result = state.liveCalcResult;
+    final notifier = ref.read(costingProvider.notifier);
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CostingSummaryCard(summary: state.summary),
+            const SizedBox(height: 20),
+
+            // ── Nama Menu ──────────────────────────────────────────────────
+            const CostingSectionHeader(
+              title: 'Identitas Menu',
+              icon: Icons.restaurant_menu_rounded,
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: menuNameCtrl,
+              decoration: InputDecoration(
+                hintText: 'Nama menu item (e.g. Nasi Goreng Spesial)',
+                prefixIcon: const Icon(Icons.label_rounded, size: 18),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary, width: 1.5),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Nama menu wajib diisi' : null,
+            ),
+            const SizedBox(height: 24),
+
+            // ── Direct Costs ───────────────────────────────────────────────
+            const CostingSectionHeader(
+              title: 'Biaya Langsung (Direct Costs)',
+              subtitle: 'Biaya per satu porsi',
+              icon: Icons.shopping_basket_rounded,
+              color: Color(0xFF1565C0),
+            ),
+            const SizedBox(height: 12),
+            CurrencyInputField(
+              label: 'Biaya Bahan Baku (Ingredients)',
+              hint: '0',
+              controller: ingredientCtrl,
+              helperText: 'Dari data inventory / resep',
+              accentColor: const Color(0xFF1565C0),
+              onChanged: (v) => notifier.updateLiveIngredientCost(v),
+            ),
+            const SizedBox(height: 12),
+            CurrencyInputField(
+              label: 'Biaya Kemasan (Packaging)',
+              hint: '0',
+              controller: packagingCtrl,
+              helperText: 'Box, plastik, sedotan, dll (untuk takeaway)',
+              accentColor: const Color(0xFF1565C0),
+              onChanged: (v) => notifier.updateLivePackagingCost(v),
+            ),
+            _SubtotalRow(
+              label: 'Subtotal Biaya Langsung',
+              value: formatIdr(result.totalDirectCost),
+              color: const Color(0xFF1565C0),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Indirect / Operating Costs ─────────────────────────────────
+            const CostingSectionHeader(
+              title: 'Biaya Operasional (Dialokasikan)',
+              subtitle: 'Bagian dari biaya bulanan per porsi',
+              icon: Icons.business_center_rounded,
+              color: Color(0xFF6A1B9A),
+            ),
+            const SizedBox(height: 12),
+            Row(
               children: [
-                // Summary card (atas)
-                CostingSummaryCard(summary: provider.summary),
-                const SizedBox(height: 20),
-
-                // ── Nama Menu ──────────────────────────────────────────────
-                const CostingSectionHeader(
-                  title: 'Identitas Menu',
-                  icon: Icons.restaurant_menu_rounded,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: menuNameCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Nama menu item (e.g. Nasi Goreng Spesial)',
-                    prefixIcon: const Icon(Icons.label_rounded, size: 18),
-                    filled: true,
-                    fillColor: Theme.of(context)
-                        .colorScheme
-                        .surfaceVariant
-                        .withOpacity(0.4),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                Expanded(
+                  child: CurrencyInputField(
+                    label: 'Alokasi Biaya Operasional/porsi',
+                    hint: '0',
+                    controller: allocatedOpCtrl,
+                    helperText: 'Total OpEx ÷ Estimasi porsi/bulan',
+                    accentColor: const Color(0xFF6A1B9A),
+                    onChanged: (v) => notifier.updateLiveAllocatedOpCost(v),
                   ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Nama menu wajib diisi' : null,
                 ),
-                const SizedBox(height: 24),
-
-                // ── Direct Costs ───────────────────────────────────────────
-                const CostingSectionHeader(
-                  title: 'Biaya Langsung (Direct Costs)',
-                  subtitle: 'Biaya per satu porsi',
-                  icon: Icons.shopping_basket_rounded,
-                  color: Color(0xFF1565C0),
-                ),
-                const SizedBox(height: 12),
-                CurrencyInputField(
-                  label: 'Biaya Bahan Baku (Ingredients)',
-                  hint: '0',
-                  controller: ingredientCtrl,
-                  helperText: 'Dari data inventory / resep',
-                  accentColor: const Color(0xFF1565C0),
-                  onChanged: (v) => provider.updateLiveIngredientCost(v),
-                ),
-                const SizedBox(height: 12),
-                CurrencyInputField(
-                  label: 'Biaya Kemasan (Packaging)',
-                  hint: '0',
-                  controller: packagingCtrl,
-                  helperText: 'Box, plastik, sedotan, dll (untuk takeaway)',
-                  accentColor: const Color(0xFF1565C0),
-                  onChanged: (v) => provider.updateLivePackagingCost(v),
-                ),
-                // Subtotal direct cost
-                _SubtotalRow(
-                  label: 'Subtotal Biaya Langsung',
-                  value: formatIdr(result.totalDirectCost),
-                  color: const Color(0xFF1565C0),
-                ),
-                const SizedBox(height: 24),
-
-                // ── Indirect / Operating Costs ─────────────────────────────
-                const CostingSectionHeader(
-                  title: 'Biaya Operasional (Dialokasikan)',
-                  subtitle: 'Bagian dari biaya bulanan per porsi',
-                  icon: Icons.business_center_rounded,
-                  color: Color(0xFF6A1B9A),
-                ),
-                const SizedBox(height: 12),
-                Row(
+                const SizedBox(width: 8),
+                Column(
                   children: [
-                    Expanded(
-                      child: CurrencyInputField(
-                        label: 'Alokasi Biaya Operasional/porsi',
-                        hint: '0',
-                        controller: allocatedOpCtrl,
-                        helperText:
-                            'Total OpEx ÷ Estimasi porsi/bulan',
-                        accentColor: const Color(0xFF6A1B9A),
-                        onChanged: (v) =>
-                            provider.updateLiveAllocatedOpCost(v),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      children: [
-                        const SizedBox(height: 22),
-                        Tooltip(
-                          message: 'Auto-fill dari Operating Expense terkini',
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              provider.autoFillAllocatedCost();
-                              allocatedOpCtrl.text = provider
-                                  .operatingExpense.operatingCostPerPortion
-                                  .toStringAsFixed(0);
-                            },
-                            icon: const Icon(Icons.auto_fix_high_rounded,
-                                size: 16),
-                            label: const Text('Auto'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF6A1B9A),
-                              side: const BorderSide(
-                                  color: Color(0xFF6A1B9A)),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 12),
-                            ),
-                          ),
+                    const SizedBox(height: 22),
+                    Tooltip(
+                      message: 'Auto-fill dari Operating Expense terkini',
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          notifier.autoFillAllocatedCost();
+                          allocatedOpCtrl.text = ref
+                              .read(costingProvider)
+                              .operatingExpense
+                              .operatingCostPerPortion
+                              .toStringAsFixed(0);
+                        },
+                        icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
+                        label: const Text('Auto'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF6A1B9A),
+                          side: const BorderSide(color: Color(0xFF6A1B9A)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
-
-                // Info biaya operasional bulanan
-                _OperatingExpenseInfoCard(
-                    expense: provider.operatingExpense),
-                const SizedBox(height: 24),
-
-                // ── HPP (otomatis) ─────────────────────────────────────────
-                _SubtotalRow(
-                  label: '📌 HPP (Harga Pokok Penjualan)',
-                  value: formatIdr(result.hpp),
-                  color: Theme.of(context).colorScheme.error,
-                  isHighlighted: true,
-                ),
-                const SizedBox(height: 24),
-
-                // ── Target Margin & Harga ──────────────────────────────────
-                const CostingSectionHeader(
-                  title: 'Target Profit & Harga Jual',
-                  icon: Icons.attach_money_rounded,
-                  color: Color(0xFF2E7D32),
-                ),
-                const SizedBox(height: 12),
-
-                // Target margin slider
-                _MarginSlider(
-                  label: 'Target Profit Margin',
-                  value: double.tryParse(targetMarginCtrl.text) ?? 30,
-                  controller: targetMarginCtrl,
-                  onChanged: (v) {
-                    targetMarginCtrl.text = v.toStringAsFixed(0);
-                    provider.updateLiveTargetMargin(v);
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                // Rekomendasi harga (read-only)
-                _RecommendedPriceBox(costing: result),
-                const SizedBox(height: 12),
-
-                CurrencyInputField(
-                  label: 'Harga Jual Saat Ini',
-                  hint: '0',
-                  controller: currentPriceCtrl,
-                  helperText: 'Masukkan harga jual yang berlaku sekarang',
-                  accentColor: const Color(0xFF2E7D32),
-                  onChanged: (v) => provider.updateLiveCurrentPrice(v),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Hasil Kalkulasi ────────────────────────────────────────
-                CostingResultCard(costing: result),
-                const SizedBox(height: 24),
-
-                // ── Tombol Simpan ──────────────────────────────────────────
-                FilledButton.icon(
-                  onPressed: provider.isSaving ? null : onSave,
-                  icon: provider.isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.save_rounded),
-                  label: Text(provider.isSaving
-                      ? 'Menyimpan...'
-                      : 'Simpan Data Costing'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    textStyle: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 32),
               ],
             ),
-          ),
-        );
-      },
+
+            _OperatingExpenseInfoCard(expense: state.operatingExpense),
+            const SizedBox(height: 24),
+
+            // ── HPP ────────────────────────────────────────────────────────
+            _SubtotalRow(
+              label: '📌 HPP (Harga Pokok Penjualan)',
+              value: formatIdr(result.hpp),
+              color: Theme.of(context).colorScheme.error,
+              isHighlighted: true,
+            ),
+            const SizedBox(height: 24),
+
+            // ── Target Margin & Harga ──────────────────────────────────────
+            const CostingSectionHeader(
+              title: 'Target Profit & Harga Jual',
+              icon: Icons.attach_money_rounded,
+              color: Color(0xFF2E7D32),
+            ),
+            const SizedBox(height: 12),
+            _MarginSlider(
+              label: 'Target Profit Margin',
+              value: double.tryParse(targetMarginCtrl.text) ?? 30,
+              controller: targetMarginCtrl,
+              onChanged: (v) {
+                targetMarginCtrl.text = v.toStringAsFixed(0);
+                notifier.updateLiveTargetMargin(v);
+              },
+            ),
+            const SizedBox(height: 12),
+            _RecommendedPriceBox(costing: result),
+            const SizedBox(height: 12),
+            CurrencyInputField(
+              label: 'Harga Jual Saat Ini',
+              hint: '0',
+              controller: currentPriceCtrl,
+              helperText: 'Masukkan harga jual yang berlaku sekarang',
+              accentColor: const Color(0xFF2E7D32),
+              onChanged: (v) => notifier.updateLiveCurrentPrice(v),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Hasil Kalkulasi ────────────────────────────────────────────
+            CostingResultCard(costing: result),
+            const SizedBox(height: 24),
+
+            // ── Tombol Simpan ──────────────────────────────────────────────
+            FilledButton.icon(
+              onPressed: state.isSaving ? null : onSave,
+              icon: state.isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.save_rounded),
+              label: Text(state.isSaving ? 'Menyimpan...' : 'Simpan Data Costing'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TAB 2: DAFTAR MENU
+// ✅ RIVERPOD: StatefulWidget → ConsumerStatefulWidget
 // ─────────────────────────────────────────────────────────────────────────────
-class _MenuListTab extends StatefulWidget {
+class _MenuListTab extends ConsumerStatefulWidget {
   const _MenuListTab();
 
   @override
-  State<_MenuListTab> createState() => _MenuListTabState();
+  ConsumerState<_MenuListTab> createState() => _MenuListTabState();
 }
 
-class _MenuListTabState extends State<_MenuListTab> {
+// ✅ RIVERPOD: State<T> → ConsumerState<T>
+class _MenuListTabState extends ConsumerState<_MenuListTab> {
   CostingStatus? _filterStatus;
   final _searchCtrl = TextEditingController();
 
@@ -435,7 +418,8 @@ class _MenuListTabState extends State<_MenuListTab> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CostingProvider>().loadAll();
+      // ✅ RIVERPOD: context.read<X>() → ref.read(xProvider.notifier)
+      ref.read(costingProvider.notifier).loadAll();
     });
   }
 
@@ -447,162 +431,154 @@ class _MenuListTabState extends State<_MenuListTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<CostingProvider>(
-      builder: (context, provider, _) {
-        if (provider.isLoading) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    // ✅ RIVERPOD: Consumer<X> builder → ref.watch(xProvider)
+    final state = ref.watch(costingProvider);
+    final notifier = ref.read(costingProvider.notifier);
 
-        final filtered = provider.getFilteredCostings(
-          filterByStatus: _filterStatus,
-          searchQuery: _searchCtrl.text,
-          sortByMarginAsc: true,
-        );
+    if (state.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-        return Column(
-          children: [
-            // Filter bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchCtrl,
-                      onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
-                        hintText: 'Cari menu...',
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        filled: true,
-                        fillColor: Theme.of(context)
-                            .colorScheme
-                            .surfaceVariant
-                            .withOpacity(0.4),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide.none,
-                        ),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                      ),
+    final filtered = notifier.getFilteredCostings(
+      filterByStatus: _filterStatus,
+      searchQuery: _searchCtrl.text,
+      sortByMarginAsc: true,
+    );
+
+    return Column(
+      children: [
+        // Filter bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Cari menu...',
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    filled: true,
+                    fillColor: Theme.of(context)
+                        .colorScheme
+                        .surfaceVariant
+                        .withOpacity(0.4),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
                     ),
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
-                  const SizedBox(width: 8),
-                  PopupMenuButton<CostingStatus?>(
-                    initialValue: _filterStatus,
-                    onSelected: (v) => setState(() => _filterStatus = v),
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
-                          value: null, child: Text('Semua')),
-                      const PopupMenuItem(
-                          value: CostingStatus.healthy,
-                          child: Text('🟢 Sehat')),
-                      const PopupMenuItem(
-                          value: CostingStatus.warning,
-                          child: Text('🟡 Perlu Review')),
-                      const PopupMenuItem(
-                          value: CostingStatus.underpriced,
-                          child: Text('🔴 Terlalu Rendah')),
-                    ],
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceVariant
-                            .withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.filter_list_rounded, size: 18),
-                          const SizedBox(width: 4),
-                          Text(
-                            _filterStatus?.label ?? 'Filter',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-
-            // List
-            Expanded(
-              child: filtered.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.inbox_rounded,
-                              size: 48, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text('Belum ada data costing',
-                              style: TextStyle(color: Colors.grey)),
-                        ],
+              const SizedBox(width: 8),
+              PopupMenuButton<CostingStatus?>(
+                initialValue: _filterStatus,
+                onSelected: (v) => setState(() => _filterStatus = v),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: null, child: Text('Semua')),
+                  const PopupMenuItem(
+                      value: CostingStatus.healthy, child: Text('🟢 Sehat')),
+                  const PopupMenuItem(
+                      value: CostingStatus.warning,
+                      child: Text('🟡 Perlu Review')),
+                  const PopupMenuItem(
+                      value: CostingStatus.underpriced,
+                      child: Text('🔴 Terlalu Rendah')),
+                ],
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceVariant
+                        .withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.filter_list_rounded, size: 18),
+                      const SizedBox(width: 4),
+                      Text(
+                        _filterStatus?.label ?? 'Filter',
+                        style: const TextStyle(fontSize: 13),
                       ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (context, i) {
-                        final costing = filtered[i];
-                        return CostingListTile(
-                          costing: costing,
-                          onTap: () {
-                            // Navigasi ke kalkulator dengan data yang dipilih
-                            provider.setActiveCosting(costing);
-                            // Jika dalam TabBarView yang sama, pindah tab
-                            DefaultTabController.of(context).animateTo(0);
-                          },
-                          onDelete: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (_) => AlertDialog(
-                                title: const Text('Hapus Costing?'),
-                                content: Text(
-                                    'Data costing untuk "${costing.menuItemName}" akan dihapus.'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('Batal'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    style: FilledButton.styleFrom(
-                                        backgroundColor: Theme.of(context)
-                                            .colorScheme
-                                            .error),
-                                    child: const Text('Hapus'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true && context.mounted) {
-                              await provider.deleteCosting(costing.id);
-                            }
-                          },
-                        );
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // List
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inbox_rounded, size: 48, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text('Belum ada data costing',
+                          style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final costing = filtered[i];
+                    return CostingListTile(
+                      costing: costing,
+                      onTap: () {
+                        notifier.setActiveCosting(costing);
+                        DefaultTabController.of(context).animateTo(0);
                       },
-                    ),
-            ),
-          ],
-        );
-      },
+                      onDelete: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Hapus Costing?'),
+                            content: Text(
+                                'Data costing untuk "${costing.menuItemName}" akan dihapus.'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Batal'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: FilledButton.styleFrom(
+                                    backgroundColor:
+                                        Theme.of(context).colorScheme.error),
+                                child: const Text('Hapus'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true && context.mounted) {
+                          await notifier.deleteCosting(costing.id);
+                        }
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper Widgets (private to screen)
+// Helper Widgets (tidak perlu akses provider → tetap StatelessWidget)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SubtotalRow extends StatelessWidget {
@@ -635,8 +611,7 @@ class _SubtotalRow extends StatelessWidget {
             label,
             style: TextStyle(
               color: color,
-              fontWeight:
-                  isHighlighted ? FontWeight.w800 : FontWeight.w600,
+              fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w600,
               fontSize: isHighlighted ? 14 : 13,
             ),
           ),
@@ -684,8 +659,7 @@ class _MarginSlider extends StatelessWidget {
               ),
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: const Color(0xFF2E7D32).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(20),
@@ -801,8 +775,7 @@ class _OperatingExpenseInfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF6A1B9A).withOpacity(0.06),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-            color: const Color(0xFF6A1B9A).withOpacity(0.2)),
+        border: Border.all(color: const Color(0xFF6A1B9A).withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -877,15 +850,15 @@ class _ExpenseLine extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color:
-                      Theme.of(context).colorScheme.outline)),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.outline)),
           Text(formatIdr(value),
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
-                  ?.copyWith(
-                      color: Theme.of(context).colorScheme.outline)),
+                  ?.copyWith(color: Theme.of(context).colorScheme.outline)),
         ],
       ),
     );

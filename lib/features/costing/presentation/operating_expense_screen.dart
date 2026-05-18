@@ -7,15 +7,18 @@ import '../models/costing_model.dart';
 import '../providers/costing_providers.dart';
 import 'costing_widgets.dart';
 
-class OperatingExpenseScreen extends StatefulWidget {
+// ✅ RIVERPOD: StatefulWidget → ConsumerStatefulWidget
+class OperatingExpenseScreen extends ConsumerStatefulWidget {
   const OperatingExpenseScreen({super.key});
 
   @override
-  State<OperatingExpenseScreen> createState() =>
+  ConsumerState<OperatingExpenseScreen> createState() =>
       _OperatingExpenseScreenState();
 }
 
-class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
+// ✅ RIVERPOD: State<T> → ConsumerState<T>
+class _OperatingExpenseScreenState
+    extends ConsumerState<OperatingExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // Labor
@@ -41,8 +44,8 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<CostingProvider>();
-      final expense = provider.operatingExpense;
+      // ✅ RIVERPOD: context.read<X>() → ref.read(xProvider)
+      final expense = ref.read(costingProvider).operatingExpense;
       if (expense.id.isNotEmpty) {
         _laborCtrl.text = expense.totalLaborCost.toStringAsFixed(0);
         _electricityCtrl.text = expense.electricityCost.toStringAsFixed(0);
@@ -51,8 +54,7 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
         _internetCtrl.text = expense.internetCost.toStringAsFixed(0);
         _rentCtrl.text = expense.rentCost.toStringAsFixed(0);
         _otherCtrl.text = expense.otherOverheadCost.toStringAsFixed(0);
-        _portionsCtrl.text =
-            expense.estimatedPortionsSoldMonthly.toString();
+        _portionsCtrl.text = expense.estimatedPortionsSoldMonthly.toString();
         _selectedYear = expense.periodYear;
         _selectedMonth = expense.periodMonth;
         setState(() {});
@@ -96,8 +98,8 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final provider = context.read<CostingProvider>();
-    final success = await provider.saveOperatingExpense(
+    // ✅ RIVERPOD: context.read<X>() → ref.read(xProvider.notifier)
+    final success = await ref.read(costingProvider.notifier).saveOperatingExpense(
       year: _selectedYear,
       month: _selectedMonth,
       laborCost: _getDouble(_laborCtrl),
@@ -114,7 +116,8 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('✅ Biaya operasional berhasil disimpan dan dialokasikan ulang'),
+          content: const Text(
+              '✅ Biaya operasional berhasil disimpan dan dialokasikan ulang'),
           backgroundColor: const Color(0xFF2E7D32),
           behavior: SnackBarBehavior.floating,
           shape:
@@ -128,6 +131,8 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // ✅ RIVERPOD: Consumer<X> wrapper di tombol save → ref.watch di build
+    final isSaving = ref.watch(costingProvider).isSaving;
 
     return Scaffold(
       appBar: AppBar(
@@ -149,11 +154,10 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
               _PeriodSelector(
                 year: _selectedYear,
                 month: _selectedMonth,
-                onChanged: (y, m) =>
-                    setState(() {
-                      _selectedYear = y;
-                      _selectedMonth = m;
-                    }),
+                onChanged: (y, m) => setState(() {
+                  _selectedYear = y;
+                  _selectedMonth = m;
+                }),
               ),
               const SizedBox(height: 20),
 
@@ -252,17 +256,14 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
                     'Estimasi Total Porsi Terjual / bulan',
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color:
-                          theme.colorScheme.onSurface.withOpacity(0.75),
+                      color: theme.colorScheme.onSurface.withOpacity(0.75),
                     ),
                   ),
                   const SizedBox(height: 6),
                   TextFormField(
                     controller: _portionsCtrl,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly
-                    ],
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       hintText: '3000',
@@ -270,16 +271,16 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
                           'Digunakan untuk menghitung alokasi biaya per porsi',
                       suffixText: 'porsi',
                       filled: true,
-                      fillColor: theme.colorScheme.surfaceVariant
-                          .withOpacity(0.4),
+                      fillColor:
+                          theme.colorScheme.surfaceVariant.withOpacity(0.4),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                            color: const Color(0xFF2E7D32), width: 1.5),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF2E7D32), width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),
@@ -321,28 +322,26 @@ class _OperatingExpenseScreenState extends State<OperatingExpenseScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Save button
-              Consumer<CostingProvider>(
-                builder: (context, provider, _) => FilledButton.icon(
-                  onPressed: provider.isSaving ? null : _save,
-                  icon: provider.isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.save_rounded),
-                  label: Text(provider.isSaving
-                      ? 'Menyimpan & Mengalokasikan...'
-                      : 'Simpan & Alokasikan ke Semua Menu'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    textStyle: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
+              // ✅ RIVERPOD: Consumer wrapper dihapus — isSaving sudah di-watch di atas
+              FilledButton.icon(
+                onPressed: isSaving ? null : _save,
+                icon: isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.save_rounded),
+                label: Text(isSaving
+                    ? 'Menyimpan & Mengalokasikan...'
+                    : 'Simpan & Alokasikan ke Semua Menu'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  textStyle: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
               const SizedBox(height: 32),
@@ -370,8 +369,7 @@ class _TotalLine extends StatelessWidget {
         Text(label,
             style: TextStyle(
                 color: color,
-                fontWeight:
-                    bold ? FontWeight.w700 : FontWeight.normal,
+                fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
                 fontSize: 13)),
         Text(value,
             style: TextStyle(
@@ -396,7 +394,7 @@ class _PeriodSelector extends StatelessWidget {
 
   static const _months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
   ];
 
   @override
@@ -410,8 +408,8 @@ class _PeriodSelector extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Bulan',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600)),
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<int>(
                 value: month,
@@ -429,8 +427,8 @@ class _PeriodSelector extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none),
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
               ),
             ],
@@ -442,19 +440,15 @@ class _PeriodSelector extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Tahun',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600)),
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               DropdownButtonFormField<int>(
                 value: year,
-                items: List.generate(
-                  5,
-                  (i) {
-                    final y = DateTime.now().year - 2 + i;
-                    return DropdownMenuItem(
-                        value: y, child: Text('$y'));
-                  },
-                ),
+                items: List.generate(5, (i) {
+                  final y = DateTime.now().year - 2 + i;
+                  return DropdownMenuItem(value: y, child: Text('$y'));
+                }),
                 onChanged: (v) => onChanged(v!, month),
                 decoration: InputDecoration(
                   filled: true,
@@ -464,8 +458,8 @@ class _PeriodSelector extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none),
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
               ),
             ],
