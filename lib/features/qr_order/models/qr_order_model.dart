@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 
 enum QrOrderStatus {
-  created,      // 0 – Pesanan masuk, menunggu dapur
-  preparing,    // 1 – Dapur sedang masak
-  ready,        // 2 – Siap disajikan / diantar ke meja
-  served,       // 3 – Sudah disajikan, customer makan
-  paid,         // 4 – Sudah bayar, selesai
-  cancelled;    // -1
+  created,
+  preparing,
+  ready,
+  served,
+  paid,
+  cancelled;
 
   String get label {
     switch (this) {
@@ -87,10 +87,8 @@ class QrOrderItemModel {
   factory QrOrderItemModel.fromMap(Map<String, dynamic> map) => QrOrderItemModel(
         menuItemId: map['menu_item_id'] as String,
         menuItemName: map['menu_item_name'] as String,
-        // DB kolom: unit_price (bukan price)
         price: ((map['unit_price'] ?? map['price']) as num).toDouble(),
         quantity: map['quantity'] as int,
-        // DB kolom: special_requests (bukan notes)
         notes: (map['special_requests'] ?? map['notes']) as String?,
         imageUrl: map['image_url'] as String?,
       );
@@ -114,7 +112,7 @@ class QrOrderModel {
   final String tableName;
   final String customerName;
   final List<QrOrderItemModel> items;
-  final double totalAmount;
+  final double totalAmountFromDb; // simpan nilai DB tapi jangan pakai langsung
   final QrOrderStatus status;
   final QrPaymentStatus paymentStatus;
   final String paymentMethod;
@@ -131,7 +129,7 @@ class QrOrderModel {
     required this.tableName,
     required this.customerName,
     required this.items,
-    required this.totalAmount,
+    required this.totalAmountFromDb,
     required this.status,
     required this.paymentStatus,
     required this.paymentMethod,
@@ -141,6 +139,19 @@ class QrOrderModel {
     this.notes,
   });
 
+  // ── Kalkulasi yang benar ──────────────────────────────────────────
+  double get subtotal => items.isNotEmpty
+      ? items.fold(0.0, (sum, i) => sum + i.subtotal)
+      : totalAmountFromDb; // fallback kalau items kosong
+
+  double get serviceCharge => subtotal * 0.03;
+  double get pb1Amount => (subtotal + serviceCharge) * 0.10;
+
+  /// Total yang benar: kalkulasi dari items kalau ada, fallback ke DB
+  double get totalAmount => items.isNotEmpty
+      ? subtotal + serviceCharge + pb1Amount
+      : totalAmountFromDb;
+
   factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
         id: map['id'] as String,
         orderNumber: map['order_number'] as String,
@@ -148,16 +159,14 @@ class QrOrderModel {
         tableId: map['table_id'] as String,
         tableName: map['table_name'] as String,
         customerName: map['customer_name'] as String,
-        // order_items = hasil join dari Supabase (sudah di-normalize ke 'items' oleh repository)
         items: ((map['items'] ?? map['order_items']) as List<dynamic>? ?? [])
             .map((e) => QrOrderItemModel.fromMap(e as Map<String, dynamic>))
             .toList(),
-        totalAmount: (map['total_amount'] as num).toDouble(),
+        totalAmountFromDb: (map['total_amount'] as num).toDouble(),
         status: QrOrderStatus.values.firstWhere(
           (s) => s.name.toLowerCase() == (map['status'] as String).toLowerCase(),
           orElse: () => QrOrderStatus.created,
         ),
-        // FIX 2: DB pakai 'unpaid', enum kita pakai 'pending' — map keduanya
         paymentStatus: () {
           final raw = (map['payment_status'] as String? ?? 'pending').toLowerCase();
           if (raw == 'unpaid') return QrPaymentStatus.pending;
@@ -206,7 +215,7 @@ class QrOrderModel {
         tableName: tableName,
         customerName: customerName,
         items: items,
-        totalAmount: totalAmount,
+        totalAmountFromDb: totalAmountFromDb,
         status: status ?? this.status,
         paymentStatus: paymentStatus ?? this.paymentStatus,
         paymentMethod: paymentMethod,
