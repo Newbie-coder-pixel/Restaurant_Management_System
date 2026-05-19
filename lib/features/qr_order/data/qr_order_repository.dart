@@ -240,7 +240,10 @@ await _client.from('order_items').insert(orderItemsData);
   ) {
     final orderItems = rawItems.map((e) {
       final item = Map<String, dynamic>.from(e as Map);
-      item['price'] = item['unit_price'] ?? item['price'];
+      // Pastikan KEDUA key tersedia agar fromMap bisa baca unit_price maupun price
+      final unitPrice = item['unit_price'] ?? item['price'];
+      item['unit_price'] = unitPrice;
+      item['price'] = unitPrice;
       item['notes'] = item['special_requests'] ?? item['notes'];
       return item;
     }).toList();

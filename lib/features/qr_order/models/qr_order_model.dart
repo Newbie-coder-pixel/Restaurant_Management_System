@@ -140,17 +140,26 @@ class QrOrderModel {
   });
 
   // ── Kalkulasi yang benar ──────────────────────────────────────────
-  double get subtotal => items.isNotEmpty
-      ? items.fold(0.0, (sum, i) => sum + i.subtotal)
-      : totalAmountFromDb; // fallback kalau items kosong
+  double get subtotal {
+    if (items.isEmpty) return 0.0;
+    final computed = items.fold(0.0, (sum, i) => sum + i.subtotal);
+    // Guard: kalau semua items punya price=0, data corrupt → kembalikan 0
+    return computed;
+  }
 
   double get serviceCharge => subtotal * 0.03;
   double get pb1Amount => (subtotal + serviceCharge) * 0.10;
 
-  /// Total yang benar: kalkulasi dari items kalau ada, fallback ke DB
-  double get totalAmount => items.isNotEmpty
-      ? subtotal + serviceCharge + pb1Amount
-      : totalAmountFromDb;
+  /// Total yang benar:
+  /// 1. Kalau items ada DAN subtotal > 0 → hitung dari items
+  /// 2. Fallback ke totalAmountFromDb (sudah include tax saat disimpan)
+  double get totalAmount {
+    if (items.isNotEmpty && subtotal > 0) {
+      return subtotal + serviceCharge + pb1Amount;
+    }
+    // totalAmountFromDb sudah tersimpan dengan tax di createOrder()
+    return totalAmountFromDb;
+  }
 
   factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
         id: map['id'] as String,
