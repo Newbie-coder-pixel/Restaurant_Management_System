@@ -582,9 +582,8 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
         ? const Color(0xFF4CAF50)
         : const Color(0xFFE94560);
     final payLabel = o.paymentStatus == 'paid' ? 'Lunas' : 'Belum Bayar';
-    final localTime = o.createdAt.toLocal();
     final jamMasuk =
-        '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')} WIB';
+        '${o.createdAt.hour.toString().padLeft(2, '0')}:${o.createdAt.minute.toString().padLeft(2, '0')} WIB';
 
     return Container(
       padding: const EdgeInsets.all(16),
