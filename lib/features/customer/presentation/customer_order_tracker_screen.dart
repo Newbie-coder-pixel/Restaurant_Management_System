@@ -280,12 +280,8 @@ class _CustomerOrderTrackerScreenState
     try {
       final user = Supabase.instance.client.auth.currentUser;
 
-      var query = Supabase.instance.client
-          .from('orders')
-          .select()
-          .eq('order_number', code);
-
       if (user != null) {
+        // Coba cari order milik user ini dulu
         final ownOrders = await Supabase.instance.client
             .from('orders')
             .select()
@@ -298,13 +294,25 @@ class _CustomerOrderTrackerScreenState
           return;
         }
 
-        final anyOrder = await query.limit(1);
+        // Fallback: cari order apapun dengan nomor ini
+        final anyOrder = await Supabase.instance.client
+            .from('orders')
+            .select()
+            .eq('order_number', code)
+            .limit(1);
+
         if ((anyOrder as List).isNotEmpty) {
           await _processOrderResult(anyOrder.first);
           return;
         }
       } else {
-        final res = await query.limit(1);
+        // Anon user: buat query baru (tidak reuse query object lama)
+        final res = await Supabase.instance.client
+            .from('orders')
+            .select()
+            .eq('order_number', code)
+            .limit(1);
+
         if ((res as List).isNotEmpty) {
           await _processOrderResult(res.first);
           return;
