@@ -22,7 +22,6 @@ class _TableCardState extends State<TableCard> {
   void initState() {
     super.initState();
     _updateTimer();
-    // Refresh timer tiap 60 detik
     _timer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) setState(_updateTimer);
     });
@@ -72,7 +71,6 @@ class _TableCardState extends State<TableCard> {
     final isCleaning = table.status == TableStatus.cleaning;
     final isOccupied = table.status == TableStatus.occupied;
 
-    // Warna timer: hijau < 60 mnt, kuning 60-90, merah > 90
     Color timerColor = const Color(0xFF4CAF50);
     if (_minutesOccupied >= 90) {
       timerColor = Colors.red;
@@ -97,7 +95,6 @@ class _TableCardState extends State<TableCard> {
         ),
         child: Stack(
           children: [
-            // ── Main content ──────────────────────────────────────
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -168,7 +165,6 @@ class _TableCardState extends State<TableCard> {
               ],
             ),
 
-            // ── IMPROVEMENT: Occupied timer badge di pojok kanan atas ──
             if (isOccupied && _minutesOccupied > 0)
               Positioned(
                 top: 6,
@@ -275,7 +271,6 @@ class _TableCardState extends State<TableCard> {
     );
   }
 
-  // ── IMPROVEMENT: Icon shape dengan gradient fill ──────────────────
   Widget _buildTableIcon(TableModel table) {
     final color = table.status.color;
     switch (table.shape) {
@@ -321,9 +316,6 @@ class _TableCardState extends State<TableCard> {
     }
   }
 }
-
-// ── Semua kode di bawah ini TIDAK BERUBAH dari versi aslinya ─────────────────
-// (copy paste model classes & bottom sheet dari file asli lo ke sini)
 
 class _BookingDetail {
   final String customerName;
@@ -407,10 +399,15 @@ class _OrderDetail {
     taxAmount: (j['tax_amount'] ?? 0).toDouble(),
     totalAmount: (j['total_amount'] ?? 0).toDouble(),
     notes: j['notes'],
-    createdAt:
-        DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
+    createdAt: DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
     items: j['items'] ?? [],
   );
+
+  // ── Selalu hitung ulang dari subtotal, tidak bergantung nilai DB ──
+  double get computedServiceCharge => subtotal * 0.03;
+  double get computedPb1 => (subtotal + computedServiceCharge) * 0.10;
+  double get computedTotal =>
+      subtotal + computedServiceCharge + computedPb1 - discountAmount;
 }
 
 class _StatusBottomSheet extends StatefulWidget {
@@ -577,13 +574,8 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
   }
 
   Widget _buildOrderSection(Color color) {
-    if (_loadingOrder) {
-      return _loadingBox(color);
-    }
-
-    if (_order == null) {
-      return _emptyBox(color, 'Tidak ada data order aktif');
-    }
+    if (_loadingOrder) return _loadingBox(color);
+    if (_order == null) return _emptyBox(color, 'Tidak ada data order aktif');
 
     final o = _order!;
     final payColor = o.paymentStatus == 'paid'
@@ -682,18 +674,18 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             const Divider(height: 16),
           ],
 
-          // ── Breakdown harga ──────────────────────────────────────
+          // ── Breakdown harga (selalu hitung ulang dari subtotal) ────
           _detailRow(Icons.receipt_outlined, 'Subtotal',
               _formatCurrency(o.subtotal)),
           _detailRow(Icons.room_service_outlined, 'Service (3%)',
-              _formatCurrency(o.subtotal * 0.03)),
+              _formatCurrency(o.computedServiceCharge)),
           _detailRow(Icons.percent_rounded, 'PB1 (10%)',
-              _formatCurrency((o.subtotal + o.subtotal * 0.03) * 0.10)),
+              _formatCurrency(o.computedPb1)),
           if (o.discountAmount > 0)
             _detailRow(Icons.discount_rounded, 'Diskon',
               '- ${_formatCurrency(o.discountAmount)}'),
-          _detailRow(
-              Icons.payments_rounded, 'Total', _formatCurrency(o.totalAmount)),
+          _detailRow(Icons.payments_rounded, 'Total',
+              _formatCurrency(o.computedTotal)),
 
           const SizedBox(height: 8),
 
