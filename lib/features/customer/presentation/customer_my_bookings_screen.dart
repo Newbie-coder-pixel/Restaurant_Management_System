@@ -431,7 +431,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     final openHour = int.tryParse(openParts[0]) ?? 10;
     final closeHour = int.tryParse(closeParts[0]) ?? 22;
 
-    final now = DateTime.now();
+    // Pakai waktu lokal (WIB) — bukan UTC
+    final now = DateTime.now().toLocal();
     final selectedOrToday = _selectedDate ?? now;
     final isToday =
         selectedOrToday.year == now.year &&
@@ -439,10 +440,14 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         selectedOrToday.day == now.day;
     final minHour = isToday ? now.hour + (now.minute > 0 ? 1 : 0) : openHour;
 
+    // Handle closing time melewati tengah malam (misal tutup jam 01:00)
+    // closeHour kecil (0-4) dianggap lewat tengah malam = valid sampai dini hari
+    final bool closesAfterMidnight = closeHour < openHour;
+
     final initialHour =
         (_selectedTime != null && _selectedTime!.hour >= minHour)
         ? _selectedTime!.hour
-        : (minHour <= closeHour - 1 ? minHour : openHour);
+        : (minHour <= (closesAfterMidnight ? 23 : closeHour - 1) ? minHour : openHour);
 
     final picked = await showTimePicker(
       context: context,
@@ -463,8 +468,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 
     if (picked == null || !mounted) return;
 
-    // Validasi: jam tidak boleh sebelum minHour
-    if (picked.hour < minHour) {
+    // Validasi: jam tidak boleh sebelum minHour (hari ini saja)
+    if (isToday && picked.hour < minHour) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -477,9 +482,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  isToday
-                      ? 'Jam ${picked.hour.toString().padLeft(2, '0')}:00 sudah lewat. Pilih jam ${minHour.toString().padLeft(2, '0')}:00 ke atas.'
-                      : 'Jam harus antara $open – $close WIB',
+                  'Jam ${picked.hour.toString().padLeft(2, '0')}:00 sudah lewat. Pilih jam ${minHour.toString().padLeft(2, '0')}:00 ke atas.',
                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                 ),
               ),
@@ -497,8 +500,14 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       return;
     }
 
-    // Validasi: jam tidak boleh >= jam tutup
-    if (picked.hour >= closeHour) {
+    // Validasi: jam harus dalam range operasional
+    // Kalau tutup lewat tengah malam (misal 01:00), valid: >= openHour ATAU <= closeHour
+    // Kalau tutup sebelum tengah malam, valid: >= openHour DAN < closeHour
+    final bool outOfRange = closesAfterMidnight
+        ? (picked.hour < openHour && picked.hour > closeHour)
+        : (picked.hour < openHour || picked.hour >= closeHour);
+
+    if (outOfRange) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
