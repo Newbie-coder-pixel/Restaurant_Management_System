@@ -33,7 +33,7 @@ class CartState {
   final List<CartItem> items;
   final String? branchId;
   final String? branchName;
-  final String? tableNotes; // meja / nama tamu untuk takeaway
+  final String? tableNotes;
 
   const CartState({
     this.items = const [],
@@ -44,7 +44,7 @@ class CartState {
 
   double get subtotal => items.fold(0, (s, i) => s + i.subtotal);
   double get serviceCharge => subtotal * 0.03;
-  double get pb1Amount => (subtotal + serviceCharge) * 0.10;
+  double get pb1Amount => subtotal * 0.10; // fix: dari subtotal saja, bukan subtotal+serviceCharge
   double get tax => 0; // PPN dihapus, tetap ada agar tidak breaking change
   double get total => subtotal + serviceCharge + pb1Amount;
   int get itemCount => items.fold(0, (s, i) => s + i.quantity);
@@ -67,7 +67,6 @@ class CartNotifier extends StateNotifier<CartState> {
   CartNotifier() : super(const CartState());
 
   void setBranch(String branchId, String branchName) {
-    // Jika ganti branch, clear cart
     if (state.branchId != null && state.branchId != branchId) {
       state = CartState(branchId: branchId, branchName: branchName);
     } else {
