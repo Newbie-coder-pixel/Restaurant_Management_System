@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../providers/cart_provider.dart';
 
 class CustomerCheckoutScreen extends ConsumerStatefulWidget {
@@ -234,11 +235,17 @@ class _CustomerCheckoutScreenState
         selectedTableId = found['id'] as String?;
       }
 
-      final orderRes = await Supabase.instance.client
+      // Generate id & order_number di client — hindari .select() setelah insert
+      // agar tidak kena RLS 403 saat anon SELECT
+      final orderId      = const Uuid().v4();
+      final orderNumber  = _generateOrderNumber();
+
+      await Supabase.instance.client
           .from('orders')
           .insert({
+            'id':               orderId,
             'branch_id':        cart.branchId,
-            'order_number':     _generateOrderNumber(),
+            'order_number':     orderNumber,
             'status':           'new',
             'source':           _orderType == 'dine_in' ? 'dine_in' : 'takeaway',
             'order_type':       _orderType == 'dine_in' ? 'app_order' : 'takeaway',
@@ -254,11 +261,7 @@ class _CustomerCheckoutScreenState
             'total_amount':     cart.total,
             'payment_status':   'unpaid',
             'notes':            _buildOrderNotes(),
-          })
-          .select()
-          .single();
-
-      final orderId = orderRes['id'] as String;
+          });
 
       final orderItems = ref.read(cartProvider).items.map((item) => {
         'order_id':        orderId,
@@ -286,7 +289,7 @@ class _CustomerCheckoutScreenState
       ref.read(cartProvider.notifier).clear();
 
       if (mounted) {
-        context.go('/customer/order-success/${orderRes['order_number']}');
+        context.go('/customer/order-success/$orderNumber');
       }
     } catch (e) {
       if (mounted) {
