@@ -149,7 +149,7 @@ class OrderModel {
       ? items.fold(0.0, (sum, item) => sum + item.subtotal)
       : _subtotalFromDb; // fallback ke nilai DB
 
-  double get pb1Amount => subtotal * 0.10;
+  double get pb1Amount => (subtotal + serviceChargeAmount) * 0.10;
   double get serviceChargeAmount => subtotal * 0.03;
   double get taxAmount => pb1Amount + serviceChargeAmount;
 
