@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -409,7 +408,7 @@ class _OrderDetail {
     totalAmount: (j['total_amount'] ?? 0).toDouble(),
     notes: j['notes'],
     createdAt:
-        (DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now()).toLocal(),
+        DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
     items: j['items'] ?? [],
   );
 }
@@ -683,12 +682,16 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             const Divider(height: 16),
           ],
 
+          // ── Breakdown harga ──────────────────────────────────────
+          _detailRow(Icons.receipt_outlined, 'Subtotal',
+              _formatCurrency(o.subtotal)),
+          _detailRow(Icons.room_service_outlined, 'Service (3%)',
+              _formatCurrency(o.subtotal * 0.03)),
+          _detailRow(Icons.percent_rounded, 'PB1 (10%)',
+              _formatCurrency((o.subtotal + o.subtotal * 0.03) * 0.10)),
           if (o.discountAmount > 0)
             _detailRow(Icons.discount_rounded, 'Diskon',
               '- ${_formatCurrency(o.discountAmount)}'),
-          if (o.taxAmount > 0)
-            _detailRow(
-                Icons.percent_rounded, 'Pajak', _formatCurrency(o.taxAmount)),
           _detailRow(
               Icons.payments_rounded, 'Total', _formatCurrency(o.totalAmount)),
 
