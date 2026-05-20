@@ -133,12 +133,6 @@ class MenuItem {
 
 // ─── MENU INGREDIENT MODEL ────────────────────────────────────────────────────
 
-/// Satu bahan/ingredient yang dipakai untuk membuat satu menu item.
-/// Tersimpan di tabel `menu_ingredients` di Supabase.
-///
-/// Relasi:
-///   menu_ingredients.menu_item_id  → menu_items.id
-///   menu_ingredients.inventory_item_id → inventory_items.id
 class MenuIngredient {
   final String id;
   final String menuItemId;
@@ -146,7 +140,7 @@ class MenuIngredient {
   final String inventoryItemName;
   final String unit;
   final double quantity;
-  final double costPerUnit; // denormalized dari inventory_items.cost_per_unit
+  final double costPerUnit;
 
   const MenuIngredient({
     required this.id,
@@ -197,22 +191,87 @@ class MenuIngredient {
       );
 }
 
-/// Digunakan sementara di form sebelum disimpan ke DB
-/// (belum punya id dan menuItemId).
+// ─── MENU INGREDIENT DRAFT ────────────────────────────────────────────────────
+
+/// Digunakan sementara di form sebelum disimpan ke DB.
+/// Mendukung input dalam satuan sekunder (butir, ml, dll).
+///
+/// Contoh: Telur — unit=kg, unitSecondary=butir, unitConversion=6
+///   → staff input "2 butir" → disimpan quantity=0.333 kg di DB
 class MenuIngredientDraft {
   final String inventoryItemId;
   final String inventoryItemName;
+
+  /// Satuan utama dari inventory (kg, liter, pcs, dll)
   final String unit;
+
+  /// Satuan sekunder jika ada (butir, ml, lembar, dll) — nullable
+  final String? unitSecondary;
+
+  /// Berapa satuan kecil dalam 1 satuan utama. Contoh: 1 kg = 6 butir → 6.0
+  final double unitConversion;
+
+  /// Quantity selalu disimpan dalam satuan UTAMA (kg, liter).
+  /// Konversi dilakukan saat user input dalam satuan sekunder.
   final double quantity;
-  final double costPerUnit; // dari inventory_items.cost_per_unit
+
+  /// True = user sedang input/lihat dalam satuan sekunder (butir, ml).
+  /// False = user input dalam satuan utama (kg, liter).
+  final bool useSecondaryUnit;
+
+  final double costPerUnit;
 
   const MenuIngredientDraft({
     required this.inventoryItemId,
     required this.inventoryItemName,
     required this.unit,
+    this.unitSecondary,
+    this.unitConversion = 1.0,
     required this.quantity,
+    this.useSecondaryUnit = false,
     this.costPerUnit = 0,
   });
+
+  /// Apakah item ini punya satuan sekunder yang valid
+  bool get hasSecondaryUnit =>
+      unitSecondary != null &&
+      unitSecondary!.isNotEmpty &&
+      unitConversion > 1;
+
+  /// Qty yang ditampilkan ke user (dalam satuan yang sedang aktif)
+  double get displayQty =>
+      useSecondaryUnit && hasSecondaryUnit ? quantity * unitConversion : quantity;
+
+  /// Label satuan yang ditampilkan ke user
+  String get displayUnit =>
+      useSecondaryUnit && hasSecondaryUnit ? unitSecondary! : unit;
+
+  /// Konversi qty dari tampilan user → satuan utama untuk disimpan ke DB
+  static double toStorageQty({
+    required double inputQty,
+    required bool useSecondary,
+    required double unitConversion,
+  }) {
+    if (useSecondary && unitConversion > 1) {
+      return inputQty / unitConversion;
+    }
+    return inputQty;
+  }
+
+  MenuIngredientDraft copyWith({
+    double? quantity,
+    bool? useSecondaryUnit,
+  }) =>
+      MenuIngredientDraft(
+        inventoryItemId: inventoryItemId,
+        inventoryItemName: inventoryItemName,
+        unit: unit,
+        unitSecondary: unitSecondary,
+        unitConversion: unitConversion,
+        quantity: quantity ?? this.quantity,
+        useSecondaryUnit: useSecondaryUnit ?? this.useSecondaryUnit,
+        costPerUnit: costPerUnit,
+      );
 
   MenuIngredient toIngredient({required String menuItemId}) => MenuIngredient(
         id: '',
@@ -220,15 +279,7 @@ class MenuIngredientDraft {
         inventoryItemId: inventoryItemId,
         inventoryItemName: inventoryItemName,
         unit: unit,
-        quantity: quantity,
-        costPerUnit: costPerUnit,
-      );
-
-  MenuIngredientDraft copyWith({double? quantity}) => MenuIngredientDraft(
-        inventoryItemId: inventoryItemId,
-        inventoryItemName: inventoryItemName,
-        unit: unit,
-        quantity: quantity ?? this.quantity,
+        quantity: quantity, // sudah dalam satuan utama
         costPerUnit: costPerUnit,
       );
 }
