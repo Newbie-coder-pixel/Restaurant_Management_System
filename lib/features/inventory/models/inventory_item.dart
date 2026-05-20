@@ -1,24 +1,24 @@
-// lib/features/inventory/models/inventory_item.dart
-
 class InventoryItem {
   final String id;
   final String branchId;
   final String name;
-  final String unit; // kg, liter, pcs, gram, dll
-  final String category; // Bahan Baku, Minuman, Packaging, dll
-  final double openingStock; // stok awal hari ini
-  final double usedStock; // terpakai (dari order)
-  final double wasteStock; // terbuang / spoilage
-  final double purchasedStock; // pembelian dari supplier
-  final double transferIn; // transfer masuk dari cabang lain
-  final double transferOut; // transfer keluar ke cabang lain
-  final double adjustmentStock; // penyesuaian manual
-  final double minimumStock; // threshold low-stock alert
-  final double costPerUnit; // harga per satuan
-  final String? linkedMenuIds; // JSON list of menu item IDs yang pakai bahan ini
-  final DateTime date; // tanggal inventory
+  final String unit;
+  final String category;
+  final double openingStock;
+  final double usedStock;
+  final double wasteStock;
+  final double purchasedStock;
+  final double transferIn;
+  final double transferOut;
+  final double adjustmentStock;
+  final double minimumStock;
+  final double costPerUnit;
+  final String? linkedMenuIds;
+  final DateTime date;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? unitSecondary;
+  final double unitConversion;
 
   const InventoryItem({
     required this.id,
@@ -39,9 +39,18 @@ class InventoryItem {
     required this.date,
     required this.createdAt,
     required this.updatedAt,
+    this.unitSecondary,
+    this.unitConversion = 1.0,
   });
 
-  /// Stok akhir = opening + purchased + transferIn + adjustment - used - waste - transferOut
+  double get availableStockSecondary => closingStock * unitConversion;
+  double get usedStockSecondary => usedStock * unitConversion;
+  double get openingStockSecondary => openingStock * unitConversion;
+  double get costPerUnitSecondary =>
+      unitConversion > 0 ? costPerUnit / unitConversion : costPerUnit;
+  bool get hasSecondaryUnit =>
+      unitSecondary != null && unitSecondary!.isNotEmpty && unitConversion > 1;
+
   double get closingStock =>
       openingStock +
       purchasedStock +
@@ -51,15 +60,10 @@ class InventoryItem {
       wasteStock -
       transferOut;
 
-  /// Stok tersedia saat ini
   double get availableStock => closingStock;
-
   bool get isLowStock => availableStock <= minimumStock && minimumStock > 0;
-
   bool get isOutOfStock => availableStock <= 0;
-
   double get totalCostUsed => usedStock * costPerUnit;
-
   double get totalCostPurchased => purchasedStock * costPerUnit;
 
   InventoryItem copyWith({
@@ -81,6 +85,8 @@ class InventoryItem {
     DateTime? date,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? unitSecondary,
+    double? unitConversion,
   }) {
     return InventoryItem(
       id: id ?? this.id,
@@ -101,6 +107,8 @@ class InventoryItem {
       date: date ?? this.date,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      unitSecondary: unitSecondary ?? this.unitSecondary,
+      unitConversion: unitConversion ?? this.unitConversion,
     );
   }
 
@@ -124,6 +132,8 @@ class InventoryItem {
       date: DateTime.parse(map['date'] as String),
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
+      unitSecondary: map['unit_secondary'] as String?,
+      unitConversion: (map['unit_conversion'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
@@ -144,20 +154,22 @@ class InventoryItem {
       'cost_per_unit': costPerUnit,
       'linked_menu_ids': linkedMenuIds,
       'date': date.toIso8601String().split('T').first,
+      'unit_secondary': unitSecondary,
+      'unit_conversion': unitConversion,
     };
   }
 }
 
-/// Model untuk transaksi log inventory (audit trail)
 class InventoryTransaction {
   final String id;
   final String inventoryItemId;
   final String branchId;
-  final String type; // 'purchase', 'order_deduct', 'waste', 'transfer_in', 'transfer_out', 'adjustment'
+  final String type;
   final double quantity;
   final String? note;
-  final String? referenceId; // order_id, transfer_id, dll
+  final String? referenceId;
   final String? createdBy;
+  final String? menuItemName;
   final DateTime createdAt;
 
   const InventoryTransaction({
@@ -169,22 +181,24 @@ class InventoryTransaction {
     this.note,
     this.referenceId,
     this.createdBy,
+    this.menuItemName,
     required this.createdAt,
   });
 
   factory InventoryTransaction.fromMap(Map<String, dynamic> map) {
-      return InventoryTransaction(
-        id: map['id'] as String,
-        inventoryItemId: (map['inventory_item_id'] ?? map['item_id']) as String,
-        branchId: map['branch_id'] as String,
-        type: (map['type'] ?? map['transaction_type']) as String,
-        quantity: (map['quantity'] as num).toDouble(),
-        note: (map['note'] ?? map['notes']) as String?,
-        referenceId: map['reference_id'] as String?,
-        createdBy: (map['created_by'] ?? map['performed_by']) as String?,
-        createdAt: DateTime.parse(map['created_at'] as String),
-      );
-    }
+    return InventoryTransaction(
+      id: map['id'] as String,
+      inventoryItemId: (map['inventory_item_id'] ?? map['item_id']) as String,
+      branchId: map['branch_id'] as String,
+      type: (map['type'] ?? map['transaction_type']) as String,
+      quantity: (map['quantity'] as num).toDouble(),
+      note: (map['note'] ?? map['notes']) as String?,
+      referenceId: map['reference_id'] as String?,
+      createdBy: (map['created_by'] ?? map['performed_by']) as String?,
+      menuItemName: map['menu_item_name'] as String?,
+      createdAt: DateTime.parse(map['created_at'] as String),
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -199,16 +213,15 @@ class InventoryTransaction {
   }
 }
 
-/// Summary untuk dashboard inventory harian
 class InventoryDailySummary {
   final String branchId;
   final DateTime date;
   final int totalItems;
   final int lowStockItems;
   final int outOfStockItems;
-  final double totalInventoryValue; // nilai stok tersedia * cost
-  final double totalUsedValue; // total bahan terpakai (COGS)
-  final double totalWasteValue; // nilai terbuang
+  final double totalInventoryValue;
+  final double totalUsedValue;
+  final double totalWasteValue;
 
   const InventoryDailySummary({
     required this.branchId,

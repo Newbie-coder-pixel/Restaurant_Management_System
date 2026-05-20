@@ -1,5 +1,3 @@
-// lib/features/inventory/presentation/widgets/inventory_card.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/inventory_item.dart';
@@ -37,7 +35,12 @@ class InventoryCard extends ConsumerWidget {
         : (item.availableStock > 0 ? 1.0 : 0.0);
 
     return GestureDetector(
-      onTap: () => _openDetail(context),
+      onTap: () => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => InventoryDetailSheet(item: item),
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: colorScheme.surface,
@@ -66,8 +69,7 @@ class InventoryCard extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(12, 10, 10, 8),
               decoration: BoxDecoration(
                 color: statusColor.withValues(alpha: 0.06),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(15)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
               ),
               child: Row(
                 children: [
@@ -96,10 +98,8 @@ class InventoryCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  // Status badge
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
@@ -124,13 +124,13 @@ class InventoryCard extends ConsumerWidget {
               ),
             ),
 
-            // Body - stock info
+            // Body
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Available stock (big number)
+                  // Stok utama
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -157,6 +157,18 @@ class InventoryCard extends ConsumerWidget {
                       ),
                     ],
                   ),
+
+                  // Satuan sekunder (misal: ≈ 90 butir)
+                  if (item.hasSecondaryUnit)
+                    Text(
+                      '≈ ${_formatQty(item.availableStockSecondary)} ${item.unitSecondary}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: statusColor.withValues(alpha: 0.7),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
                   Text(
                     'Stok Tersedia',
                     style: TextStyle(
@@ -174,8 +186,7 @@ class InventoryCard extends ConsumerWidget {
                     child: LinearProgressIndicator(
                       value: stockPercent,
                       minHeight: 5,
-                      backgroundColor:
-                          colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      backgroundColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                       valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                     ),
                   ),
@@ -195,7 +206,12 @@ class InventoryCard extends ConsumerWidget {
                       _MiniStat(
                         label: 'Pakai',
                         value: _formatQty(item.usedStock),
-                        unit: item.unit,
+                        unit: item.hasSecondaryUnit
+                            ? '${item.unitSecondary}'
+                            : item.unit,
+                        secondaryValue: item.hasSecondaryUnit
+                            ? _formatQty(item.usedStockSecondary)
+                            : null,
                         color: Colors.orange.shade500,
                         isNegative: true,
                       ),
@@ -214,17 +230,14 @@ class InventoryCard extends ConsumerWidget {
 
             const Spacer(),
 
-            // Footer - min stock warning
+            // Footer
             if (item.minimumStock > 0)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.flag_outlined,
-                      size: 10,
-                      color: colorScheme.onSurface.withValues(alpha: 0.35),
-                    ),
+                    Icon(Icons.flag_outlined, size: 10,
+                        color: colorScheme.onSurface.withValues(alpha: 0.35)),
                     const SizedBox(width: 3),
                     Text(
                       'Min: ${_formatQty(item.minimumStock)} ${item.unit}',
@@ -245,19 +258,8 @@ class InventoryCard extends ConsumerWidget {
   }
 
   String _formatQty(double qty) {
-    if (qty == qty.truncateToDouble()) {
-      return qty.toInt().toString();
-    }
+    if (qty == qty.truncateToDouble()) return qty.toInt().toString();
     return qty.toStringAsFixed(1);
-  }
-
-  void _openDetail(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => InventoryDetailSheet(item: item),
-    );
   }
 }
 
@@ -265,6 +267,7 @@ class _MiniStat extends StatelessWidget {
   final String label;
   final String value;
   final String unit;
+  final String? secondaryValue;
   final Color color;
   final bool isNegative;
 
@@ -272,6 +275,7 @@ class _MiniStat extends StatelessWidget {
     required this.label,
     required this.value,
     required this.unit,
+    this.secondaryValue,
     required this.color,
     this.isNegative = false,
   });
@@ -290,29 +294,40 @@ class _MiniStat extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 1),
-        RichText(
-          text: TextSpan(
-            children: [
-              if (isNegative)
+        // Tampilkan satuan sekunder jika ada
+        if (secondaryValue != null)
+          Text(
+            '${isNegative ? '-' : ''}$secondaryValue $unit',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          )
+        else
+          RichText(
+            text: TextSpan(
+              children: [
+                if (isNegative)
+                  TextSpan(
+                    text: '-',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
                 TextSpan(
-                  text: '-',
+                  text: value,
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
                     color: color,
                   ),
                 ),
-              TextSpan(
-                text: value,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
       ],
     );
   }

@@ -8,7 +8,7 @@ import '../../providers/inventory_provider.dart';
 
 class AddInventoryForm extends ConsumerStatefulWidget {
   final String branchId;
-  final InventoryItem? editItem; // null = add, non-null = edit
+  final InventoryItem? editItem;
 
   const AddInventoryForm({
     super.key,
@@ -26,10 +26,14 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
   final _openingStockCtrl = TextEditingController();
   final _minimumStockCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
+  // ── BARU: satuan sekunder ──
+  final _unitSecondaryCtrl = TextEditingController();
+  final _unitConversionCtrl = TextEditingController();
 
   String _selectedUnit = 'kg';
   String _selectedCategory = 'Bahan Baku';
   bool _isLoading = false;
+  bool _hasSecondaryUnit = false; // toggle tampil field satuan sekunder
 
   final _units = ['kg', 'gram', 'liter', 'ml', 'pcs', 'botol', 'bungkus', 'dus', 'buah'];
   final _categories = [
@@ -53,6 +57,12 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
       _costCtrl.text = item.costPerUnit.toString();
       _selectedUnit = item.unit;
       _selectedCategory = item.category;
+      // ── load satuan sekunder jika ada ──
+      if (item.hasSecondaryUnit) {
+        _hasSecondaryUnit = true;
+        _unitSecondaryCtrl.text = item.unitSecondary ?? '';
+        _unitConversionCtrl.text = item.unitConversion.toInt().toString();
+      }
     }
   }
 
@@ -62,6 +72,8 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
     _openingStockCtrl.dispose();
     _minimumStockCtrl.dispose();
     _costCtrl.dispose();
+    _unitSecondaryCtrl.dispose();
+    _unitConversionCtrl.dispose();
     super.dispose();
   }
 
@@ -71,6 +83,15 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
 
     try {
       final now = DateTime.now();
+
+      // Hitung satuan sekunder
+      final unitSecondary = _hasSecondaryUnit && _unitSecondaryCtrl.text.trim().isNotEmpty
+          ? _unitSecondaryCtrl.text.trim()
+          : null;
+      final unitConversion = _hasSecondaryUnit
+          ? (double.tryParse(_unitConversionCtrl.text) ?? 1.0)
+          : 1.0;
+
       final item = InventoryItem(
         id: widget.editItem?.id ?? '',
         branchId: widget.branchId,
@@ -89,6 +110,8 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
         date: now,
         createdAt: widget.editItem?.createdAt ?? now,
         updatedAt: now,
+        unitSecondary: unitSecondary,       // ← BARU
+        unitConversion: unitConversion,     // ← BARU
       );
 
       final notifier = ref.read(inventoryNotifierProvider.notifier);
@@ -131,147 +154,254 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
       ),
       child: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            Text(
-              isEdit ? 'Edit Item Inventory' : 'Tambah Item Inventory',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 20),
+              Text(
+                isEdit ? 'Edit Item Inventory' : 'Tambah Item Inventory',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 20),
 
-            // Nama item
-            _buildTextField(
-              controller: _nameCtrl,
-              label: 'Nama Bahan / Item',
-              hint: 'cth. Tepung Terigu, Minyak Goreng...',
-              validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
-            ),
-            const SizedBox(height: 12),
+              // Nama item
+              _buildTextField(
+                controller: _nameCtrl,
+                label: 'Nama Bahan / Item',
+                hint: 'cth. Tepung Terigu, Minyak Goreng...',
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
+              ),
+              const SizedBox(height: 12),
 
-            // Unit + Category
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDropdown(
-                    label: 'Satuan',
-                    value: _selectedUnit,
-                    items: _units,
-                    onChanged: (v) => setState(() => _selectedUnit = v!),
+              // Unit + Category
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDropdown(
+                      label: 'Satuan Utama',
+                      value: _selectedUnit,
+                      items: _units,
+                      onChanged: (v) => setState(() => _selectedUnit = v!),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildDropdown(
-                    label: 'Kategori',
-                    value: _selectedCategory,
-                    items: _categories,
-                    onChanged: (v) => setState(() => _selectedCategory = v!),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildDropdown(
+                      label: 'Kategori',
+                      value: _selectedCategory,
+                      items: _categories,
+                      onChanged: (v) => setState(() => _selectedCategory = v!),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+                ],
+              ),
+              const SizedBox(height: 12),
 
-            // Opening stock + Min stock
-            Row(
-              children: [
-                Expanded(
-                  child: _buildTextField(
-                    controller: _openingStockCtrl,
-                    label: 'Stok Awal',
-                    hint: '0',
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d+\.?\d{0,2}')),
-                    ],
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Wajib diisi';
-                      if (double.tryParse(v) == null) return 'Angka tidak valid';
-                      return null;
-                    },
+              // ── BARU: Toggle satuan sekunder ──────────────────────────────
+              GestureDetector(
+                onTap: () => setState(() {
+                  _hasSecondaryUnit = !_hasSecondaryUnit;
+                  if (!_hasSecondaryUnit) {
+                    _unitSecondaryCtrl.clear();
+                    _unitConversionCtrl.clear();
+                  }
+                }),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _hasSecondaryUnit
+                        ? colorScheme.primaryContainer.withValues(alpha: 0.4)
+                        : colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(10),
+                    border: _hasSecondaryUnit
+                        ? Border.all(color: colorScheme.primary.withValues(alpha: 0.4))
+                        : null,
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildTextField(
-                    controller: _minimumStockCtrl,
-                    label: 'Stok Minimum',
-                    hint: '0 (opsional)',
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d+\.?\d{0,2}')),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Cost per unit
-            _buildTextField(
-              controller: _costCtrl,
-              label: 'Harga per Satuan (Rp)',
-              hint: '0',
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Submit button
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _isLoading ? null : _submit,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        isEdit ? 'Simpan Perubahan' : 'Tambah Item',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                  child: Row(
+                    children: [
+                      Icon(
+                        _hasSecondaryUnit
+                            ? Icons.check_box_rounded
+                            : Icons.check_box_outline_blank_rounded,
+                        size: 18,
+                        color: _hasSecondaryUnit
+                            ? colorScheme.primary
+                            : colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Punya satuan kecil? (cth: 1 kg = 6 butir)',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: _hasSecondaryUnit
+                                ? colorScheme.primary
+                                : colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
+
+              // Field satuan sekunder — muncul jika toggle aktif
+              if (_hasSecondaryUnit) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTextField(
+                        controller: _unitSecondaryCtrl,
+                        label: 'Satuan Kecil',
+                        hint: 'cth. butir, slice, lembar...',
+                        validator: (v) => _hasSecondaryUnit && (v == null || v.trim().isEmpty)
+                            ? 'Wajib diisi'
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildTextField(
+                        controller: _unitConversionCtrl,
+                        label: '1 $_selectedUnit = ? ${_unitSecondaryCtrl.text.isEmpty ? '...' : _unitSecondaryCtrl.text}',
+                        hint: 'cth. 6',
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                        ],
+                        validator: (v) {
+                          if (!_hasSecondaryUnit) return null;
+                          if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                          final n = double.tryParse(v);
+                          if (n == null || n <= 0) return 'Harus > 0';
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                // Preview konversi
+                if (_unitConversionCtrl.text.isNotEmpty &&
+                    _unitSecondaryCtrl.text.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      '→ 1 $_selectedUnit = ${_unitConversionCtrl.text} ${_unitSecondaryCtrl.text}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+              // ─────────────────────────────────────────────────────────────
+
+              const SizedBox(height: 12),
+
+              // Opening stock + Min stock
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _openingStockCtrl,
+                      label: 'Stok Awal ($_selectedUnit)',
+                      hint: '0',
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d+\.?\d{0,2}')),
+                      ],
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                        if (double.tryParse(v) == null) return 'Tidak valid';
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _minimumStockCtrl,
+                      label: 'Stok Minimum',
+                      hint: '0 (opsional)',
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d+\.?\d{0,2}')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Cost per unit
+              _buildTextField(
+                controller: _costCtrl,
+                label: 'Harga per $_selectedUnit (Rp)',
+                hint: '0',
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Submit button
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _isLoading ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          isEdit ? 'Simpan Perubahan' : 'Tambah Item',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -291,6 +421,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator,
+      onChanged: (_) => setState(() {}), // rebuild untuk preview konversi
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

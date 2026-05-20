@@ -285,27 +285,23 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   /// Deduct inventory berdasarkan ingredients setiap menu item di order.
   /// Dipanggil sekali saat order pertama kali masuk ke status [preparing].
-  Future<void> _deductInventoryForOrder(OrderModel order) async {
+Future<void> _deductInventoryForOrder(OrderModel order) async {
     if (order.items.isEmpty) return;
 
     try {
       final inventoryService = InventoryService(supabase);
       final staff = ref.read(currentStaffProvider);
 
-      // Kumpulkan semua menuItemId yang unik dari order
       final menuItemIds = order.items.map((i) => i.menuItemId).toSet().toList();
 
-      // Fetch semua ingredients untuk menu-menu tersebut sekaligus
       final ingredientsRes = await Supabase.instance.client
           .from('menu_ingredients')
           .select()
           .inFilter('menu_item_id', menuItemIds);
 
-      if (ingredientsRes.isEmpty) return;
+      if ((ingredientsRes as List).isEmpty) return;
 
-      // Deduct per ingredient × qty menu yang dipesan
       for (final orderItem in order.items) {
-        // Filter ingredients milik menu item ini
         final ingredients = ingredientsRes
             .where((r) => r['menu_item_id'] == orderItem.menuItemId)
             .toList();
@@ -323,13 +319,12 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             branchId: order.branchId,
             quantity: totalDeduct,
             orderId: order.id,
+            menuItemName: orderItem.menuItemName, // ← baris baru ini saja
             createdBy: staff?.id,
           );
         }
       }
     } catch (e) {
-      // Deduct gagal tidak boleh block flow order —
-      // log saja, status order tetap diupdate
       debugPrint('[InventoryDeduct] Error: $e');
     }
   }

@@ -10,7 +10,6 @@ class InventoryService {
 
   // ─── FETCH ────────────────────────────────────────────────────────────────
 
-  /// Ambil semua item inventory untuk branch & tanggal tertentu
   Future<List<InventoryItem>> fetchInventoryItems({
     required String branchId,
     DateTime? date,
@@ -31,7 +30,6 @@ class InventoryService {
         .toList();
   }
 
-  /// Fetch realtime stream untuk inventory
   Stream<List<InventoryItem>> streamInventoryItems({
     required String branchId,
     DateTime? date,
@@ -50,7 +48,6 @@ class InventoryService {
             .toList());
   }
 
-  /// Fetch item yang low stock / out of stock (untuk alert)
   Future<List<InventoryItem>> fetchLowStockItems(String branchId) async {
     final dateStr = DateTime.now().toIso8601String().split('T').first;
     final response = await _client
@@ -63,11 +60,9 @@ class InventoryService {
         .map((e) => InventoryItem.fromMap(e as Map<String, dynamic>))
         .toList();
 
-    // Filter low stock di client side (karena kalkulasi closing stock)
     return items.where((item) => item.isLowStock || item.isOutOfStock).toList();
   }
 
-  /// Fetch history transaksi inventory
   Future<List<InventoryTransaction>> fetchTransactions({
     required String inventoryItemId,
     int limit = 50,
@@ -86,7 +81,6 @@ class InventoryService {
 
   // ─── WRITE ────────────────────────────────────────────────────────────────
 
-  /// Tambah item inventory baru
   Future<InventoryItem> addInventoryItem(InventoryItem item) async {
     final response = await _client
         .from('inventory_items')
@@ -97,7 +91,6 @@ class InventoryService {
     return InventoryItem.fromMap(response);
   }
 
-  /// Update item inventory
   Future<InventoryItem> updateInventoryItem(InventoryItem item) async {
     final response = await _client
         .from('inventory_items')
@@ -109,7 +102,6 @@ class InventoryService {
     return InventoryItem.fromMap(response);
   }
 
-  /// Catat pembelian stok (Inventory In - Purchase)
   Future<void> recordPurchase({
     required String inventoryItemId,
     required String branchId,
@@ -117,14 +109,12 @@ class InventoryService {
     String? note,
     String? createdBy,
   }) async {
-    // Update stok
     await _client.rpc('increment_inventory_field', params: {
       'p_id': inventoryItemId,
       'p_field': 'purchased_stock',
       'p_amount': quantity,
     });
 
-    // Log transaksi
     await _logTransaction(
       inventoryItemId: inventoryItemId,
       branchId: branchId,
@@ -135,12 +125,14 @@ class InventoryService {
     );
   }
 
-  /// Catat pemakaian dari order (dipanggil otomatis saat order dibuat)
+  /// Dipanggil dari order_screen saat order → preparing.
+  /// [menuItemName] diisi nama menu agar histori terpakai lebih informatif.
   Future<void> deductFromOrder({
     required String inventoryItemId,
     required String branchId,
     required double quantity,
     required String orderId,
+    String? menuItemName,       // ← BARU: nama menu untuk kolom menu_item_name
     String? createdBy,
   }) async {
     await _client.rpc('increment_inventory_field', params: {
@@ -155,15 +147,14 @@ class InventoryService {
       type: 'order_deduct',
       quantity: quantity,
       referenceId: orderId,
-      note: 'Deducted from order',
+      note: menuItemName != null ? 'Dari order: $menuItemName' : 'Deducted from order',
       createdBy: createdBy,
+      menuItemName: menuItemName,   // ← BARU
     );
 
-    // Cek apakah stok habis → trigger menu update
     await _checkAndUpdateMenuAvailability(inventoryItemId, branchId);
   }
 
-  /// Catat pemborosan / spoilage
   Future<void> recordWaste({
     required String inventoryItemId,
     required String branchId,
@@ -187,7 +178,6 @@ class InventoryService {
     );
   }
 
-  /// Transfer stok antar cabang
   Future<void> transferStock({
     required String fromItemId,
     required String fromBranchId,
@@ -196,21 +186,18 @@ class InventoryService {
     required double quantity,
     String? createdBy,
   }) async {
-    // Kurangi dari cabang asal
     await _client.rpc('increment_inventory_field', params: {
       'p_id': fromItemId,
       'p_field': 'transfer_out',
       'p_amount': quantity,
     });
 
-    // Tambah ke cabang tujuan
     await _client.rpc('increment_inventory_field', params: {
       'p_id': toItemId,
       'p_field': 'transfer_in',
       'p_amount': quantity,
     });
 
-    // Log keduanya
     final transferId = DateTime.now().millisecondsSinceEpoch.toString();
     await _logTransaction(
       inventoryItemId: fromItemId,
@@ -232,11 +219,10 @@ class InventoryService {
     );
   }
 
-  /// Penyesuaian stok manual (stock opname)
   Future<void> adjustStock({
     required String inventoryItemId,
     required String branchId,
-    required double adjustmentQty, // bisa positif atau negatif
+    required double adjustmentQty,
     required String reason,
     String? createdBy,
   }) async {
@@ -258,7 +244,8 @@ class InventoryService {
     );
   }
 
-  /// Roll over stok akhir → stok awal hari berikutnya
+  /// Roll over stok akhir → stok awal hari berikutnya.
+  /// ✅ FIX: carry over unit_secondary & unit_conversion
   Future<void> rolloverDailyStock(String branchId) async {
     final tomorrow = DateTime.now()
         .add(const Duration(days: 1))
@@ -266,10 +253,8 @@ class InventoryService {
         .split('T')
         .first;
 
-    // Fetch semua item hari ini
     final items = await fetchInventoryItems(branchId: branchId);
 
-    // Buat record baru untuk besok dengan opening = closing hari ini
     final inserts = items.map((item) {
       return {
         'branch_id': branchId,
@@ -287,6 +272,9 @@ class InventoryService {
         'cost_per_unit': item.costPerUnit,
         'linked_menu_ids': item.linkedMenuIds,
         'date': tomorrow,
+        // ✅ FIX: carry over satuan sekunder
+        'unit_secondary': item.unitSecondary,
+        'unit_conversion': item.unitConversion,
       };
     }).toList();
 
@@ -306,19 +294,20 @@ class InventoryService {
     String? note,
     String? referenceId,
     String? createdBy,
+    String? menuItemName,   // ← BARU
   }) async {
     await _client.from('inventory_transactions').insert({
       'inventory_item_id': inventoryItemId,
       'branch_id': branchId,
-      'transaction_type': type,  // ← pakai nama kolom yang benar
+      'transaction_type': type,
       'quantity': quantity,
-      'notes': note,             // ← kolom namanya 'notes' bukan 'note'
+      'notes': note,
       'reference_id': referenceId,
-      'performed_by': createdBy, // ← kolom namanya 'performed_by' bukan 'created_by'
+      'performed_by': createdBy,
+      'menu_item_name': menuItemName,   // ← BARU: nama menu tampil di histori
     });
   }
 
-  /// Cek stok setelah deduct → jika habis, update menu availability
   Future<void> _checkAndUpdateMenuAvailability(
     String inventoryItemId,
     String branchId,
@@ -326,7 +315,9 @@ class InventoryService {
     try {
       final response = await _client
           .from('inventory_items')
-          .select('linked_menu_ids, opening_stock, used_stock, waste_stock, purchased_stock, transfer_in, transfer_out, adjustment_stock')
+          .select(
+              'linked_menu_ids, opening_stock, used_stock, waste_stock, '
+              'purchased_stock, transfer_in, transfer_out, adjustment_stock')
           .eq('id', inventoryItemId)
           .single();
 
@@ -345,7 +336,6 @@ class InventoryService {
       });
 
       if (item.isOutOfStock && item.linkedMenuIds != null) {
-        // Parse linked menu IDs dan update availability = false
         final menuIds = (item.linkedMenuIds ?? '')
             .replaceAll('[', '')
             .replaceAll(']', '')
@@ -363,11 +353,10 @@ class InventoryService {
         }
       }
     } catch (_) {
-      // Jangan crash jika menu update gagal
+      // Tidak crash jika menu update gagal
     }
   }
 
-  /// Generate daily summary
   Future<InventoryDailySummary> getDailySummary(String branchId,
       {DateTime? date}) async {
     final items = await fetchInventoryItems(branchId: branchId, date: date);
@@ -379,9 +368,11 @@ class InventoryService {
     double totalWaste = 0;
 
     for (final item in items) {
-      if (item.isOutOfStock) { outOfStock++; }
-      else if (item.isLowStock) { lowStock++; }
-
+      if (item.isOutOfStock) {
+        outOfStock++;
+      } else if (item.isLowStock) {
+        lowStock++;
+      }
       totalValue += item.availableStock * item.costPerUnit;
       totalUsed += item.usedStock * item.costPerUnit;
       totalWaste += item.wasteStock * item.costPerUnit;
