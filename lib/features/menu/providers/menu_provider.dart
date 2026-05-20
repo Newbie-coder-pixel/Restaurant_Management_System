@@ -2,8 +2,10 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../shared/models/menu_model.dart'; // includes MenuIngredient, MenuIngredientDraft
+import '../../../../shared/models/menu_model.dart';
 import '../presentation/services/menu_service.dart';
+import '../../../features/auth/providers/auth_provider.dart';
+import '../../../core/models/staff_role.dart';
 
 // ─── SERVICE PROVIDER ─────────────────────────────────────────────────────────
 
@@ -32,18 +34,30 @@ class MenuFilter {
     bool? showAvailableOnly,
     String? branchId,
     bool clearCategory = false,
+    bool clearBranch = false,
   }) {
     return MenuFilter(
       categoryId: clearCategory ? null : (categoryId ?? this.categoryId),
       searchQuery: searchQuery ?? this.searchQuery,
       showAvailableOnly: showAvailableOnly ?? this.showAvailableOnly,
-      branchId: branchId ?? this.branchId,
+      branchId: clearBranch ? null : (branchId ?? this.branchId),
     );
   }
 }
 
-final menuFilterProvider =
-    StateProvider<MenuFilter>((ref) => const MenuFilter());
+// ─── FIX UTAMA: menuFilterProvider auto-init dari staff branchId ──────────────
+// Saat refresh web, provider ini langsung punya branchId yang benar
+// tanpa perlu menunggu initState + addPostFrameCallback.
+final menuFilterProvider = StateProvider<MenuFilter>((ref) {
+  final staff = ref.watch(currentStaffProvider);
+  final isSuperAdmin = staff?.role == StaffRole.superadmin;
+
+  // Superadmin: default tampil semua (branchId null)
+  // Staff biasa: langsung filter ke branch mereka
+  final initialBranchId = isSuperAdmin ? null : staff?.branchId;
+
+  return MenuFilter(branchId: initialBranchId);
+});
 
 // ─── MENU NOTIFIER ────────────────────────────────────────────────────────────
 
@@ -82,8 +96,6 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
     );
   }
 
-  // ─── ACTIONS ──────────────────────────────────────────────────────────────
-
   Future<void> refresh() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() => _service.fetchMenus());
@@ -91,16 +103,13 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
 
   Future<bool> toggleAvailability(String id, bool currentStatus) async {
     final newStatus = !currentStatus;
-
     state = state.whenData((items) => items
         .map((m) => m.id == id ? m.copyWith(isAvailable: newStatus) : m)
         .toList());
-
     try {
       await _service.toggleAvailability(id, newStatus);
       return true;
     } catch (e) {
-      // Rollback
       state = state.whenData((items) => items
           .map((m) => m.id == id ? m.copyWith(isAvailable: currentStatus) : m)
           .toList());
@@ -126,7 +135,6 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
       if (imageFile != null) {
         imageUrl = await _service.uploadImage(imageFile);
       }
-
       final item = MenuItem(
         id: '',
         branchId: branchId,
@@ -141,17 +149,13 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
         allergens: allergens,
         dietaryLabels: dietaryLabels,
       );
-
       final saved = await _service.addMenu(item);
-
-      // Simpan ingredients setelah menu berhasil dibuat dan dapat ID-nya
       if (ingredients.isNotEmpty) {
         await _service.saveIngredients(
           menuItemId: saved.id,
           drafts: ingredients,
         );
       }
-
       return true;
     } catch (e) {
       return false;
@@ -169,13 +173,10 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
         imageUrl = await _service.uploadImage(newImageFile);
       }
       await _service.updateMenu(item.copyWith(imageUrl: imageUrl));
-
-      // Update ingredients: hapus lama, insert baru
       await _service.updateIngredients(
         menuItemId: item.id,
         drafts: ingredients,
       );
-
       return true;
     } catch (e) {
       return false;
@@ -195,9 +196,7 @@ class MenuNotifier extends AsyncNotifier<List<MenuItem>> {
         preparationTimeMinutes: 15,
       ),
     );
-
     state = state.whenData((items) => items.where((m) => m.id != id).toList());
-
     try {
       await _service.deleteMenu(id, imageUrl: item?.imageUrl);
       return true;
@@ -222,13 +221,12 @@ final filteredMenuProvider = Provider<AsyncValue<List<MenuItem>>>((ref) {
   return menusAsync.whenData((items) {
     var result = items;
 
-    if (filter.branchId != null) {
+    if (filter.branchId != null && filter.branchId!.isNotEmpty) {
       result = result.where((m) => m.branchId == filter.branchId).toList();
     }
 
     if (filter.categoryId != null) {
-      result =
-          result.where((m) => m.categoryId == filter.categoryId).toList();
+      result = result.where((m) => m.categoryId == filter.categoryId).toList();
     }
 
     if (filter.searchQuery.isNotEmpty) {
@@ -248,9 +246,8 @@ final filteredMenuProvider = Provider<AsyncValue<List<MenuItem>>>((ref) {
   });
 });
 
-/// Jumlah menu per categoryId.
 final menuCountByCategoryProvider = Provider<Map<String?, int>>((ref) {
-  final items = ref.watch(menuProvider).valueOrNull ?? [];
+  final items = ref.watch(filteredMenuProvider).valueOrNull ?? [];
   final counts = <String?, int>{};
   for (final m in items) {
     counts[m.categoryId] = (counts[m.categoryId] ?? 0) + 1;
@@ -272,7 +269,8 @@ class CategoryNotifier extends FamilyAsyncNotifier<List<MenuCategory>, String> {
   Future<bool> addCategory(String name) async {
     final branchId = arg;
     try {
-      final newCat = await _service.addCategory(branchId: branchId, name: name);
+      final newCat =
+          await _service.addCategory(branchId: branchId, name: name);
       state = state.whenData((cats) => [...cats, newCat]);
       return true;
     } catch (_) {
@@ -282,7 +280,8 @@ class CategoryNotifier extends FamilyAsyncNotifier<List<MenuCategory>, String> {
 
   Future<bool> deleteCategory(String categoryId) async {
     final prev = state.valueOrNull ?? [];
-    state = state.whenData((cats) => cats.where((c) => c.id != categoryId).toList());
+    state =
+        state.whenData((cats) => cats.where((c) => c.id != categoryId).toList());
     try {
       await _service.deleteCategory(categoryId);
       return true;

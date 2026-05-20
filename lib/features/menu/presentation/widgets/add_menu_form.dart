@@ -715,10 +715,15 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
 
     if (available.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Semua item inventory sudah ditambahkan.')),
-      );
-      return;
+        SnackBar(
+          content: Text(
+            items.isEmpty
+                ? 'Belum ada item inventory di cabang ini.'
+                : 'Semua item inventory sudah ditambahkan.',
+      ),
+    ),
+  );
+  return;
     }
 
     final picked = await showModalBottomSheet<InventoryItem>(

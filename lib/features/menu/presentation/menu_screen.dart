@@ -47,16 +47,11 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
   @override
   void initState() {
     super.initState();
+    // FIX: Tidak perlu set filter manual di sini lagi.
+    // menuFilterProvider sudah auto-init dari currentStaffProvider.
+    // Hanya perlu load daftar branch untuk superadmin dropdown.
     if (widget.isSuperAdmin) {
       _loadBranches();
-    } else {
-      // Non-superadmin: langsung set filter ke branch sendiri
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ref.read(menuFilterProvider.notifier).update(
-              (s) => s.copyWith(branchId: widget.branchId),
-            );
-      });
     }
   }
 
@@ -76,18 +71,26 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
     ref.read(menuFilterProvider.notifier).update(
           (s) => s.copyWith(
             branchId: branchId,
-            // reset category saat ganti branch
+            clearBranch: branchId == null,
             clearCategory: true,
           ),
         );
   }
 
-  /// branchId efektif untuk widget yang butuh branchId eksplisit
-  /// (AddMenuForm, CategoryTabs)
-  String get _effectiveBranchId =>
-      _selectedBranchId ?? widget.branchId;
+  String get _effectiveBranchId => _selectedBranchId ?? widget.branchId;
 
   void _openAddMenu() {
+    if (widget.isSuperAdmin &&
+        (_selectedBranchId == null || _selectedBranchId!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Pilih cabang terlebih dahulu sebelum menambahkan menu.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -187,7 +190,6 @@ class _MenuAppBar extends StatelessWidget {
         ),
       ),
       actions: [
-        // ── Branch filter dropdown (superadmin only) ──
         if (isSuperAdmin && branches.isNotEmpty)
           DropdownButtonHideUnderline(
             child: DropdownButton<String?>(
@@ -231,10 +233,13 @@ class _MenuAppBar extends StatelessWidget {
             ),
           ),
         const SizedBox(width: 4),
-        // ── Refresh ──
         Consumer(
           builder: (_, ref, __) => IconButton(
-            onPressed: () => ref.read(menuProvider.notifier).refresh(),
+            onPressed: () async {
+              final currentFilter = ref.read(menuFilterProvider);
+              await ref.read(menuProvider.notifier).refresh();
+              ref.read(menuFilterProvider.notifier).update((_) => currentFilter);
+            },
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
           ),
@@ -310,7 +315,8 @@ class _SearchFilterBar extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: filter.showAvailableOnly == true
                     ? colorScheme.primary
-                    : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    : colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: IconButton(
@@ -347,6 +353,9 @@ class _CategoryTabs extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final filter = ref.watch(menuFilterProvider);
     final colorScheme = Theme.of(context).colorScheme;
+
+    // Kalau branchId kosong, jangan render tab (menghindari query kosong)
+    if (branchId.isEmpty) return const SizedBox(height: 44);
 
     final categoriesAsync = ref.watch(categoryNotifierProvider(branchId));
     final counts = ref.watch(menuCountByCategoryProvider);
@@ -388,10 +397,9 @@ class _CategoryTabs extends ConsumerWidget {
                 label: cat.name,
                 count: count,
                 isSelected: isSelected,
-                onTap: () =>
-                    ref.read(menuFilterProvider.notifier).update(
-                          (s) => s.copyWith(categoryId: cat.id),
-                        ),
+                onTap: () => ref.read(menuFilterProvider.notifier).update(
+                      (s) => s.copyWith(categoryId: cat.id),
+                    ),
               );
             },
           );
@@ -435,7 +443,8 @@ class _CategoryTabs extends ConsumerWidget {
             ),
             const SizedBox(width: 4),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(
                 color: isSelected
                     ? colorScheme.onPrimary.withValues(alpha: 0.25)
