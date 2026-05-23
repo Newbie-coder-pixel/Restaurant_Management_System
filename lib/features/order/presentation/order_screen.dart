@@ -393,11 +393,26 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     for (final o in validOrders) {
       switch (o.status) {
         case OrderStatus.new_:
-        case OrderStatus.created:   groups['Antri Masak']!.add(o); break;
-        case OrderStatus.preparing: groups['Sedang Dimasak']!.add(o); break;
-        case OrderStatus.ready:     groups['Siap Disajikan']!.add(o); break;
-        case OrderStatus.served:    groups['Sudah Tersaji']!.add(o); break;
-        default: break;
+        case OrderStatus.created:
+          groups['Antri Masak']!.add(o);
+          break;
+        case OrderStatus.preparing:
+          // Selalu masuk "Sedang Dimasak"
+          groups['Sedang Dimasak']!.add(o);
+          // Jika ada minimal 1 item yang sudah ready → tampil juga di "Siap Disajikan"
+          // supaya waiter bisa langsung antar item yang sudah siap tanpa nunggu semua selesai
+          final hasReadyItem = o.items.any(
+              (item) => item.status == OrderItemStatus.ready);
+          if (hasReadyItem) groups['Siap Disajikan']!.add(o);
+          break;
+        case OrderStatus.ready:
+          groups['Siap Disajikan']!.add(o);
+          break;
+        case OrderStatus.served:
+          groups['Sudah Tersaji']!.add(o);
+          break;
+        default:
+          break;
       }
     }
     return groups;
@@ -664,7 +679,6 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   Widget _buildOrderCard(OrderModel o) {
     final color = _statusColor(o.status);
-    _nextStatus(o.status);
     final isUpdating = _updatingOrderId == o.id;
     final badgeLabel = _orderTypeLabel(o);
     final badgeColor = _orderTypeBadgeColor(o);
@@ -720,17 +734,19 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         children: [
           // Items
           ...o.items.map((item) {
-            // Tombol "Antar" per item hanya muncul saat order = ready
-            final isReady = o.status == OrderStatus.ready;
+            // Tampilkan tombol "Antar" kalau:
+            // - order sudah ready (semua item siap), ATAU
+            // - order masih preparing tapi item ini sudah ready (sebagian siap)
+            final itemReady  = item.status == OrderItemStatus.ready;
             final itemServed = item.status == OrderItemStatus.served;
-            final showServeBtn = isReady && !itemServed;
+            final canServe   = (o.status == OrderStatus.ready || itemReady) && !itemServed;
 
-            if (!isReady) {
-              // Status selain ready: pakai tile biasa
+            if (!canServe && !itemServed) {
+              // Item belum siap sama sekali: pakai tile biasa
               return OrderItemTile(item: item);
             }
 
-            // Status ready: render item tile custom dengan tombol Antar
+            // Item sudah ready atau served: render custom tile dengan tombol Antar
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
@@ -799,7 +815,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                   ),
 
                   // ── Tombol "Antar ke Meja" ───────────────────────
-                  if (showServeBtn)
+                  if (canServe)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                       child: SizedBox(
@@ -876,7 +892,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                 : o.status == OrderStatus.new_ || o.status == OrderStatus.created
                     ? _infoChip(Icons.soup_kitchen_outlined, 'Menunggu dimasak oleh dapur', const Color(0xFFFF9800))
                     : o.status == OrderStatus.preparing
-                        ? _infoChip(Icons.outdoor_grill_outlined, 'Sedang dimasak oleh dapur', const Color(0xFFE53935))
+                        ? o.items.any((item) => item.status == OrderItemStatus.ready)
+                            ? _infoChip(Icons.outdoor_grill_outlined, 'Sebagian item siap — antar dulu via tombol di atas', const Color(0xFF43A047))
+                            : _infoChip(Icons.outdoor_grill_outlined, 'Sedang dimasak oleh dapur', const Color(0xFFE53935))
                         : o.status == OrderStatus.served
                             ? _infoChip(Icons.point_of_sale_outlined, 'Menunggu pembayaran di kasir', Colors.orange)
                             : _infoChip(Icons.check_circle_outline, 'Selesai', AppColors.available),
