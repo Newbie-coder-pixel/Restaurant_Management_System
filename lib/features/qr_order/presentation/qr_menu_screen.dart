@@ -235,7 +235,12 @@ class _MenuBody extends ConsumerWidget {
           ? null
           : ScaleTransition(
               scale: CurvedAnimation(parent: fabAnimCtrl, curve: Curves.elasticOut),
-              child: _CartFab(cart: cart, tableId: tableId, tableName: tableName),
+              child: _CartFab(
+                cart: cart,
+                tableId: tableId,
+                tableName: tableName,
+                isAddMode: addMode != null,
+              ),
             ),
     );
   }
@@ -779,8 +784,14 @@ class _QrMenuHeader extends StatelessWidget {
 class _CartFab extends StatelessWidget {
   final QrOrderSession cart;
   final String tableId, tableName;
+  final bool isAddMode;
 
-  const _CartFab({required this.cart, required this.tableId, required this.tableName});
+  const _CartFab({
+    required this.cart,
+    required this.tableId,
+    required this.tableName,
+    required this.isAddMode,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -816,7 +827,11 @@ class _CartFab extends StatelessWidget {
           const SizedBox(width: 8),
           Container(width: 1, height: 16, color: cs.onPrimary.withValues(alpha: 0.4)),
           const SizedBox(width: 8),
-          Text(_fmt(cart.totalAmount), style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
+          // Saat add mode: tampilkan subtotal item baru saja (bukan total+pajak)
+          Text(
+            isAddMode ? _fmt(cart.subtotal) : _fmt(cart.totalAmount),
+            style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold),
+          ),
         ]),
       ),
     );
