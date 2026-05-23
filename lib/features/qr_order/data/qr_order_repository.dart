@@ -428,19 +428,21 @@ await _client.from('order_items').insert(orderItemsData);
   }
 
   Future<String> _generateQueueNumber(String branchId) async {
-    final today = DateTime.now();
-    final startOfDay = DateTime(today.year, today.month, today.day);
+    final now = DateTime.now().toUtc();
+    // Pakai UTC midnight agar konsisten dengan timestamp Supabase (UTC)
+    final startOfDayUtc = DateTime.utc(now.year, now.month, now.day);
     try {
       final rows = await _client
           .from('orders')
           .select('queue_number')
           .eq('branch_id', branchId)
-          .gte('created_at', startOfDay.toIso8601String())
+          .gte('created_at', startOfDayUtc.toIso8601String())
           .order('created_at', ascending: false)
           .limit(1);
 
       if (rows.isEmpty) return 'A001';
       final lastQueue = rows.first['queue_number'] as String;
+      if (lastQueue.length < 2) return 'A001';
       final letter = lastQueue[0];
       final number = int.tryParse(lastQueue.substring(1)) ?? 0;
       if (number < 999) return '$letter${(number + 1).toString().padLeft(3, '0')}';
