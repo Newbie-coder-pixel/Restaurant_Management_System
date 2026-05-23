@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../data/qr_order_repository.dart';
 import '../models/qr_order_model.dart';
 import '../../../core/services/prep_time_service.dart'; // ← ML Service
+import '../providers/qr_cart_provider.dart';
 
 class QrOrderTrackerScreen extends ConsumerWidget {
   final String orderId;
@@ -1016,27 +1017,100 @@ class _PriceRow extends StatelessWidget {
 
 // ─── Tracker Actions ──────────────────────────────────────────────────────────
 
-class _TrackerActions extends StatefulWidget {
+class _TrackerActions extends ConsumerStatefulWidget {
   final QrOrderModel order;
 
   const _TrackerActions({required this.order});
 
   @override
-  State<_TrackerActions> createState() => _TrackerActionsState();
+  ConsumerState<_TrackerActions> createState() => _TrackerActionsState();
 }
 
-class _TrackerActionsState extends State<_TrackerActions> {
+class _TrackerActionsState extends ConsumerState<_TrackerActions> {
   bool _billRequested = false;
+
+  /// Navigasi ke menu screen dalam mode "tambah pesanan".
+  /// Set addOrderModeProvider → clear cart lama → push ke menu.
+  void _goToAddOrder(BuildContext context) {
+    final order = widget.order;
+
+    // Set mode tambah pesanan
+    ref.read(addOrderModeProvider.notifier).state = AddOrderModeState(
+      orderId: order.id,
+      queueNumber: order.queueNumber,
+      tableId: order.tableId,
+    );
+
+    // Clear cart agar tidak tercampur dengan item order lama
+    final table = ref.read(activeQrTableProvider);
+    ref.read(qrCartProvider(table).notifier).clearCart();
+
+    // Push ke menu screen (bukan go, agar bisa back ke tracker)
+    context.push('/qr/${order.tableId}');
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final isServed = widget.order.status == QrOrderStatus.served;
-    final isPaid = widget.order.status == QrOrderStatus.paid;
+    final order = widget.order;
+    final isCreated = order.status == QrOrderStatus.created;
+    final isServed = order.status == QrOrderStatus.served;
+    final isPaid = order.status == QrOrderStatus.paid;
+    final isCancelled = order.status == QrOrderStatus.cancelled;
 
     return Column(
       children: [
+        // ── Tombol Tambah Pesanan (hanya saat status created) ─────────────
+        if (isCreated && !isCancelled) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _goToAddOrder(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.add_shopping_cart_outlined),
+              label: const Text(
+                'Tambah Pesanan',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Info: item yang sudah dikirim tidak bisa diubah
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.tertiaryContainer.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: colorScheme.tertiary.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 14, color: colorScheme.tertiary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Item yang sudah dikirim ke dapur tidak dapat diubah atau dibatalkan.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onTertiaryContainer,
+                        fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+
         // ── Tombol Minta Bill (hanya saat served) ──────────────────────────
         if (isServed) ...[
           if (!_billRequested)
@@ -1100,7 +1174,7 @@ class _TrackerActionsState extends State<_TrackerActions> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => context.go('/qr/${widget.order.tableId}'),
+              onPressed: () => context.go('/qr/${order.tableId}'),
               icon: const Icon(Icons.add_shopping_cart_outlined),
               label: const Text('Pesan Lagi'),
             ),

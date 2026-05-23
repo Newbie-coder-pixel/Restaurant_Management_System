@@ -133,6 +133,100 @@ await _client.from('order_items').insert(orderItemsData);
     }
   }
 
+  // ─── Add Items to Existing Order ──────────────────────────────────────────
+  /// Menambah item baru ke order yang sudah ada (tambah pesanan).
+  /// Hanya boleh dipanggil saat status order masih `created`.
+  /// Item lama TIDAK diubah sama sekali.
+  Future<QrOrderModel> addItemsToOrder({
+    required String orderId,
+    required List<QrCartItem> newItems,
+  }) async {
+    if (newItems.isEmpty) throw Exception('Tidak ada item baru untuk ditambahkan');
+
+    try {
+      debugPrint('🔄 Tambah ${newItems.length} item ke order $orderId');
+
+      // 1. Cek status order — hanya boleh `created`
+      //    Juga pastikan tidak ada item yang sudah sent_to_kitchen (extra guard)
+      final orderCheck = await _client
+          .from('orders')
+          .select('id, status, total_amount, subtotal')
+          .eq('id', orderId)
+          .single();
+
+      final currentStatus = orderCheck['status'] as String;
+      if (currentStatus != 'created') {
+        throw Exception(
+          'Pesanan tidak dapat diubah karena sudah berstatus "$currentStatus". '
+          'Hanya pesanan yang belum masuk dapur yang bisa ditambah.',
+        );
+      }
+
+      // 2. Insert item-item baru ke order_items
+      //    `sent_to_kitchen_at` dibiarkan null → item baru belum dikirim ke dapur
+      final orderItemsData = newItems.map((cartItem) {
+        final itemData = <String, dynamic>{
+          'order_id': orderId,
+          'menu_item_id': cartItem.menuItem.id,
+          'menu_item_name': cartItem.menuItem.name,
+          'unit_price': cartItem.menuItem.price,
+          'quantity': cartItem.quantity,
+          // subtotal adalah generated column di DB, tidak perlu di-insert
+          // sent_to_kitchen_at: null (belum dikirim, staff yang akan send)
+        };
+        if (cartItem.notes != null && cartItem.notes!.isNotEmpty) {
+          itemData['special_requests'] = cartItem.notes;
+        }
+        return itemData;
+      }).toList();
+
+      await _client.from('order_items').insert(orderItemsData);
+      debugPrint('✅ ${orderItemsData.length} item baru tersimpan');
+
+      // 3. Fetch ulang semua items untuk hitung ulang total
+      final allItemsResp = await _client
+          .from('order_items')
+          .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
+          .eq('order_id', orderId);
+
+      // 4. Hitung ulang total dari semua item (lama + baru)
+      //    Rumus: subtotal → service_charge 3% → pb1 10% dari (subtotal + SC)
+      double newSubtotal = 0;
+      for (final item in allItemsResp) {
+        final unitPrice = (item['unit_price'] as num?)?.toDouble() ?? 0;
+        final qty = (item['quantity'] as int?) ?? 0;
+        newSubtotal += unitPrice * qty;
+      }
+      final newServiceCharge = newSubtotal * 0.03;
+      final newPb1 = (newSubtotal + newServiceCharge) * 0.10;
+      final newTotal = newSubtotal + newServiceCharge + newPb1;
+
+      // 5. Update semua kolom finansial di orders
+      //    Sesuai skema DB: subtotal, service_charge_amount, pb1_amount,
+      //    tax_amount (diisi pb1 agar konsisten dengan createOrder), total_amount
+      await _client.from('orders').update({
+        'subtotal': newSubtotal,
+        'service_charge_amount': newServiceCharge,
+        'pb1_amount': newPb1,
+        'tax_amount': newPb1,   // konsisten dengan createOrder yang pakai tax_amount = pb1
+        'total_amount': newTotal,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', orderId);
+
+      debugPrint('✅ Total diupdate: Rp ${newTotal.toStringAsFixed(0)}');
+
+      // 6. Fetch ulang full order
+      await Future.delayed(const Duration(milliseconds: 300));
+      final fullOrder = await fetchOrder(orderId);
+      if (fullOrder == null) throw Exception('Gagal memuat order setelah update');
+
+      return fullOrder;
+    } catch (e, stack) {
+      debugPrint('❌ Gagal addItemsToOrder: $e\n$stack');
+      rethrow;
+    }
+  }
+
   // ── Watch Order realtime ───────────────────────────────────────────────────
   Stream<QrOrderModel> watchOrder(String orderId) {
     late StreamController<QrOrderModel> controller;
@@ -393,3 +487,36 @@ final qrOrderWatchProvider =
     StreamProvider.family<QrOrderModel, String>((ref, orderId) {
   return ref.read(qrOrderRepositoryProvider).watchOrder(orderId);
 });
+
+// ─── Add Items Notifier ────────────────────────────────────────────────────────
+/// Provider untuk menambah item ke order yang sudah ada.
+/// State: AsyncValue<QrOrderModel?> — null = idle, loading, data, error
+class QrAddItemsNotifier extends StateNotifier<AsyncValue<QrOrderModel?>> {
+  final QrOrderRepository _repo;
+  QrAddItemsNotifier(this._repo) : super(const AsyncValue.data(null));
+
+  Future<QrOrderModel?> submit({
+    required String orderId,
+    required List<QrCartItem> newItems,
+  }) async {
+    state = const AsyncValue.loading();
+    try {
+      final updated = await _repo.addItemsToOrder(
+        orderId: orderId,
+        newItems: newItems,
+      );
+      state = AsyncValue.data(updated);
+      return updated;
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      return null;
+    }
+  }
+
+  void reset() => state = const AsyncValue.data(null);
+}
+
+final qrAddItemsProvider =
+    StateNotifierProvider<QrAddItemsNotifier, AsyncValue<QrOrderModel?>>(
+  (ref) => QrAddItemsNotifier(ref.read(qrOrderRepositoryProvider)),
+);
