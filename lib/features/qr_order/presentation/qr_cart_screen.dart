@@ -656,7 +656,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                child: _OrderSummaryCard(cart: cart),
+                child: _OrderSummaryCard(cart: cart, isAddMode: isAddMode),
               ),
             ),
           ],
@@ -665,7 +665,9 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       bottomNavigationBar: _CartBottomBar(
         cart:      cart,
         onProceed: _showOrderConfirmationDialog,
-        isLoading: _isSubmitting),
+        isLoading: _isSubmitting,
+        isAddMode: isAddMode,
+      ),
     );
   }
 }
@@ -918,7 +920,9 @@ class _CustomerInfoCard extends StatelessWidget {
 // ─── Order Summary Card ───────────────────────────────────────────────────────
 class _OrderSummaryCard extends StatelessWidget {
   final QrOrderSession cart;
-  const _OrderSummaryCard({required this.cart});
+  final bool isAddMode;
+
+  const _OrderSummaryCard({required this.cart, this.isAddMode = false});
 
   @override
   Widget build(BuildContext context) {
@@ -935,10 +939,12 @@ class _OrderSummaryCard extends StatelessWidget {
         Row(children: [
           Icon(Icons.receipt_outlined, size: 18, color: colorScheme.primary),
           const SizedBox(width: 8),
-          Text('Ringkasan Pesanan',
+          Text('Ringkasan Tambahan',
             style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
         ]),
         const SizedBox(height: 14),
+
+        // Daftar item
         ...cart.items.map((item) => Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(children: [
@@ -952,41 +958,73 @@ class _OrderSummaryCard extends StatelessWidget {
             Text(_formatPrice(item.subtotal), style: theme.textTheme.bodySmall),
           ]),
         )),
+
         Divider(color: colorScheme.outlineVariant, height: 20, thickness: 0.5),
-        Row(children: [
-          Text('Subtotal',
-            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-          const Spacer(),
-          Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall),
-        ]),
-        const SizedBox(height: 4),
-        Row(children: [
-          Text('Service Charge (3%)',
-            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-          const Spacer(),
-          Text(_formatPrice(cart.serviceCharge), style: theme.textTheme.bodySmall),
-        ]),
-        const SizedBox(height: 4),
-        Row(children: [
-          Text('PB1 (10%)',
-            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-          const Spacer(),
-          Text(_formatPrice(cart.pb1Amount), style: theme.textTheme.bodySmall),
-        ]),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(10)),
-          child: Row(children: [
-            Text('Total', style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer)),
+
+        if (!isAddMode) ...[
+          // Mode normal: tampilkan breakdown lengkap
+          Row(children: [
+            Text('Subtotal',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
             const Spacer(),
-            Text(_formatPrice(cart.totalAmount),
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold, color: colorScheme.primary)),
-          ])),
+            Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            Text('Service Charge (3%)',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+            const Spacer(),
+            Text(_formatPrice(cart.serviceCharge), style: theme.textTheme.bodySmall),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            Text('PB1 (10%)',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+            const Spacer(),
+            Text(_formatPrice(cart.pb1Amount), style: theme.textTheme.bodySmall),
+          ]),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(10)),
+            child: Row(children: [
+              Text('Total', style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer)),
+              const Spacer(),
+              Text(_formatPrice(cart.totalAmount),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold, color: colorScheme.primary)),
+            ])),
+        ] else ...[
+          // Mode tambah pesanan: hanya tampilkan subtotal item baru + info pajak dihitung otomatis
+          Row(children: [
+            Text('Subtotal item baru',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+            const Spacer(),
+            Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              Icon(Icons.info_outline, size: 13, color: colorScheme.outline),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'PB1 & Service Charge dihitung otomatis dari total keseluruhan pesanan.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.outline, fontSize: 11),
+                ),
+              ),
+            ]),
+          ),
+        ],
       ]),
     );
   }
@@ -1003,11 +1041,13 @@ class _CartBottomBar extends StatelessWidget {
   final QrOrderSession cart;
   final VoidCallback onProceed;
   final bool isLoading;
+  final bool isAddMode;
 
   const _CartBottomBar({
     required this.cart,
     required this.onProceed,
     required this.isLoading,
+    this.isAddMode = false,
   });
 
   @override
@@ -1048,7 +1088,11 @@ class _CartBottomBar extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: colorScheme.onPrimary.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20)),
-                    child: Text(_formatPrice(cart.totalAmount),
+                    // Saat add mode: tampilkan subtotal item baru saja (bukan total+pajak)
+                    child: Text(
+                      isAddMode
+                          ? '${_formatPrice(cart.subtotal)} (item baru)'
+                          : _formatPrice(cart.totalAmount),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onPrimary, fontWeight: FontWeight.bold))),
                 ]),
