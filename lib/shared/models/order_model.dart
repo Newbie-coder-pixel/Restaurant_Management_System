@@ -138,6 +138,10 @@ class OrderModel {
   final List<OrderItem> items;
   final DateTime createdAt;
   final int? estimatedPrepMinutes; // hasil prediksi ML
+  final bool billRequested;
+  final DateTime? billRequestedAt;
+  final String? customerPhone;
+  final String? queueNumber;
 
   // FIX Bug 1: simpan total dari DB sebagai fallback kalau items kosong
   final double _totalAmountFromDb;
@@ -188,6 +192,10 @@ class OrderModel {
     this.items = const [],
     required this.createdAt,
     this.estimatedPrepMinutes,
+    this.billRequested = false,
+    this.billRequestedAt,
+    this.customerPhone,
+    this.queueNumber,
     double totalAmountFromDb = 0.0,
     double subtotalFromDb = 0.0,
     double taxAmountFromDb = 0.0,
@@ -224,6 +232,12 @@ class OrderModel {
       items: itemsList,
       createdAt: createdAt,
       estimatedPrepMinutes: (j['estimated_prep_minutes'] as num?)?.toInt(),
+      billRequested: (j['bill_requested'] as bool?) ?? false,
+      billRequestedAt: j['bill_requested_at'] != null
+          ? DateTime.tryParse(j['bill_requested_at'] as String)
+          : null,
+      customerPhone: j['customer_phone'] as String?,
+      queueNumber: j['queue_number'] as String?,
       // FIX Bug 1: baca nilai finansial dari DB sebagai fallback
       totalAmountFromDb: (j['total_amount'] ?? 0).toDouble(),
       subtotalFromDb: (j['subtotal'] ?? 0).toDouble(),
@@ -248,6 +262,10 @@ class OrderModel {
     List<OrderItem>? items,
     DateTime? createdAt,
     int? estimatedPrepMinutes,
+    bool? billRequested,
+    DateTime? billRequestedAt,
+    String? customerPhone,
+    String? queueNumber,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -264,6 +282,10 @@ class OrderModel {
       items: items ?? this.items,
       createdAt: createdAt ?? this.createdAt,
       estimatedPrepMinutes: estimatedPrepMinutes ?? this.estimatedPrepMinutes,
+      billRequested: billRequested ?? this.billRequested,
+      billRequestedAt: billRequestedAt ?? this.billRequestedAt,
+      customerPhone: customerPhone ?? this.customerPhone,
+      queueNumber: queueNumber ?? this.queueNumber,
       totalAmountFromDb: _totalAmountFromDb,
       subtotalFromDb: _subtotalFromDb,
       taxAmountFromDb: _taxAmountFromDb,

@@ -122,6 +122,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             id, branch_id, table_id, order_number,
             status, source, order_type, customer_name,
             discount_amount, notes, created_at, updated_at,
+            bill_requested, bill_requested_at,
+            total_amount, subtotal, tax_amount,
             restaurant_tables(table_number),
             order_items(*)
           ''')
@@ -590,6 +592,10 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                 final count = (grouped[def.name] ?? []).length;
                 if (count == 0) return const SizedBox.shrink();
                 final isSelected = _selectedGroup == def.name;
+                // Hitung berapa order di grup ini yang minta bill
+                final billCount = (grouped[def.name] ?? [])
+                    .where((o) => o.billRequested && o.status == OrderStatus.served)
+                    .length;
 
                 return GestureDetector(
                   onTap: () => setState(() => _selectedGroup = def.name),
@@ -607,6 +613,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                         Icon(def.icon, size: 14,
                           color: isSelected ? Colors.white : def.color),
                         const Spacer(),
+                        // Badge jumlah order
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
@@ -615,6 +622,19 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                           child: Text('$count', style: TextStyle(
                             fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700,
                             color: isSelected ? Colors.white : def.color))),
+                        // Badge 🔔 bill diminta
+                        if (billCount > 0) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B),
+                              borderRadius: BorderRadius.circular(10)),
+                            child: Text('🔔$billCount', style: const TextStyle(
+                              fontFamily: 'Poppins', fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white))),
+                        ],
                       ]),
                       const SizedBox(height: 6),
                       Text(def.name, style: TextStyle(
@@ -725,6 +745,24 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
               ])),
             const SizedBox(width: 6),
             Text('${o.items.length} item', style: AppTextStyles.caption),
+            if (o.billRequested && o.status == OrderStatus.served) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFF59E0B))),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.notifications_active, size: 9, color: Color(0xFFF59E0B)),
+                  SizedBox(width: 3),
+                  Text('Minta Bill',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFF59E0B))),
+                ])),
+            ],
           ]),
         ),
         trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -896,7 +934,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                             ? _infoChip(Icons.outdoor_grill_outlined, 'Sebagian item siap — antar dulu via tombol di atas', const Color(0xFF43A047))
                             : _infoChip(Icons.outdoor_grill_outlined, 'Sedang dimasak oleh dapur', const Color(0xFFE53935))
                         : o.status == OrderStatus.served
-                            ? _infoChip(Icons.point_of_sale_outlined, 'Menunggu pembayaran di kasir', Colors.orange)
+                            ? o.billRequested
+                                ? _infoChip(Icons.notifications_active, '🔔 Customer minta bill — arahkan ke kasir!', const Color(0xFFF59E0B))
+                                : _infoChip(Icons.point_of_sale_outlined, 'Menunggu pembayaran di kasir', Colors.orange)
                             : _infoChip(Icons.check_circle_outline, 'Selesai', AppColors.available),
           ),
         ],

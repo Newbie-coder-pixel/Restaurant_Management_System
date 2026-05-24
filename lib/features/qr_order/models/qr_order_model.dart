@@ -120,6 +120,8 @@ class QrOrderModel {
   final DateTime? updatedAt;
   final String? branchId;
   final String? notes;
+  final bool billRequested;
+  final DateTime? billRequestedAt;
 
   const QrOrderModel({
     required this.id,
@@ -137,6 +139,8 @@ class QrOrderModel {
     this.updatedAt,
     this.branchId,
     this.notes,
+    this.billRequested = false,
+    this.billRequestedAt,
   });
 
   // ── Kalkulasi yang benar ──────────────────────────────────────────
@@ -191,6 +195,10 @@ class QrOrderModel {
             : null,
         branchId: map['branch_id'] as String?,
         notes: map['notes'] as String?,
+        billRequested: (map['bill_requested'] as bool?) ?? false,
+        billRequestedAt: map['bill_requested_at'] != null
+            ? DateTime.tryParse(map['bill_requested_at'] as String)
+            : null,
       );
 
   Map<String, dynamic> toMap() => {
@@ -209,12 +217,17 @@ class QrOrderModel {
         if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
         if (branchId != null) 'branch_id': branchId,
         if (notes != null) 'notes': notes,
+        'bill_requested': billRequested,
+        if (billRequestedAt != null)
+          'bill_requested_at': billRequestedAt!.toIso8601String(),
       };
 
   QrOrderModel copyWith({
     QrOrderStatus? status,
     QrPaymentStatus? paymentStatus,
     DateTime? updatedAt,
+    bool? billRequested,
+    DateTime? billRequestedAt,
   }) =>
       QrOrderModel(
         id: id,
@@ -232,6 +245,8 @@ class QrOrderModel {
         updatedAt: updatedAt ?? this.updatedAt,
         branchId: branchId,
         notes: notes,
+        billRequested: billRequested ?? this.billRequested,
+        billRequestedAt: billRequestedAt ?? this.billRequestedAt,
       );
 
   bool get isActive =>

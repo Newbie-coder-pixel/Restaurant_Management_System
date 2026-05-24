@@ -1,3 +1,4 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1028,6 +1029,59 @@ class _TrackerActions extends ConsumerStatefulWidget {
 
 class _TrackerActionsState extends ConsumerState<_TrackerActions> {
   bool _billRequested = false;
+  bool _isRequestingBill = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Init dari model supaya persistent setelah refresh
+    _billRequested = widget.order.billRequested;
+  }
+
+  @override
+  void didUpdateWidget(_TrackerActions oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Kalau Supabase realtime update order dan billRequested jadi true, ikut update
+    if (widget.order.billRequested && !_billRequested) {
+      setState(() => _billRequested = true);
+    }
+  }
+
+  Future<void> _requestBill(BuildContext context) async {
+    final order = widget.order;
+    // Simpan messenger sebelum async gap
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _isRequestingBill = true);
+    try {
+      await Supabase.instance.client.from('orders').update({
+        'bill_requested': true,
+        'bill_requested_at': DateTime.now().toIso8601String(),
+      }).eq('id', order.id);
+
+      if (!mounted) return;
+      setState(() {
+        _billRequested = true;
+        _isRequestingBill = false;
+      });
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('✅ Kasir sedang menyiapkan bill kamu!'),
+          duration: Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isRequestingBill = false);
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Gagal mengirim permintaan bill. Coba lagi.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   /// Navigasi ke menu screen dalam mode "tambah pesanan".
   /// Set addOrderModeProvider → clear cart lama → push ke menu.
@@ -1055,14 +1109,19 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
     final colorScheme = theme.colorScheme;
     final order = widget.order;
     final isCreated = order.status == QrOrderStatus.created;
+    final isPreparing = order.status == QrOrderStatus.preparing;
+    final isReady = order.status == QrOrderStatus.ready;
     final isServed = order.status == QrOrderStatus.served;
     final isPaid = order.status == QrOrderStatus.paid;
     final isCancelled = order.status == QrOrderStatus.cancelled;
 
+    // Tambah pesanan boleh selama belum served/paid/cancelled
+    final canAddOrder = (isCreated || isPreparing || isReady) && !isCancelled;
+
     return Column(
       children: [
-        // ── Tombol Tambah Pesanan (hanya saat status created) ─────────────
-        if (isCreated && !isCancelled) ...[
+        // ── Tombol Tambah Pesanan (aktif sampai sebelum served) ───────
+        if (canAddOrder) ...[
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -1117,16 +1176,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  setState(() => _billRequested = true);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('✅ Kasir sedang menyiapkan bill kamu!'),
-                      duration: Duration(seconds: 3),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+                onPressed: _isRequestingBill ? null : () => _requestBill(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green.shade600,
                   foregroundColor: Colors.white,
@@ -1134,10 +1184,15 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                 ),
-                icon: const Icon(Icons.receipt_outlined),
-                label: const Text(
-                  'Minta Bill',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                icon: _isRequestingBill
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.receipt_outlined),
+                label: Text(
+                  _isRequestingBill ? 'Mengirim...' : 'Minta Bill',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             )

@@ -28,6 +28,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   List<Map<String, dynamic>> _branches = [];
   String? _selectedBranchId; // null = semua cabang
 
+  // ── Bill request notification tracking ───────────────────────────────────
+  RealtimeChannel? _billChannel;
+  final Set<String> _shownBillNotifs = {}; // hindari notif duplikat
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +45,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     await _loadBranches();
     await _load();
     _subscribeRealtime();
+    _subscribeBillRealtime();
   }
 
   // ── Load daftar branch (superadmin only) ─────────────────────────────────
@@ -74,12 +79,14 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           .select('''
             id, branch_id, table_id, order_number,
             status, source, order_type, customer_name,
+            customer_phone, queue_number, table_name,
             discount_amount, notes, created_at, updated_at,
-            payment_status,
+            payment_status, bill_requested, bill_requested_at,
+            total_amount, subtotal, tax_amount,
             restaurant_tables(table_number),
             order_items(*)
           ''')
-          .inFilter('status', ['ready', 'served'])
+          .eq('status', 'served')
           // FIX: tambah 'unpaid' (standar baru) dan null-check untuk order lama
           // yang dibuat sebelum kolom payment_status diisi secara konsisten
           .or('payment_status.eq.unpaid,payment_status.eq.pending,payment_status.is.null')
@@ -128,8 +135,203 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   @override
   void dispose() {
     _channel?.unsubscribe();
+    _billChannel?.unsubscribe();
     super.dispose();
   }
+
+  // ── Subscribe khusus untuk bill_requested ────────────────────────────────
+  void _subscribeBillRealtime() {
+    _billChannel?.unsubscribe();
+    if (!_isSuperAdmin && _branchId == null) return;
+
+    final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
+    final channelName = effectiveBranchId != null
+        ? 'bill_requests_$effectiveBranchId'
+        : 'bill_requests_all';
+
+    _billChannel = Supabase.instance.client
+        .channel(channelName)
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'orders',
+          filter: effectiveBranchId != null
+              ? PostgresChangeFilter(
+                  type: PostgresChangeFilterType.eq,
+                  column: 'branch_id',
+                  value: effectiveBranchId)
+              : null,
+          callback: (payload) {
+            if (!mounted) return;
+            final newRecord = payload.newRecord;
+            final billRequested = newRecord['bill_requested'] as bool? ?? false;
+            final orderId = newRecord['id'] as String? ?? '';
+            // Hanya tampilkan notif jika bill_requested = true dan belum pernah ditampilkan
+            if (billRequested && orderId.isNotEmpty && !_shownBillNotifs.contains(orderId)) {
+              _shownBillNotifs.add(orderId);
+              _load(); // refresh list
+              _showBillNotification(newRecord);
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  void _showBillNotification(Map<String, dynamic> record) {
+    final tableName   = record['table_name'] as String?;
+    final tableId     = record['table_id'] as String?;
+    final custName    = record['customer_name'] as String? ?? 'Customer';
+    final custPhone   = record['customer_phone'] as String?;
+    final queueNumber = record['queue_number'] as String?;
+    final totalAmount = (record['total_amount'] as num?)?.toDouble() ?? 0.0;
+    final orderNumber = record['order_number'] as String? ?? '-';
+
+    // Format total
+    String fmtBillTotal(double v) {
+      final s = v.toStringAsFixed(0);
+      final buf = StringBuffer();
+      for (int i = 0; i < s.length; i++) {
+        if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+        buf.write(s[i]);
+      }
+      return buf.toString();
+    }
+    final totalStr = totalAmount > 0 ? 'Rp ${fmtBillTotal(totalAmount)}' : '-';
+
+    // Lokasi customer: pakai table_name, fallback ke table_id, fallback ke queue number
+    final lokasi = tableName ?? (tableId != null ? 'Meja $tableId' : null) ?? (queueNumber != null ? 'Antrian $queueNumber' : 'Takeaway');
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Icon + judul ─────────────────────────────────────────
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.notifications_active,
+                    color: Color(0xFFF59E0B), size: 30),
+              ),
+              const SizedBox(height: 12),
+              const Text('🔔 Minta Bill!',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: Color(0xFF1A1A2E))),
+              const SizedBox(height: 4),
+              const Text('Order #\$orderNumber',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+
+              // ── Info card ────────────────────────────────────────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: Column(children: [
+                  _billInfoRow(Icons.table_restaurant_outlined, 'Lokasi', lokasi),
+                  const Divider(height: 16),
+                  _billInfoRow(Icons.person_outline, 'Nama', custName),
+                  if (custPhone != null && custPhone.isNotEmpty) ...[
+                    const Divider(height: 16),
+                    _billInfoRow(Icons.phone_outlined, 'No. HP', custPhone),
+                  ],
+                  if (queueNumber != null && queueNumber.isNotEmpty) ...[
+                    const Divider(height: 16),
+                    _billInfoRow(Icons.confirmation_number_outlined, 'No. Antrian', queueNumber),
+                  ],
+                  const Divider(height: 16),
+                  _billInfoRow(Icons.payments_outlined, 'Total', totalStr,
+                      valueColor: AppColors.accent),
+                ]),
+              ),
+              const SizedBox(height: 16),
+
+              // ── Buttons ──────────────────────────────────────────────
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      minimumSize: const Size(0, 44)),
+                    child: const Text('Nanti',
+                        style: TextStyle(
+                            fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      // Auto-select order di list
+                      final target = _orders.firstWhere(
+                        (o) => o.orderNumber == orderNumber,
+                        orElse: () => _orders.first,
+                      );
+                      setState(() => _selected = target);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      minimumSize: const Size(0, 44),
+                      elevation: 0),
+                    child: const Text('Proses Bayar',
+                        style: TextStyle(
+                            fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _billInfoRow(IconData icon, String label, String value, {Color? valueColor}) =>
+      Row(children: [
+        Icon(icon, size: 16, color: AppColors.textSecondary),
+        const SizedBox(width: 8),
+        Text('$label: ',
+            style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: AppColors.textSecondary)),
+        Expanded(
+          child: Text(value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: valueColor ?? const Color(0xFF1A1A2E))),
+        ),
+      ]);
 
   // ─── CASH PAYMENT ────────────────────────────────────────────────────────
   Future<void> _onCashPayment(OrderModel order) async {
@@ -806,6 +1008,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 itemBuilder: (_, i) {
                   final o = _orders[i];
                   final isSelected = _selected?.id == o.id;
+                  final isBillRequested = o.billRequested;
                   // Badge: QR / App Order / Staff
                   final isQrOrder = o.orderType == 'qr_order';
                   final isAppOrder = o.orderType == 'app_order' || o.orderType == 'takeaway';
@@ -832,13 +1035,17 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primary.withValues(alpha: 0.05)
-                            : AppColors.surface,
+                        color: isBillRequested && !isSelected
+                            ? const Color(0xFFFFFBEB)
+                            : isSelected
+                                ? AppColors.primary.withValues(alpha: 0.05)
+                                : AppColors.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isSelected ? AppColors.primary : AppColors.border,
-                          width: isSelected ? 2 : 1,
+                          color: isBillRequested
+                              ? const Color(0xFFF59E0B)
+                              : isSelected ? AppColors.primary : AppColors.border,
+                          width: isBillRequested || isSelected ? 2 : 1,
                         ),
                       ),
                       child: Row(children: [
@@ -897,10 +1104,32 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                                   ]),
                                 ),
                               ]),
-                              Text(
-                                '${o.items.length} item • ${o.status.label}',
-                                style: AppTextStyles.caption,
-                              ),
+                              Row(children: [
+                                Text(
+                                  '${o.items.length} item • ${o.status.label}',
+                                  style: AppTextStyles.caption,
+                                ),
+                                if (isBillRequested) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFFF59E0B)),
+                                    ),
+                                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                                      Icon(Icons.notifications_active, size: 9, color: Color(0xFFF59E0B)),
+                                      SizedBox(width: 3),
+                                      Text('Minta Bill',
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins', fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFFF59E0B))),
+                                    ]),
+                                  ),
+                                ],
+                              ]),
                             ],
                           ),
                         ),

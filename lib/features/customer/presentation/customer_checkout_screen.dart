@@ -54,78 +54,156 @@ class _CustomerCheckoutScreenState
   Future<bool> _showConfirmDialog(CartState cart) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(children: [
-          Icon(Icons.shopping_cart_checkout, color: Color(0xFFE94560), size: 22),
-          SizedBox(width: 10),
-          Text('Konfirmasi Pesanan',
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16)),
-        ]),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(10)),
-            child: Column(children: [
-              _confirmRow('Nama', _nameCtrl.text.trim()),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ──────────────────────────────────────────────
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.shopping_cart_outlined,
+                      color: Colors.white, size: 18)),
+                const SizedBox(width: 10),
+                const Text('Konfirmasi Pesanan',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        color: Color(0xFF1A1A2E))),
+              ]),
+              const SizedBox(height: 16),
+
+              // ── Info rows ───────────────────────────────────────────
+              _dialogRow('Nama', _nameCtrl.text.trim()),
               if (_phoneCtrl.text.trim().isNotEmpty)
-                _confirmRow('No. HP', _phoneCtrl.text.trim()),
-              _confirmRow('Tipe', 'Bawa pulang'),
-              _confirmRow('Total', 'Rp ${_fmt(cart.total)}'),
-              _confirmRow('Item', '${cart.itemCount} item'),
-            ])),
-          const SizedBox(height: 10),
-          const Text(
-            '💡 Pembayaran dilakukan di kasir setelah pesanan selesai.',
-            style: TextStyle(
-                fontFamily: 'Poppins', fontSize: 11, color: Colors.grey),
-            textAlign: TextAlign.center),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cek Lagi',
-                style: TextStyle(
-                    fontFamily: 'Poppins', color: Colors.grey))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE94560),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10))),
-            child: const Text('Pesan Sekarang',
-                style: TextStyle(
-                    fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                _dialogRow('No. HP', _phoneCtrl.text.trim()),
+              _dialogRow('Tipe', 'Bawa Pulang'),
+              _dialogRow('Total', 'Rp ${_fmt(cart.total)}'),
+              _dialogRow('Item', '${cart.itemCount} item'),
+              const SizedBox(height: 14),
+
+              // ── Warning box ─────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0F0),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: const Color(0xFFE94560).withValues(alpha: 0.25))),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Icon(Icons.error_outline,
+                          color: Color(0xFFE94560), size: 16),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Pesanan yang telah dikirim ke dapur tidak dapat dibatalkan.',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFE94560)),
+                        ),
+                      ),
+                    ]),
+                    SizedBox(height: 6),
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Icon(Icons.check_circle_outline,
+                          color: Color(0xFFE94560), size: 16),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Pastikan pesanan sudah benar sebelum melanjutkan.',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              color: Color(0xFFE94560)),
+                        ),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // ── Buttons ─────────────────────────────────────────────
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      minimumSize: const Size(0, 44)),
+                    child: const Text('Cek Lagi',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1A1A2E),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      minimumSize: const Size(0, 44),
+                      elevation: 0),
+                    child: const Text('Pesan Sekarang',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                  ),
+                ),
+              ]),
+            ],
           ),
-        ],
+        ),
       ),
     );
     return result ?? false;
   }
 
-  Widget _confirmRow(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Row(children: [
-      Text('$label: ',
-          style: const TextStyle(
-              fontFamily: 'Poppins', fontSize: 12, color: Colors.grey)),
-      Expanded(
-        child: Text(value,
+  Widget _dialogRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
             style: const TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1A1A2E)),
-            textAlign: TextAlign.end),
-      ),
-    ]),
+                fontSize: 13,
+                color: Color(0xFF6B7280))),
+        Text(value,
+            style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A2E))),
+      ],
+    ),
   );
+
+
 
   Future<void> _placeOrder() async {
     final cart = ref.read(cartProvider);
