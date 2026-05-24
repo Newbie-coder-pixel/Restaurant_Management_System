@@ -30,7 +30,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
   // ── Bill request notification tracking ───────────────────────────────────
   RealtimeChannel? _billChannel;
-  final Set<String> _shownBillNotifs = {}; // hindari notif duplikat
+  // Apakah bottom sheet sedang terbuka
+  bool _billSheetOpen = false;
 
   @override
   void initState() {
@@ -101,6 +102,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               .toList();
           _isLoading = false;
         });
+        // Setelah load: cek order yang sudah bill_requested = true
+        // supaya kasir yang baru buka halaman langsung lihat notif
+        _checkAndShowBillSheet();
       }
     } catch (e) {
       debugPrint('Error load cashier orders: $e');
@@ -166,172 +170,51 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             final newRecord = payload.newRecord;
             final billRequested = newRecord['bill_requested'] as bool? ?? false;
             final orderId = newRecord['id'] as String? ?? '';
-            // Hanya tampilkan notif jika bill_requested = true dan belum pernah ditampilkan
-            if (billRequested && orderId.isNotEmpty && !_shownBillNotifs.contains(orderId)) {
-              _shownBillNotifs.add(orderId);
-              _load(); // refresh list
-              _showBillNotification(newRecord);
+            if (billRequested && orderId.isNotEmpty) {
+              _load(); // refresh list dulu, lalu sheet akan auto-update
             }
           },
         )
         .subscribe();
   }
 
-  void _showBillNotification(Map<String, dynamic> record) {
-    final tableName   = record['table_name'] as String?;
-    final tableId     = record['table_id'] as String?;
-    final custName    = record['customer_name'] as String? ?? 'Customer';
-    final custPhone   = record['customer_phone'] as String?;
-    final queueNumber = record['queue_number'] as String?;
-    final totalAmount = (record['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final orderNumber = record['order_number'] as String? ?? '-';
-
-    // Format total
-    String fmtBillTotal(double v) {
-      final s = v.toStringAsFixed(0);
-      final buf = StringBuffer();
-      for (int i = 0; i < s.length; i++) {
-        if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-        buf.write(s[i]);
-      }
-      return buf.toString();
-    }
-    final totalStr = totalAmount > 0 ? 'Rp ${fmtBillTotal(totalAmount)}' : '-';
-
-    // Lokasi customer: pakai table_name, fallback ke table_id, fallback ke queue number
-    final lokasi = tableName ?? (tableId != null ? 'Meja $tableId' : null) ?? (queueNumber != null ? 'Antrian $queueNumber' : 'Takeaway');
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Icon + judul ─────────────────────────────────────────
-              Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3CD),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(Icons.notifications_active,
-                    color: Color(0xFFF59E0B), size: 30),
-              ),
-              const SizedBox(height: 12),
-              const Text('🔔 Minta Bill!',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      color: Color(0xFF1A1A2E))),
-              const SizedBox(height: 4),
-              const Text('Order #\$orderNumber',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 12,
-                      color: AppColors.textSecondary)),
-              const SizedBox(height: 16),
-
-              // ── Info card ────────────────────────────────────────────
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
-                child: Column(children: [
-                  _billInfoRow(Icons.table_restaurant_outlined, 'Lokasi', lokasi),
-                  const Divider(height: 16),
-                  _billInfoRow(Icons.person_outline, 'Nama', custName),
-                  if (custPhone != null && custPhone.isNotEmpty) ...[
-                    const Divider(height: 16),
-                    _billInfoRow(Icons.phone_outlined, 'No. HP', custPhone),
-                  ],
-                  if (queueNumber != null && queueNumber.isNotEmpty) ...[
-                    const Divider(height: 16),
-                    _billInfoRow(Icons.confirmation_number_outlined, 'No. Antrian', queueNumber),
-                  ],
-                  const Divider(height: 16),
-                  _billInfoRow(Icons.payments_outlined, 'Total', totalStr,
-                      valueColor: AppColors.accent),
-                ]),
-              ),
-              const SizedBox(height: 16),
-
-              // ── Buttons ──────────────────────────────────────────────
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
-                      side: const BorderSide(color: Color(0xFFD1D5DB)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      minimumSize: const Size(0, 44)),
-                    child: const Text('Nanti',
-                        style: TextStyle(
-                            fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      // Auto-select order di list
-                      final target = _orders.firstWhere(
-                        (o) => o.orderNumber == orderNumber,
-                        orElse: () => _orders.first,
-                      );
-                      setState(() => _selected = target);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      minimumSize: const Size(0, 44),
-                      elevation: 0),
-                    child: const Text('Proses Bayar',
-                        style: TextStyle(
-                            fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ]),
-            ],
-          ),
-        ),
-      ),
-    );
+  // ── Cek & tampilkan bill sheet jika ada order yang minta bill ───────────
+  void _checkAndShowBillSheet() {
+    final billOrders = _orders.where((o) => o.billRequested).toList();
+    if (billOrders.isEmpty) return;
+    // Kalau sheet sudah terbuka, tidak perlu buka lagi — sheet
+    // akan rebuild sendiri karena setState di _load()
+    if (_billSheetOpen) return;
+    // Delay supaya widget sudah selesai build setelah setState
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showBillSheet();
+    });
   }
 
-  Widget _billInfoRow(IconData icon, String label, String value, {Color? valueColor}) =>
-      Row(children: [
-        Icon(icon, size: 16, color: AppColors.textSecondary),
-        const SizedBox(width: 8),
-        Text('$label: ',
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: AppColors.textSecondary)),
-        Expanded(
-          child: Text(value,
-              textAlign: TextAlign.end,
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: valueColor ?? const Color(0xFF1A1A2E))),
-        ),
-      ]);
+  void _showBillSheet() {
+    if (_billSheetOpen) return;
+    _billSheetOpen = true;
+
+    showModalBottomSheet(
+      context: context,
+      isDismissible: true,
+      enableDrag: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _BillRequestSheet(
+        // Kirim getter live supaya sheet bisa rebuild saat _orders berubah
+        getOrders: () => _orders.where((o) => o.billRequested).toList(),
+        onSelectOrder: (order) {
+          Navigator.pop(ctx);
+          setState(() => _selected = order);
+        },
+        onDismiss: () => Navigator.pop(ctx),
+      ),
+    ).whenComplete(() {
+      if (mounted) setState(() => _billSheetOpen = false);
+    });
+  }
 
   // ─── CASH PAYMENT ────────────────────────────────────────────────────────
   Future<void> _onCashPayment(OrderModel order) async {
@@ -1536,4 +1419,217 @@ class _NonCashConfig {
     required this.refHint,
     required this.refRequired,
   });
+}
+
+// ─── Bill Request Bottom Sheet ────────────────────────────────────────────────
+// Stateful supaya bisa polling perubahan _orders dari parent via getOrders()
+class _BillRequestSheet extends StatefulWidget {
+  final List<OrderModel> Function() getOrders;
+  final void Function(OrderModel) onSelectOrder;
+  final VoidCallback onDismiss;
+
+  const _BillRequestSheet({
+    required this.getOrders,
+    required this.onSelectOrder,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_BillRequestSheet> createState() => _BillRequestSheetState();
+}
+
+class _BillRequestSheetState extends State<_BillRequestSheet> {
+  @override
+  Widget build(BuildContext context) {
+    final orders = widget.getOrders();
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Handle bar ──────────────────────────────────────────────────
+          const SizedBox(height: 12),
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD1D5DB),
+              borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Header ──────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.notifications_active,
+                    color: Color(0xFFF59E0B), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('🔔 Minta Bill',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: Color(0xFF1A1A2E))),
+                  Text(
+                    orders.length == 1
+                        ? '1 customer menunggu bill'
+                        : '${orders.length} customer menunggu bill',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: AppColors.textSecondary)),
+                ]),
+              ),
+              // Badge jumlah
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B),
+                  borderRadius: BorderRadius.circular(20)),
+                child: Text('${orders.length}',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: Colors.white)),
+              ),
+            ]),
+          ),
+
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+
+          // ── List orders ─────────────────────────────────────────────────
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: orders.length,
+              separatorBuilder: (_, __) => const Divider(height: 1, indent: 20, endIndent: 20),
+              itemBuilder: (_, i) {
+                final o = orders[i];
+                final lokasi = o.tableNumber != null
+                    ? 'Meja ${o.tableNumber}'
+                    : o.customerName != null
+                        ? o.customerName!
+                        : 'Takeaway';
+                final queueNum = o.queueNumber;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(children: [
+                    // Avatar nomor antrian / meja
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFF59E0B), width: 1.5)),
+                      child: Center(
+                        child: Text(
+                          queueNum ?? o.orderNumber.split('-').last,
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                              color: Color(0xFFB45309)))),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(lokasi,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: Color(0xFF1A1A2E))),
+                          const SizedBox(height: 2),
+                          Row(children: [
+                            if (o.customerName != null && o.tableNumber != null) ...[
+                              Text(o.customerName!,
+                                  style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary)),
+                              const Text(' · ',
+                                  style: TextStyle(color: AppColors.textSecondary)),
+                            ],
+                            Text('Rp ${o.totalAmount.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.accent)),
+                          ]),
+                        ],
+                      ),
+                    ),
+
+                    // Tombol Proses
+                    ElevatedButton(
+                      onPressed: () => widget.onSelectOrder(o),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Proses',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13)),
+                    ),
+                  ]),
+                );
+              },
+            ),
+          ),
+
+          // ── Footer ──────────────────────────────────────────────────────
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+                20, 8, 20, MediaQuery.of(context).padding.bottom + 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: widget.onDismiss,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary,
+                  side: const BorderSide(color: Color(0xFFD1D5DB)),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Tutup — Proses Nanti',
+                    style: TextStyle(
+                        fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
