@@ -233,6 +233,29 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     }).eq('order_id', orderId);
   }
 
+  /// Tandai 1 item sebagai siap saji (tanpa ubah status order keseluruhan)
+  Future<void> _markItemReady(String itemId, String orderId) async {
+    final now = DateTime.now().toIso8601String();
+    await Supabase.instance.client.from('order_items').update({
+      'status':      'ready',
+      'prepared_at': now,
+    }).eq('id', itemId);
+
+    // Cek apakah semua item di order ini sudah ready → auto-update order juga
+    final remaining = await Supabase.instance.client
+        .from('order_items')
+        .select('id')
+        .eq('order_id', orderId)
+        .neq('status', 'ready');
+
+    if ((remaining as List).isEmpty) {
+      await Supabase.instance.client.from('orders').update({
+        'status':     'ready',
+        'updated_at': now,
+      }).eq('id', orderId);
+    }
+  }
+
   bool _isNewOrder(OrderModel order) =>
       order.status == OrderStatus.new_ || order.status == OrderStatus.created;
 
@@ -585,58 +608,119 @@ Widget _buildLowStockBanner() {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
             children: order.items.map((item) {
-              final notes = item.specialRequests;
+              final notes       = item.specialRequests;
+              final itemReady   = item.status == OrderItemStatus.ready;
+              // Tombol per-item hanya muncul saat order sedang dimasak (preparing)
+              final showItemBtn = !isNew && !itemReady;
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLowest,
+                  color: itemReady
+                      ? Colors.green.shade50
+                      : colorScheme.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: colorScheme.outlineVariant, width: 0.8)),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Container(
-                    width: 30, height: 30,
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8)),
-                    child: Center(child: Text('${item.quantity}',
-                      style: TextStyle(
-                        fontFamily: 'Poppins', fontWeight: FontWeight.w800,
-                        color: statusColor, fontSize: 14)))),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item.menuItemName,
-                        style: TextStyle(
-                          fontFamily: 'Poppins', fontWeight: FontWeight.w600,
-                          color: colorScheme.onSurface, fontSize: 13)),
-                      if (notes != null && notes.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade50,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.amber.shade200)),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Icon(Icons.edit_note,
-                                  size: 13, color: Colors.amber.shade700),
-                                const SizedBox(width: 4),
-                                Flexible(child: Text(notes,
+                  border: Border.all(
+                    color: itemReady
+                        ? Colors.green.shade200
+                        : colorScheme.outlineVariant,
+                    width: 0.8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Row utama item ──────────────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        // Badge qty
+                        Container(
+                          width: 30, height: 30,
+                          decoration: BoxDecoration(
+                            color: itemReady
+                                ? Colors.green.withValues(alpha: 0.15)
+                                : statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8)),
+                          child: Center(child: Text('${item.quantity}',
+                            style: TextStyle(
+                              fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                              color: itemReady ? Colors.green.shade700 : statusColor,
+                              fontSize: 14)))),
+                        const SizedBox(width: 10),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              Expanded(
+                                child: Text(item.menuItemName,
                                   style: TextStyle(
-                                    fontFamily: 'Poppins', fontSize: 11,
-                                    color: Colors.amber.shade800,
-                                    fontWeight: FontWeight.w500))),
-                              ]),
-                          )),
-                    ])),
-                ]),
+                                    fontFamily: 'Poppins', fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: itemReady
+                                        ? Colors.green.shade700
+                                        : colorScheme.onSurface,
+                                    decoration: itemReady
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ))),
+                              if (itemReady)
+                                Icon(Icons.check_circle,
+                                  size: 16, color: Colors.green.shade600),
+                            ]),
+                            if (notes != null && notes.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.amber.shade200)),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(Icons.edit_note,
+                                        size: 13, color: Colors.amber.shade700),
+                                      const SizedBox(width: 4),
+                                      Flexible(child: Text(notes,
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins', fontSize: 11,
+                                          color: Colors.amber.shade800,
+                                          fontWeight: FontWeight.w500))),
+                                    ]),
+                                )),
+                          ])),
+                      ]),
+                    ),
+
+                    // ── Tombol "Siap Saji" per item ─────────────────────
+                    if (showItemBtn)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                        child: SizedBox(
+                          width: double.infinity, height: 30,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _markItemReady(item.id, order.id),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green.shade500,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: EdgeInsets.zero,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(7))),
+                            icon: const Icon(Icons.check_rounded, size: 13),
+                            label: const Text('Siap Saji',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11)),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               );
             }).toList(),
           ),

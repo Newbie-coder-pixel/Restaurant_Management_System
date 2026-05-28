@@ -832,7 +832,7 @@ class _SummaryTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Rumus inventory
-          _SectionTitle('📐 Rumus Perhitungan Stok'),
+          const _SectionTitle('📐 Rumus Perhitungan Stok'),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
@@ -910,7 +910,7 @@ class _SummaryTab extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Kalkulasi harga
-          _SectionTitle('💰 Kalkulasi Harga'),
+          const _SectionTitle('💰 Kalkulasi Harga'),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
@@ -960,7 +960,7 @@ class _SummaryTab extends StatelessWidget {
 
           // Info satuan
           if (item.hasSecondaryUnit) ...[
-            _SectionTitle('📏 Info Satuan'),
+            const _SectionTitle('📏 Info Satuan'),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(16),
@@ -1353,7 +1353,7 @@ class _TransferTargetPanel extends ConsumerWidget {
                     style: TextStyle(fontSize: 12));
               }
               return DropdownButtonFormField<String>(
-                value: selectedBranchId,
+                initialValue: selectedBranchId,
                 decoration: InputDecoration(
                   labelText: 'Cabang Tujuan',
                   filled: true,
@@ -1397,7 +1397,7 @@ class _TransferTargetPanel extends ConsumerWidget {
                       );
                     }
                     return DropdownButtonFormField<String>(
-                      value: selectedItemId,
+                      initialValue: selectedItemId,
                       decoration: InputDecoration(
                         labelText: 'Item Tujuan',
                         filled: true,

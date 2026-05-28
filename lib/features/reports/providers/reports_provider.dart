@@ -262,7 +262,7 @@ Future<void> init() async {
       try {
         var topMenuQ = Supabase.instance.client
             .from('order_items')
-            .select('menu_item_name, quantity, subtotal');
+            .select('menu_item_name, quantity, subtotal, orders!inner(branch_id)');
         if (effectiveBranchId != null) {
           topMenuQ = topMenuQ.eq('orders.branch_id', effectiveBranchId);
         }

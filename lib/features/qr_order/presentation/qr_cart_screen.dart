@@ -105,7 +105,9 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
   // ── Show confirmation dialog sebelum order ────────────────────────────────
   Future<void> _showOrderConfirmationDialog() async {
-    if (!_formKey.currentState!.validate()) return;
+    final addMode = ref.read(addOrderModeProvider);
+    // Di mode tambah pesanan, skip validasi form nama/HP
+    if (addMode == null && !_formKey.currentState!.validate()) return;
 
     final colorScheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
@@ -262,9 +264,17 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   // ── Confirm order ──────────────────────────────────────────────────────────
   Future<void> _confirmOrder() async {
     if (_isSubmitting) return;
-
     setState(() => _isSubmitting = true);
 
+    final addMode = ref.read(addOrderModeProvider);
+
+    // ── Mode Tambah Pesanan (order sudah ada) ──────────────────────────────
+    if (addMode != null) {
+      await _confirmAddItems(addMode);
+      return;
+    }
+
+    // ── Mode Normal (buat order baru) ──────────────────────────────────────
     final notifier = ref.read(activeQrCartNotifierProvider);
     notifier.setCustomerInfo(name: _nameCtrl.text.trim(), phone: _phoneCtrl.text.trim());
 
@@ -312,7 +322,6 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       notifier.clearCart();
 
       if (mounted) {
-        // Simpan estimasi sebelum clear
         final estimasiText = _estimatedMinutes != null
             ? ' Estimasi siap: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
             : '';
@@ -328,6 +337,55 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal membuat pesanan: $e'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  // ── Confirm tambah item ke order yang sudah ada ────────────────────────────
+  Future<void> _confirmAddItems(AddOrderModeState addMode) async {
+    final cart = ref.read(activeQrCartProvider);
+    final notifier = ref.read(activeQrCartNotifierProvider);
+
+    try {
+      final addNotifier = ref.read(qrAddItemsProvider.notifier);
+      final updatedOrder = await addNotifier.submit(
+        orderId: addMode.orderId,
+        newItems: cart.items,
+      );
+
+      if (updatedOrder == null) throw Exception('Gagal menambah pesanan');
+
+      // Clear cart & reset mode
+      notifier.clearCart();
+      ref.read(addOrderModeProvider.notifier).state = null;
+
+      if (mounted) {
+        final estimasiText = _estimatedMinutes != null
+            ? ' Estimasi siap: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
+            : '';
+
+        // Kembali ke tracker screen order yang sama
+        context.go(
+          '/qr/${addMode.tableId}/track/${addMode.orderId}?queue=${addMode.queueNumber}',
+        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            '✅ Pesanan tambahan berhasil dikirim ke dapur!$estimasiText',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menambah pesanan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -407,11 +465,21 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       );
     }
 
+    final addMode = ref.watch(addOrderModeProvider);
+    final isAddMode = addMode != null;
+
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: const Text('Keranjang Pesanan'),
-        leading: BackButton(onPressed: () => context.pop()),
+        title: Text(isAddMode ? 'Tambah Pesanan' : 'Keranjang Pesanan'),
+        leading: BackButton(onPressed: () {
+          // Saat back dari add mode, reset mode agar tidak stuck
+          if (isAddMode) {
+            ref.read(addOrderModeProvider.notifier).state = null;
+            notifier.clearCart();
+          }
+          context.pop();
+        }),
         actions: [
           TextButton(
             onPressed: () {
@@ -498,6 +566,47 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                 ),
               ),
 
+            // ── Banner mode tambah pesanan ──────────────────────────────────
+            if (isAddMode)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: colorScheme.secondary.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.add_circle_outline,
+                        color: colorScheme.secondary, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mode Tambah Pesanan',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: colorScheme.onSecondaryContainer,
+                                fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'No. Antrian: ${addMode.queueNumber} · Item lama tidak bisa diubah',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSecondaryContainer
+                                    .withValues(alpha: 0.75)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -532,20 +641,22 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
               ),
             ),
 
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: _CustomerInfoCard(
-                  nameCtrl:  _nameCtrl,
-                  phoneCtrl: _phoneCtrl,
-                  tableName: cart.tableName ?? 'Meja'),
+            // Di mode tambah pesanan, form nama/HP tidak diperlukan
+            if (!isAddMode)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _CustomerInfoCard(
+                    nameCtrl:  _nameCtrl,
+                    phoneCtrl: _phoneCtrl,
+                    tableName: cart.tableName ?? 'Meja'),
+                ),
               ),
-            ),
 
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                child: _OrderSummaryCard(cart: cart),
+                child: _OrderSummaryCard(cart: cart, isAddMode: isAddMode),
               ),
             ),
           ],
@@ -554,7 +665,9 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       bottomNavigationBar: _CartBottomBar(
         cart:      cart,
         onProceed: _showOrderConfirmationDialog,
-        isLoading: _isSubmitting),
+        isLoading: _isSubmitting,
+        isAddMode: isAddMode,
+      ),
     );
   }
 }
@@ -807,7 +920,9 @@ class _CustomerInfoCard extends StatelessWidget {
 // ─── Order Summary Card ───────────────────────────────────────────────────────
 class _OrderSummaryCard extends StatelessWidget {
   final QrOrderSession cart;
-  const _OrderSummaryCard({required this.cart});
+  final bool isAddMode;
+
+  const _OrderSummaryCard({required this.cart, this.isAddMode = false});
 
   @override
   Widget build(BuildContext context) {
@@ -824,10 +939,12 @@ class _OrderSummaryCard extends StatelessWidget {
         Row(children: [
           Icon(Icons.receipt_outlined, size: 18, color: colorScheme.primary),
           const SizedBox(width: 8),
-          Text('Ringkasan Pesanan',
+          Text('Ringkasan Tambahan',
             style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
         ]),
         const SizedBox(height: 14),
+
+        // Daftar item
         ...cart.items.map((item) => Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(children: [
@@ -841,41 +958,73 @@ class _OrderSummaryCard extends StatelessWidget {
             Text(_formatPrice(item.subtotal), style: theme.textTheme.bodySmall),
           ]),
         )),
+
         Divider(color: colorScheme.outlineVariant, height: 20, thickness: 0.5),
-        Row(children: [
-          Text('Subtotal',
-            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-          const Spacer(),
-          Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall),
-        ]),
-        const SizedBox(height: 4),
-        Row(children: [
-          Text('Service Charge (3%)',
-            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-          const Spacer(),
-          Text(_formatPrice(cart.serviceCharge), style: theme.textTheme.bodySmall),
-        ]),
-        const SizedBox(height: 4),
-        Row(children: [
-          Text('PB1 (10%)',
-            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-          const Spacer(),
-          Text(_formatPrice(cart.pb1Amount), style: theme.textTheme.bodySmall),
-        ]),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(10)),
-          child: Row(children: [
-            Text('Total', style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer)),
+
+        if (!isAddMode) ...[
+          // Mode normal: tampilkan breakdown lengkap
+          Row(children: [
+            Text('Subtotal',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
             const Spacer(),
-            Text(_formatPrice(cart.totalAmount),
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold, color: colorScheme.primary)),
-          ])),
+            Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            Text('Service Charge (3%)',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+            const Spacer(),
+            Text(_formatPrice(cart.serviceCharge), style: theme.textTheme.bodySmall),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            Text('PB1 (10%)',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+            const Spacer(),
+            Text(_formatPrice(cart.pb1Amount), style: theme.textTheme.bodySmall),
+          ]),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(10)),
+            child: Row(children: [
+              Text('Total', style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer)),
+              const Spacer(),
+              Text(_formatPrice(cart.totalAmount),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold, color: colorScheme.primary)),
+            ])),
+        ] else ...[
+          // Mode tambah pesanan: hanya tampilkan subtotal item baru + info pajak dihitung otomatis
+          Row(children: [
+            Text('Subtotal item baru',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+            const Spacer(),
+            Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              Icon(Icons.info_outline, size: 13, color: colorScheme.outline),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'PB1 & Service Charge dihitung otomatis dari total keseluruhan pesanan.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.outline, fontSize: 11),
+                ),
+              ),
+            ]),
+          ),
+        ],
       ]),
     );
   }
@@ -892,11 +1041,13 @@ class _CartBottomBar extends StatelessWidget {
   final QrOrderSession cart;
   final VoidCallback onProceed;
   final bool isLoading;
+  final bool isAddMode;
 
   const _CartBottomBar({
     required this.cart,
     required this.onProceed,
     required this.isLoading,
+    this.isAddMode = false,
   });
 
   @override
@@ -937,7 +1088,11 @@ class _CartBottomBar extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: colorScheme.onPrimary.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20)),
-                    child: Text(_formatPrice(cart.totalAmount),
+                    // Saat add mode: tampilkan subtotal item baru saja (bukan total+pajak)
+                    child: Text(
+                      isAddMode
+                          ? '${_formatPrice(cart.subtotal)} (item baru)'
+                          : _formatPrice(cart.totalAmount),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onPrimary, fontWeight: FontWeight.bold))),
                 ]),

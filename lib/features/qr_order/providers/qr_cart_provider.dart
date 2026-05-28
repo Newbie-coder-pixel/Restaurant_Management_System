@@ -212,3 +212,23 @@ final activeQrCartNotifierProvider = Provider<QrCartNotifier>((ref) {
   final table = ref.watch(activeQrTableProvider);
   return ref.read(qrCartProvider(table).notifier);
 });
+// ─── Add Order Mode ───────────────────────────────────────────────────────────
+/// Menyimpan state saat customer sedang menambah pesanan ke order yang sudah ada.
+/// null  = mode normal (order baru).
+/// non-null = mode tambah pesanan, berisi orderId & queueNumber order aktif.
+class AddOrderModeState {
+  final String orderId;
+  final String queueNumber;
+  final String tableId;
+
+  const AddOrderModeState({
+    required this.orderId,
+    required this.queueNumber,
+    required this.tableId,
+  });
+}
+
+/// Provider global untuk mode "tambah pesanan".
+/// Di-set oleh tracker screen saat customer tap "Tambah Pesanan".
+/// Di-clear oleh cart screen setelah berhasil submit.
+final addOrderModeProvider = StateProvider<AddOrderModeState?>((ref) => null);

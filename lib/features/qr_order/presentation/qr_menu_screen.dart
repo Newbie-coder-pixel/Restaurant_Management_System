@@ -146,6 +146,8 @@ class _MenuBody extends ConsumerWidget {
 
     cart.totalItems > 0 ? fabAnimCtrl.forward() : fabAnimCtrl.reverse();
 
+    final addMode = ref.watch(addOrderModeProvider);
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: Column(
@@ -155,6 +157,7 @@ class _MenuBody extends ConsumerWidget {
             branchName: branchName,
             searchCtrl: searchCtrl,
             onSearchChanged: (q) => ref.read(_searchQueryProvider.notifier).state = q,
+            addOrderQueueNumber: addMode?.queueNumber,
           ),
           Expanded(
             child: menuAsync.when(
@@ -232,7 +235,12 @@ class _MenuBody extends ConsumerWidget {
           ? null
           : ScaleTransition(
               scale: CurvedAnimation(parent: fabAnimCtrl, curve: Curves.elasticOut),
-              child: _CartFab(cart: cart, tableId: tableId, tableName: tableName),
+              child: _CartFab(
+                cart: cart,
+                tableId: tableId,
+                tableName: tableName,
+                isAddMode: addMode != null,
+              ),
             ),
     );
   }
@@ -673,12 +681,14 @@ class _QrMenuHeader extends StatelessWidget {
   final String tableName, branchName;
   final TextEditingController searchCtrl;
   final ValueChanged<String> onSearchChanged;
+  final String? addOrderQueueNumber;
 
   const _QrMenuHeader({
     required this.tableName,
     required this.branchName,
     required this.searchCtrl,
     required this.onSearchChanged,
+    this.addOrderQueueNumber,
   });
 
   @override
@@ -715,7 +725,36 @@ class _QrMenuHeader extends StatelessWidget {
                 ),
               ]),
               const SizedBox(height: 8),
-              Text('Pilih menu favoritmu', style: theme.textTheme.headlineSmall?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
+              if (addOrderQueueNumber != null) ...[
+                // Banner tambah pesanan
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.add_circle_outline, size: 14, color: cs.onPrimary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Tambah ke pesanan #$addOrderQueueNumber',
+                      style: TextStyle(
+                        color: cs.onPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 6),
+              ],
+              Text(
+                addOrderQueueNumber != null
+                    ? 'Pilih item yang ingin ditambahkan'
+                    : 'Pilih menu favoritmu',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                    color: cs.onPrimary, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 14),
               TextField(
                 controller: searchCtrl,
@@ -745,8 +784,14 @@ class _QrMenuHeader extends StatelessWidget {
 class _CartFab extends StatelessWidget {
   final QrOrderSession cart;
   final String tableId, tableName;
+  final bool isAddMode;
 
-  const _CartFab({required this.cart, required this.tableId, required this.tableName});
+  const _CartFab({
+    required this.cart,
+    required this.tableId,
+    required this.tableName,
+    required this.isAddMode,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -782,7 +827,11 @@ class _CartFab extends StatelessWidget {
           const SizedBox(width: 8),
           Container(width: 1, height: 16, color: cs.onPrimary.withValues(alpha: 0.4)),
           const SizedBox(width: 8),
-          Text(_fmt(cart.totalAmount), style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
+          // Saat add mode: tampilkan subtotal item baru saja (bukan total+pajak)
+          Text(
+            isAddMode ? _fmt(cart.subtotal) : _fmt(cart.totalAmount),
+            style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold),
+          ),
         ]),
       ),
     );

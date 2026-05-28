@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import '../../features/auth/providers/auth_provider.dart';
-import '../../features/auth/presentation/staff_gateway_screen.dart';
 import '../../features/screens.dart';
 
 import '../../features/customer/presentation/customer_landing_screen.dart';
@@ -289,7 +288,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // ── Staff Routes ──────────────────────────────────────────────────────
-      GoRoute(path: AppRoutes.staffGateway, builder: (_, __) => const StaffGatewayScreen()),
       GoRoute(path: AppRoutes.login,        builder: (_, __) => const LoginScreen()),
       GoRoute(path: AppRoutes.tables,       builder: (_, __) => const TableScreen()),
       GoRoute(path: AppRoutes.booking,      builder: (_, __) => const BookingScreen()),

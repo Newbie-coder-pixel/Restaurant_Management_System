@@ -511,8 +511,9 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Wajib diisi';
                         final n = int.tryParse(v.trim());
-                        if (n == null || n <= 0)
+                        if (n == null || n <= 0) {
                           return 'Masukkan angka yang valid';
+                        }
                         if (n > 180) return 'Maksimal 180 menit';
                         return null;
                       },
@@ -692,15 +693,6 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
     super.dispose();
   }
 
-  TextEditingController _controllerFor(int index, double displayQty) {
-    return _qtyControllers.putIfAbsent(
-      index,
-      () => TextEditingController(
-        text: _formatQty(displayQty),
-      ),
-    );
-  }
-
   String _formatQty(double qty) {
     if (qty == qty.roundToDouble()) return qty.toInt().toString();
     return qty.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
@@ -708,12 +700,34 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
 
   Future<void> _showPickIngredientSheet(
       BuildContext context, List<InventoryItem> items) async {
+    // ── FIX BUG 2 ────────────────────────────────────────────────────────────
+    // Guard: jika inventory provider belum selesai load, items bisa kosong
+    // meskipun sebenarnya ada data. Cek dulu state provider-nya.
+    final inventoryState = ref.read(inventoryStreamProvider(widget.branchId));
+    if (inventoryState is AsyncLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Memuat data inventory, coba lagi sebentar...')),
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     final alreadyPicked =
         widget.drafts.map((d) => d.inventoryItemId).toSet();
     final available =
         items.where((i) => !alreadyPicked.contains(i.id)).toList();
 
+    if (items.isEmpty) {
+      // Inventory branch ini memang benar-benar kosong
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Belum ada item inventory di cabang ini.')),
+      );
+      return;
+    }
+
     if (available.isEmpty) {
+      // Semua item sudah dipilih
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -851,24 +865,49 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const _FormLabel('Bahan / Resep'),
+            // ── FIX BUG 2: tombol Tambah Bahan yang benar ────────────────
             inventoryAsync.when(
-              loading: () => const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2)),
-              error: (_, __) => const SizedBox.shrink(),
+              // Loading: tampilkan spinner, tombol disable
+              loading: () => TextButton.icon(
+                onPressed: null, // disabled saat loading
+                icon: const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                label: const Text('Memuat...', style: TextStyle(fontSize: 13)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              // Error: tampilkan ikon error, jangan hide
+              error: (_, __) => TextButton.icon(
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Gagal memuat inventory. Coba tutup & buka form kembali.'),
+                    backgroundColor: Colors.red,
+                  ),
+                ),
+                icon: const Icon(Icons.error_outline, size: 16, color: Colors.red),
+                label: const Text('Gagal memuat', style: TextStyle(fontSize: 13, color: Colors.red)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              // Data sudah ada: tombol aktif
               data: (items) => TextButton.icon(
                 onPressed: () => _showPickIngredientSheet(context, items),
                 icon: const Icon(Icons.add, size: 16),
-                label:
-                    const Text('Tambah Bahan', style: TextStyle(fontSize: 13)),
+                label: const Text('Tambah Bahan', style: TextStyle(fontSize: 13)),
                 style: TextButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
             ),
+            // ─────────────────────────────────────────────────────────────
           ],
         ),
         const SizedBox(height: 4),

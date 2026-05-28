@@ -6,8 +6,6 @@ import '../../../shared/models/table_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../features/inventory/services/inventory_service.dart';
-import '../../../core/supabase_client.dart';
 import 'widgets/order_item_tile.dart';
 import 'widgets/menu_item_selector.dart';
 import '../../../shared/widgets/app_drawer.dart';
@@ -124,6 +122,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             id, branch_id, table_id, order_number,
             status, source, order_type, customer_name,
             discount_amount, notes, created_at, updated_at,
+            bill_requested, bill_requested_at,
+            total_amount, subtotal, tax_amount,
             restaurant_tables(table_number),
             order_items(*)
           ''')
@@ -253,79 +253,26 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     }
   }
 
+  // Order Screen hanya bisa update ready → served.
+  // Status sebelumnya (new/created/preparing) dihandle oleh KDS (Dapur).
   OrderStatus? _nextStatus(OrderStatus current) {
     switch (current) {
-      case OrderStatus.new_:
-      case OrderStatus.created:    return OrderStatus.preparing;
-      case OrderStatus.preparing:  return OrderStatus.ready;
-      case OrderStatus.ready:      return OrderStatus.served;
-      default:                     return null;
+      case OrderStatus.ready: return OrderStatus.served;
+      default:                return null;
     }
   }
 
   String _nextStatusLabel(OrderStatus current) {
     switch (current) {
-      case OrderStatus.new_:
-      case OrderStatus.created:    return 'Mulai Masak';
-      case OrderStatus.preparing:  return 'Tandai Siap';
-      case OrderStatus.ready:      return '✓ Sudah Diantar';
-      default:                     return '';
+      case OrderStatus.ready: return '✓ Sudah Diantar';
+      default:                return '';
     }
   }
 
   IconData _nextStatusIcon(OrderStatus current) {
     switch (current) {
-      case OrderStatus.new_:
-      case OrderStatus.created:    return Icons.soup_kitchen_outlined;
-      case OrderStatus.preparing: return Icons.check_circle_outline;
-      case OrderStatus.ready:     return Icons.room_service_outlined;
-      default:                    return Icons.arrow_forward;
-    }
-  }
-
-  /// Deduct inventory berdasarkan ingredients setiap menu item di order.
-  /// Dipanggil sekali saat order pertama kali masuk ke status [preparing].
-Future<void> _deductInventoryForOrder(OrderModel order) async {
-    if (order.items.isEmpty) return;
-
-    try {
-      final inventoryService = InventoryService(supabase);
-      final staff = ref.read(currentStaffProvider);
-
-      final menuItemIds = order.items.map((i) => i.menuItemId).toSet().toList();
-
-      final ingredientsRes = await Supabase.instance.client
-          .from('menu_ingredients')
-          .select()
-          .inFilter('menu_item_id', menuItemIds);
-
-      if ((ingredientsRes as List).isEmpty) return;
-
-      for (final orderItem in order.items) {
-        final ingredients = ingredientsRes
-            .where((r) => r['menu_item_id'] == orderItem.menuItemId)
-            .toList();
-
-        for (final ing in ingredients) {
-          final inventoryItemId = ing['inventory_item_id'] as String?;
-          final qtyPerPortion = (ing['quantity'] as num?)?.toDouble() ?? 0;
-
-          if (inventoryItemId == null || qtyPerPortion <= 0) continue;
-
-          final totalDeduct = qtyPerPortion * orderItem.quantity;
-
-          await inventoryService.deductFromOrder(
-            inventoryItemId: inventoryItemId,
-            branchId: order.branchId,
-            quantity: totalDeduct,
-            orderId: order.id,
-            menuItemName: orderItem.menuItemName, // ← baris baru ini saja
-            createdBy: staff?.id,
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('[InventoryDeduct] Error: $e');
+      case OrderStatus.ready: return Icons.room_service_outlined;
+      default:                return Icons.arrow_forward;
     }
   }
 
@@ -378,11 +325,6 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
         'status': next.dbValue,
       }).eq('order_id', order.id);
 
-      // Deduct inventory saat dapur mulai masak (new/created → preparing)
-      if (next == OrderStatus.preparing) {
-        await _deductInventoryForOrder(order);
-      }
-
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Order #${order.orderNumber} → ${next.label}'),
@@ -394,6 +336,47 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
         content: Text('Gagal update status order.'), backgroundColor: AppColors.accent));
     } finally {
       if (mounted) setState(() => _updatingOrderId = null);
+    }
+  }
+
+  /// Tandai 1 item sudah diantar ke meja (served), tanpa ubah status order keseluruhan.
+  /// Jika semua item sudah served → order otomatis jadi served.
+  Future<void> _markItemServed(String itemId, String orderId) async {
+    final now = DateTime.now().toIso8601String();
+    try {
+      await Supabase.instance.client.from('order_items').update({
+        'status': 'served',
+      }).eq('id', itemId);
+
+      // Cek apakah semua item sudah served
+      final remaining = await Supabase.instance.client
+          .from('order_items')
+          .select('id')
+          .eq('order_id', orderId)
+          .neq('status', 'served');
+
+      if ((remaining as List).isEmpty) {
+        final staff = ref.read(currentStaffProvider);
+        await Supabase.instance.client.from('orders').update({
+          'status':     'served',
+          'staff_id':   staff?.id,
+          'updated_at': now,
+        }).eq('id', orderId);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Semua item sudah diantar! Order → Tersaji'),
+            backgroundColor: Color(0xFF1E88E5),
+            duration: Duration(seconds: 2)));
+        }
+      }
+    } catch (e) {
+      debugPrint('[MarkItemServed] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Gagal update item.'),
+          backgroundColor: AppColors.accent));
+      }
     }
   }
 
@@ -412,11 +395,26 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
     for (final o in validOrders) {
       switch (o.status) {
         case OrderStatus.new_:
-        case OrderStatus.created:   groups['Antri Masak']!.add(o); break;
-        case OrderStatus.preparing: groups['Sedang Dimasak']!.add(o); break;
-        case OrderStatus.ready:     groups['Siap Disajikan']!.add(o); break;
-        case OrderStatus.served:    groups['Sudah Tersaji']!.add(o); break;
-        default: break;
+        case OrderStatus.created:
+          groups['Antri Masak']!.add(o);
+          break;
+        case OrderStatus.preparing:
+          // Selalu masuk "Sedang Dimasak"
+          groups['Sedang Dimasak']!.add(o);
+          // Jika ada minimal 1 item yang sudah ready → tampil juga di "Siap Disajikan"
+          // supaya waiter bisa langsung antar item yang sudah siap tanpa nunggu semua selesai
+          final hasReadyItem = o.items.any(
+              (item) => item.status == OrderItemStatus.ready);
+          if (hasReadyItem) groups['Siap Disajikan']!.add(o);
+          break;
+        case OrderStatus.ready:
+          groups['Siap Disajikan']!.add(o);
+          break;
+        case OrderStatus.served:
+          groups['Sudah Tersaji']!.add(o);
+          break;
+        default:
+          break;
       }
     }
     return groups;
@@ -594,6 +592,10 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
                 final count = (grouped[def.name] ?? []).length;
                 if (count == 0) return const SizedBox.shrink();
                 final isSelected = _selectedGroup == def.name;
+                // Hitung berapa order di grup ini yang minta bill
+                final billCount = (grouped[def.name] ?? [])
+                    .where((o) => o.billRequested && o.status == OrderStatus.served)
+                    .length;
 
                 return GestureDetector(
                   onTap: () => setState(() => _selectedGroup = def.name),
@@ -611,6 +613,7 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
                         Icon(def.icon, size: 14,
                           color: isSelected ? Colors.white : def.color),
                         const Spacer(),
+                        // Badge jumlah order
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
@@ -619,6 +622,19 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
                           child: Text('$count', style: TextStyle(
                             fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700,
                             color: isSelected ? Colors.white : def.color))),
+                        // Badge 🔔 bill diminta
+                        if (billCount > 0) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B),
+                              borderRadius: BorderRadius.circular(10)),
+                            child: Text('🔔$billCount', style: const TextStyle(
+                              fontFamily: 'Poppins', fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white))),
+                        ],
                       ]),
                       const SizedBox(height: 6),
                       Text(def.name, style: TextStyle(
@@ -683,7 +699,6 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
 
   Widget _buildOrderCard(OrderModel o) {
     final color = _statusColor(o.status);
-    final nextS = _nextStatus(o.status);
     final isUpdating = _updatingOrderId == o.id;
     final badgeLabel = _orderTypeLabel(o);
     final badgeColor = _orderTypeBadgeColor(o);
@@ -730,6 +745,24 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
               ])),
             const SizedBox(width: 6),
             Text('${o.items.length} item', style: AppTextStyles.caption),
+            if (o.billRequested && o.status == OrderStatus.served) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFF59E0B))),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.notifications_active, size: 9, color: Color(0xFFF59E0B)),
+                  SizedBox(width: 3),
+                  Text('Minta Bill',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFF59E0B))),
+                ])),
+            ],
           ]),
         ),
         trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -738,7 +771,115 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
         ]),
         children: [
           // Items
-          ...o.items.map((item) => OrderItemTile(item: item)),
+          ...o.items.map((item) {
+            // Tampilkan tombol "Antar" kalau:
+            // - order sudah ready (semua item siap), ATAU
+            // - order masih preparing tapi item ini sudah ready (sebagian siap)
+            final itemReady  = item.status == OrderItemStatus.ready;
+            final itemServed = item.status == OrderItemStatus.served;
+            final canServe   = (o.status == OrderStatus.ready || itemReady) && !itemServed;
+
+            if (!canServe && !itemServed) {
+              // Item belum siap sama sekali: pakai tile biasa
+              return OrderItemTile(item: item);
+            }
+
+            // Item sudah ready atau served: render custom tile dengan tombol Antar
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: itemServed
+                    ? const Color(0xFF1E88E5).withValues(alpha: 0.06)
+                    : Colors.green.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: itemServed
+                      ? const Color(0xFF1E88E5).withValues(alpha: 0.25)
+                      : Colors.green.withValues(alpha: 0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Baris utama item ──────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                    child: Row(children: [
+                      // Badge qty
+                      Container(
+                        width: 30, height: 30,
+                        decoration: BoxDecoration(
+                          color: itemServed
+                              ? const Color(0xFF1E88E5).withValues(alpha: 0.12)
+                              : Colors.green.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8)),
+                        child: Center(child: Text('${item.quantity}',
+                          style: TextStyle(
+                            fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: itemServed
+                                ? const Color(0xFF1E88E5)
+                                : Colors.green.shade700)))),
+                      const SizedBox(width: 10),
+                      Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Expanded(child: Text(item.menuItemName,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: itemServed
+                                    ? const Color(0xFF1E88E5)
+                                    : AppColors.textPrimary,
+                                decoration: itemServed
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ))),
+                            if (itemServed)
+                              const Icon(Icons.delivery_dining,
+                                size: 16, color: Color(0xFF1E88E5)),
+                          ]),
+                          if (item.specialRequests != null &&
+                              item.specialRequests!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 3),
+                              child: Text('📝 ${item.specialRequests}',
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins', fontSize: 11,
+                                  color: AppColors.reserved))),
+                        ])),
+                    ]),
+                  ),
+
+                  // ── Tombol "Antar ke Meja" ───────────────────────
+                  if (canServe)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: SizedBox(
+                        width: double.infinity, height: 30,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _markItemServed(item.id, o.id),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1E88E5),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(7))),
+                          icon: const Icon(Icons.delivery_dining, size: 14),
+                          label: const Text('Antar ke Meja',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11)),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }),
 
           // Notes order
           if (o.notes != null && o.notes!.isNotEmpty)
@@ -759,39 +900,44 @@ Future<void> _deductInventoryForOrder(OrderModel order) async {
 
           const Divider(height: 1),
 
-          // Action button
+          // Action button — hanya ready → served yang bisa diupdate di sini
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: nextS != null
-                    ? SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: isUpdating ? null : () => _updateOrderStatus(o),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: o.status == OrderStatus.ready
-                                ? Colors.green.shade600
-                                : _statusColor(nextS),
-                            foregroundColor: Colors.white,
-                            elevation: o.status == OrderStatus.ready ? 3 : 0,
-                            shadowColor: o.status == OrderStatus.ready
-                                ? Colors.green.withValues(alpha: 0.4)
-                                : null,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            padding: EdgeInsets.symmetric(
-                              vertical: o.status == OrderStatus.ready ? 13 : 10)),
-                          icon: isUpdating
-                              ? const SizedBox(width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : Icon(_nextStatusIcon(o.status), size: 18),
-                          label: Text(
-                            isUpdating ? 'Memperbarui...' : _nextStatusLabel(o.status),
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w700,
-                              fontSize: o.status == OrderStatus.ready ? 14 : 13))))
-                    : o.status == OrderStatus.served
-                        ? _infoChip(Icons.point_of_sale_outlined, 'Menunggu pembayaran di kasir', Colors.orange)
-                        : _infoChip(Icons.check_circle_outline, 'Selesai', AppColors.available),
+            child: o.status == OrderStatus.ready
+                ? SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: isUpdating ? null : () => _updateOrderStatus(o),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade600,
+                        foregroundColor: Colors.white,
+                        elevation: 3,
+                        shadowColor: Colors.green.withValues(alpha: 0.4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 13)),
+                      icon: isUpdating
+                          ? const SizedBox(width: 16, height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.room_service_outlined, size: 18),
+                      label: Text(
+                        isUpdating ? 'Memperbarui...' : '✓ Semua Sudah Diantar',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14))))
+                : o.status == OrderStatus.new_ || o.status == OrderStatus.created
+                    ? _infoChip(Icons.soup_kitchen_outlined, 'Menunggu dimasak oleh dapur', const Color(0xFFFF9800))
+                    : o.status == OrderStatus.preparing
+                        ? o.items.any((item) => item.status == OrderItemStatus.ready)
+                            ? _infoChip(Icons.outdoor_grill_outlined, 'Sebagian item siap — antar dulu via tombol di atas', const Color(0xFF43A047))
+                            : _infoChip(Icons.outdoor_grill_outlined, 'Sedang dimasak oleh dapur', const Color(0xFFE53935))
+                        : o.status == OrderStatus.served
+                            ? o.billRequested
+                                ? _infoChip(Icons.notifications_active, '🔔 Customer minta bill — arahkan ke kasir!', const Color(0xFFF59E0B))
+                                : _infoChip(Icons.point_of_sale_outlined, 'Menunggu pembayaran di kasir', Colors.orange)
+                            : _infoChip(Icons.check_circle_outline, 'Selesai', AppColors.available),
           ),
         ],
       ),
