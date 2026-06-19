@@ -12,7 +12,30 @@ class AppConfig {
   // API Key TIDAK disimpan di sini — sudah aman di Vercel Environment Variables
   // Proxy endpoint: /api/chat (Vercel Function)
   // JANGAN tambahkan groqApiKey di sini lagi!
-  
+
+
+  // ── Midtrans Payment Gateway ───────────────────────────────
+  // Client key AMAN disimpan di Flutter (memang didesain public, bukan rahasia)
+  // Server key JANGAN PERNAH ditaruh di sini — hanya boleh di Supabase
+  // Edge Function Secrets (lihat supabase_midtrans_migration.sql bagian 6)
+  //
+  // Ambil client key di:
+  //   Sandbox    → https://dashboard.sandbox.midtrans.com → Settings → Access Keys
+  //   Production → https://dashboard.midtrans.com → Settings → Access Keys
+  //
+  // ⚠️  GANTI nilai di bawah ini dengan client key asli kamu
+  static const String midtransClientKeySandbox =
+      'Mid-client-f78f7e7Tgcr_gavX';
+  static const String midtransClientKeyProduction =
+    'Mid-client-JETr7K-VE_xT2luw'; // ← isi ini, yang kamu dapat tadi
+
+  // Ganti ke `true` HANYA kalau sudah siap go-live dengan akun production
+  static const bool midtransIsProduction = false;
+
+  static String get midtransClientKey => midtransIsProduction
+      ? midtransClientKeyProduction
+      : midtransClientKeySandbox;
+
 
   // ── App Settings ──────────────────────────────────────────
   static const String appName = 'RestaurantOS';

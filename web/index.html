@@ -33,16 +33,33 @@
     tanpa di-strip oleh uBlock filter list
     ══════════════════════════════════════════════
   -->
+  <!--
+    Domain Midtrans (sandbox + production) ditambahkan ke CSP supaya
+    Snap.js dan resource pendukungnya (iframe pembayaran, gambar metode
+    bayar) tidak diblokir browser. Dua-duanya diizinkan sekaligus supaya
+    tidak perlu ubah CSP lagi saat pindah dari sandbox ke production.
+  -->
   <meta http-equiv="Content-Security-Policy"
     content="
       default-src 'self';
-      script-src  'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.gstatic.com;
+      script-src  'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.gstatic.com https://app.sandbox.midtrans.com https://app.midtrans.com;
       style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src    'self' https://fonts.gstatic.com data:;
       img-src     'self' data: blob: https:;
-      connect-src 'self' https: wss: https://www.gstatic.com;
+      connect-src 'self' https: wss: https://www.gstatic.com https://app.sandbox.midtrans.com https://app.midtrans.com;
+      frame-src   'self' https://app.sandbox.midtrans.com https://app.midtrans.com;
       worker-src  'self' blob:;
     ">
+
+  <!--
+    Midtrans Snap.js — script resmi untuk membuka popup pembayaran di web.
+    TIDAK di-hardcode di sini karena src & data-client-key harus sinkron
+    dengan AppConfig.midtransClientKey dan AppConfig.midtransIsProduction
+    di Dart (sandbox vs production bisa berubah tanpa rebuild index.html).
+    Script ini di-inject secara dinamis oleh midtrans_web_service.dart
+    saat aplikasi start, lewat tag dengan id ini sebagai penanda lokasi.
+  -->
+  <script id="midtrans-snap-script-placeholder" type="application/json">{}</script>
 
   <style>
     body {

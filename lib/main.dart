@@ -8,6 +8,7 @@ import 'core/config/app_config.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/notification_service.dart';
+import 'features/payment/midtrans/midtrans_service.dart';
 import 'firebase_options.dart';
 import 'dart:js_interop';
 
@@ -39,14 +40,23 @@ void main() async {
     ),
   );
 
-  // 3. Listener notif setelah Supabase siap
+  // 3. Midtrans SDK
+  // Hanya diinisialisasi di Android/iOS — midtrans_sdk tidak support Flutter Web
+  if (!kIsWeb) {
+    await MidtransService.initialize(
+      clientKey: AppConfig.midtransClientKey,
+      isProduction: AppConfig.midtransIsProduction,
+    );
+  }
+
+  // 4. Listener notif setelah Supabase siap
   Supabase.instance.client.auth.onAuthStateChange.listen((event) {
     if (event.session?.user != null) {
       NotificationService.initialize();
     }
   });
 
-  // 4. Handle OAuth Web
+  // 5. Handle OAuth Web
   if (kIsWeb) {
     final uri = Uri.base;
     final code = uri.queryParameters['code'];

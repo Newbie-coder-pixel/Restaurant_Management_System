@@ -141,6 +141,7 @@ class OrderModel {
   final bool billRequested;
   final DateTime? billRequestedAt;
   final String? customerPhone;
+  final String? customerEmail;
   final String? queueNumber;
 
   // FIX Bug 1: simpan total dari DB sebagai fallback kalau items kosong
@@ -195,6 +196,7 @@ class OrderModel {
     this.billRequested = false,
     this.billRequestedAt,
     this.customerPhone,
+    this.customerEmail,
     this.queueNumber,
     double totalAmountFromDb = 0.0,
     double subtotalFromDb = 0.0,
@@ -237,6 +239,7 @@ class OrderModel {
           ? DateTime.tryParse(j['bill_requested_at'] as String)
           : null,
       customerPhone: j['customer_phone'] as String?,
+      customerEmail: j['customer_email'] as String?,
       queueNumber: j['queue_number'] as String?,
       // FIX Bug 1: baca nilai finansial dari DB sebagai fallback
       totalAmountFromDb: (j['total_amount'] ?? 0).toDouble(),
@@ -265,6 +268,7 @@ class OrderModel {
     bool? billRequested,
     DateTime? billRequestedAt,
     String? customerPhone,
+    String? customerEmail,
     String? queueNumber,
   }) {
     return OrderModel(
@@ -285,6 +289,7 @@ class OrderModel {
       billRequested: billRequested ?? this.billRequested,
       billRequestedAt: billRequestedAt ?? this.billRequestedAt,
       customerPhone: customerPhone ?? this.customerPhone,
+      customerEmail: customerEmail ?? this.customerEmail,
       queueNumber: queueNumber ?? this.queueNumber,
       totalAmountFromDb: _totalAmountFromDb,
       subtotalFromDb: _subtotalFromDb,
