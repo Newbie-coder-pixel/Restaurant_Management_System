@@ -69,6 +69,19 @@ class MidtransService {
   }
 
   // ── Buat Snap Token via Edge Function ─────────────────────────────────────
+  //
+  // PENTING: Midtrans WAJIB gross_amount === sum(item_details.price * qty).
+  // Sebelumnya `items` hanya berisi menu (subtotal), sedangkan `gross_amount`
+  // dikirim dari `order.totalAmount` yang sudah termasuk service charge,
+  // PB1/pajak, & diskon → menyebabkan mismatch dan Edge Function menolak
+  // request (400 Bad Request, error_messages: "gross_amount is not equal to
+  // the sum of item_details").
+  //
+  // Fix: service charge, pajak, & diskon ikut dikirim sebagai item_details
+  // tersendiri, dan gross_amount dihitung dari penjumlahan item_details yang
+  // sama (bukan dihitung independen dari order.totalAmount). Dengan begitu
+  // dua nilai itu dijamin selalu sinkron, termasuk kalau ada selisih
+  // pembulatan rupiah.
   static Future<MidtransTokenResult> createSnapToken({
     required OrderModel order,
     required String branchId,
@@ -76,20 +89,74 @@ class MidtransService {
     try {
       final supabase = Supabase.instance.client;
 
-      final items = order.items
-          .map((item) => {
-                'id': item.menuItemId,
-                'name': item.menuItemName,
-                'price': item.unitPrice.round(),
-                'quantity': item.quantity,
-              })
-          .toList();
+      final items = <Map<String, dynamic>>[];
+
+      // 1. Item menu (subtotal) — pakai harga yang sudah dibulatkan per item
+      //    supaya konsisten dengan integer yang dikirim ke Midtrans.
+      for (final item in order.items) {
+        items.add({
+          'id': item.menuItemId,
+          'name': item.menuItemName,
+          'price': item.unitPrice.round(),
+          'quantity': item.quantity,
+        });
+      }
+
+      // Subtotal "riil" yang dikirim ke Midtrans = penjumlahan item di atas.
+      // Dihitung ulang dari `items` (bukan order.subtotal) supaya tidak ada
+      // celah pembulatan antara nilai yang ditampilkan di UI vs yang dikirim.
+      final itemsSubtotal = items.fold<int>(
+        0,
+        (sum, item) => sum + (item['price'] as int) * (item['quantity'] as int),
+      );
+
+      // 2. Service charge (3%) — hanya ditambahkan kalau nilainya != 0
+      final serviceCharge = (itemsSubtotal * 0.03).round();
+      if (serviceCharge != 0) {
+        items.add({
+          'id': 'SERVICE_CHARGE',
+          'name': 'Service Charge (3%)',
+          'price': serviceCharge,
+          'quantity': 1,
+        });
+      }
+
+      // 3. PB1 / Pajak (10%) — dihitung dari subtotal + service charge,
+      //    sama seperti rumus di OrderModel.pb1Amount
+      final pb1 = ((itemsSubtotal + serviceCharge) * 0.10).round();
+      if (pb1 != 0) {
+        items.add({
+          'id': 'TAX_PB1',
+          'name': 'PB1 / Pajak (10%)',
+          'price': pb1,
+          'quantity': 1,
+        });
+      }
+
+      // 4. Diskon (kalau ada) — dikirim sebagai item dengan harga negatif.
+      //    Midtrans mendukung price negatif untuk merepresentasikan diskon.
+      final discount = order.discountAmount.round();
+      if (discount > 0) {
+        items.add({
+          'id': 'DISCOUNT',
+          'name': 'Diskon',
+          'price': -discount,
+          'quantity': 1,
+        });
+      }
+
+      // gross_amount WAJIB dihitung dari `items` yang sama persis dengan
+      // yang dikirim di atas, supaya selalu sinkron dengan validasi Midtrans.
+      final grossAmount = items.fold<int>(
+        0,
+        (sum, item) => sum + (item['price'] as int) * (item['quantity'] as int),
+      );
 
       final response = await supabase.functions.invoke(
         'midtrans-create-token',
         body: {
           'order_id': order.id,
-          'gross_amount': order.totalAmount.round(),
+          'gross_amount': grossAmount,
           'customer_name': order.customerName ?? 'Pelanggan',
           'customer_email': order.customerEmail ?? '',
           'customer_phone': order.customerPhone,
