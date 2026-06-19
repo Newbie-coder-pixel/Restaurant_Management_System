@@ -152,10 +152,29 @@ class MidtransService {
         (sum, item) => sum + (item['price'] as int) * (item['quantity'] as int),
       );
 
+      // PENTING: Midtrans mewajibkan transaction_details.order_id UNIK
+      // SELAMANYA per akun — tidak boleh dipakai ulang walau transaksi
+      // sebelumnya gagal/pending/expired (error: "order_id has already
+      // been taken").
+      //
+      // Karena itu kita kirim DUA id berbeda ke Edge Function:
+      //   - uniqueOrderId   → id unik per PERCOBAAN bayar, dikirim ke
+      //                       Midtrans sebagai transaction_details.order_id
+      //   - order.id        → UUID asli row di tabel `orders`, dipakai
+      //                       Edge Function untuk lookup/update ke DB
+      //                       (dikirim sebagai internal_order_id)
+      //
+      // Setiap kali createSnapToken() dipanggil (termasuk saat user retry
+      // setelah pembayaran gagal/dibatalkan), timestamp baru akan membuat
+      // uniqueOrderId yang baru juga, sehingga tidak collision di Midtrans.
+      final uniqueOrderId =
+          '${order.id}-${DateTime.now().millisecondsSinceEpoch}';
+
       final response = await supabase.functions.invoke(
         'midtrans-create-token',
         body: {
-          'order_id': order.id,
+          'order_id': uniqueOrderId,
+          'internal_order_id': order.id,
           'gross_amount': grossAmount,
           'customer_name': order.customerName ?? 'Pelanggan',
           'customer_email': order.customerEmail ?? '',
