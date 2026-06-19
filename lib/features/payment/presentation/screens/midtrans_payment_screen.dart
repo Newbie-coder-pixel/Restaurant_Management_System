@@ -196,7 +196,12 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
       // ── Overlay loading + polling ──────────────────────────────────────
       if (state.isLoading)
         Positioned.fill(
-          child: _LoadingOverlay(state: state),
+          child: _LoadingOverlay(
+            state: state,
+            onCancel: () {
+              ref.read(activeMidtransProvider.notifier).reset();
+            },
+          ),
         ),
     ]);
   }
@@ -566,7 +571,8 @@ class _PayButton extends StatelessWidget {
 
 class _LoadingOverlay extends StatelessWidget {
   final MidtransState state;
-  const _LoadingOverlay({required this.state});
+  final VoidCallback onCancel;
+  const _LoadingOverlay({required this.state, required this.onCancel});
 
   @override
   Widget build(BuildContext context) {
@@ -636,6 +642,28 @@ class _LoadingOverlay extends StatelessWidget {
                       fontSize: 12,
                       color: AppColors.textSecondary),
                   textAlign: TextAlign.center),
+            ],
+            // ── Tombol Tutup ───────────────────────────────────────────
+            // Penting: hanya tampil saat step polling (bukan creatingToken
+            // yang biasanya cuma 1-2 detik & belum ada transaksi tercatat).
+            // Transaksi yang sudah dibuat di Midtrans TETAP akan terbayar
+            // kalau pelanggan lanjut bayar — menutup overlay ini cuma
+            // menghentikan tampilan & pengecekan otomatis di app, bukan
+            // membatalkan transaksi di sisi Midtrans.
+            if (state.step == MidtransFlowStep.polling) ...[
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: onCancel,
+                child: const Text(
+                  'Tutup',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
             ],
           ]),
         ),

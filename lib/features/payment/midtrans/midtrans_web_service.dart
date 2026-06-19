@@ -73,6 +73,13 @@ class MidtransWebService {
         web.document.createElement('script') as web.HTMLScriptElement;
     script.src = '$baseUrl/snap/snap.js';
     script.setAttribute('data-client-key', clientKey);
+    // CATATAN: JANGAN set atribut 'crossorigin' di sini.
+    // Kalau diset, browser akan memuat script ini dalam mode CORS dan
+    // mewajibkan server mengirim header Access-Control-Allow-Origin.
+    // Server snap.js Midtrans TIDAK mengirim header itu (script ini memang
+    // didesain dimuat lewat <script> tag biasa, bukan lewat fetch()/CORS),
+    // jadi request-nya akan diblokir browser dengan error CORS dan
+    // snap.js gagal dimuat sama sekali.
 
     // Load success
     script.addEventListener(
