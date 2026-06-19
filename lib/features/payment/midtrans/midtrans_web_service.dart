@@ -73,7 +73,6 @@ class MidtransWebService {
         web.document.createElement('script') as web.HTMLScriptElement;
     script.src = '$baseUrl/snap/snap.js';
     script.setAttribute('data-client-key', clientKey);
-    script.setAttribute('crossorigin', 'anonymous');
 
     // Load success
     script.addEventListener(
