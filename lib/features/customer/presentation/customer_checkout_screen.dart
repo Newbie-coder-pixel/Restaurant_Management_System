@@ -263,6 +263,7 @@ class _CustomerCheckoutScreenState
             'customer_name':    _nameCtrl.text.trim(),
             'customer_phone':   _phoneCtrl.text.trim().isEmpty
                 ? null : _phoneCtrl.text.trim(),
+            'customer_email':   user?.email,
             'customer_user_id': user?.id,
             'table_id':         null,
             'table_name':       null,

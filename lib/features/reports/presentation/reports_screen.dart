@@ -152,7 +152,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  _TopMenuSection(topMenus: s.topMenus),
+                  _TopMenuSection(
+                      topMenus: s.topMenus,
+                      categories: s.topMenuCategories),
                   const SizedBox(height: 24),
                   _MenuMarginSection(menuMargins: s.menuMargins),
                   const SizedBox(height: 24),
@@ -398,125 +400,291 @@ class _RevenueBarChart extends StatelessWidget {
 
 // ── Top Menu Section ──────────────────────────────────────────────────────────
 
-class _TopMenuSection extends StatelessWidget {
+class _TopMenuSection extends StatefulWidget {
   final List<Map<String, dynamic>> topMenus;
-  const _TopMenuSection({required this.topMenus});
+  final List<String> categories;
+  const _TopMenuSection({required this.topMenus, required this.categories});
 
-  // BUG FIX: hilangkan backslash sebelum $
+  @override
+  State<_TopMenuSection> createState() => _TopMenuSectionState();
+}
+
+class _TopMenuSectionState extends State<_TopMenuSection> {
+  String _selectedCategory = 'Semua';
+
   String _fmtRev(double v) =>
       'Rp ${(v / 1000).toStringAsFixed(0)}rb';
 
+  List<Map<String, dynamic>> get _filtered {
+    final list = _selectedCategory == 'Semua'
+        ? widget.topMenus
+        : widget.topMenus
+            .where((m) => m['category'] == _selectedCategory)
+            .toList();
+    return list.take(10).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (topMenus.isEmpty) return const SizedBox.shrink();
+    if (widget.topMenus.isEmpty) return const SizedBox.shrink();
 
-    final maxQty = (topMenus.first['qty'] as int).toDouble();
+    final filtered = _filtered;
+    if (filtered.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _header(),
+          const SizedBox(height: 8),
+          _categoryChips(),
+          const SizedBox(height: 12),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(
+                child: Text('Belum ada data untuk kategori ini',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        color: AppColors.textSecondary)),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final maxQty = (filtered.first['qty'] as int).toDouble();
+    // Interval grid: bulatkan ke angka yang enak dibaca
+    double gridInterval = (maxQty / 4).ceilToDouble();
+    if (gridInterval == 0) gridInterval = 1;
+    // Bulatkan ke kelipatan 5, 10, 25, 50, 100 dst supaya lebih rapi
+    final nice = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
+    for (final n in nice) {
+      if (gridInterval <= n) { gridInterval = n.toDouble(); break; }
+    }
+    final chartMaxY = gridInterval * 5; // selalu 5 baris grid
+
+    // Tinggi chart: min 200, max ~320 — cukup untuk 10 bar
+    final chartHeight = (filtered.length * 38.0).clamp(200.0, 320.0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('🏆 Menu Terlaris',
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w700,
-                fontSize: 16)),
+        _header(),
+        const SizedBox(height: 8),
+        _categoryChips(),
         const SizedBox(height: 12),
         Card(
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 12),
-            child: Column(
-              children: topMenus.asMap().entries.map((entry) {
-                final rank = entry.key + 1;
-                final item = entry.value;
-                final name = item['name'] as String;
-                final qty = item['qty'] as int;
-                final rev = item['revenue'] as double;
-                final ratio = maxQty > 0 ? qty / maxQty : 0.0;
-
-                final Color rankColor;
-                if (rank == 1) {
-                  rankColor = const Color(0xFFFFD700);
-                } else if (rank == 2) {
-                  rankColor = const Color(0xFFC0C0C0);
-                } else if (rank == 3) {
-                  rankColor = const Color(0xFFCD7F32);
-                } else {
-                  rankColor = AppColors.textSecondary;
-                }
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 28,
-                        child: Text('#$rank',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: rankColor)),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(name,
-                                      style: const TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13),
-                                      overflow: TextOverflow.ellipsis),
-                                ),
-                                const SizedBox(width: 8),
-                                Text('$qty terjual',
-                                    style: const TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 11,
-                                        color: AppColors.textSecondary)),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: ratio,
-                                minHeight: 6,
-                                backgroundColor: AppColors.primary
-                                    .withValues(alpha: 0.1),
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(
-                                  rank <= 3
-                                      ? AppColors.primary
-                                      : AppColors.primary
-                                          .withValues(alpha: 0.45),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(_fmtRev(rev),
-                                style: const TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary)),
-                          ],
-                        ),
-                      ),
-                    ],
+            padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+            child: SizedBox(
+              height: chartHeight + 60, // +60 untuk label bawah
+              child: BarChart(
+                BarChartData(
+                  maxY: chartMaxY,
+                  alignment: BarChartAlignment.spaceAround,
+                  barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipColor: (_) => AppColors.primary,
+                      getTooltipItem: (group, _, rod, __) {
+                        final item = filtered[group.x];
+                        return BarTooltipItem(
+                          '${item['name']}\n${rod.toY.toInt()} terjual\n${_fmtRev(item['revenue'] as double)}',
+                          const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              fontSize: 11),
+                        );
+                      },
+                    ),
                   ),
-                );
-              }).toList(),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: gridInterval,
+                    getDrawingHorizontalLine: (_) => const FlLine(
+                      color: AppColors.border,
+                      strokeWidth: 1,
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 36,
+                        interval: gridInterval,
+                        getTitlesWidget: (v, _) {
+                          if (v == 0) return const SizedBox();
+                          final label = v >= 1000
+                              ? '${(v / 1000).toStringAsFixed(0)}k'
+                              : v.toInt().toString();
+                          return Text(label,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 10,
+                                  color: AppColors.textSecondary));
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 52,
+                        getTitlesWidget: (v, _) {
+                          final idx = v.toInt();
+                          if (idx < 0 || idx >= filtered.length) {
+                            return const SizedBox();
+                          }
+                          final name = filtered[idx]['name'] as String;
+                          // Potong nama panjang: maks 2 baris @ 8 karakter
+                          final words = name.split(' ');
+                          final lines = <String>[];
+                          var line = '';
+                          for (final w in words) {
+                            if ((line.isEmpty ? w : '$line $w').length > 9) {
+                              if (line.isNotEmpty) lines.add(line);
+                              line = w.length > 9 ? '${w.substring(0, 8)}..' : w;
+                            } else {
+                              line = line.isEmpty ? w : '$line $w';
+                            }
+                          }
+                          if (line.isNotEmpty) lines.add(line);
+                          final display = lines.take(2).join('\n');
+
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              display,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 9,
+                                  color: AppColors.textSecondary),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  barGroups: filtered.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final item = entry.value;
+                    final qty = (item['qty'] as int).toDouble();
+                    // Top 3: warna solid, sisanya agak transparan
+                    final barColor = idx == 0
+                        ? const Color(0xFFFFD700)   // emas
+                        : idx == 1
+                            ? const Color(0xFFC0C0C0) // perak
+                            : idx == 2
+                                ? const Color(0xFFCD7F32) // perunggu
+                                : AppColors.primary.withValues(alpha: 0.55);
+
+                    return BarChartGroupData(
+                      x: idx,
+                      barRods: [
+                        BarChartRodData(
+                          toY: qty,
+                          width: (filtered.length <= 5 ? 28 : 18).toDouble(),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4)),
+                          color: idx < 3 ? barColor : AppColors.primary,
+                          backDrawRodData: BackgroundBarChartRodData(
+                            show: true,
+                            toY: chartMaxY,
+                            color: AppColors.primary.withValues(alpha: 0.06),
+                          ),
+                        ),
+                      ],
+                      showingTooltipIndicators: [],
+                    );
+                  }).toList(),
+                ),
+              ),
             ),
           ),
         ),
+        // Legend singkat: rank 1-3 & total item
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            children: filtered.take(3).toList().asMap().entries.map((e) {
+              final medals = ['🥇', '🥈', '🥉'];
+              final item = e.value;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(medals[e.key],
+                      style: const TextStyle(fontSize: 13)),
+                  const SizedBox(width: 4),
+                  Text('${item['name']} — ${item['qty']} terjual',
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: AppColors.textSecondary)),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _header() => const Text('🏆 Menu Terlaris',
+      style: TextStyle(
+          fontFamily: 'Poppins',
+          fontWeight: FontWeight.w700,
+          fontSize: 16));
+
+  Widget _categoryChips() {
+    if (widget.categories.length <= 1) return const SizedBox.shrink();
+    return SizedBox(
+      height: 32,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: widget.categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final cat = widget.categories[i];
+          final isSelected = cat == _selectedCategory;
+          return GestureDetector(
+            onTap: () => setState(() => _selectedCategory = cat),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primary
+                    : AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.primary.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                cat,
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : AppColors.primary),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

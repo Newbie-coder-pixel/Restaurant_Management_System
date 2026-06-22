@@ -20,6 +20,7 @@ class ReportsState {
   final List<FlSpot> revenueSpots;
   final List<OrderModel> recentOrders;
   final List<Map<String, dynamic>> topMenus;
+  final List<String> topMenuCategories; // daftar unik kategori untuk filter
   final List<Map<String, dynamic>> menuMargins;
   final List<Map<String, dynamic>> branchRevenue;
   final List<Map<String, dynamic>> branches;
@@ -36,6 +37,7 @@ class ReportsState {
     this.revenueSpots = const [],
     this.recentOrders = const [],
     this.topMenus = const [],
+    this.topMenuCategories = const [],
     this.menuMargins = const [],
     this.branchRevenue = const [],
     this.branches = const [],
@@ -53,6 +55,7 @@ class ReportsState {
     List<FlSpot>? revenueSpots,
     List<OrderModel>? recentOrders,
     List<Map<String, dynamic>>? topMenus,
+    List<String>? topMenuCategories,
     List<Map<String, dynamic>>? menuMargins,
     List<Map<String, dynamic>>? branchRevenue,
     List<Map<String, dynamic>>? branches,
@@ -70,6 +73,7 @@ class ReportsState {
       revenueSpots: revenueSpots ?? this.revenueSpots,
       recentOrders: recentOrders ?? this.recentOrders,
       topMenus: topMenus ?? this.topMenus,
+      topMenuCategories: topMenuCategories ?? this.topMenuCategories,
       menuMargins: menuMargins ?? this.menuMargins,
       branchRevenue: branchRevenue ?? this.branchRevenue,
       branches: branches ?? this.branches,
@@ -259,10 +263,16 @@ Future<void> init() async {
 
       // ── Top Menu ───────────────────────────────────────────────
       List<Map<String, dynamic>> topMenus = [];
+      List<String> topMenuCategories = [];
       try {
+        // Join ke menu_items → menu_categories supaya dapat nama kategori
         var topMenuQ = Supabase.instance.client
             .from('order_items')
-            .select('menu_item_name, quantity, subtotal, orders!inner(branch_id)');
+            .select(
+              'menu_item_name, quantity, subtotal, menu_item_id, '
+              'orders!inner(branch_id), '
+              'menu_items(category_id, menu_categories(name))',
+            );
         if (effectiveBranchId != null) {
           topMenuQ = topMenuQ.eq('orders.branch_id', effectiveBranchId);
         }
@@ -273,8 +283,19 @@ Future<void> init() async {
           final name = (row['menu_item_name'] as String?) ?? 'Unknown';
           final qty = (row['quantity'] as num?)?.toInt() ?? 0;
           final rev = (row['subtotal'] as num?)?.toDouble() ?? 0;
+
+          // Ambil nama kategori dari join (nullable karena item lama mungkin null)
+          final menuItem = row['menu_items'] as Map<String, dynamic>?;
+          final menuCat = menuItem?['menu_categories'] as Map<String, dynamic>?;
+          final categoryName = menuCat?['name'] as String? ?? 'Lainnya';
+
           if (!agg.containsKey(name)) {
-            agg[name] = {'name': name, 'qty': 0, 'revenue': 0.0};
+            agg[name] = {
+              'name': name,
+              'qty': 0,
+              'revenue': 0.0,
+              'category': categoryName,
+            };
           }
           agg[name]!['qty'] = (agg[name]!['qty'] as int) + qty;
           agg[name]!['revenue'] = (agg[name]!['revenue'] as double) + rev;
@@ -282,7 +303,11 @@ Future<void> init() async {
 
         topMenus = agg.values.toList()
           ..sort((a, b) => (b['qty'] as int).compareTo(a['qty'] as int));
-        topMenus = topMenus.take(10).toList();
+        topMenus = topMenus.take(20).toList(); // ambil 20 supaya filter kategori punya cukup data
+
+        // Kumpulkan daftar kategori unik (urut abjad, 'Semua' di depan)
+        final catSet = topMenus.map((m) => m['category'] as String).toSet();
+        topMenuCategories = ['Semua', ...catSet.toList()..sort()];
       } catch (e) {
         debugPrint('⚠️ Gagal fetch top menus: $e');
       }
@@ -382,6 +407,7 @@ Future<void> init() async {
         todayCogs: todayCogs,
         revenueSpots: spots,
         topMenus: topMenus,
+        topMenuCategories: topMenuCategories,
         menuMargins: menuMargins,
         branchRevenue: branchRevenue,
         recentOrders: (recentRes as List)
