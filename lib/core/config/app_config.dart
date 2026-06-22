@@ -27,10 +27,10 @@ class AppConfig {
   static const String midtransClientKeySandbox =
       'Mid-client-f78f7e7Tgcr_gavX';
   static const String midtransClientKeyProduction =
-    'Mid-client-JETr7K-VE_xT2luw'; // ← isi ini, yang kamu dapat tadi
+    'Mid-client-JETr7K-VE_xT2luw'; // ✅ Production client key
 
-  // Ganti ke `true` HANYA kalau sudah siap go-live dengan akun production
-  static const bool midtransIsProduction = false;
+  // ✅ PRODUCTION MODE AKTIF — pastikan server key di Supabase Secrets sudah diganti
+  static const bool midtransIsProduction = true;
 
   static String get midtransClientKey => midtransIsProduction
       ? midtransClientKeyProduction
