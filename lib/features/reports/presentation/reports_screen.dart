@@ -121,66 +121,32 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: SizedBox(
-                        height: 200,
-                        child: s.revenueSpots.isEmpty
+                        height: 220,
+                        // Cek total, bukan cuma panjang list — list selalu
+                        // berisi 7 entri (nilai 0 kalau memang tak ada
+                        // transaksi), jadi .isEmpty tidak pernah true.
+                        child: _allZero(s.revenueSpots)
                             ? const Center(
-                                child: Text('Belum ada data revenue',
-                                    style:
-                                        TextStyle(fontFamily: 'Poppins')))
-                            : LineChart(LineChartData(
-                                gridData: const FlGridData(show: true),
-                                titlesData: FlTitlesData(
-                                  bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                    showTitles: true,
-                                    getTitlesWidget: (v, _) {
-                                      final labels = [
-                                        'Sen', 'Sel', 'Rab',
-                                        'Kam', 'Jum', 'Sab', 'Min'
-                                      ];
-                                      final idx = v.toInt();
-                                      if (idx < 0 || idx >= labels.length) {
-                                        return const SizedBox();
-                                      }
-                                      return Text(labels[idx],
-                                          style: const TextStyle(
-                                              fontFamily: 'Poppins',
-                                              fontSize: 10));
-                                    },
-                                  )),
-                                  leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                    showTitles: true,
-                                    getTitlesWidget: (v, _) => Text(
-                                        '${v.toInt()}rb',
-                                        style: const TextStyle(
+                                child: Column(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.bar_chart_outlined,
+                                        size: 36,
+                                        color: AppColors.textHint),
+                                    SizedBox(height: 8),
+                                    Text(
+                                        'Belum ada transaksi dalam\n'
+                                        '7 hari terakhir',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
                                             fontFamily: 'Poppins',
-                                            fontSize: 10)),
-                                    reservedSize: 40,
-                                  )),
-                                  topTitles: const AxisTitles(
-                                      sideTitles:
-                                          SideTitles(showTitles: false)),
-                                  rightTitles: const AxisTitles(
-                                      sideTitles:
-                                          SideTitles(showTitles: false)),
+                                            fontSize: 12,
+                                            color: AppColors.textSecondary)),
+                                  ],
                                 ),
-                                borderData: FlBorderData(show: false),
-                                lineBarsData: [
-                                  LineChartBarData(
-                                    spots: s.revenueSpots,
-                                    isCurved: true,
-                                    color: AppColors.primary,
-                                    barWidth: 3,
-                                    belowBarData: BarAreaData(
-                                        show: true,
-                                        color: AppColors.primary
-                                            .withValues(alpha: 0.15)),
-                                    dotData:
-                                        const FlDotData(show: true),
-                                  )
-                                ],
-                              )),
+                              )
+                            : _RevenueBarChart(spots: s.revenueSpots),
                       ),
                     ),
                   ),
@@ -275,6 +241,159 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
         ),
       );
+}
+
+// ── Helper: cek apakah semua nilai revenue 7 hari = 0 ──────────────────────
+//
+// Dipakai untuk empty-state chart. revenueSpots dari provider SELALU
+// berisi 7 entri (hari tanpa transaksi diisi 0), jadi tidak bisa pakai
+// .isEmpty untuk deteksi "tidak ada data" — harus cek total/jumlahnya.
+bool _allZero(List<FlSpot> spots) =>
+    spots.isEmpty || spots.every((s) => s.y == 0);
+
+// ── Helper: format Rupiah dengan pemisah ribuan, tanpa perlu intl locale ────
+String _formatRupiah(num value) {
+  final rounded = value.round();
+  final isNegative = rounded < 0;
+  final digits = rounded.abs().toString();
+  final buffer = StringBuffer();
+  for (int i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+    buffer.write(digits[i]);
+  }
+  return '${isNegative ? '-' : ''}Rp$buffer';
+}
+
+// ── Revenue Bar Chart ────────────────────────────────────────────────────────
+//
+// Dipilih Bar Chart (bukan Line Chart) karena data revenue harian itu
+// DISKRIT — tiap hari adalah angka berdiri sendiri, bukan rangkaian
+// kontinu. Line chart menyiratkan ada "alur"/interpolasi antar titik yang
+// sebenarnya tidak relevan secara analitis untuk perbandingan per-hari.
+//
+// Perbaikan dibanding versi LineChart sebelumnya:
+//   • Grid HANYA horizontal (drawVerticalLine: false) → tidak ada lagi
+//     garis-garis vertikal yang membuat chart terlihat penuh & membingungkan
+//   • Label sumbu-X pakai TANGGAL ASLI (bukan "Sen/Sel/Rab" generik yang
+//     ambigu) + interval:1 supaya tidak dobel/tumpang-tindih
+//   • Bar "Hari Ini" diberi warna beda (accent) supaya langsung kelihatan
+//     mana performa hari ini vs riwayat 6 hari sebelumnya
+//   • Tooltip saat disentuh menampilkan nominal Rupiah ASLI (bukan cuma
+//     skala "rb") untuk kebutuhan drill-down analitis
+class _RevenueBarChart extends StatelessWidget {
+  const _RevenueBarChart({required this.spots});
+
+  final List<FlSpot> spots; // x: index 0(6 hari lalu)..6(hari ini), y: ribuan
+
+  @override
+  Widget build(BuildContext context) {
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    // Beri headroom 25% di atas nilai tertinggi supaya bar tidak mepet atap.
+    final chartMaxY = maxY <= 0 ? 1.0 : maxY * 1.25;
+    final today = DateTime.now();
+    const weekdayShort = [
+      'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'
+    ]; // index sesuai DateTime.weekday - 1
+
+    return BarChart(
+      BarChartData(
+        maxY: chartMaxY,
+        alignment: BarChartAlignment.spaceAround,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false, // ← hilangkan garis vertikal yang ramai
+          horizontalInterval: chartMaxY / 4,
+          getDrawingHorizontalLine: (_) => const FlLine(
+            color: AppColors.border,
+            strokeWidth: 1,
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              interval: chartMaxY / 4 == 0 ? 1 : chartMaxY / 4,
+              getTitlesWidget: (v, _) => Text(
+                v == 0 ? '0' : '${v.toStringAsFixed(0)}rb',
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 10,
+                    color: AppColors.textSecondary),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 1, // ← fix utama: cegah label dobel/tumpang-tindih
+              getTitlesWidget: (v, _) {
+                final idx = v.toInt();
+                if (idx < 0 || idx > 6) return const SizedBox();
+                final date = today.subtract(Duration(days: 6 - idx));
+                return Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Column(
+                    children: [
+                      Text(weekdayShort[date.weekday - 1],
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600)),
+                      Text('${date.day}/${date.month}',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 9,
+                              color: AppColors.textSecondary)),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => AppColors.primary,
+            getTooltipItem: (group, _, rod, __) => BarTooltipItem(
+              _formatRupiah(rod.toY * 1000),
+              const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  fontSize: 11),
+            ),
+          ),
+        ),
+        barGroups: spots.map((spot) {
+          final idx = spot.x.toInt();
+          final isToday = idx == 6;
+          return BarChartGroupData(
+            x: idx,
+            barRods: [
+              BarChartRodData(
+                toY: spot.y,
+                width: 22,
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(4)),
+                color: isToday ? AppColors.accent : AppColors.primary,
+                backDrawRodData: BackgroundBarChartRodData(
+                  show: true,
+                  toY: chartMaxY,
+                  color: AppColors.surfaceVariant,
+                ),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
 }
 
 // ── Top Menu Section ──────────────────────────────────────────────────────────
