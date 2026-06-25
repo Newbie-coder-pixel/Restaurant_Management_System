@@ -51,7 +51,7 @@ jobs:
             ]
           }
           JSON
-      
+
       - name: Copy Staff build
         run: cp -r build/web build/staff
 
@@ -116,6 +116,25 @@ jobs:
 
       - name: Copy QR build
         run: cp -r build/web build/qr
+
+      # ── Verify build contents sebelum deploy ───────────────────
+
+      - name: Verify build contents
+        run: |
+          echo "=== build/staff/ ==="
+          ls -la build/staff/
+          echo ""
+          echo "=== build/staff/api/ ==="
+          ls -la build/staff/api/ || echo "❌ api folder MISSING di staff!"
+          echo ""
+          echo "=== build/customer/api/ ==="
+          ls -la build/customer/api/ || echo "❌ api folder MISSING di customer!"
+          echo ""
+          echo "=== build/qr/api/ ==="
+          ls -la build/qr/api/ || echo "❌ api folder MISSING di qr!"
+          echo ""
+          echo "=== vercel.json staff ==="
+          cat build/staff/vercel.json || echo "❌ vercel.json MISSING di staff!"
 
       # ── Install Vercel CLI ─────────────────────────────────────
 
