@@ -12,13 +12,13 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  Flutter Multi-Mode Build Script"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ── vercel.json mini untuk tiap folder build (CORS + SPA rewrite + functions) ──
+# ── vercel.json untuk tiap folder build ──────────────────────────────────────
+# CATATAN: block "functions" DIHAPUS karena Vercel modern (v2+) otomatis
+# mendeteksi api/*.js sebagai Node.js serverless function.
+# Format "nodejs18.x" menyebabkan error: "Function Runtimes must have a valid version"
 write_vercel_json() {
   cat > "$1/vercel.json" << 'EOF'
 {
-  "functions": {
-    "api/*.js": { "runtime": "nodejs18.x" }
-  },
   "rewrites": [
     { "source": "/((?!api).*)", "destination": "/index.html" }
   ]
