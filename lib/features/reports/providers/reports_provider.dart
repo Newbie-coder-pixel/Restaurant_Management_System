@@ -9,6 +9,15 @@ import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../costing/providers/costing_providers.dart';
 
+// ── Period enum ──────────────────────────────────────────────────────────────
+
+enum ReportPeriod { week, month }
+
+extension ReportPeriodExt on ReportPeriod {
+  String get label => this == ReportPeriod.week ? 'Minggu Ini' : 'Bulan Ini';
+  int get days => this == ReportPeriod.week ? 7 : 30;
+}
+
 // ── State model ──────────────────────────────────────────────────────────────
 
 class ReportsState {
@@ -27,6 +36,7 @@ class ReportsState {
   final String? selectedBranchId;
   final bool isSuperAdmin;
   final String? branchId;
+  final ReportPeriod period;
 
   const ReportsState({
     this.isLoading = true,
@@ -44,6 +54,7 @@ class ReportsState {
     this.selectedBranchId,
     this.isSuperAdmin = false,
     this.branchId,
+    this.period = ReportPeriod.week,
   });
 
   ReportsState copyWith({
@@ -63,6 +74,7 @@ class ReportsState {
     bool? isSuperAdmin,
     String? branchId,
     bool clearSelectedBranch = false,
+    ReportPeriod? period,
   }) {
     return ReportsState(
       isLoading: isLoading ?? this.isLoading,
@@ -80,6 +92,7 @@ class ReportsState {
       selectedBranchId: clearSelectedBranch ? null : selectedBranchId ?? this.selectedBranchId,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
       branchId: branchId ?? this.branchId,
+      period: period ?? this.period,
     );
   }
 }
@@ -141,6 +154,15 @@ Future<void> init() async {
     await load();
   }
 
+  // ── Period filter ─────────────────────────────────────────────────────────
+
+  Future<void> selectPeriod(ReportPeriod period) async {
+    if (_state.period == period) return;
+    _state = _state.copyWith(period: period);
+    notifyListeners();
+    await load();
+  }
+
   // ── Load branches (superadmin only) ───────────────────────────────────────
 
   Future<void> _loadBranches() async {
@@ -185,9 +207,12 @@ Future<void> init() async {
         DateTime(today.year, today.month, today.day).toIso8601String();
     final tomorrowStart =
         DateTime(today.year, today.month, today.day + 1).toIso8601String();
-    final weekStartDate = today.subtract(const Duration(days: 6));
-    final weekStartIso = DateTime(
-            weekStartDate.year, weekStartDate.month, weekStartDate.day)
+
+    // Hitung range berdasarkan periode yang dipilih
+    final periodDays = _state.period.days; // 7 atau 30
+    final periodStartDate = today.subtract(Duration(days: periodDays - 1));
+    final periodStartIso = DateTime(
+            periodStartDate.year, periodStartDate.month, periodStartDate.day)
         .toIso8601String();
 
     try {
@@ -220,12 +245,12 @@ Future<void> init() async {
       if (effectiveBranchId != null) bookQ = bookQ.eq('branch_id', effectiveBranchId);
       final bookRes = await bookQ;
 
-      // ── 7-day revenue ──────────────────────────────────────────
+      // ── Revenue chart (periode dipilih) ────────────────────────
       var weekQ = Supabase.instance.client
           .from('payments')
           .select('amount, created_at')
           .eq('status', 'paid')
-          .gte('created_at', weekStartIso);
+          .gte('created_at', periodStartIso);
       if (effectiveBranchId != null) weekQ = weekQ.eq('branch_id', effectiveBranchId);
       final weekRes = await weekQ;
 
@@ -270,9 +295,11 @@ Future<void> init() async {
             .from('order_items')
             .select(
               'menu_item_name, quantity, subtotal, menu_item_id, '
-              'orders!inner(branch_id), '
+              'orders!inner(branch_id, created_at, status), '
               'menu_items(category_id, menu_categories(name))',
-            );
+            )
+            .eq('orders.status', 'paid')
+            .gte('orders.created_at', periodStartIso);
         if (effectiveBranchId != null) {
           topMenuQ = topMenuQ.eq('orders.branch_id', effectiveBranchId);
         }
@@ -377,9 +404,9 @@ Future<void> init() async {
         }
       }
 
-      // ── Process 7-day chart ────────────────────────────────────
+      // ── Process revenue chart (dinamis sesuai periode) ────────
       final Map<int, double> dayRevenue = {
-        0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0
+        for (int i = 0; i < periodDays; i++) i: 0.0,
       };
       for (final p in weekRes as List) {
         final created = DateTime.parse(p['created_at']).toLocal();
@@ -387,8 +414,9 @@ Future<void> init() async {
             .difference(
                 DateTime(created.year, created.month, created.day))
             .inDays;
-        if (diff >= 0 && diff <= 6) {
-          dayRevenue[6 - diff] = (dayRevenue[6 - diff]! +
+        if (diff >= 0 && diff < periodDays) {
+          final idx = periodDays - 1 - diff;
+          dayRevenue[idx] = (dayRevenue[idx]! +
               ((p['amount'] ?? 0) as num).toDouble());
         }
       }
@@ -410,6 +438,7 @@ Future<void> init() async {
         topMenuCategories: topMenuCategories,
         menuMargins: menuMargins,
         branchRevenue: branchRevenue,
+        period: _state.period,
         recentOrders: (recentRes as List)
             .map((e) => OrderModel.fromJson(e))
             .toList(),

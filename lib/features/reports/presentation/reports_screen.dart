@@ -110,43 +110,54 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   ]),
                   const SizedBox(height: 24),
 
-                  // Revenue chart
-                  const Text('Revenue 7 Hari Terakhir',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16)),
+                  // Revenue chart — header + toggle periode
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Revenue ${s.period.label}',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16),
+                        ),
+                      ),
+                      _PeriodToggle(
+                        current: s.period,
+                        onChanged: (p) => notifier.selectPeriod(p),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: SizedBox(
                         height: 220,
-                        // Cek total, bukan cuma panjang list — list selalu
-                        // berisi 7 entri (nilai 0 kalau memang tak ada
-                        // transaksi), jadi .isEmpty tidak pernah true.
                         child: _allZero(s.revenueSpots)
-                            ? const Center(
+                            ? Center(
                                 child: Column(
                                   mainAxisAlignment:
                                       MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.bar_chart_outlined,
+                                    const Icon(Icons.bar_chart_outlined,
                                         size: 36,
                                         color: AppColors.textHint),
-                                    SizedBox(height: 8),
+                                    const SizedBox(height: 8),
                                     Text(
-                                        'Belum ada transaksi dalam\n'
-                                        '7 hari terakhir',
+                                        'Belum ada transaksi\n${s.period.label.toLowerCase()}',
                                         textAlign: TextAlign.center,
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                             fontFamily: 'Poppins',
                                             fontSize: 12,
                                             color: AppColors.textSecondary)),
                                   ],
                                 ),
                               )
-                            : _RevenueBarChart(spots: s.revenueSpots),
+                            : _RevenueBarChart(
+                                spots: s.revenueSpots,
+                                periodDays: s.period.days,
+                              ),
                       ),
                     ),
                   ),
@@ -154,7 +165,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
                   _TopMenuSection(
                       topMenus: s.topMenus,
-                      categories: s.topMenuCategories),
+                      categories: s.topMenuCategories,
+                      period: s.period),
                   const SizedBox(height: 24),
                   _MenuMarginSection(menuMargins: s.menuMargins),
                   const SizedBox(height: 24),
@@ -283,9 +295,10 @@ String _formatRupiah(num value) {
 //   • Tooltip saat disentuh menampilkan nominal Rupiah ASLI (bukan cuma
 //     skala "rb") untuk kebutuhan drill-down analitis
 class _RevenueBarChart extends StatelessWidget {
-  const _RevenueBarChart({required this.spots});
+  const _RevenueBarChart({required this.spots, this.periodDays = 7});
 
-  final List<FlSpot> spots; // x: index 0(6 hari lalu)..6(hari ini), y: ribuan
+  final List<FlSpot> spots; // x: index 0(n-1 hari lalu)..(n-1)(hari ini), y: ribuan
+  final int periodDays;
 
   @override
   Widget build(BuildContext context) {
@@ -336,21 +349,26 @@ class _RevenueBarChart extends StatelessWidget {
               interval: 1, // ← fix utama: cegah label dobel/tumpang-tindih
               getTitlesWidget: (v, _) {
                 final idx = v.toInt();
-                if (idx < 0 || idx > 6) return const SizedBox();
-                final date = today.subtract(Duration(days: 6 - idx));
+                if (idx < 0 || idx >= periodDays) return const SizedBox();
+                final date = today.subtract(Duration(days: periodDays - 1 - idx));
+                // Untuk bulan (30 hari): tampilkan label setiap 5 hari agar tidak penuh
+                if (periodDays > 7 && idx % 5 != 0 && idx != periodDays - 1) {
+                  return const SizedBox();
+                }
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Column(
                     children: [
-                      Text(weekdayShort[date.weekday - 1],
-                          style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600)),
+                      if (periodDays <= 7)
+                        Text(weekdayShort[date.weekday - 1],
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600)),
                       Text('${date.day}/${date.month}',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontFamily: 'Poppins',
-                              fontSize: 9,
+                              fontSize: periodDays <= 7 ? 9 : 10,
                               color: AppColors.textSecondary)),
                     ],
                   ),
@@ -374,13 +392,13 @@ class _RevenueBarChart extends StatelessWidget {
         ),
         barGroups: spots.map((spot) {
           final idx = spot.x.toInt();
-          final isToday = idx == 6;
+          final isToday = idx == periodDays - 1;
           return BarChartGroupData(
             x: idx,
             barRods: [
               BarChartRodData(
                 toY: spot.y,
-                width: 22,
+                width: periodDays <= 7 ? 22 : 9,
                 borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(4)),
                 color: isToday ? AppColors.accent : AppColors.primary,
@@ -398,12 +416,63 @@ class _RevenueBarChart extends StatelessWidget {
   }
 }
 
+// ── Period Toggle Widget ──────────────────────────────────────────────────────
+
+class _PeriodToggle extends StatelessWidget {
+  final ReportPeriod current;
+  final ValueChanged<ReportPeriod> onChanged;
+
+  const _PeriodToggle({required this.current, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: ReportPeriod.values.map((p) {
+          final isSelected = current == p;
+          return GestureDetector(
+            onTap: () => onChanged(p),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                p.label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
 // ── Top Menu Section ──────────────────────────────────────────────────────────
 
 class _TopMenuSection extends StatefulWidget {
   final List<Map<String, dynamic>> topMenus;
   final List<String> categories;
-  const _TopMenuSection({required this.topMenus, required this.categories});
+  final ReportPeriod period;
+  const _TopMenuSection({
+    required this.topMenus,
+    required this.categories,
+    required this.period,
+  });
 
   @override
   State<_TopMenuSection> createState() => _TopMenuSectionState();
@@ -639,8 +708,8 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
     );
   }
 
-  Widget _header() => const Text('🏆 Menu Terlaris',
-      style: TextStyle(
+  Widget _header() => Text('🏆 Menu Terlaris · ${widget.period.label}',
+      style: const TextStyle(
           fontFamily: 'Poppins',
           fontWeight: FontWeight.w700,
           fontSize: 16));
