@@ -22,7 +22,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # ── Build 3 versi ──────────────────────────────────────────
+      # ── Shared vercel.json content (dengan functions config) ────
+      # Disimpan sebagai step env supaya tidak duplikat 3x
+      # PENTING: "functions" wajib ada agar Vercel tahu api/chat.js & api/notify.js
+      # adalah serverless functions, bukan static files (tanpanya → 404)
 
       - name: Build Flutter Web (Staff)
         run: flutter build web --release --dart-define=APP_MODE=staff
@@ -32,6 +35,11 @@ jobs:
           cp -r api build/web/api
           cat > build/web/vercel.json << 'JSON'
           {
+            "functions": {
+              "api/*.js": {
+                "runtime": "nodejs18.x"
+              }
+            },
             "rewrites": [
               { "source": "/((?!api).*)", "destination": "/index.html" }
             ],
@@ -42,6 +50,10 @@ jobs:
               },
               {
                 "source": "/flutter_bootstrap.js",
+                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+              },
+              {
+                "source": "/main.dart.js",
                 "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
               },
               {
@@ -63,6 +75,11 @@ jobs:
           cp -r api build/web/api
           cat > build/web/vercel.json << 'JSON'
           {
+            "functions": {
+              "api/*.js": {
+                "runtime": "nodejs18.x"
+              }
+            },
             "rewrites": [
               { "source": "/((?!api).*)", "destination": "/index.html" }
             ],
@@ -73,6 +90,10 @@ jobs:
               },
               {
                 "source": "/flutter_bootstrap.js",
+                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+              },
+              {
+                "source": "/main.dart.js",
                 "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
               },
               {
@@ -94,6 +115,11 @@ jobs:
           cp -r api build/web/api
           cat > build/web/vercel.json << 'JSON'
           {
+            "functions": {
+              "api/*.js": {
+                "runtime": "nodejs18.x"
+              }
+            },
             "rewrites": [
               { "source": "/((?!api).*)", "destination": "/index.html" }
             ],
@@ -104,6 +130,10 @@ jobs:
               },
               {
                 "source": "/flutter_bootstrap.js",
+                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+              },
+              {
+                "source": "/main.dart.js",
                 "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
               },
               {
@@ -133,7 +163,7 @@ jobs:
           echo "=== build/qr/api/ ==="
           ls -la build/qr/api/ || echo "❌ api folder MISSING di qr!"
           echo ""
-          echo "=== vercel.json staff ==="
+          echo "=== vercel.json staff (harus ada 'functions') ==="
           cat build/staff/vercel.json || echo "❌ vercel.json MISSING di staff!"
 
       # ── Install Vercel CLI ─────────────────────────────────────

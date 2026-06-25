@@ -1,6 +1,6 @@
 {
   "outputDirectory": "build/web",
-  "buildCommand": "flutter/bin/flutter build web --release",
+  "buildCommand": "flutter/bin/flutter build web --release --dart-define=APP_MODE=staff",
   "functions": {
     "api/*.js": {
       "runtime": "nodejs18.x"
