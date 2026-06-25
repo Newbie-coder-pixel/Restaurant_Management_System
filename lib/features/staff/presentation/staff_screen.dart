@@ -1012,6 +1012,24 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         return;
                       }
 
+                      // ── Cek duplikat email sebelum panggil Edge Function ──
+                      try {
+                        final existing = await Supabase.instance.client
+                            .from('staff')
+                            .select('id')
+                            .eq('email', email)
+                            .maybeSingle();
+                        if (existing != null) {
+                          ss(() {
+                            isLoading = false;
+                            errorMsg = 'Email "$email" sudah terdaftar.\nGunakan email lain.';
+                          });
+                          return;
+                        }
+                      } catch (_) {
+                        // Kalau cek gagal, lanjut saja — Edge Function akan handle
+                      }
+
                       try {
                         final res = await Supabase.instance.client.functions.invoke(
                           'create-staff-user',
@@ -1019,16 +1037,31 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                             'email':     email,
                             'password':  pass,
                             'fullName':  name,
-                            'phone':     phone, // sudah divalidasi wajib diisi
+                            'phone':     phone,
                             'role':      selectedRole.name,
                             'branchId':  selectedBranchId,
                           },
                         );
 
                         if (res.status != 200) {
-                          final msg = (res.data as Map?)?['error']
-                              ?? 'Gagal menambahkan staff.';
-                          ss(() { isLoading = false; errorMsg = msg; });
+                          // Terjemahkan pesan error teknis → pesan yang ramah
+                          final rawMsg = (res.data as Map?)?['error'] as String? ?? '';
+                          final String friendlyMsg;
+                          if (rawMsg.contains('already been registered') ||
+                              rawMsg.contains('already registered') ||
+                              rawMsg.contains('already exists')) {
+                            friendlyMsg = 'Email "$email" sudah terdaftar di sistem.\nGunakan email lain.';
+                          } else if (rawMsg.contains('invalid email')) {
+                            friendlyMsg = 'Format email tidak valid.';
+                          } else if (rawMsg.contains('weak password') ||
+                              rawMsg.contains('password')) {
+                            friendlyMsg = 'Password terlalu lemah. Gunakan minimal 6 karakter.';
+                          } else if (rawMsg.isNotEmpty) {
+                            friendlyMsg = rawMsg;
+                          } else {
+                            friendlyMsg = 'Gagal menambahkan staff. Coba lagi.';
+                          }
+                          ss(() { isLoading = false; errorMsg = friendlyMsg; });
                           return;
                         }
 
