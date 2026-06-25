@@ -22,10 +22,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # ── Shared vercel.json content (dengan functions config) ────
-      # Disimpan sebagai step env supaya tidak duplikat 3x
-      # PENTING: "functions" wajib ada agar Vercel tahu api/chat.js & api/notify.js
-      # adalah serverless functions, bukan static files (tanpanya → 404)
+      # ── Build & package tiap app ───────────────────────────────
+      # vercel.json di-copy dari ROOT repo (sudah ada "functions" block yang benar)
+      # Tidak pakai heredoc inline — heredoc dengan indentasi YAML menyebabkan
+      # delimiter penutup tidak dikenali bash → file vercel.json kosong/corrupt → 404
 
       - name: Build Flutter Web (Staff)
         run: flutter build web --release --dart-define=APP_MODE=staff
@@ -33,36 +33,7 @@ jobs:
       - name: Copy API & vercel.json (Staff)
         run: |
           cp -r api build/web/api
-          cat > build/web/vercel.json << 'JSON'
-          {
-            "functions": {
-              "api/*.js": {
-                "runtime": "nodejs18.x"
-              }
-            },
-            "rewrites": [
-              { "source": "/((?!api).*)", "destination": "/index.html" }
-            ],
-            "headers": [
-              {
-                "source": "/index.html",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/flutter_bootstrap.js",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/main.dart.js",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/assets/(.*)",
-                "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-              }
-            ]
-          }
-          JSON
+          cp vercel.json build/web/vercel.json
 
       - name: Copy Staff build
         run: cp -r build/web build/staff
@@ -73,36 +44,7 @@ jobs:
       - name: Copy API & vercel.json (Customer)
         run: |
           cp -r api build/web/api
-          cat > build/web/vercel.json << 'JSON'
-          {
-            "functions": {
-              "api/*.js": {
-                "runtime": "nodejs18.x"
-              }
-            },
-            "rewrites": [
-              { "source": "/((?!api).*)", "destination": "/index.html" }
-            ],
-            "headers": [
-              {
-                "source": "/index.html",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/flutter_bootstrap.js",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/main.dart.js",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/assets/(.*)",
-                "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-              }
-            ]
-          }
-          JSON
+          cp vercel.json build/web/vercel.json
 
       - name: Copy Customer build
         run: cp -r build/web build/customer
@@ -113,36 +55,7 @@ jobs:
       - name: Copy API & vercel.json (QR)
         run: |
           cp -r api build/web/api
-          cat > build/web/vercel.json << 'JSON'
-          {
-            "functions": {
-              "api/*.js": {
-                "runtime": "nodejs18.x"
-              }
-            },
-            "rewrites": [
-              { "source": "/((?!api).*)", "destination": "/index.html" }
-            ],
-            "headers": [
-              {
-                "source": "/index.html",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/flutter_bootstrap.js",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/main.dart.js",
-                "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-              },
-              {
-                "source": "/assets/(.*)",
-                "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-              }
-            ]
-          }
-          JSON
+          cp vercel.json build/web/vercel.json
 
       - name: Copy QR build
         run: cp -r build/web build/qr
