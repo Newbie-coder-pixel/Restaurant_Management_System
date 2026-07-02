@@ -60,6 +60,7 @@ class QrOrderSession {
   final String branchId;
   final String? customerName;
   final String? customerPhone;
+  final String? customerEmail;
   final List<QrCartItem> items;
   final QrPaymentMethod? paymentMethod;
 
@@ -69,6 +70,7 @@ class QrOrderSession {
     required this.branchId,
     this.customerName,
     this.customerPhone,
+    this.customerEmail,
     this.items = const [],
     this.paymentMethod,
   });
@@ -79,6 +81,7 @@ class QrOrderSession {
     String? branchId,
     String? customerName,
     String? customerPhone,
+    String? customerEmail,
     List<QrCartItem>? items,
     QrPaymentMethod? paymentMethod,
   }) =>
@@ -88,6 +91,7 @@ class QrOrderSession {
         branchId: branchId ?? this.branchId,
         customerName: customerName ?? this.customerName,
         customerPhone: customerPhone ?? this.customerPhone,
+        customerEmail: customerEmail ?? this.customerEmail,
         items: items ?? this.items,
         paymentMethod: paymentMethod ?? this.paymentMethod,
       );
@@ -166,8 +170,8 @@ class QrCartNotifier extends StateNotifier<QrOrderSession> {
     state = state.copyWith(items: updated);
   }
 
-  void setCustomerInfo({required String name, String? phone}) {
-    state = state.copyWith(customerName: name, customerPhone: phone);
+  void setCustomerInfo({required String name, String? phone, String? email}) {
+    state = state.copyWith(customerName: name, customerPhone: phone, customerEmail: email);
   }
 
   void setPaymentMethod(QrPaymentMethod method) {

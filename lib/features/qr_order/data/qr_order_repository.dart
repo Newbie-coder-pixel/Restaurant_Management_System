@@ -33,6 +33,7 @@ class QrOrderRepository {
             'table_name': session.tableName ?? 'Meja ${session.tableId}',
             'customer_name': session.customerName ?? 'Tamu',
             if (session.customerPhone != null && session.customerPhone!.isNotEmpty) 'customer_phone': session.customerPhone,
+            'customer_email': session.customerEmail ?? '',
             'subtotal': session.subtotal,
             'tax_amount': session.pb1Amount,
             'total_amount': session.totalAmount,

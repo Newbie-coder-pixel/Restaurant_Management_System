@@ -143,6 +143,7 @@ PENTING:
   }
 
   static Future<Map<String, String>> _fetchBranchHours(String branchId) async {
+    if (branchId.isEmpty) return {'opening': '10:00', 'closing': '22:00'};
     try {
       final res = await Supabase.instance.client
           .from('branches')
@@ -160,8 +161,10 @@ PENTING:
     return {'opening': '10:00', 'closing': '22:00'};
   }
 
-  // ✅ FIXED: Ganti join PostgREST dengan 2 query terpisah untuk hindari error 400
+  // ✅ FIXED: handle branchId null/kosong + 2 query terpisah untuk hindari error 400
   static Future<String> _fetchMenu(String branchId) async {
+    // Guard: jangan query kalau branchId kosong
+    if (branchId.isEmpty) return '(branch belum dipilih)';
     try {
       // Query 1: Ambil menu items tanpa join
       final items = await Supabase.instance.client
@@ -203,7 +206,9 @@ PENTING:
   static Future<ChatResponse> _callGroqProxy(
       String branchId, String message, List<ChatMessage> history) async {
     final hours = await _fetchBranchHours(branchId);
-    final menuText = await _fetchMenu(branchId);
+    final menuText = branchId.isNotEmpty
+        ? await _fetchMenu(branchId)
+        : '(pilih cabang untuk melihat menu)';
     final recent =
         history.length > 14 ? history.sublist(history.length - 14) : history;
     final messages = [
@@ -237,7 +242,17 @@ PENTING:
           (data['choices'][0]['message']['content'] as String).trim();
       return _parseResponse(raw);
     }
-    throw Exception('Proxy ${res.statusCode}: ${res.body}');
+
+    // Error 404 → fungsi /api/chat belum ter-deploy di Vercel
+    if (res.statusCode == 404) {
+      throw Exception(
+        'Proxy 404: Serverless function /api/chat tidak ditemukan. '
+        'Pastikan file api/chat.js sudah ter-deploy di Vercel '
+        'dan vercel.json memiliki blok "functions".',
+      );
+    }
+
+    throw Exception('Proxy error ${res.statusCode}: ${res.body}');
   }
 
   static ChatResponse _parseResponse(String raw) {

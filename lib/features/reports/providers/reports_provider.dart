@@ -9,6 +9,15 @@ import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../costing/providers/costing_providers.dart';
 
+// ── Period enum ──────────────────────────────────────────────────────────────
+
+enum ReportPeriod { week, month }
+
+extension ReportPeriodExt on ReportPeriod {
+  String get label => this == ReportPeriod.week ? 'Minggu Ini' : 'Bulan Ini';
+  int get days => this == ReportPeriod.week ? 7 : 30;
+}
+
 // ── State model ──────────────────────────────────────────────────────────────
 
 class ReportsState {
@@ -20,12 +29,14 @@ class ReportsState {
   final List<FlSpot> revenueSpots;
   final List<OrderModel> recentOrders;
   final List<Map<String, dynamic>> topMenus;
+  final List<String> topMenuCategories; // daftar unik kategori untuk filter
   final List<Map<String, dynamic>> menuMargins;
   final List<Map<String, dynamic>> branchRevenue;
   final List<Map<String, dynamic>> branches;
   final String? selectedBranchId;
   final bool isSuperAdmin;
   final String? branchId;
+  final ReportPeriod period;
 
   const ReportsState({
     this.isLoading = true,
@@ -36,12 +47,14 @@ class ReportsState {
     this.revenueSpots = const [],
     this.recentOrders = const [],
     this.topMenus = const [],
+    this.topMenuCategories = const [],
     this.menuMargins = const [],
     this.branchRevenue = const [],
     this.branches = const [],
     this.selectedBranchId,
     this.isSuperAdmin = false,
     this.branchId,
+    this.period = ReportPeriod.week,
   });
 
   ReportsState copyWith({
@@ -53,6 +66,7 @@ class ReportsState {
     List<FlSpot>? revenueSpots,
     List<OrderModel>? recentOrders,
     List<Map<String, dynamic>>? topMenus,
+    List<String>? topMenuCategories,
     List<Map<String, dynamic>>? menuMargins,
     List<Map<String, dynamic>>? branchRevenue,
     List<Map<String, dynamic>>? branches,
@@ -60,6 +74,7 @@ class ReportsState {
     bool? isSuperAdmin,
     String? branchId,
     bool clearSelectedBranch = false,
+    ReportPeriod? period,
   }) {
     return ReportsState(
       isLoading: isLoading ?? this.isLoading,
@@ -70,12 +85,14 @@ class ReportsState {
       revenueSpots: revenueSpots ?? this.revenueSpots,
       recentOrders: recentOrders ?? this.recentOrders,
       topMenus: topMenus ?? this.topMenus,
+      topMenuCategories: topMenuCategories ?? this.topMenuCategories,
       menuMargins: menuMargins ?? this.menuMargins,
       branchRevenue: branchRevenue ?? this.branchRevenue,
       branches: branches ?? this.branches,
       selectedBranchId: clearSelectedBranch ? null : selectedBranchId ?? this.selectedBranchId,
       isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
       branchId: branchId ?? this.branchId,
+      period: period ?? this.period,
     );
   }
 }
@@ -137,6 +154,15 @@ Future<void> init() async {
     await load();
   }
 
+  // ── Period filter ─────────────────────────────────────────────────────────
+
+  Future<void> selectPeriod(ReportPeriod period) async {
+    if (_state.period == period) return;
+    _state = _state.copyWith(period: period);
+    notifyListeners();
+    await load();
+  }
+
   // ── Load branches (superadmin only) ───────────────────────────────────────
 
   Future<void> _loadBranches() async {
@@ -181,9 +207,12 @@ Future<void> init() async {
         DateTime(today.year, today.month, today.day).toIso8601String();
     final tomorrowStart =
         DateTime(today.year, today.month, today.day + 1).toIso8601String();
-    final weekStartDate = today.subtract(const Duration(days: 6));
-    final weekStartIso = DateTime(
-            weekStartDate.year, weekStartDate.month, weekStartDate.day)
+
+    // Hitung range berdasarkan periode yang dipilih
+    final periodDays = _state.period.days; // 7 atau 30
+    final periodStartDate = today.subtract(Duration(days: periodDays - 1));
+    final periodStartIso = DateTime(
+            periodStartDate.year, periodStartDate.month, periodStartDate.day)
         .toIso8601String();
 
     try {
@@ -216,12 +245,12 @@ Future<void> init() async {
       if (effectiveBranchId != null) bookQ = bookQ.eq('branch_id', effectiveBranchId);
       final bookRes = await bookQ;
 
-      // ── 7-day revenue ──────────────────────────────────────────
+      // ── Revenue chart (periode dipilih) ────────────────────────
       var weekQ = Supabase.instance.client
           .from('payments')
           .select('amount, created_at')
           .eq('status', 'paid')
-          .gte('created_at', weekStartIso);
+          .gte('created_at', periodStartIso);
       if (effectiveBranchId != null) weekQ = weekQ.eq('branch_id', effectiveBranchId);
       final weekRes = await weekQ;
 
@@ -259,10 +288,18 @@ Future<void> init() async {
 
       // ── Top Menu ───────────────────────────────────────────────
       List<Map<String, dynamic>> topMenus = [];
+      List<String> topMenuCategories = [];
       try {
+        // Join ke menu_items → menu_categories supaya dapat nama kategori
         var topMenuQ = Supabase.instance.client
             .from('order_items')
-            .select('menu_item_name, quantity, subtotal, orders!inner(branch_id)');
+            .select(
+              'menu_item_name, quantity, subtotal, menu_item_id, '
+              'orders!inner(branch_id, created_at, status), '
+              'menu_items(category_id, menu_categories(name))',
+            )
+            .eq('orders.status', 'paid')
+            .gte('orders.created_at', periodStartIso);
         if (effectiveBranchId != null) {
           topMenuQ = topMenuQ.eq('orders.branch_id', effectiveBranchId);
         }
@@ -273,8 +310,19 @@ Future<void> init() async {
           final name = (row['menu_item_name'] as String?) ?? 'Unknown';
           final qty = (row['quantity'] as num?)?.toInt() ?? 0;
           final rev = (row['subtotal'] as num?)?.toDouble() ?? 0;
+
+          // Ambil nama kategori dari join (nullable karena item lama mungkin null)
+          final menuItem = row['menu_items'] as Map<String, dynamic>?;
+          final menuCat = menuItem?['menu_categories'] as Map<String, dynamic>?;
+          final categoryName = menuCat?['name'] as String? ?? 'Lainnya';
+
           if (!agg.containsKey(name)) {
-            agg[name] = {'name': name, 'qty': 0, 'revenue': 0.0};
+            agg[name] = {
+              'name': name,
+              'qty': 0,
+              'revenue': 0.0,
+              'category': categoryName,
+            };
           }
           agg[name]!['qty'] = (agg[name]!['qty'] as int) + qty;
           agg[name]!['revenue'] = (agg[name]!['revenue'] as double) + rev;
@@ -282,7 +330,11 @@ Future<void> init() async {
 
         topMenus = agg.values.toList()
           ..sort((a, b) => (b['qty'] as int).compareTo(a['qty'] as int));
-        topMenus = topMenus.take(10).toList();
+        topMenus = topMenus.take(20).toList(); // ambil 20 supaya filter kategori punya cukup data
+
+        // Kumpulkan daftar kategori unik (urut abjad, 'Semua' di depan)
+        final catSet = topMenus.map((m) => m['category'] as String).toSet();
+        topMenuCategories = ['Semua', ...catSet.toList()..sort()];
       } catch (e) {
         debugPrint('⚠️ Gagal fetch top menus: $e');
       }
@@ -352,9 +404,9 @@ Future<void> init() async {
         }
       }
 
-      // ── Process 7-day chart ────────────────────────────────────
+      // ── Process revenue chart (dinamis sesuai periode) ────────
       final Map<int, double> dayRevenue = {
-        0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0
+        for (int i = 0; i < periodDays; i++) i: 0.0,
       };
       for (final p in weekRes as List) {
         final created = DateTime.parse(p['created_at']).toLocal();
@@ -362,8 +414,9 @@ Future<void> init() async {
             .difference(
                 DateTime(created.year, created.month, created.day))
             .inDays;
-        if (diff >= 0 && diff <= 6) {
-          dayRevenue[6 - diff] = (dayRevenue[6 - diff]! +
+        if (diff >= 0 && diff < periodDays) {
+          final idx = periodDays - 1 - diff;
+          dayRevenue[idx] = (dayRevenue[idx]! +
               ((p['amount'] ?? 0) as num).toDouble());
         }
       }
@@ -382,8 +435,10 @@ Future<void> init() async {
         todayCogs: todayCogs,
         revenueSpots: spots,
         topMenus: topMenus,
+        topMenuCategories: topMenuCategories,
         menuMargins: menuMargins,
         branchRevenue: branchRevenue,
+        period: _state.period,
         recentOrders: (recentRes as List)
             .map((e) => OrderModel.fromJson(e))
             .toList(),

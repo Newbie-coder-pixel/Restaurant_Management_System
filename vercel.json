@@ -1,11 +1,4 @@
 {
-  "outputDirectory": "build/web",
-  "buildCommand": "flutter/bin/flutter build web --release",
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs18.x"
-    }
-  },
   "rewrites": [
     { "source": "/((?!api).*)", "destination": "/index.html" }
   ],

@@ -12,6 +12,20 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  Flutter Multi-Mode Build Script"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# ── vercel.json untuk tiap folder build ──────────────────────────────────────
+# CATATAN: block "functions" DIHAPUS karena Vercel modern (v2+) otomatis
+# mendeteksi api/*.js sebagai Node.js serverless function.
+# Format "nodejs18.x" menyebabkan error: "Function Runtimes must have a valid version"
+write_vercel_json() {
+  cat > "$1/vercel.json" << 'EOF'
+{
+  "rewrites": [
+    { "source": "/((?!api).*)", "destination": "/index.html" }
+  ]
+}
+EOF
+}
+
 # ── 1. Staff App ──────────────────────────────────────────────────────────────
 echo ""
 echo "▶ [1/3] Building STAFF app..."
@@ -22,7 +36,9 @@ flutter build web \
 # Pindahkan hasil build ke folder staff
 rm -rf build/staff
 cp -r build/web build/staff
-echo "✓ Staff build selesai → build/staff"
+cp -r api build/staff/api
+write_vercel_json build/staff
+echo "✓ Staff build selesai → build/staff (+ api/ + vercel.json ikut)"
 
 # ── 2. Customer App ───────────────────────────────────────────────────────────
 echo ""
@@ -33,7 +49,9 @@ flutter build web \
 
 rm -rf build/customer
 cp -r build/web build/customer
-echo "✓ Customer build selesai → build/customer"
+cp -r api build/customer/api
+write_vercel_json build/customer
+echo "✓ Customer build selesai → build/customer (+ api/ + vercel.json ikut)"
 
 # ── 3. QR App ─────────────────────────────────────────────────────────────────
 echo ""
@@ -44,7 +62,9 @@ flutter build web \
 
 rm -rf build/qr
 cp -r build/web build/qr
-echo "✓ QR build selesai → build/qr"
+cp -r api build/qr/api
+write_vercel_json build/qr
+echo "✓ QR build selesai → build/qr (+ api/ + vercel.json ikut)"
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""

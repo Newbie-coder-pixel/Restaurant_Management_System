@@ -455,10 +455,11 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
           .cast<Map<String, dynamic>>();
 
       // 2. Fetch kategori terpisah
-      final catRaw = (await sb
-          .from('menu_categories')
-          .select('id, name')
-          .eq('branch_id', branchId ?? '')) as List;
+      // PENTING: jangan kirim .eq('branch_id', '') saat branchId null (Semua Cabang)
+      // karena string kosong membuat Supabase return 400 Bad Request
+      dynamic catQuery = sb.from('menu_categories').select('id, name');
+      if (branchId != null) catQuery = catQuery.eq('branch_id', branchId);
+      final catRaw = (await catQuery) as List;
       final catMap = <String, String>{
         for (final c in catRaw) c['id'] as String: c['name'] as String
       };
@@ -617,9 +618,25 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
     if (res.statusCode == 200) {
       final d = jsonDecode(res.body);
       return (d['choices'][0]['message']['content'] as String).trim();
-    } else {
-      throw Exception('Proxy error ${res.statusCode}');
     }
+
+    if (res.statusCode == 404) {
+      throw Exception(
+        'Proxy 404: Vercel function /api/chat belum aktif.\n'
+        'Solusi: Tambahkan blok "functions" di vercel.json lalu redeploy.',
+      );
+    }
+
+    if (res.statusCode == 500) {
+      final body = jsonDecode(res.body);
+      if ((body['error'] as String?)?.contains('GROQ_API_KEY') == true) {
+        throw Exception(
+          'GROQ_API_KEY belum dikonfigurasi di Vercel Environment Variables.',
+        );
+      }
+    }
+
+    throw Exception('Proxy error ${res.statusCode}: ${res.body}');
   }
 
   // ── Show Export Sheet ─────────────────────────────────────────────

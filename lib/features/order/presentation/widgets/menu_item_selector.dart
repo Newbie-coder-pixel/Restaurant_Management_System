@@ -205,12 +205,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         backgroundColor: AppColors.accent));
       return;
     }
-    if (_phoneCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nomor telepon wajib diisi.'),
-        backgroundColor: AppColors.accent));
-      return;
-    }
+
     setState(() => _isSubmitting = true);
     try {
       final now  = DateTime.now();
@@ -330,7 +325,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         Row(children: [
           Expanded(flex: 3, child: _field(_nameCtrl, 'Nama Pelanggan *', Icons.person_outline)),
           const SizedBox(width: 8),
-          Expanded(flex: 2, child: _field(_phoneCtrl, 'No. HP *', Icons.phone_outlined,
+          Expanded(flex: 2, child: _field(_phoneCtrl, 'No. HP (opsional)', Icons.phone_outlined,
             keyboardType: TextInputType.phone)),
         ]),
       ]),
