@@ -703,7 +703,10 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
     // ── FIX BUG 2 ────────────────────────────────────────────────────────────
     // Guard: jika inventory provider belum selesai load, items bisa kosong
     // meskipun sebenarnya ada data. Cek dulu state provider-nya.
-    final inventoryState = ref.read(inventoryStreamProvider(widget.branchId));
+    // FIX BUG 3: pakai todayInventoryStreamProvider (bukan inventoryStreamProvider)
+    // supaya tidak ikut kena tanggal yang sedang di-browse user di layar
+    // Inventory (inventorySelectedDateProvider bersifat global/shared).
+    final inventoryState = ref.read(todayInventoryStreamProvider(widget.branchId));
     if (inventoryState is AsyncLoading) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Memuat data inventory, coba lagi sebentar...')),
@@ -855,8 +858,10 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    // FIX BUG 3: gunakan todayInventoryStreamProvider — lihat catatan di
+    // _showPickIngredientSheet di atas.
     final inventoryAsync =
-        ref.watch(inventoryStreamProvider(widget.branchId));
+        ref.watch(todayInventoryStreamProvider(widget.branchId));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

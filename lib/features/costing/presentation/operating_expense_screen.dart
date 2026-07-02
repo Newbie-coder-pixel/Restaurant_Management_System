@@ -82,6 +82,16 @@ class _OperatingExpenseScreenState
   double _getDouble(TextEditingController ctrl) =>
       double.tryParse(ctrl.text) ?? 0;
 
+  // Validator bersama: field wajib diisi dengan angka (boleh 0, tidak boleh
+  // kosong/negatif/tidak valid) — supaya user tidak asal skip field biaya.
+  String? _requiredNonNegative(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+    final n = double.tryParse(v);
+    if (n == null) return 'Tidak valid';
+    if (n < 0) return 'Tidak boleh negatif';
+    return null;
+  }
+
   double get _totalLive =>
       _getDouble(_laborCtrl) +
       _getDouble(_electricityCtrl) +
@@ -228,7 +238,15 @@ class _OperatingExpenseScreenState
                 controller: _laborCtrl,
                 helperText: 'Termasuk gaji pokok + tunjangan',
                 accentColor: const Color(0xFF1565C0),
+                isRequired: true,
                 onChanged: (_) => setState(() {}),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                  final n = double.tryParse(v);
+                  if (n == null) return 'Tidak valid';
+                  if (n <= 0) return 'Harus lebih dari 0';
+                  return null;
+                },
               ),
               const SizedBox(height: 20),
 
@@ -244,7 +262,9 @@ class _OperatingExpenseScreenState
                 hint: '2500000',
                 controller: _electricityCtrl,
                 accentColor: const Color(0xFFF57F17),
+                isRequired: true,
                 onChanged: (_) => setState(() {}),
+                validator: _requiredNonNegative,
               ),
               const SizedBox(height: 10),
               CurrencyInputField(
@@ -252,7 +272,9 @@ class _OperatingExpenseScreenState
                 hint: '500000',
                 controller: _waterCtrl,
                 accentColor: const Color(0xFFF57F17),
+                isRequired: true,
                 onChanged: (_) => setState(() {}),
+                validator: _requiredNonNegative,
               ),
               const SizedBox(height: 10),
               CurrencyInputField(
@@ -260,7 +282,9 @@ class _OperatingExpenseScreenState
                 hint: '750000',
                 controller: _gasCtrl,
                 accentColor: const Color(0xFFF57F17),
+                isRequired: true,
                 onChanged: (_) => setState(() {}),
+                validator: _requiredNonNegative,
               ),
               const SizedBox(height: 10),
               CurrencyInputField(
@@ -268,7 +292,9 @@ class _OperatingExpenseScreenState
                 hint: '350000',
                 controller: _internetCtrl,
                 accentColor: const Color(0xFFF57F17),
+                isRequired: true,
                 onChanged: (_) => setState(() {}),
+                validator: _requiredNonNegative,
               ),
               const SizedBox(height: 20),
 
@@ -284,7 +310,9 @@ class _OperatingExpenseScreenState
                 hint: '8000000',
                 controller: _rentCtrl,
                 accentColor: const Color(0xFF6A1B9A),
+                isRequired: true,
                 onChanged: (_) => setState(() {}),
+                validator: _requiredNonNegative,
               ),
               const SizedBox(height: 10),
               CurrencyInputField(
@@ -292,7 +320,9 @@ class _OperatingExpenseScreenState
                 hint: '1000000',
                 controller: _otherCtrl,
                 accentColor: const Color(0xFF6A1B9A),
+                isRequired: true,
                 onChanged: (_) => setState(() {}),
+                validator: _requiredNonNegative,
               ),
               const SizedBox(height: 20),
 

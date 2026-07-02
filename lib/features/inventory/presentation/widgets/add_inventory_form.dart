@@ -185,6 +185,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                 controller: _nameCtrl,
                 label: 'Nama Bahan / Item',
                 hint: 'cth. Tepung Terigu, Minyak Goreng...',
+                isRequired: true,
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
               ),
@@ -327,6 +328,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                       controller: _openingStockCtrl,
                       label: 'Stok Awal ($_selectedUnit)',
                       hint: '0',
+                      isRequired: true,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [
@@ -363,11 +365,19 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                 controller: _costCtrl,
                 label: 'Harga per $_selectedUnit (Rp)',
                 hint: '0',
+                isRequired: true,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                 ],
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                  final n = double.tryParse(v);
+                  if (n == null) return 'Tidak valid';
+                  if (n <= 0) return 'Harga harus lebih dari 0';
+                  return null;
+                },
               ),
               const SizedBox(height: 24),
 
@@ -414,6 +424,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
+    bool isRequired = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return TextFormField(
@@ -421,9 +432,14 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator,
+      // Tampilkan warning merah langsung saat user mengetik, bukan cuma saat submit.
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       onChanged: (_) => setState(() {}), // rebuild untuk preview konversi
       decoration: InputDecoration(
-        labelText: label,
+        labelText: isRequired ? '$label *' : label,
+        labelStyle: TextStyle(
+          color: colorScheme.onSurface.withValues(alpha: 0.7),
+        ),
         hintText: hint,
         filled: true,
         fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
@@ -434,6 +450,19 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1.3),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1.6),
+        ),
+        errorStyle: const TextStyle(
+          color: Colors.red,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

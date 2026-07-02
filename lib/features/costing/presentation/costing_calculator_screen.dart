@@ -439,7 +439,12 @@ class _CalculatorTab extends ConsumerWidget {
             const SizedBox(height: 10),
             TextFormField(
               controller: menuNameCtrl,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
               decoration: InputDecoration(
+                labelText: 'Nama Menu *',
+                labelStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
                 hintText: 'Nama menu item (e.g. Nasi Goreng Spesial)',
                 prefixIcon: const Icon(Icons.label_rounded, size: 18),
                 filled: true,
@@ -452,6 +457,19 @@ class _CalculatorTab extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide(
                       color: Theme.of(context).colorScheme.primary, width: 1.5),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.red, width: 1.3),
+                ),
+                focusedErrorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.red, width: 1.6),
+                ),
+                errorStyle: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
                 ),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -475,7 +493,15 @@ class _CalculatorTab extends ConsumerWidget {
               controller: ingredientCtrl,
               helperText: 'Dari data inventory / resep',
               accentColor: const Color(0xFF1565C0),
+              isRequired: true,
               onChanged: (v) => notifier.updateLiveIngredientCost(v),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                final n = double.tryParse(v);
+                if (n == null) return 'Tidak valid';
+                if (n <= 0) return 'Biaya bahan baku harus lebih dari 0';
+                return null;
+              },
             ),
             const SizedBox(height: 12),
             CurrencyInputField(
@@ -580,7 +606,15 @@ class _CalculatorTab extends ConsumerWidget {
               controller: currentPriceCtrl,
               helperText: 'Masukkan harga jual yang berlaku sekarang',
               accentColor: const Color(0xFF2E7D32),
+              isRequired: true,
               onChanged: (v) => notifier.updateLiveCurrentPrice(v),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                final n = double.tryParse(v);
+                if (n == null) return 'Tidak valid';
+                if (n <= 0) return 'Harga jual harus lebih dari 0';
+                return null;
+              },
             ),
             const SizedBox(height: 20),
 

@@ -23,6 +23,8 @@ class CurrencyInputField extends StatelessWidget {
   final String? helperText;
   final IconData? prefixIcon;
   final Color? accentColor;
+  final String? Function(String?)? validator;
+  final bool isRequired;
 
   const CurrencyInputField({
     super.key,
@@ -33,6 +35,8 @@ class CurrencyInputField extends StatelessWidget {
     this.helperText,
     this.prefixIcon,
     this.accentColor,
+    this.validator,
+    this.isRequired = false,
   });
 
   @override
@@ -43,11 +47,21 @@ class CurrencyInputField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.labelMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+        RichText(
+          text: TextSpan(
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+            ),
+            children: [
+              TextSpan(text: label),
+              if (isRequired)
+                const TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                      color: Colors.red, fontWeight: FontWeight.w800),
+                ),
+            ],
           ),
         ),
         const SizedBox(height: 6),
@@ -58,6 +72,10 @@ class CurrencyInputField extends StatelessWidget {
             FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
           ],
           onChanged: (v) => onChanged(double.tryParse(v) ?? 0),
+          validator: validator,
+          // Warning merah langsung muncul saat user mengetik, bukan cuma
+          // saat tombol simpan ditekan.
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           style: theme.textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
             color: theme.colorScheme.onSurface,
@@ -86,6 +104,19 @@ class CurrencyInputField extends StatelessWidget {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: color, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.red, width: 1.3),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.red, width: 1.6),
+            ),
+            errorStyle: const TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

@@ -61,6 +61,17 @@ final inventoryStreamProvider =
   return service.streamInventoryItems(branchId: branchId, date: date);
 });
 
+// ─── FIX BUG: stream inventory HARI INI, independen dari tanggal yang ────────
+// sedang di-browse user di layar Inventory (inventorySelectedDateProvider).
+// Dipakai oleh fitur lain (mis. "Tambah Bahan" di form menu) yang selalu
+// butuh stok hari ini, supaya tidak ikut kosong saat user sedang melihat
+// tanggal lain di layar Inventory.
+final todayInventoryStreamProvider =
+    StreamProvider.family<List<InventoryItem>, String>((ref, branchId) {
+  final service = ref.watch(inventoryServiceProvider);
+  return service.streamInventoryItems(branchId: branchId, date: DateTime.now());
+});
+
 // ─── FILTERED INVENTORY ───────────────────────────────────────────────────────
 
 final filteredInventoryProvider =
