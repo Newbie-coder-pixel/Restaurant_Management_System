@@ -439,7 +439,7 @@ class _CalculatorTab extends ConsumerWidget {
             const SizedBox(height: 10),
             TextFormField(
               controller: menuNameCtrl,
-              autovalidateMode: AutovalidateMode.onUserInteraction,
+              autovalidateMode: AutovalidateMode.always,
               decoration: InputDecoration(
                 labelText: 'Nama Menu *',
                 labelStyle: TextStyle(

@@ -61,7 +61,18 @@ class _OperatingExpenseScreenState
         _selectedMonth = expense.periodMonth;
         setState(() {});
       } else {
+        // Belum ada data periode ini — mulai dari 0, bukan kosong, supaya
+        // warning "wajib diisi" langsung kelihatan dan user sadar field
+        // mana saja yang harus diisi.
+        _laborCtrl.text = '0';
+        _electricityCtrl.text = '0';
+        _waterCtrl.text = '0';
+        _gasCtrl.text = '0';
+        _internetCtrl.text = '0';
+        _rentCtrl.text = '0';
+        _otherCtrl.text = '0';
         _portionsCtrl.text = '3000';
+        setState(() {});
       }
     });
   }
@@ -348,6 +359,7 @@ class _OperatingExpenseScreenState
                     controller: _portionsCtrl,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    autovalidateMode: AutovalidateMode.always,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       hintText: '3000',

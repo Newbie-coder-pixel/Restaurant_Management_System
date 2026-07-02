@@ -73,9 +73,9 @@ class CurrencyInputField extends StatelessWidget {
           ],
           onChanged: (v) => onChanged(double.tryParse(v) ?? 0),
           validator: validator,
-          // Warning merah langsung muncul saat user mengetik, bukan cuma
-          // saat tombol simpan ditekan.
-          autovalidateMode: AutovalidateMode.onUserInteraction,
+          // Warning merah langsung terlihat begitu layar dibuka, tidak perlu
+          // menunggu user mengetik dulu.
+          autovalidateMode: AutovalidateMode.always,
           style: theme.textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
             color: theme.colorScheme.onSurface,

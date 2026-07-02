@@ -432,8 +432,8 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator,
-      // Tampilkan warning merah langsung saat user mengetik, bukan cuma saat submit.
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+      // Warning merah langsung terlihat begitu layar dibuka.
+      autovalidateMode: AutovalidateMode.always,
       onChanged: (_) => setState(() {}), // rebuild untuk preview konversi
       decoration: InputDecoration(
         labelText: isRequired ? '$label *' : label,
