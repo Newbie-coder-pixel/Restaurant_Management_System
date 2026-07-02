@@ -7,6 +7,8 @@ import '../models/costing_model.dart';
 import '../services/costing_services.dart';
 import '../../../core/models/staff_role.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../menu/providers/menu_provider.dart';
+import '../../inventory/providers/inventory_provider.dart';
 
 // ─── Service Provider ──────────────────────────────────────────────────────
 final costingServiceProvider = Provider<CostingService>((ref) {
@@ -124,6 +126,43 @@ class CostingNotifier extends ChangeNotifier {
   // ── Effective branch untuk query ───────────────────────────────────────
   String? get _effectiveBranchId =>
       _isSuperAdmin ? _selectedBranchId : _branchId;
+
+  /// Branch aktif saat ini (dipakai UI untuk filter picker menu).
+  String? get effectiveBranchId => _effectiveBranchId;
+
+  /// Hitung total biaya bahan baku (ingredient cost) per porsi untuk satu
+  /// menu item, berdasarkan resep (menu_ingredients) × harga bahan TERKINI
+  /// dari inventory (bukan harga yang tersimpan lama di resep), supaya HPP
+  /// selalu mengikuti harga bahan baku terbaru.
+  ///
+  /// Ini adalah titik koneksi utama Menu ↔ Inventory ↔ Costing.
+  Future<double> computeIngredientCostForMenu(String menuItemId) async {
+    final branchId = _effectiveBranchId;
+    if (branchId == null || menuItemId.isEmpty) return 0;
+
+    final menuService = _ref.read(menuServiceProvider);
+    final inventoryService = _ref.read(inventoryServiceProvider);
+
+    final ingredients = await menuService.fetchIngredients(menuItemId);
+    if (ingredients.isEmpty) return 0;
+
+    final currentStock = await inventoryService.fetchInventoryItems(
+      branchId: branchId,
+    );
+    final costByName = {
+      for (final item in currentStock) item.name.trim().toLowerCase(): item.costPerUnit,
+    };
+
+    double total = 0;
+    for (final ing in ingredients) {
+      final liveCost = costByName[ing.inventoryItemName.trim().toLowerCase()];
+      // Prioritaskan harga inventory TERKINI; fallback ke harga tersimpan di
+      // resep kalau bahan itu belum/tidak ada di data inventory hari ini.
+      final unitCost = liveCost ?? ing.costPerUnit;
+      total += ing.quantity * unitCost;
+    }
+    return total;
+  }
 
   // ── Load ───────────────────────────────────────────────────────────────
   Future<void> loadAll() async {

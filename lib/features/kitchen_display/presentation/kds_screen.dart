@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../../../core/models/staff_role.dart';
+import '../services/kitchen_inventory_service.dart';
 
 class KDSScreen extends ConsumerStatefulWidget {
   const KDSScreen({super.key});
@@ -22,6 +23,9 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   StaffRole? _userRole;
   RealtimeChannel? _channel;
   bool _initialized = false;
+  final _kitchenInventoryService =
+      KitchenInventoryService(Supabase.instance.client);
+  final Set<String> _preparingInProgress = {}; // guard: cegah tap ganda
 
   // Multi-branch (superadmin only)
   List<_BranchItem> _branches = [];
@@ -202,20 +206,69 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   }
 
   // ── FIX: Tambah sent_to_kitchen_at saat dapur mulai masak ─────────────────
+  // ── BARU: Potong stok inventory sesuai resep menu saat mulai masak ────────
   Future<void> _markPreparing(String orderId) async {
+    if (_preparingInProgress.contains(orderId)) return; // cegah tap ganda
+    _preparingInProgress.add(orderId);
+
     final now = DateTime.now().toIso8601String();
 
-    // Update status order + catat waktu mulai masak
-    await Supabase.instance.client.from('orders').update({
-      'status':     'preparing',
-      'updated_at': now,
-    }).eq('id', orderId);
+    try {
+      // Update status order + catat waktu mulai masak
+      await Supabase.instance.client.from('orders').update({
+        'status':     'preparing',
+        'updated_at': now,
+      }).eq('id', orderId);
 
-    // Catat sent_to_kitchen_at di semua order_items milik order ini
-    // Ini adalah titik awal pengukuran actual_prep_time untuk training data ML
-    await Supabase.instance.client.from('order_items').update({
-      'sent_to_kitchen_at': now,
-    }).eq('order_id', orderId);
+      // Catat sent_to_kitchen_at di semua order_items milik order ini
+      // Ini adalah titik awal pengukuran actual_prep_time untuk training data ML
+      await Supabase.instance.client.from('order_items').update({
+        'sent_to_kitchen_at': now,
+      }).eq('order_id', orderId);
+
+      // ── Potong stok inventory sesuai resep (menu_ingredients) ────────────
+      // Dilakukan tepat saat order mulai dimasak (bukan saat order dibuat),
+      // sesuai alur: dapur mulai masak → bahan baku otomatis terpakai.
+      final order = _orders.firstWhere(
+        (o) => o.id == orderId,
+        orElse: () => OrderModel(
+          id: orderId,
+          branchId: '',
+          orderNumber: '',
+          status: OrderStatus.preparing,
+          source: OrderSource.dineIn,
+          createdAt: DateTime.now(),
+        ),
+      );
+
+      if (order.branchId.isNotEmpty && order.items.isNotEmpty) {
+        final result = await _kitchenInventoryService.deductStockForOrder(
+          order: order,
+          createdBy: ref.read(currentStaffProvider)?.id,
+        );
+
+        if (mounted && result.hasWarnings) {
+          final warnings = <String>[
+            if (result.menusWithoutRecipe.isNotEmpty)
+              'Belum ada resep: ${result.menusWithoutRecipe.join(', ')}',
+            if (result.notFoundInInventory.isNotEmpty)
+              'Bahan tidak ditemukan di inventory: ${result.notFoundInInventory.join(', ')}',
+          ];
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ ${warnings.join(' • ')}'),
+              backgroundColor: Colors.orange.shade700,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('KDS _markPreparing error: $e');
+    } finally {
+      _preparingInProgress.remove(orderId);
+    }
   }
 
   Future<void> _markReady(String orderId) async {

@@ -109,15 +109,17 @@ const _navItems = [
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
     _NavItem(
-    label: 'Costing & HPP',
-    icon: Icons.receipt_long_rounded,  // ← ini ada di list kamu
-    route: AppRoutes.costing,
+    // Biaya Operasional diisi lebih dulu karena Costing & HPP butuh nilai
+    // alokasi biaya operasional per porsi untuk menghitung HPP yang akurat.
+    label: 'Biaya Operasional',
+    icon: Icons.bar_chart_rounded,
+    route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
-    label: 'Biaya Operasional',
-    icon: Icons.bar_chart_rounded,     // ← ini juga ada di list kamu
-    route: AppRoutes.operatingExpense,
+    label: 'Costing & HPP',
+    icon: Icons.receipt_long_rounded,
+    route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
 ];

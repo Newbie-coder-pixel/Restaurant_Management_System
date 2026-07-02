@@ -2,10 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../models/costing_model.dart';
 import '../providers/costing_providers.dart';
 import 'costing_widgets.dart';
 import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/models/menu_model.dart';
+import '../../menu/providers/menu_provider.dart';
+import '../../../core/router/app_router.dart';
 
 // ✅ RIVERPOD: StatefulWidget → ConsumerStatefulWidget
 class CostingCalculatorScreen extends ConsumerStatefulWidget {
@@ -39,10 +43,17 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
   late TabController _tabController;
   final _formKey = GlobalKey<FormState>();
 
+  // ID menu item asli yang sedang diedit (bukan id costing).
+  // Dipakai saat _save() supaya costing benar-benar terhubung ke menu_items,
+  // bukan membuat id 'custom-...' acak setiap kali disimpan.
+  String? _selectedMenuItemId;
+  bool _isComputingCost = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _selectedMenuItemId = widget.menuItemId;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // ✅ RIVERPOD: context.read<X>() → ref.read(xProvider.notifier)
@@ -76,14 +87,106 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
 
   // ✅ RIVERPOD: parameter sekarang CostingState (bukan CostingProvider)
   void _syncFromState(CostingNotifier state) {
-  final c = state.activeCosting;
-  _menuNameCtrl.text = c.menuItemName;
-  _ingredientCtrl.text = c.ingredientCost.toStringAsFixed(0);
-  _packagingCtrl.text = c.packagingCost.toStringAsFixed(0);
-  _allocatedOpCtrl.text = c.allocatedOperatingCost.toStringAsFixed(0);
-  _currentPriceCtrl.text = c.currentSellingPrice.toStringAsFixed(0);
-  _targetMarginCtrl.text = c.targetProfitMarginPercent.toStringAsFixed(0);
-}
+    final c = state.activeCosting;
+    _menuNameCtrl.text = c.menuItemName;
+    _ingredientCtrl.text = c.ingredientCost.toStringAsFixed(0);
+    _packagingCtrl.text = c.packagingCost.toStringAsFixed(0);
+    _allocatedOpCtrl.text = c.allocatedOperatingCost.toStringAsFixed(0);
+    _currentPriceCtrl.text = c.currentSellingPrice.toStringAsFixed(0);
+    _targetMarginCtrl.text = c.targetProfitMarginPercent.toStringAsFixed(0);
+    if (c.menuItemId.isNotEmpty) _selectedMenuItemId = c.menuItemId;
+  }
+
+  /// Dipanggil saat user tap salah satu menu di tab "Daftar Menu" untuk
+  /// diedit. Beda dengan [_syncFromState]: ini dipanggil manual dari luar
+  /// listener supaya text controller ikut ter-update meski notifier
+  /// (ChangeNotifier) tidak memicu rebuild yang bisa dideteksi.
+  void _onSelectExistingCosting(CostingModel costing) {
+    ref.read(costingProvider.notifier).setActiveCosting(costing);
+    setState(() {
+      _menuNameCtrl.text = costing.menuItemName;
+      _ingredientCtrl.text = costing.ingredientCost.toStringAsFixed(0);
+      _packagingCtrl.text = costing.packagingCost.toStringAsFixed(0);
+      _allocatedOpCtrl.text = costing.allocatedOperatingCost.toStringAsFixed(0);
+      _currentPriceCtrl.text = costing.currentSellingPrice.toStringAsFixed(0);
+      _targetMarginCtrl.text = costing.targetProfitMarginPercent.toStringAsFixed(0);
+      _selectedMenuItemId = costing.menuItemId;
+    });
+    _tabController.animateTo(0);
+  }
+
+  /// Dipanggil saat user memilih menu dari picker "Pilih dari Menu".
+  /// Ini titik koneksi Menu ↔ Inventory ↔ Costing:
+  ///  1. Cek apakah menu ini sudah punya data costing tersimpan → kalau ada, muat itu.
+  ///  2. Kalau belum, hitung otomatis biaya bahan baku dari resep (menu_ingredients)
+  ///     × harga bahan TERKINI di inventory, lalu isi form.
+  ///  3. Alokasi biaya operasional per porsi ikut diisi otomatis dari data
+  ///     Biaya Operasional yang terakhir disimpan.
+  Future<void> _onMenuPicked(MenuItem menu) async {
+    final notifier = ref.read(costingProvider.notifier);
+    setState(() => _isComputingCost = true);
+
+    try {
+      final existing = await ref
+          .read(costingServiceProvider)
+          .getCostingByMenuItemId(menu.id);
+
+      if (existing != null) {
+        _onSelectExistingCosting(existing);
+        return;
+      }
+
+      final ingredientCost =
+          await notifier.computeIngredientCostForMenu(menu.id);
+      final opCost = ref.read(costingProvider).operatingExpense.operatingCostPerPortion;
+
+      notifier.clearActiveCosting();
+      notifier.updateLiveIngredientCost(ingredientCost);
+      notifier.updateLiveAllocatedOpCost(opCost);
+
+      if (!mounted) return;
+      setState(() {
+        _selectedMenuItemId = menu.id;
+        _menuNameCtrl.text = menu.name;
+        _ingredientCtrl.text = ingredientCost.toStringAsFixed(0);
+        _packagingCtrl.text = '0';
+        _allocatedOpCtrl.text = opCost.toStringAsFixed(0);
+        _currentPriceCtrl.text = menu.price > 0 ? menu.price.toStringAsFixed(0) : '0';
+        _targetMarginCtrl.text = '30';
+      });
+      notifier.updateLiveCurrentPrice(menu.price);
+
+      if (ingredientCost <= 0 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '⚠️ "${menu.name}" belum punya resep (ingredients) atau bahannya tidak ditemukan di inventory. '
+                'Biaya bahan baku diisi manual atau lengkapi resepnya dulu di menu Menu Management.'),
+            backgroundColor: Colors.orange.shade700,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isComputingCost = false);
+    }
+  }
+
+  Future<void> _openMenuPicker() async {
+    final branchId = ref.read(costingProvider.notifier).effectiveBranchId;
+    final picked = await showModalBottomSheet<MenuItem>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _MenuPickerSheet(branchId: branchId),
+    );
+    if (picked != null) {
+      await _onMenuPicked(picked);
+    }
+  }
 
   @override
   void dispose() {
@@ -102,7 +205,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
 
     // ✅ RIVERPOD: ref.read(costingProvider.notifier) untuk aksi/mutation
     final success = await ref.read(costingProvider.notifier).saveCosting(
-      menuItemId: widget.menuItemId ?? 'custom-${DateTime.now().millisecondsSinceEpoch}',
+      menuItemId: _selectedMenuItemId ?? widget.menuItemId ?? 'custom-${DateTime.now().millisecondsSinceEpoch}',
       menuItemName: _menuNameCtrl.text.trim(),
       ingredientCost: double.tryParse(_ingredientCtrl.text) ?? 0,
       packagingCost: double.tryParse(_packagingCtrl.text) ?? 0,
@@ -223,8 +326,10 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
             currentPriceCtrl: _currentPriceCtrl,
             targetMarginCtrl: _targetMarginCtrl,
             onSave: _save,
+            onPickMenu: _openMenuPicker,
+            isComputingCost: _isComputingCost,
           ),
-          const _MenuListTab(),
+          _MenuListTab(onSelectCosting: _onSelectExistingCosting),
         ],
       ),
     );
@@ -244,6 +349,8 @@ class _CalculatorTab extends ConsumerWidget {
   final TextEditingController currentPriceCtrl;
   final TextEditingController targetMarginCtrl;
   final VoidCallback onSave;
+  final VoidCallback onPickMenu;
+  final bool isComputingCost;
 
   const _CalculatorTab({
     required this.formKey,
@@ -254,6 +361,8 @@ class _CalculatorTab extends ConsumerWidget {
     required this.currentPriceCtrl,
     required this.targetMarginCtrl,
     required this.onSave,
+    required this.onPickMenu,
+    required this.isComputingCost,
   });
 
   @override
@@ -272,12 +381,60 @@ class _CalculatorTab extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CostingSummaryCard(summary: state.summary),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // ── Nudge: Biaya Operasional harus diisi lebih dulu ─────────────
+            // Alokasi biaya operasional per porsi (dipakai untuk HPP) hanya
+            // akurat kalau data Biaya Operasional bulan ini sudah ada.
+            if (state.operatingExpense.id.isEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: Colors.orange.shade800, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Biaya Operasional bulan ini belum diisi, jadi alokasi biaya per porsi masih Rp 0. Isi dulu supaya HPP akurat.',
+                        style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => context.go(AppRoutes.operatingExpense),
+                      child: const Text('Isi Sekarang', style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ),
 
             // ── Nama Menu ──────────────────────────────────────────────────
-            const CostingSectionHeader(
-              title: 'Identitas Menu',
-              icon: Icons.restaurant_menu_rounded,
+            Row(
+              children: [
+                const Expanded(
+                  child: CostingSectionHeader(
+                    title: 'Identitas Menu',
+                    icon: Icons.restaurant_menu_rounded,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: isComputingCost ? null : onPickMenu,
+                  icon: isComputingCost
+                      ? const SizedBox(
+                          width: 14, height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.restaurant_rounded, size: 16),
+                  label: const Text('Pilih dari Menu', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             TextFormField(
@@ -464,7 +621,8 @@ class _CalculatorTab extends ConsumerWidget {
 // ✅ RIVERPOD: StatefulWidget → ConsumerStatefulWidget
 // ─────────────────────────────────────────────────────────────────────────────
 class _MenuListTab extends ConsumerStatefulWidget {
-  const _MenuListTab();
+  final ValueChanged<CostingModel> onSelectCosting;
+  const _MenuListTab({required this.onSelectCosting});
 
   @override
   ConsumerState<_MenuListTab> createState() => _MenuListTabState();
@@ -599,10 +757,7 @@ class _MenuListTabState extends ConsumerState<_MenuListTab> {
                     final costing = filtered[i];
                     return CostingListTile(
                       costing: costing,
-                      onTap: () {
-                        notifier.setActiveCosting(costing);
-                        DefaultTabController.of(context).animateTo(0);
-                      },
+                      onTap: () => widget.onSelectCosting(costing),
                       onDelete: () async {
                         final confirm = await showDialog<bool>(
                           context: context,
@@ -922,6 +1077,133 @@ class _ExpenseLine extends StatelessWidget {
                   ?.copyWith(color: Theme.of(context).colorScheme.outline)),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PICKER: Pilih dari Menu — jembatan Menu ↔ Costing
+// Menampilkan daftar menu_items milik branch aktif. Memilih salah satu akan
+// otomatis menghitung biaya bahan baku dari resep (menu_ingredients) ×
+// harga inventory TERKINI.
+// ─────────────────────────────────────────────────────────────────────────────
+class _MenuPickerSheet extends ConsumerStatefulWidget {
+  final String? branchId;
+  const _MenuPickerSheet({required this.branchId});
+
+  @override
+  ConsumerState<_MenuPickerSheet> createState() => _MenuPickerSheetState();
+}
+
+class _MenuPickerSheetState extends ConsumerState<_MenuPickerSheet> {
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final menusAsync = ref.watch(menuProvider);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16, right: 16, top: 12,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('Pilih Menu',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _searchCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Cari menu...',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: menusAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('Gagal memuat menu: $e')),
+                  data: (menus) {
+                    var filtered = widget.branchId == null
+                        ? menus
+                        : menus.where((m) => m.branchId == widget.branchId).toList();
+
+                    final q = _searchCtrl.text.trim().toLowerCase();
+                    if (q.isNotEmpty) {
+                      filtered = filtered
+                          .where((m) => m.name.toLowerCase().contains(q))
+                          .toList();
+                    }
+
+                    if (filtered.isEmpty) {
+                      return const Center(
+                        child: Text('Belum ada menu di cabang ini.',
+                            style: TextStyle(color: Colors.grey)),
+                      );
+                    }
+
+                    return ListView.separated(
+                      controller: scrollController,
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final m = filtered[i];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            child: Text(
+                              m.name.isNotEmpty ? m.name[0].toUpperCase() : '?',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text(formatIdr(m.price), style: const TextStyle(fontSize: 12)),
+                          onTap: () => Navigator.pop(context, m),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

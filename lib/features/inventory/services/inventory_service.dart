@@ -155,6 +155,58 @@ class InventoryService {
     await _checkAndUpdateMenuAvailability(inventoryItemId, branchId);
   }
 
+  /// Potong stok inventory berdasarkan resep (bahan baku per menu).
+  ///
+  /// [requirements] = daftar kebutuhan bahan: nama bahan (harus cocok dengan
+  /// `inventory_items.name` di cabang ini) + jumlah total yang harus dipotong
+  /// (sudah dikalikan quantity order).
+  ///
+  /// Dicocokkan berdasarkan NAMA (bukan ID) karena `inventory_items` bersifat
+  /// harian (row baru setiap hari lewat [rolloverDailyStock]), sehingga ID
+  /// yang tersimpan di resep menu bisa saja sudah tidak berlaku untuk hari ini.
+  ///
+  /// Item yang namanya tidak ditemukan di stok hari ini akan dilewati dengan
+  /// aman (dikembalikan lewat [notFound]) agar tidak menggagalkan seluruh
+  /// proses "mulai masak" hanya karena satu bahan belum terdaftar di inventory.
+  Future<List<String>> deductIngredientsForOrder({
+    required String branchId,
+    required String orderId,
+    required Map<String, double> requirements, // nama bahan → qty yang dipotong
+    String? menuItemName,
+    String? createdBy,
+  }) async {
+    if (requirements.isEmpty) return [];
+
+    final todayStock = await fetchInventoryItems(branchId: branchId);
+    final byName = <String, InventoryItem>{
+      for (final item in todayStock) item.name.trim().toLowerCase(): item,
+    };
+
+    final notFound = <String>[];
+
+    for (final entry in requirements.entries) {
+      final qty = entry.value;
+      if (qty <= 0) continue;
+
+      final match = byName[entry.key.trim().toLowerCase()];
+      if (match == null) {
+        notFound.add(entry.key);
+        continue;
+      }
+
+      await deductFromOrder(
+        inventoryItemId: match.id,
+        branchId: branchId,
+        quantity: qty,
+        orderId: orderId,
+        menuItemName: menuItemName,
+        createdBy: createdBy,
+      );
+    }
+
+    return notFound;
+  }
+
   Future<void> recordWaste({
     required String inventoryItemId,
     required String branchId,
@@ -346,7 +398,7 @@ class InventoryService {
 
         for (final menuId in menuIds) {
           await _client
-              .from('menus')
+              .from('menu_items')
               .update({'is_available': false})
               .eq('id', menuId.trim())
               .eq('branch_id', branchId);

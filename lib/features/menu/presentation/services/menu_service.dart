@@ -174,6 +174,29 @@ class MenuService {
     }
   }
 
+  /// Ambil ingredients untuk BEBERAPA menu item sekaligus (batch), dikelompokkan
+  /// per menuItemId. Dipakai saat dapur mulai masak order (KDS) atau saat
+  /// menghitung ulang HPP, supaya tidak query satu-satu per item.
+  Future<Map<String, List<MenuIngredient>>> fetchIngredientsForMenuItems(
+      List<String> menuItemIds) async {
+    if (menuItemIds.isEmpty) return {};
+    try {
+      final response = await _client
+          .from(_ingredientsTable)
+          .select()
+          .inFilter('menu_item_id', menuItemIds);
+
+      final result = <String, List<MenuIngredient>>{};
+      for (final row in (response as List<dynamic>)) {
+        final ingredient = MenuIngredient.fromJson(row as Map<String, dynamic>);
+        result.putIfAbsent(ingredient.menuItemId, () => []).add(ingredient);
+      }
+      return result;
+    } on PostgrestException catch (e) {
+      throw MenuServiceException('Gagal memuat resep menu: ${e.message}');
+    }
+  }
+
   /// Hapus semua ingredients untuk satu menu item.
   /// Biasanya tidak perlu dipanggil manual karena tabel sudah pakai
   /// ON DELETE CASCADE dari menu_items. Tapi tersedia jika dibutuhkan
