@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/auth_provider.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -47,6 +48,90 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Show success briefly - router will redirect automatically
       _showToast('✅ Login berhasil! Memuat dashboard...', isError: false);
     }
+  }
+
+  Future<void> _forgotPassword() async {
+    final resetCtrl = TextEditingController(text: _emailCtrl.text.trim());
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        bool sending = false;
+        return StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('Lupa Password',
+                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Kami akan mengirimkan link reset password ke email yang '
+                  'dipakai saat akun staff ini dibuat.',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: resetCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: sending ? null : () => Navigator.pop(ctx),
+                child: const Text('Batal'),
+              ),
+              ElevatedButton(
+                onPressed: sending
+                    ? null
+                    : () async {
+                        final email = resetCtrl.text.trim();
+                        if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+                          _showToast('Masukkan email yang valid.', isError: true);
+                          return;
+                        }
+                        setS(() => sending = true);
+                        try {
+                          await Supabase.instance.client.auth.resetPasswordForEmail(
+                            email,
+                            redirectTo: '${Uri.base.origin}/#/reset-password',
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            _showToast(
+                              'Link reset password dikirim ke $email. '
+                              'Cek inbox atau folder spam.',
+                              isError: false,
+                            );
+                          }
+                        } on AuthException catch (e) {
+                          if (mounted) _showToast('Gagal: ${e.message}', isError: true);
+                        } catch (_) {
+                          if (mounted) _showToast('Gagal mengirim email. Coba lagi.', isError: true);
+                        } finally {
+                          if (ctx.mounted) setS(() => sending = false);
+                        }
+                      },
+                child: sending
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Kirim Link Reset'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    resetCtrl.dispose();
   }
 
   void _showToast(String message, {bool isError = false}) {
@@ -153,7 +238,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: (_isSubmitting || authState.isLoading) ? null : _forgotPassword,
+                          child: const Text('Lupa Password?',
+                              style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       SizedBox(
                         height: 50,
                         child: ElevatedButton(
