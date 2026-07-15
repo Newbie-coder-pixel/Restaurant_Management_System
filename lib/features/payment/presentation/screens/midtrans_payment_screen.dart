@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../features/auth/providers/auth_provider.dart';
 import '../../../../shared/models/order_model.dart';
@@ -70,6 +71,21 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
     if (_branchId == null) return;
 
     final notifier = ref.read(activeMidtransProvider.notifier);
+
+    // Atribusikan order ke staff yang memproses pembayaran, supaya terhitung
+    // di Staff Performance (get_staff_performance RPC baca orders.cashier_id).
+    // Non-blocking: kalau gagal, jangan halangi proses bayar tetap jalan.
+    final cashierId = ref.read(currentStaffProvider)?.id;
+    if (cashierId != null) {
+      try {
+        await Supabase.instance.client
+            .from('orders')
+            .update({'cashier_id': cashierId})
+            .eq('id', widget.order.id);
+      } catch (e) {
+        debugPrint('[Midtrans] Gagal set cashier_id: $e');
+      }
+    }
 
     await notifier.pay(
       order: widget.order,
