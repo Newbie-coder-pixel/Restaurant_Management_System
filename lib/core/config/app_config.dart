@@ -29,8 +29,11 @@ class AppConfig {
   static const String midtransClientKeyProduction =
     'Mid-client-JETr7K-VE_xT2luw'; // ✅ Production client key
 
-  // ✅ PRODUCTION MODE AKTIF — pastikan server key di Supabase Secrets sudah diganti
-  static const bool midtransIsProduction = true;
+  // 🧪 SANDBOX MODE AKTIF (sementara — NPWP belum ada untuk akses production)
+  // Untuk balik ke production nanti: ubah baris di bawah ini jadi `true` lagi,
+  // dan pastikan MIDTRANS_SERVER_KEY di Supabase Edge Function Secrets sudah
+  // di-set ke server key PRODUCTION (bukan sandbox).
+  static const bool midtransIsProduction = false; // production: true | sandbox: false
 
   static String get midtransClientKey => midtransIsProduction
       ? midtransClientKeyProduction
