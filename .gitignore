@@ -57,3 +57,6 @@ CLAUDE.md
 
 # Supabase CLI local cache
 supabase/.temp/
+
+# Edge Function source downloaded locally for debugging (not version-controlled by choice)
+supabase/functions/
