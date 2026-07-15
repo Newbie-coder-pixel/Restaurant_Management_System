@@ -54,3 +54,6 @@ node_modules
 
 # Claude Code project instructions (local only)
 CLAUDE.md
+
+# Supabase CLI local cache
+supabase/.temp/
