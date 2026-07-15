@@ -249,7 +249,10 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
     if (confirm != true || !mounted) return;
     try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(s.email);
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        s.email,
+        redirectTo: '${Uri.base.origin}/#/reset-password',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: const Text('📧 Email reset password berhasil dikirim'),

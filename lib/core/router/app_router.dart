@@ -19,6 +19,8 @@ import '../../features/qr_order/presentation/qr_menu_screen.dart';
 import '../../features/qr_order/presentation/qr_cart_screen.dart';
 import '../../features/qr_order/presentation/qr_order_tracker_screen.dart';
 
+import '../../features/auth/presentation/staff_reset_password_screen.dart';
+
 import '../models/staff_role.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,6 +32,7 @@ const String appMode = String.fromEnvironment('APP_MODE', defaultValue: 'staff')
 abstract class AppRoutes {
   static const staffGateway   = '/staff-access';
   static const login          = '/login';
+  static const staffResetPassword = '/reset-password';
   static const tables         = '/tables';
   static const booking        = '/booking';
   static const bookingStats   = '/booking-stats';
@@ -181,8 +184,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (kIsWeb) {
         final uri = Uri.base;
         final type = uri.queryParameters['type'];
-        if (type == 'recovery' && loc != AppRoutes.customerResetPassword) {
-          return AppRoutes.customerResetPassword;
+        if (type == 'recovery' && loc != AppRoutes.staffResetPassword) {
+          return AppRoutes.staffResetPassword;
         }
       }
 
@@ -289,6 +292,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // ── Staff Routes ──────────────────────────────────────────────────────
       GoRoute(path: AppRoutes.login,        builder: (_, __) => const LoginScreen()),
+      GoRoute(path: AppRoutes.staffResetPassword, builder: (_, __) => const StaffResetPasswordScreen()),
       GoRoute(path: AppRoutes.tables,       builder: (_, __) => const TableScreen()),
       GoRoute(path: AppRoutes.booking,      builder: (_, __) => const BookingScreen()),
       GoRoute(path: AppRoutes.bookingStats, builder: (_, __) => const BookingStatsScreen()),
