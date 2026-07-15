@@ -51,3 +51,6 @@ app.*.map.json
 .vercel
 .env*.local
 node_modules
+
+# Claude Code project instructions (local only)
+CLAUDE.md
