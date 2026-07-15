@@ -50,88 +50,206 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  // ── Lupa Password: kode OTP dikirim via WhatsApp (Fonnte), 2 langkah
+  // dalam 1 dialog — tanpa buka email/klik link/pindah halaman.
   Future<void> _forgotPassword() async {
-    final resetCtrl = TextEditingController(text: _emailCtrl.text.trim());
+    final emailCtrl = TextEditingController(text: _emailCtrl.text.trim());
+    final otpCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
 
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
+        int step = 1; // 1 = minta kode, 2 = masukkan kode + password baru
         bool sending = false;
+        bool obscureNew = true;
+        bool obscureConfirm = true;
+
         return StatefulBuilder(
-          builder: (ctx, setS) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text('Lupa Password',
-                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Kami akan mengirimkan link reset password ke email yang '
-                  'dipakai saat akun staff ini dibuat.',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary),
+          builder: (ctx, setS) {
+            Future<void> requestOtp() async {
+              final email = emailCtrl.text.trim();
+              if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+                _showToast('Masukkan email yang valid.', isError: true);
+                return;
+              }
+              setS(() => sending = true);
+              try {
+                final response = await Supabase.instance.client.functions.invoke(
+                  'staff-password-reset',
+                  body: {'step': 'request', 'email': email},
+                );
+                final data = response.data;
+                final msg = data is Map && data['message'] != null
+                    ? data['message'].toString()
+                    : 'Kalau email terdaftar dan punya nomor WhatsApp, kode reset sudah dikirim.';
+                if (mounted) _showToast(msg, isError: false);
+                setS(() => step = 2);
+              } on FunctionException catch (e) {
+                final msg = (e.details is Map ? e.details['error'] : null) ??
+                    'Gagal mengirim kode. Coba lagi.';
+                if (mounted) _showToast(msg.toString(), isError: true);
+              } catch (_) {
+                if (mounted) _showToast('Gagal mengirim kode. Coba lagi.', isError: true);
+              } finally {
+                if (ctx.mounted) setS(() => sending = false);
+              }
+            }
+
+            Future<void> verifyAndReset() async {
+              final otp = otpCtrl.text.trim();
+              final newPass = newPassCtrl.text.trim();
+              final confirmPass = confirmCtrl.text.trim();
+
+              if (otp.length != 6) {
+                _showToast('Kode OTP harus 6 digit.', isError: true);
+                return;
+              }
+              if (newPass.length < 6) {
+                _showToast('Password minimal 6 karakter.', isError: true);
+                return;
+              }
+              if (newPass != confirmPass) {
+                _showToast('Konfirmasi password tidak cocok.', isError: true);
+                return;
+              }
+
+              setS(() => sending = true);
+              try {
+                final response = await Supabase.instance.client.functions.invoke(
+                  'staff-password-reset',
+                  body: {
+                    'step': 'verify',
+                    'email': emailCtrl.text.trim(),
+                    'otp': otp,
+                    'new_password': newPass,
+                  },
+                );
+                final data = response.data;
+                if (data is Map && data['error'] != null) {
+                  if (mounted) _showToast(data['error'].toString(), isError: true);
+                  return;
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  _showToast('Password berhasil diubah. Silakan login.', isError: false);
+                }
+              } on FunctionException catch (e) {
+                final msg = (e.details is Map ? e.details['error'] : null) ??
+                    'Kode salah atau sudah kedaluwarsa.';
+                if (mounted) _showToast(msg.toString(), isError: true);
+              } catch (_) {
+                if (mounted) _showToast('Gagal reset password. Coba lagi.', isError: true);
+              } finally {
+                if (ctx.mounted) setS(() => sending = false);
+              }
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('Lupa Password',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: step == 1
+                      ? [
+                          const Text(
+                            'Kode reset 6-digit akan dikirim ke WhatsApp yang '
+                            'terdaftar untuk akun staff ini.',
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
+                            autofocus: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                          ),
+                        ]
+                      : [
+                          Text(
+                            'Masukkan kode yang dikirim ke WhatsApp untuk ${emailCtrl.text.trim()}.',
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: otpCtrl,
+                            keyboardType: TextInputType.number,
+                            autofocus: true,
+                            maxLength: 6,
+                            decoration: const InputDecoration(
+                              labelText: 'Kode OTP',
+                              counterText: '',
+                              prefixIcon: Icon(Icons.sms_outlined),
+                            ),
+                          ),
+                          TextField(
+                            controller: newPassCtrl,
+                            obscureText: obscureNew,
+                            decoration: InputDecoration(
+                              labelText: 'Password Baru',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility),
+                                onPressed: () => setS(() => obscureNew = !obscureNew),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: confirmCtrl,
+                            obscureText: obscureConfirm,
+                            decoration: InputDecoration(
+                              labelText: 'Konfirmasi Password',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                                onPressed: () => setS(() => obscureConfirm = !obscureConfirm),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: sending ? null : () => setS(() => step = 1),
+                              child: const Text('Ganti email / kirim ulang kode',
+                                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                            ),
+                          ),
+                        ],
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: resetCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: sending ? null : () => Navigator.pop(ctx),
+                  child: const Text('Batal'),
+                ),
+                ElevatedButton(
+                  onPressed: sending ? null : (step == 1 ? requestOtp : verifyAndReset),
+                  child: sending
+                      ? const SizedBox(
+                          width: 18, height: 18,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text(step == 1 ? 'Kirim Kode' : 'Reset Password'),
                 ),
               ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: sending ? null : () => Navigator.pop(ctx),
-                child: const Text('Batal'),
-              ),
-              ElevatedButton(
-                onPressed: sending
-                    ? null
-                    : () async {
-                        final email = resetCtrl.text.trim();
-                        if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
-                          _showToast('Masukkan email yang valid.', isError: true);
-                          return;
-                        }
-                        setS(() => sending = true);
-                        try {
-                          await Supabase.instance.client.auth.resetPasswordForEmail(
-                            email,
-                            redirectTo: '${Uri.base.origin}/#/reset-password',
-                          );
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          if (mounted) {
-                            _showToast(
-                              'Link reset password dikirim ke $email. '
-                              'Cek inbox atau folder spam.',
-                              isError: false,
-                            );
-                          }
-                        } on AuthException catch (e) {
-                          if (mounted) _showToast('Gagal: ${e.message}', isError: true);
-                        } catch (_) {
-                          if (mounted) _showToast('Gagal mengirim email. Coba lagi.', isError: true);
-                        } finally {
-                          if (ctx.mounted) setS(() => sending = false);
-                        }
-                      },
-                child: sending
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('Kirim Link Reset'),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
-    resetCtrl.dispose();
+    emailCtrl.dispose();
+    otpCtrl.dispose();
+    newPassCtrl.dispose();
+    confirmCtrl.dispose();
   }
 
   void _showToast(String message, {bool isError = false}) {
