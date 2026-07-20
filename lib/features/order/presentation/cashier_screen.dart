@@ -82,7 +82,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             id, branch_id, table_id, order_number,
             status, source, order_type, customer_name,
             customer_phone, queue_number, table_name,
-            discount_amount, notes, created_at, updated_at,
+            discount_amount, notes, created_at, updated_at, served_at,
             payment_status, bill_requested, bill_requested_at,
             total_amount, subtotal, tax_amount,
             restaurant_tables(table_number),
@@ -689,12 +689,32 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                                     ]),
                                   ),
                                 ],
+                                if (o.isOvertime) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEE2E2),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: AppColors.accent),
+                                    ),
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                      const Icon(Icons.timer_outlined, size: 9, color: AppColors.accent),
+                                      const SizedBox(width: 3),
+                                      Text('+Rp ${o.overtimeCharge}',
+                                        style: const TextStyle(
+                                          fontFamily: 'Poppins', fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.accent)),
+                                    ]),
+                                  ),
+                                ],
                               ]),
                             ],
                           ),
                         ),
                         Text(
-                          'Rp ${o.totalAmount.toStringAsFixed(0)}',
+                          'Rp ${o.totalAmountWithOvertime.toStringAsFixed(0)}',
                           style: const TextStyle(
                             fontFamily: 'Poppins', fontWeight: FontWeight.w700,
                             fontSize: 14, color: AppColors.accent),

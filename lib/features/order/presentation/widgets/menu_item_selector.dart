@@ -247,8 +247,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       );
 
       if (_selectedTableId != null) {
-        await Supabase.instance.client
-            .from('restaurant_tables').update({'status': 'occupied'}).eq('id', _selectedTableId!);
+        await Supabase.instance.client.from('restaurant_tables').update({
+          'status': 'occupied',
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', _selectedTableId!);
       }
 
       if (mounted) {

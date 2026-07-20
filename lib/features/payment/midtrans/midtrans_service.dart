@@ -133,6 +133,17 @@ class MidtransService {
         });
       }
 
+      // 3b. Kelebihan waktu makan (>2 jam sejak disajikan) — Rp 5.000/jam.
+      final overtimeCharge = order.overtimeCharge;
+      if (overtimeCharge > 0) {
+        items.add({
+          'id': 'OVERTIME_CHARGE',
+          'name': 'Kelebihan Waktu Makan',
+          'price': overtimeCharge,
+          'quantity': 1,
+        });
+      }
+
       // 4. Diskon (kalau ada) — dikirim sebagai item dengan harga negatif.
       //    Midtrans mendukung price negatif untuk merepresentasikan diskon.
       final discount = order.discountAmount.round();

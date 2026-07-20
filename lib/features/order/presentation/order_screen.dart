@@ -121,7 +121,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           .select('''
             id, branch_id, table_id, order_number,
             status, source, order_type, customer_name,
-            discount_amount, notes, created_at, updated_at,
+            discount_amount, notes, created_at, updated_at, served_at,
             bill_requested, bill_requested_at,
             total_amount, subtotal, tax_amount,
             restaurant_tables(table_number),
@@ -316,8 +316,11 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     setState(() => _updatingOrderId = order.id);
     try {
       final staff = ref.read(currentStaffProvider);
+      final nowIso = DateTime.now().toIso8601String();
       await Supabase.instance.client.from('orders').update({
-        'status': next.dbValue, 'staff_id': staff?.id, 'updated_at': DateTime.now().toIso8601String(),
+        'status': next.dbValue, 'staff_id': staff?.id, 'updated_at': nowIso,
+        // Mulai hitung batas waktu makan (kMaxDineInDuration) sejak disajikan.
+        if (next == OrderStatus.served) 'served_at': nowIso,
       }).eq('id', order.id);
 
       // Sync order_items status agar konsisten dengan orders
@@ -361,6 +364,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           'status':     'served',
           'staff_id':   staff?.id,
           'updated_at': now,
+          // Mulai hitung batas waktu makan (kMaxDineInDuration) sejak disajikan.
+          'served_at':  now,
         }).eq('id', orderId);
 
         if (mounted) {

@@ -1,5 +1,24 @@
 enum OrderStatus { new_, created, preparing, ready, served, cancelled, paid }
 
+/// Batas waktu makan gratis setelah makanan disajikan, sebelum kena
+/// biaya kelebihan waktu (table turnover charge).
+const Duration kMaxDineInDuration = Duration(hours: 2);
+
+/// Biaya kelebihan waktu per jam (atau kelipatannya) setelah kMaxDineInDuration.
+const int kOvertimeChargePerHour = 5000;
+
+/// Hitung biaya kelebihan waktu makan berdasarkan waktu makanan disajikan.
+/// Dipakai bersama oleh [OrderModel], kartu meja, dan alur pembayaran supaya
+/// rumusnya selalu sinkron di seluruh aplikasi.
+int calculateOvertimeCharge(DateTime? servedAt, {DateTime? now}) {
+  if (servedAt == null) return 0;
+  final elapsed = (now ?? DateTime.now()).difference(servedAt);
+  final overMinutes = elapsed.inMinutes - kMaxDineInDuration.inMinutes;
+  if (overMinutes <= 0) return 0;
+  final overHours = (overMinutes / 60).ceil();
+  return overHours * kOvertimeChargePerHour;
+}
+
 enum OrderSource { dineIn, online, takeaway }
 
 enum OrderItemStatus { pending, preparing, ready, served, cancelled }
@@ -137,6 +156,7 @@ class OrderModel {
   final String? notes;
   final List<OrderItem> items;
   final DateTime createdAt;
+  final DateTime? servedAt;
   final int? estimatedPrepMinutes; // hasil prediksi ML
   final bool billRequested;
   final DateTime? billRequestedAt;
@@ -174,6 +194,15 @@ class OrderModel {
     return 0.0;
   }
 
+  /// Biaya kelebihan waktu makan (Rp), dihitung dari [servedAt].
+  /// 0 kalau makanan belum disajikan atau belum melewati kMaxDineInDuration.
+  int get overtimeCharge => calculateOvertimeCharge(servedAt);
+
+  bool get isOvertime => overtimeCharge > 0;
+
+  /// Total akhir yang harus dibayar, termasuk biaya kelebihan waktu (kalau ada).
+  double get totalAmountWithOvertime => totalAmount + overtimeCharge;
+
   /// True kalau totalAmount berasal dari fallback DB, bukan dari items.
   /// Berguna untuk UI yang perlu menampilkan indikator "data mungkin tidak lengkap".
   bool get isTotalEstimated => items.isEmpty && _totalAmountFromDb <= 0 && _subtotalFromDb > 0;
@@ -192,6 +221,7 @@ class OrderModel {
     this.notes,
     this.items = const [],
     required this.createdAt,
+    this.servedAt,
     this.estimatedPrepMinutes,
     this.billRequested = false,
     this.billRequestedAt,
@@ -233,6 +263,9 @@ class OrderModel {
       notes: j['notes'],
       items: itemsList,
       createdAt: createdAt,
+      servedAt: j['served_at'] != null
+          ? DateTime.tryParse(j['served_at'] as String)
+          : null,
       estimatedPrepMinutes: (j['estimated_prep_minutes'] as num?)?.toInt(),
       billRequested: (j['bill_requested'] as bool?) ?? false,
       billRequestedAt: j['bill_requested_at'] != null
@@ -264,6 +297,7 @@ class OrderModel {
     String? notes,
     List<OrderItem>? items,
     DateTime? createdAt,
+    DateTime? servedAt,
     int? estimatedPrepMinutes,
     bool? billRequested,
     DateTime? billRequestedAt,
@@ -285,6 +319,7 @@ class OrderModel {
       notes: notes ?? this.notes,
       items: items ?? this.items,
       createdAt: createdAt ?? this.createdAt,
+      servedAt: servedAt ?? this.servedAt,
       estimatedPrepMinutes: estimatedPrepMinutes ?? this.estimatedPrepMinutes,
       billRequested: billRequested ?? this.billRequested,
       billRequestedAt: billRequestedAt ?? this.billRequestedAt,

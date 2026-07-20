@@ -2,13 +2,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/models/table_model.dart';
+import '../../../../shared/models/order_model.dart' show kMaxDineInDuration, calculateOvertimeCharge;
 import '../../../../core/theme/app_theme.dart';
 
 class TableCard extends StatefulWidget {          // ← GANTI jadi StatefulWidget
   final TableModel table;
   final void Function(TableStatus) onStatusChange;
+  // Waktu makanan disajikan untuk order aktif di meja ini (null kalau belum
+  // disajikan / tidak ada order aktif) — batas 2 jam makan dihitung dari sini.
+  final DateTime? servedAt;
 
-  const TableCard({super.key, required this.table, required this.onStatusChange});
+  const TableCard({
+    super.key,
+    required this.table,
+    required this.onStatusChange,
+    this.servedAt,
+  });
 
   @override
   State<TableCard> createState() => _TableCardState();
@@ -16,7 +25,8 @@ class TableCard extends StatefulWidget {          // ← GANTI jadi StatefulWidg
 
 class _TableCardState extends State<TableCard> {
   Timer? _timer;
-  int _minutesOccupied = 0;
+  int _minutesSinceServed = 0;
+  int _overtimeCharge = 0;
 
   @override
   void initState() {
@@ -29,11 +39,13 @@ class _TableCardState extends State<TableCard> {
 
   void _updateTimer() {
     if (widget.table.status == TableStatus.occupied &&
-        widget.table.updatedAt != null) {
-      final diff = DateTime.now().difference(widget.table.updatedAt!);
-      _minutesOccupied = diff.inMinutes;
+        widget.servedAt != null) {
+      final diff = DateTime.now().difference(widget.servedAt!);
+      _minutesSinceServed = diff.inMinutes;
+      _overtimeCharge = calculateOvertimeCharge(widget.servedAt);
     } else {
-      _minutesOccupied = 0;
+      _minutesSinceServed = 0;
+      _overtimeCharge = 0;
     }
   }
 
@@ -41,7 +53,7 @@ class _TableCardState extends State<TableCard> {
   void didUpdateWidget(TableCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.table.status != widget.table.status ||
-        oldWidget.table.updatedAt != widget.table.updatedAt) {
+        oldWidget.servedAt != widget.servedAt) {
       setState(_updateTimer);
     }
   }
@@ -71,10 +83,11 @@ class _TableCardState extends State<TableCard> {
     final isCleaning = table.status == TableStatus.cleaning;
     final isOccupied = table.status == TableStatus.occupied;
 
+    final maxMinutes = kMaxDineInDuration.inMinutes;
     Color timerColor = const Color(0xFF4CAF50);
-    if (_minutesOccupied >= 90) {
+    if (_overtimeCharge > 0) {
       timerColor = Colors.red;
-    } else if (_minutesOccupied >= 60) {
+    } else if (_minutesSinceServed >= maxMinutes - 20) {
       timerColor = Colors.orange;
     }
 
@@ -165,7 +178,7 @@ class _TableCardState extends State<TableCard> {
               ],
             ),
 
-            if (isOccupied && _minutesOccupied > 0)
+            if (isOccupied && widget.servedAt != null)
               Positioned(
                 top: 6,
                 right: 6,
@@ -185,13 +198,18 @@ class _TableCardState extends State<TableCard> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.timer_outlined,
+                      Icon(
+                          _overtimeCharge > 0
+                              ? Icons.warning_amber_rounded
+                              : Icons.timer_outlined,
                           size: 10, color: Colors.white),
                       const SizedBox(width: 2),
                       Text(
-                        _minutesOccupied >= 60
-                            ? '${(_minutesOccupied / 60).toStringAsFixed(0)}j ${_minutesOccupied % 60}m'
-                            : '${_minutesOccupied}m',
+                        _overtimeCharge > 0
+                            ? 'Lewat +Rp${_overtimeCharge ~/ 1000}rb'
+                            : (_minutesSinceServed >= 60
+                                ? '${(_minutesSinceServed / 60).toStringAsFixed(0)}j ${_minutesSinceServed % 60}m'
+                                : '${_minutesSinceServed}m'),
                         style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 9,
@@ -369,6 +387,7 @@ class _OrderDetail {
   final double totalAmount;
   final String? notes;
   final DateTime createdAt;
+  final DateTime? servedAt;
   final List<dynamic> items;
 
   const _OrderDetail({
@@ -384,6 +403,7 @@ class _OrderDetail {
     required this.totalAmount,
     this.notes,
     required this.createdAt,
+    this.servedAt,
     required this.items,
   });
 
@@ -399,6 +419,7 @@ class _OrderDetail {
     taxAmount: (j['tax_amount'] ?? 0).toDouble(),
     totalAmount: (j['total_amount'] ?? 0).toDouble(),
     notes: j['notes'],
+    servedAt: j['served_at'] != null ? DateTime.tryParse(j['served_at']) : null,
     createdAt: DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
     items: j['items'] ?? [],
   );
@@ -406,8 +427,9 @@ class _OrderDetail {
   // ── Selalu hitung ulang dari subtotal, tidak bergantung nilai DB ──
   double get computedServiceCharge => subtotal * 0.03;
   double get computedPb1 => (subtotal + computedServiceCharge) * 0.10;
+  int get computedOvertimeCharge => calculateOvertimeCharge(servedAt);
   double get computedTotal =>
-      subtotal + computedServiceCharge + computedPb1 - discountAmount;
+      subtotal + computedServiceCharge + computedPb1 - discountAmount + computedOvertimeCharge;
 }
 
 class _StatusBottomSheet extends StatefulWidget {
@@ -445,7 +467,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             id, order_number, queue_number, customer_name, customer_phone,
             status, payment_status, payment_method,
             subtotal, discount_amount, tax_amount, total_amount,
-            notes, created_at,
+            notes, created_at, served_at,
             order_items(id, menu_item_name, quantity, unit_price, subtotal)
           ''')
           .eq('table_id', widget.table.id)
@@ -683,6 +705,9 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           if (o.discountAmount > 0)
             _detailRow(Icons.discount_rounded, 'Diskon',
               '- ${_formatCurrency(o.discountAmount)}'),
+          if (o.computedOvertimeCharge > 0)
+            _detailRow(Icons.warning_amber_rounded, 'Kelebihan Waktu (>2j)',
+              _formatCurrency(o.computedOvertimeCharge.toDouble())),
           _detailRow(Icons.payments_rounded, 'Total',
               _formatCurrency(o.computedTotal)),
 

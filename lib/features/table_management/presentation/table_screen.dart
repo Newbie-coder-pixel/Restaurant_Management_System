@@ -17,6 +17,9 @@ class TableScreen extends ConsumerStatefulWidget {
 
 class _TableScreenState extends ConsumerState<TableScreen> {
   List<TableModel> _tables = [];
+  // table_id → waktu makanan disajikan (order aktif terbaru di meja itu).
+  // Dipakai TableCard untuk hitung batas 2 jam makan & biaya kelebihan waktu.
+  Map<String, DateTime?> _servedAtByTable = {};
   bool _isLoading = true;
   String? _branchId;
   RealtimeChannel? _channel;
@@ -101,14 +104,43 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       }
 
       final res = await query.order('table_number');
+      final tables = (res as List).map((e) => TableModel.fromJson(e)).toList();
+      final servedAtByTable = await _loadServedAtByTable(targetBranch);
       if (mounted) {
         setState(() {
-          _tables = (res as List).map((e) => TableModel.fromJson(e)).toList();
+          _tables = tables;
+          _servedAtByTable = servedAtByTable;
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── Ambil served_at dari order aktif tiap meja ────────────────────────
+  // Dipakai untuk menghitung batas 2 jam makan sejak makanan disajikan.
+  Future<Map<String, DateTime?>> _loadServedAtByTable(String? targetBranch) async {
+    try {
+      var query = Supabase.instance.client
+          .from('orders')
+          .select('table_id, served_at, created_at')
+          .not('table_id', 'is', null)
+          .inFilter('status', ['new', 'created', 'preparing', 'ready', 'served']);
+      if (targetBranch != null) {
+        query = query.eq('branch_id', targetBranch);
+      }
+      final res = await query.order('created_at', ascending: false);
+      final map = <String, DateTime?>{};
+      for (final row in (res as List)) {
+        final tableId = row['table_id'] as String?;
+        if (tableId == null || map.containsKey(tableId)) continue;
+        final servedAtRaw = row['served_at'] as String?;
+        map[tableId] = servedAtRaw != null ? DateTime.tryParse(servedAtRaw) : null;
+      }
+      return map;
+    } catch (e) {
+      return {};
     }
   }
 
@@ -120,6 +152,14 @@ class _TableScreenState extends ConsumerState<TableScreen> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'restaurant_tables',
+          callback: (_) => _load(),
+        )
+        // Order berubah status (mis. → served) juga perlu memicu reload,
+        // supaya badge batas waktu makan di TableCard ikut ter-update.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'orders',
           callback: (_) => _load(),
         )
         .subscribe();
@@ -356,6 +396,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
                               itemCount: _filtered.length,
                               itemBuilder: (ctx, i) => TableCard(
                                 table: _filtered[i],
+                                servedAt: _servedAtByTable[_filtered[i].id],
                                 onStatusChange: (s) =>
                                   _updateStatus(_filtered[i].id, s),
                               ),
