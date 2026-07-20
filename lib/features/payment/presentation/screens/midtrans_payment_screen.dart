@@ -56,7 +56,9 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
   double get _serviceCharge => _subtotal * 0.03;
   double get _pb1 => (_subtotal + _serviceCharge) * 0.10;
   double get _discount => widget.order.discountAmount;
-  double get _total => _subtotal + _serviceCharge + _pb1 - _discount;
+  double get _overtimeCharge => widget.order.overtimeCharge.toDouble();
+  double get _total =>
+      _subtotal + _serviceCharge + _pb1 - _discount + _overtimeCharge;
 
   @override
   void initState() {
@@ -190,6 +192,7 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
               serviceCharge: _serviceCharge,
               pb1: _pb1,
               discount: _discount,
+              overtimeCharge: _overtimeCharge,
               total: _total,
             ),
             const SizedBox(height: 20),
@@ -368,12 +371,13 @@ class _OrderItemsCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _BreakdownCard extends StatelessWidget {
-  final double subtotal, serviceCharge, pb1, discount, total;
+  final double subtotal, serviceCharge, pb1, discount, overtimeCharge, total;
   const _BreakdownCard({
     required this.subtotal,
     required this.serviceCharge,
     required this.pb1,
     required this.discount,
+    this.overtimeCharge = 0,
     required this.total,
   });
 
@@ -391,6 +395,8 @@ class _BreakdownCard extends StatelessWidget {
         _Row('Service Charge (3%)', serviceCharge),
         _Row('PB1 / Pajak (10%)', pb1),
         if (discount > 0) _Row('Diskon', -discount, isDiscount: true),
+        if (overtimeCharge > 0)
+          _Row('Kelebihan Waktu Makan (>2 jam)', overtimeCharge),
         const Divider(height: 16, color: AppColors.border),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
