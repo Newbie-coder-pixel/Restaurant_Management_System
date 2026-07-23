@@ -50,10 +50,20 @@ void main() async {
   }
 
   // 4. Listener notif setelah Supabase siap
-  Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-    if (event.session?.user != null) {
-      NotificationService.initialize();
+  // Dedupe per user_id supaya initialize() tidak dipanggil ulang di setiap
+  // auth event (initialSession, tokenRefreshed, dst) — tapi tetap retry
+  // kalau percobaan simpan token sebelumnya gagal (mis. token masih stale).
+  String? notifReadyForUserId;
+  Supabase.instance.client.auth.onAuthStateChange.listen((event) async {
+    final user = event.session?.user;
+    if (user == null) {
+      notifReadyForUserId = null;
+      return;
     }
+    if (notifReadyForUserId == user.id) return;
+
+    final saved = await NotificationService.initialize();
+    if (saved) notifReadyForUserId = user.id;
   });
 
   // 5. Handle OAuth Web

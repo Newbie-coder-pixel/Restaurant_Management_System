@@ -6,8 +6,10 @@ import 'package:flutter/foundation.dart';
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  static bool _listenersRegistered = false;
 
-  static Future<void> initialize() async {
+  /// Return true jika token berhasil disimpan ke Supabase.
+  static Future<bool> initialize() async {
     // Minta izin notifikasi
     await _messaging.requestPermission(
       alert: true,
@@ -17,22 +19,28 @@ class NotificationService {
 
     // Ambil token dan simpan ke Supabase
     final token = await _messaging.getToken();
-    if (token != null) {
-      await _saveTokenToSupabase(token);
+    final saved = token != null && await _saveTokenToSupabase(token);
+
+    // Listener refresh token & foreground notif cukup didaftarkan sekali
+    // (dulu didaftarkan ulang tiap kali initialize() dipanggil, menumpuk listener)
+    if (!_listenersRegistered) {
+      _listenersRegistered = true;
+
+      // Refresh token otomatis — simpan ulang jika token berubah
+      _messaging.onTokenRefresh.listen(_saveTokenToSupabase);
+
+      // Handle notif saat app terbuka (foreground)
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        debugPrint('[FCM] Foreground notif: ${message.notification?.title}');
+      });
     }
 
-    // Refresh token otomatis — simpan ulang jika token berubah
-    _messaging.onTokenRefresh.listen(_saveTokenToSupabase);
-
-    // Handle notif saat app terbuka (foreground)
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('[FCM] Foreground notif: ${message.notification?.title}');
-    });
+    return saved;
   }
 
-  static Future<void> _saveTokenToSupabase(String token) async {
+  static Future<bool> _saveTokenToSupabase(String token) async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) return false;
 
     // Detect platform secara otomatis
     final platform = _detectPlatform();
@@ -50,8 +58,10 @@ class NotificationService {
         onConflict: 'user_id,platform',
       );
       debugPrint('[FCM] Token saved — user: $userId platform: $platform');
+      return true;
     } catch (e) {
       debugPrint('[FCM] Save token error: $e');
+      return false;
     }
   }
 
