@@ -156,7 +156,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                       _nameCtrl.text.trim()),
                   const SizedBox(height: 8),
                   _buildInfoRow(theme, colorScheme, 'No. HP',
-                      _phoneCtrl.text.trim()),
+                      _phoneCtrl.text.trim().isEmpty ? '-' : _phoneCtrl.text.trim()),
                   const SizedBox(height: 8),
                   _buildInfoRow(theme, colorScheme, 'Meja', tableName),
                   const SizedBox(height: 8),
@@ -896,7 +896,7 @@ class _CustomerInfoCard extends StatelessWidget {
           controller: phoneCtrl,
           keyboardType: TextInputType.phone,
           decoration: InputDecoration(
-            labelText: 'Nomor Telepon *',
+            labelText: 'Nomor Telepon (opsional)',
             hintText: 'Contoh: 08123456789',
             prefixIcon: const Icon(Icons.phone_outlined),
             helperText: 'Format: 08xxxxxxxxxx (10–13 digit)',
@@ -905,7 +905,7 @@ class _CustomerInfoCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
           validator: (val) {
-            if (val == null || val.trim().isEmpty) return 'Nomor telepon tidak boleh kosong';
+            if (val == null || val.trim().isEmpty) return null;
             final digits = val.trim().replaceAll(RegExp(r'\s+'), '');
             if (!RegExp(r'^08\d{8,11}$').hasMatch(digits)) {
               return 'Masukkan nomor valid (08xxxxxxxxxx, 10–13 digit)';
