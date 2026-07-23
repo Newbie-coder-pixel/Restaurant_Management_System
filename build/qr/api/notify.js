@@ -126,9 +126,21 @@ async function sendToToken(accessToken, projectId, token, title, body, data, and
   return res.ok;
 }
 
+// Origin diizinkan via env var ALLOWED_ORIGINS (comma-separated) di Vercel
+// project settings. Sebelumnya "*" mengizinkan situs manapun memicu push FCM
+// ke token perangkat manapun yang dikirim di body request.
+function resolveAllowedOrigin(req) {
+  const allowed = (process.env.ALLOWED_ORIGINS || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  const origin = req.headers.origin;
+  if (allowed.length === 0 || !origin) return null;
+  return allowed.includes(origin) ? origin : null;
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigin = resolveAllowedOrigin(req);
+  if (allowedOrigin) res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -141,14 +153,21 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'FIREBASE_SERVICE_ACCOUNT_JSON not configured' });
   }
 
-  // Validasi input
+  // Validasi input — termasuk batas jumlah token per request supaya satu
+  // panggilan (dipicu langsung dari browser customer, lihat
+  // sentiment_escalation_service.dart) tidak bisa dipakai untuk fan-out push
+  // notification ke jumlah device tak terbatas dalam satu request.
   const { tokens, title, body, data = {} } = req.body || {};
 
   if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
     return res.status(400).json({ error: 'tokens harus array dan tidak boleh kosong' });
   }
-  if (!title || !body) {
-    return res.status(400).json({ error: 'title dan body wajib diisi' });
+  if (tokens.length > 50 || !tokens.every((t) => typeof t === 'string' && t.length < 4096)) {
+    return res.status(400).json({ error: 'tokens tidak valid' });
+  }
+  if (!title || !body || typeof title !== 'string' || typeof body !== 'string' ||
+      title.length > 200 || body.length > 1000) {
+    return res.status(400).json({ error: 'title dan body wajib diisi dan dalam batas panjang' });
   }
 
   try {

@@ -95,8 +95,15 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     }
   }
 
+  bool get _isAuthorized =>
+      _userRole == StaffRole.superadmin || _userRole == StaffRole.manager;
+
   // ── data ───────────────────────────────────────────────
   Future<void> _load() async {
+    if (!_isAuthorized) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
     // Non-superadmin wajib punya branchId
     if (_userRole != StaffRole.superadmin && _branchId == null) {
       if (mounted) setState(() => _isLoading = false);
@@ -346,11 +353,19 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<StaffRole>(
-                initialValue: selectedRole,
+                // Manager tidak boleh menetapkan role staff lain jadi
+                // superadmin lewat edit — hanya superadmin yang boleh memilih
+                // superadmin di sini.
+                initialValue: (_userRole != StaffRole.superadmin &&
+                        selectedRole == StaffRole.superadmin)
+                    ? StaffRole.waiter
+                    : selectedRole,
                 decoration: InputDecoration(
                     labelText: 'Role',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                items: StaffRole.values.map((r) => DropdownMenuItem(
+                items: StaffRole.values
+                    .where((r) => _userRole == StaffRole.superadmin || r != StaffRole.superadmin)
+                    .map((r) => DropdownMenuItem(
                   value: r,
                   child: Row(children: [
                     Container(width: 12, height: 12,
@@ -857,11 +872,19 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   keyboardType: TextInputType.phone),
               const SizedBox(height: 16),
               DropdownButtonFormField<StaffRole>(
-                initialValue: selectedRole,
+                // Manager (non-superadmin) tidak boleh membuat akun superadmin —
+                // sebelumnya dropdown ini menampilkan semua role tanpa batas,
+                // yang berpotensi jadi jalur eskalasi privilege lewat pembuatan
+                // staff baru ber-role superadmin.
+                initialValue: (!isSuperadmin && selectedRole == StaffRole.superadmin)
+                    ? StaffRole.waiter
+                    : selectedRole,
                 decoration: InputDecoration(
                     labelText: 'Role',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                items: StaffRole.values.map((r) => DropdownMenuItem(
+                items: StaffRole.values
+                    .where((r) => isSuperadmin || r != StaffRole.superadmin)
+                    .map((r) => DropdownMenuItem(
                   value: r,
                   child: Row(children: [
                     Container(width: 12, height: 12,
@@ -1102,6 +1125,23 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   @override
   Widget build(BuildContext context) {
     final isSuperadmin = _userRole == StaffRole.superadmin;
+
+    // Guard sisi layar — hanya manager & superadmin yang boleh melihat/mengubah
+    // data staff. Router sudah memblokir navigasi ke /staff untuk role lain,
+    // tapi ini dijaga ulang di sini (bukan cuma menyembunyikan menu drawer)
+    // supaya widget ini tidak pernah render/query data staff untuk role yang
+    // tidak berhak walau ter-mount lewat jalur lain.
+    if (_userRole != null &&
+        _userRole != StaffRole.superadmin &&
+        _userRole != StaffRole.manager) {
+      return Scaffold(
+        drawer: const AppDrawer(),
+        appBar: AppBar(title: const Text('Staff Management')),
+        body: const Center(
+          child: Text('Anda tidak memiliki akses ke halaman ini.'),
+        ),
+      );
+    }
 
     return Scaffold(
       drawer: const AppDrawer(),

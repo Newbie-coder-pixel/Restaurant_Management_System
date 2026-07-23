@@ -52,11 +52,16 @@ app.*.map.json
 .env*.local
 node_modules
 
+# Signing keys — jangan pernah commit keystore Android/iOS (belum pernah
+# ter-commit sampai sekarang, tapi ditambahkan preemptif supaya tetap begitu)
+android/key.properties
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+
 # Claude Code project instructions (local only)
 CLAUDE.md
 
 # Supabase CLI local cache
 supabase/.temp/
-
-# Edge Function source downloaded locally for debugging (not version-controlled by choice)
-supabase/functions/
