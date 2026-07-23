@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart'; // ← TAMBAH IMPORT INI
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/router/app_router.dart'; // ← TAMBAH IMPORT INI
 import '../../../core/theme/app_theme.dart';
+import '../../../core/models/staff_role.dart';
+import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
 
 class BranchDashboardScreen extends ConsumerStatefulWidget {
@@ -23,7 +25,19 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     _load();
   }
 
+  bool get _isAuthorized =>
+      ref.read(currentStaffProvider)?.role == StaffRole.superadmin;
+
   Future<void> _load() async {
+    // "Multi Cabang" adalah fitur superadmin-only (lihat StaffRole.accessFeatures).
+    // Sebelumnya layar ini query & render data SEMUA cabang untuk role apa pun
+    // yang berhasil mencapainya (tidak ada guard sama sekali) — router sekarang
+    // memblokir navigasi non-superadmin ke /branches, dan ini adalah lapis
+    // pertahanan kedua di level widget.
+    if (!_isAuthorized) {
+      setState(() => _isLoading = false);
+      return;
+    }
     setState(() => _isLoading = true);
     try {
       final res = await Supabase.instance.client
@@ -366,6 +380,16 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isAuthorized) {
+      return Scaffold(
+        drawer: const AppDrawer(),
+        appBar: AppBar(title: const Text('Multi-Branch Dashboard')),
+        body: const Center(
+          child: Text('Anda tidak memiliki akses ke halaman ini.'),
+        ),
+      );
+    }
+
     return Scaffold(
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,

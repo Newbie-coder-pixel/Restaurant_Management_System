@@ -127,11 +127,16 @@ Future<void> init() async {
     await Future.delayed(const Duration(milliseconds: 300));
     final retryStaff = _ref.read(currentStaffProvider);
     if (retryStaff == null) return;
+    if (!_canViewReports(retryStaff.role)) return;
     _state = _state.copyWith(
       isSuperAdmin: retryStaff.role == StaffRole.superadmin,
       branchId: retryStaff.role == StaffRole.superadmin ? null : retryStaff.branchId,
     );
   } else {
+    // Guard sisi provider — laporan/analitik hanya untuk manager & superadmin.
+    // Router sudah membatasi navigasi ke /reports, tapi provider ini dijaga
+    // ulang di sini supaya tidak bergantung 100% pada satu titik enforcement.
+    if (!_canViewReports(staff.role)) return;
     _state = _state.copyWith(
       isSuperAdmin: staff.role == StaffRole.superadmin,
       branchId: staff.role == StaffRole.superadmin ? null : staff.branchId,
@@ -141,6 +146,9 @@ Future<void> init() async {
   await _loadBranches();
   await load();
 }
+
+  bool _canViewReports(StaffRole role) =>
+      role == StaffRole.superadmin || role == StaffRole.manager;
 
   // ── Branch filter ─────────────────────────────────────────────────────────
 

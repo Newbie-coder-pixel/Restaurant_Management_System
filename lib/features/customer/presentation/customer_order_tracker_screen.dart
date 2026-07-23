@@ -284,7 +284,16 @@ class _CustomerOrderTrackerScreenState
         // Coba cari order milik user ini dulu
         final ownOrders = await Supabase.instance.client
             .from('orders')
-            .select()
+            // Kolom dibatasi eksplisit (bukan select semua) — order_number bisa
+            // ditebak/di-enumerasi (format pendek A001..Z999) dan endpoint ini
+            // bisa diakses tanpa login, jadi data sensitif seperti nomor
+            // telepon & email pelanggan sengaja TIDAK ikut diambil di sini.
+            .select('id, order_number, queue_number, table_id, table_name, '
+                'branch_id, customer_name, status, payment_status, '
+                'payment_method, order_type, source, subtotal, tax_amount, '
+                'discount_amount, total_amount, notes, bill_requested, '
+                'bill_requested_at, estimated_prep_minutes, sent_to_kitchen_at, '
+                'served_at, created_at, updated_at')
             .eq('order_number', code)
             .eq('customer_user_id', user.id)
             .limit(1);
@@ -297,7 +306,16 @@ class _CustomerOrderTrackerScreenState
         // Fallback: cari order apapun dengan nomor ini
         final anyOrder = await Supabase.instance.client
             .from('orders')
-            .select()
+            // Kolom dibatasi eksplisit (bukan select semua) — order_number bisa
+            // ditebak/di-enumerasi (format pendek A001..Z999) dan endpoint ini
+            // bisa diakses tanpa login, jadi data sensitif seperti nomor
+            // telepon & email pelanggan sengaja TIDAK ikut diambil di sini.
+            .select('id, order_number, queue_number, table_id, table_name, '
+                'branch_id, customer_name, status, payment_status, '
+                'payment_method, order_type, source, subtotal, tax_amount, '
+                'discount_amount, total_amount, notes, bill_requested, '
+                'bill_requested_at, estimated_prep_minutes, sent_to_kitchen_at, '
+                'served_at, created_at, updated_at')
             .eq('order_number', code)
             .limit(1);
 
@@ -309,7 +327,16 @@ class _CustomerOrderTrackerScreenState
         // Anon user: buat query baru (tidak reuse query object lama)
         final res = await Supabase.instance.client
             .from('orders')
-            .select()
+            // Kolom dibatasi eksplisit (bukan select semua) — order_number bisa
+            // ditebak/di-enumerasi (format pendek A001..Z999) dan endpoint ini
+            // bisa diakses tanpa login, jadi data sensitif seperti nomor
+            // telepon & email pelanggan sengaja TIDAK ikut diambil di sini.
+            .select('id, order_number, queue_number, table_id, table_name, '
+                'branch_id, customer_name, status, payment_status, '
+                'payment_method, order_type, source, subtotal, tax_amount, '
+                'discount_amount, total_amount, notes, bill_requested, '
+                'bill_requested_at, estimated_prep_minutes, sent_to_kitchen_at, '
+                'served_at, created_at, updated_at')
             .eq('order_number', code)
             .limit(1);
 

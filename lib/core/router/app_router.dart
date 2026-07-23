@@ -103,6 +103,54 @@ class _AuthChangeNotifier extends ChangeNotifier {
   }
 }
 
+// ── Guard: role-based route access (staff app) ───────────────────────────────
+// Sebelumnya redirect() cuma cek "sudah login atau belum" — role staff apa pun
+// bisa deep-link ke route manapun (mis. waiter mengetik /reports langsung di
+// address bar) dan layarnya tetap render + query data asli. Fungsi ini
+// mencocokkan route yang diminta dengan StaffRole.accessFeatures supaya
+// navigasi ke fitur di luar hak role tsb diblokir di level router, bukan cuma
+// disembunyikan dari drawer/menu.
+bool _roleCanAccessRoute(StaffRole role, String path) {
+  if (role == StaffRole.superadmin) return true;
+  final features = role.accessFeatures;
+  bool has(String f) => features.contains(f);
+
+  switch (path) {
+    case AppRoutes.tables:
+      return has('Manajemen Meja');
+    case AppRoutes.booking:
+    case AppRoutes.bookingStats:
+      return has('Reservasi');
+    case AppRoutes.order:
+      return has('Order');
+    case AppRoutes.cashier:
+      return has('Kasir & Pembayaran');
+    case AppRoutes.kitchen:
+      return has('Dapur (KDS)');
+    case AppRoutes.menu:
+      return has('Menu');
+    case AppRoutes.inventory:
+      return has('Inventori');
+    case AppRoutes.staff:
+      return has('Staff');
+    case AppRoutes.reports:
+      return has('Laporan & Analitik');
+    case AppRoutes.chatbot:
+      return has('AI Chatbot');
+    case AppRoutes.branches:
+    case AppRoutes.transferStock:
+      return has('Multi Cabang');
+    // Fitur finansial/administratif sensitif — manager & superadmin saja,
+    // meski belum ada entri khusus di StaffRole.accessFeatures.
+    case AppRoutes.closures:
+    case AppRoutes.costing:
+    case AppRoutes.operatingExpense:
+      return role == StaffRole.manager;
+    default:
+      return true; // route non-staff (login, reset password, dsb) tidak digate di sini
+  }
+}
+
 String _getInitialLocation() {
   if (kIsWeb) {
     final uri = Uri.base;
@@ -202,6 +250,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (isLoggedIn && loc == AppRoutes.login) {
         final s = authState.staff;
         if (s != null) return _defaultRouteForRole(s.role);
+      }
+
+      if (isLoggedIn) {
+        final s = authState.staff;
+        if (s != null && !_roleCanAccessRoute(s.role, loc)) {
+          return _defaultRouteForRole(s.role);
+        }
       }
 
       return null;
