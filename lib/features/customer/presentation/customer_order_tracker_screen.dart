@@ -1116,6 +1116,7 @@ class _CustomerPrepTimeCard extends StatefulWidget {
 
 class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
   late final Future<PrepTimeResult?> _future;
+  late final List<PrepTimeRequestItem> _requestItems;
 
   // ── FIX 2: Pakai preparation_time_minutes dari join, bukan hardcoded 15 ──
   List<PrepTimeRequestItem> _buildRequestItems() {
@@ -1143,8 +1144,9 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
   @override
   void initState() {
     super.initState();
+    _requestItems = _buildRequestItems();
     _future = PrepTimeService.predict(
-      items: _buildRequestItems(),
+      items: _requestItems,
       branchId: widget.order['branch_id'] as String? ?? '',
     );
   }
@@ -1186,7 +1188,14 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
         }
 
         final result = snap.data;
-        if (snap.hasError || result == null) return const SizedBox.shrink();
+        // Server tidak terjangkau (mis. mati/timeout) → tampilkan estimasi
+        // kasar (jumlah menu prep time, tanpa ML/buffer) daripada kartu ini
+        // hilang sepenuhnya tanpa keterangan sama sekali.
+        final isFallback = snap.hasError || result == null;
+        final displayMinutes = isFallback
+            ? PrepTimeService.rawFallbackEstimate(_requestItems)
+            : result.estimatedMinutes;
+        if (isFallback && displayMinutes <= 0) return const SizedBox.shrink();
 
         return Container(
           padding: const EdgeInsets.all(14),
@@ -1207,17 +1216,21 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
                   color: const Color(0xFFD97706).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.soup_kitchen_outlined,
-                    color: Color(0xFFD97706), size: 22),
+                child: Icon(
+                    isFallback
+                        ? Icons.access_time_outlined
+                        : Icons.soup_kitchen_outlined,
+                    color: const Color(0xFFD97706),
+                    size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Estimasi Waktu Masak',
-                      style: TextStyle(
+                    Text(
+                      isFallback ? 'Estimasi Kasar (offline)' : 'Estimasi Waktu Masak',
+                      style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 12,
                         color: Color(0xFFB45309),
@@ -1225,7 +1238,7 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      PrepTimeService.formatEstimate(result.estimatedMinutes),
+                      PrepTimeService.formatEstimate(displayMinutes),
                       style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 18,

@@ -20,8 +20,9 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   bool _isSubmitting = false;
 
   // ── ML state ────────────────────────────────────────────────────────────────
-  int?  _estimatedMinutes;
+  int?  _estimatedMinutes;   // hasil prediksi ML, ATAU estimasi kasar fallback
   bool  _isFetchingEstimate = false;
+  bool  _isFallbackEstimate = false; // true kalau _estimatedMinutes bukan dari ML
   List<QrCartItem> _lastCartItems = [];
 
   @override
@@ -52,7 +53,10 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   // ── ML: Fetch estimasi waktu ───────────────────────────────────────────────
   Future<void> _fetchEstimate(QrOrderSession cart) async {
     if (cart.isEmpty) {
-      setState(() => _estimatedMinutes = null);
+      setState(() {
+        _estimatedMinutes = null;
+        _isFallbackEstimate = false;
+      });
       return;
     }
 
@@ -72,7 +76,11 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
     if (mounted) {
       setState(() {
-        _estimatedMinutes   = result?.estimatedMinutes;
+        // Server tidak terjangkau → estimasi kasar (jumlah menu prep time,
+        // tanpa ML/buffer) daripada banner estimasi hilang tanpa keterangan.
+        _estimatedMinutes = result?.estimatedMinutes ??
+            PrepTimeService.rawFallbackEstimate(items);
+        _isFallbackEstimate = result == null;
         _isFetchingEstimate = false;
       });
     }
@@ -533,7 +541,10 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                       Expanded(child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Estimasi Waktu Siap',
+                          Text(
+                            _isFallbackEstimate
+                                ? 'Estimasi Kasar (offline)'
+                                : 'Estimasi Waktu Siap',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: colorScheme.onPrimaryContainer,
                               fontWeight: FontWeight.w600)),

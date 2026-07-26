@@ -216,16 +216,39 @@ class _PrepTimeCard extends StatefulWidget {
 
 class _PrepTimeCardState extends State<_PrepTimeCard> {
   late final Future<PrepTimeResult?> _future;
+  List<PrepTimeRequestItem> _requestItems = [];
 
   /// Konversi QrOrderItemModel → PrepTimeRequestItem untuk ML API.
-  /// preparation_time_minutes di-default 15 karena QrOrderItemModel
-  /// tidak menyimpan field ini. Akan lebih akurat setelah data real tersedia.
-  List<PrepTimeRequestItem> _buildRequestItems() {
+  /// Ambil preparation_time_minutes ASLI dari tabel menu_items — sebelumnya
+  /// di-hardcode 15 untuk semua item karena QrOrderItemModel tidak menyimpan
+  /// field ini, yang merusak weighted_prep_time (Es Teh dan Ayam Bakar sama
+  /// dianggap 15 menit). Fallback ke 15 hanya kalau menu item-nya sudah
+  /// dihapus dari tabel menu_items.
+  Future<List<PrepTimeRequestItem>> _buildRequestItems() async {
+    final ids = widget.order.items.map((i) => i.menuItemId).toSet().toList();
+    final prepTimes = <String, int>{};
+
+    if (ids.isNotEmpty) {
+      try {
+        final rows = await Supabase.instance.client
+            .from('menu_items')
+            .select('id, preparation_time_minutes')
+            .inFilter('id', ids);
+        for (final row in (rows as List)) {
+          final id = row['id'] as String?;
+          final prep = (row['preparation_time_minutes'] as num?)?.toInt();
+          if (id != null && prep != null) prepTimes[id] = prep;
+        }
+      } catch (e) {
+        debugPrint('Gagal ambil preparation_time_minutes: $e');
+      }
+    }
+
     return widget.order.items
         .map((item) => PrepTimeRequestItem(
               menuItemName: item.menuItemName,
               quantity: item.quantity,
-              preparationTimeMinutes: 15, // default — lihat catatan di bawah
+              preparationTimeMinutes: prepTimes[item.menuItemId] ?? 15,
               specialRequests: item.notes,
             ))
         .toList();
@@ -234,10 +257,13 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
   @override
   void initState() {
     super.initState();
-    _future = PrepTimeService.predict(
-      items: _buildRequestItems(),
-      branchId: widget.order.branchId ?? '',
-    );
+    _future = _buildRequestItems().then((items) {
+      _requestItems = items;
+      return PrepTimeService.predict(
+        items: items,
+        branchId: widget.order.branchId ?? '',
+      );
+    });
   }
 
   @override
@@ -285,9 +311,16 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
             );
           }
 
-          // Error atau null
+          // Server tidak terjangkau (mis. mati/timeout) → tampilkan estimasi
+          // kasar (jumlah menu prep time, tanpa ML/buffer) daripada
+          // menyembunyikan kartu ini sepenuhnya. Ditandai jelas beda dari hasil ML.
           final result = snap.data;
-          if (snap.hasError || result == null) {
+          final isFallback = snap.hasError || result == null;
+          final displayMinutes = isFallback
+              ? PrepTimeService.rawFallbackEstimate(_requestItems)
+              : result.estimatedMinutes;
+
+          if (isFallback && displayMinutes <= 0) {
             return Row(
               children: [
                 Icon(Icons.access_time_outlined,
@@ -302,7 +335,6 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
             );
           }
 
-          // Sukses
           return Row(
             children: [
               // Icon
@@ -312,8 +344,12 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
                   color: cs.primary.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.soup_kitchen_outlined,
-                    color: cs.primary, size: 22),
+                child: Icon(
+                    isFallback
+                        ? Icons.access_time_outlined
+                        : Icons.soup_kitchen_outlined,
+                    color: cs.primary,
+                    size: 22),
               ),
               const SizedBox(width: 14),
 
@@ -323,7 +359,9 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Estimasi Waktu Masak',
+                      isFallback
+                          ? 'Estimasi Kasar (offline)'
+                          : 'Estimasi Waktu Masak',
                       style: theme.textTheme.labelMedium?.copyWith(
                         color: cs.onPrimaryContainer
                             .withValues(alpha: 0.75),
@@ -331,8 +369,7 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      PrepTimeService.formatEstimate(
-                          result.estimatedMinutes),
+                      PrepTimeService.formatEstimate(displayMinutes),
                       style: theme.textTheme.titleLarge?.copyWith(
                         color: cs.primary,
                         fontWeight: FontWeight.bold,

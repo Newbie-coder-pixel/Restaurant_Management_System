@@ -36,8 +36,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   bool _isSubmitting = false;
 
   // ── ML state ────────────────────────────────────────────────────────────────
-  int?  _estimatedMinutes;   // hasil prediksi ML
+  int?  _estimatedMinutes;   // hasil prediksi ML, ATAU estimasi kasar fallback
   bool  _isFetchingEstimate  = false;
+  bool  _isFallbackEstimate  = false; // true kalau _estimatedMinutes bukan dari ML
 
   // ── Load data ──────────────────────────────────────────────────────────────
   @override
@@ -110,7 +111,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   // ── ML: Fetch estimasi waktu ───────────────────────────────────────────────
   Future<void> _fetchEstimate() async {
     if (_cart.isEmpty) {
-      setState(() => _estimatedMinutes = null);
+      setState(() {
+        _estimatedMinutes = null;
+        _isFallbackEstimate = false;
+      });
       return;
     }
 
@@ -133,7 +137,11 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
 
     if (mounted) {
       setState(() {
-        _estimatedMinutes  = result?.estimatedMinutes;
+        // Server tidak terjangkau → estimasi kasar (jumlah menu prep time,
+        // tanpa ML/buffer) daripada kartu estimasi hilang tanpa keterangan.
+        _estimatedMinutes = result?.estimatedMinutes ??
+            PrepTimeService.rawFallbackEstimate(items);
+        _isFallbackEstimate = result == null;
         _isFetchingEstimate = false;
       });
     }
@@ -580,8 +588,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
               child: Row(children: [
                 const Icon(Icons.schedule_rounded, size: 16, color: Colors.white),
                 const SizedBox(width: 8),
-                const Text('Estimasi siap masak:',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70)),
+                Text(
+                  _isFallbackEstimate ? 'Estimasi kasar (offline):' : 'Estimasi siap masak:',
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70)),
                 const SizedBox(width: 6),
                 if (_isFetchingEstimate)
                   const SizedBox(width: 14, height: 14,
