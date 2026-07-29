@@ -232,8 +232,22 @@ class SentimentEscalationService {
     required String body,
     required Map<String, String> data,
   }) async {
-    const proxyUrl =
-        kIsWeb ? '/api/notify' : 'http://localhost:3000/api/notify';
+    // Sama seperti ChatbotApi/customer_chatbot_screen — di build native tidak
+    // ada origin untuk path relatif '/api/notify', jadi harus nembak domain
+    // Vercel customer app eksplisit. Sebelumnya hardcode ke localhost:3000
+    // yang di HP asli selalu gagal, jadi push notif (eskalasi & konfirmasi
+    // booking) tidak pernah terkirim di luar dev lokal.
+    // Override dev lokal: `--dart-define=NOTIFY_API_BASE_URL=http://localhost:3000`
+    final String proxyUrl;
+    if (kIsWeb) {
+      proxyUrl = '/api/notify';
+    } else {
+      const override = String.fromEnvironment('NOTIFY_API_BASE_URL');
+      final base = override.isNotEmpty
+          ? override
+          : 'https://restaurant-customer-two.vercel.app';
+      proxyUrl = '$base/api/notify';
+    }
 
     final res = await http
         .post(

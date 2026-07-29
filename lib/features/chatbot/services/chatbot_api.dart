@@ -38,11 +38,19 @@ class OrderItemData {
 }
 
 class ChatbotApi {
+  // Di web, /api/chat relatif ke origin yang sedang di-serve (Vercel project
+  // staff app). Di build native (Android/iOS/desktop) tidak ada origin
+  // seperti itu, jadi harus nembak domain Vercel staff app secara eksplisit
+  // — sebelumnya ini hardcode ke 'http://localhost:3000' yang di HP asli
+  // merujuk ke HP itu sendiri, jadi chatbot selalu gagal di luar dev lokal.
+  // Override untuk dev lokal: `--dart-define=CHAT_API_BASE_URL=http://localhost:3000`
   static String get _proxyUrl {
-    if (kIsWeb) {
-      return '/api/chat';
-    }
-    return 'http://localhost:3000/api/chat';
+    if (kIsWeb) return '/api/chat';
+    const override = String.fromEnvironment('CHAT_API_BASE_URL');
+    final base = override.isNotEmpty
+        ? override
+        : 'https://restaurant-staff-topaz.vercel.app';
+    return '$base/api/chat';
   }
 
   static const String _model = 'llama-3.3-70b-versatile';

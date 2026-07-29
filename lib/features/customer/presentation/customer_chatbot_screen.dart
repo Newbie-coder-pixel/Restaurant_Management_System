@@ -89,9 +89,16 @@ class _CustomerChatbotScreenState
         const Duration(minutes: 5);
   }
 
+  // Sama seperti ChatbotApi (staff) — di build native tidak ada origin untuk
+  // path relatif '/api/chat', jadi harus nembak domain Vercel customer app
+  // eksplisit. Override dev lokal: `--dart-define=CHAT_API_BASE_URL=http://localhost:3000`
   String get _proxyUrl {
     if (kIsWeb) return '/api/chat';
-    return 'http://localhost:3000/api/chat';
+    const override = String.fromEnvironment('CHAT_API_BASE_URL');
+    final base = override.isNotEmpty
+        ? override
+        : 'https://restaurant-customer-two.vercel.app';
+    return '$base/api/chat';
   }
 
   // Prioritas: widget.branchId → _selectedBranchId (dipilih user) → ''
