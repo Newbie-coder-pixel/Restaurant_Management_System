@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/config/app_config.dart';
 import '../providers/cart_provider.dart';
 import '../providers/customer_auth_provider.dart';
 import '../services/sentiment_escalation_service.dart';
@@ -95,9 +96,7 @@ class _CustomerChatbotScreenState
   String get _proxyUrl {
     if (kIsWeb) return '/api/chat';
     const override = String.fromEnvironment('CHAT_API_BASE_URL');
-    final base = override.isNotEmpty
-        ? override
-        : 'https://restaurant-customer-two.vercel.app';
+    final base = override.isNotEmpty ? override : AppConfig.customerAppUrl;
     return '$base/api/chat';
   }
 

@@ -14,6 +14,7 @@ import '../../../../features/auth/providers/auth_provider.dart';
 import '../../../../shared/models/order_model.dart';
 import '../../midtrans/midtrans_provider.dart';
 import '../../models/midtrans_model.dart';
+import '../../services/receipt_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPER
@@ -161,9 +162,15 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
   }
 
   Future<void> _printReceipt() async {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('Mencetak struk...', style: TextStyle(fontFamily: 'Poppins')),
-    ));
+    try {
+      await ReceiptService.printReceipt(
+        order: widget.order,
+        cashierName: ref.read(currentStaffProvider)?.fullName,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Gagal mencetak struk: $e');
+    }
   }
 
   @override

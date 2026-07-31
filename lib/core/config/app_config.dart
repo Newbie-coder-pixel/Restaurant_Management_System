@@ -44,6 +44,12 @@ class AppConfig {
   static const String appName = 'RestaurantOS';
   static const String appVersion = '1.0.0';
 
+  // ── Public web app domains (Vercel deployments) ───────────
+  // Dipakai sebagai base URL untuk /api/* proxy calls dari build native
+  // (yang tidak punya origin seperti web), dan untuk QR promosi di struk.
+  static const String staffAppUrl = 'https://restaurant-staff-topaz.vercel.app';
+  static const String customerAppUrl = 'https://restaurant-customer-two.vercel.app';
+
   // ── Order Number Prefix (per branch code) ─────────────────
   static const String defaultOrderPrefix = 'A';
 

@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/config/app_config.dart';
 
 // ── Hasil analisis sentiment ───────────────────────────────────────────
 enum SentimentLevel { neutral, negative, urgent }
@@ -243,9 +244,7 @@ class SentimentEscalationService {
       proxyUrl = '/api/notify';
     } else {
       const override = String.fromEnvironment('NOTIFY_API_BASE_URL');
-      final base = override.isNotEmpty
-          ? override
-          : 'https://restaurant-customer-two.vercel.app';
+      final base = override.isNotEmpty ? override : AppConfig.customerAppUrl;
       proxyUrl = '$base/api/notify';
     }
 

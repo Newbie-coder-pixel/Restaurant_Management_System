@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
+import '../../../core/config/app_config.dart';
 
 class ChatMessage {
   final String role;
@@ -47,9 +48,7 @@ class ChatbotApi {
   static String get _proxyUrl {
     if (kIsWeb) return '/api/chat';
     const override = String.fromEnvironment('CHAT_API_BASE_URL');
-    final base = override.isNotEmpty
-        ? override
-        : 'https://restaurant-staff-topaz.vercel.app';
+    final base = override.isNotEmpty ? override : AppConfig.staffAppUrl;
     return '$base/api/chat';
   }
 
