@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 // ─────────────────────────────────────────────────────────
 enum AttendanceStatus {
   present,
+  late,
   permission,
   sick,
   absent,
@@ -17,6 +18,7 @@ enum AttendanceStatus {
   String get label {
     switch (this) {
       case AttendanceStatus.present:    return 'Present';
+      case AttendanceStatus.late:       return 'Late';
       case AttendanceStatus.permission: return 'Permission';
       case AttendanceStatus.sick:       return 'Sick';
       case AttendanceStatus.absent:     return 'Absent';
@@ -24,11 +26,12 @@ enum AttendanceStatus {
     }
   }
 
-  String get value => name; // 'present', 'permission', etc — matches DB
+  String get value => name; // 'present', 'late', 'permission', etc — matches DB
 
   Color get color {
     switch (this) {
       case AttendanceStatus.present:    return const Color(0xFF4CAF50);
+      case AttendanceStatus.late:       return const Color(0xFFFFC107);
       case AttendanceStatus.permission: return const Color(0xFF2196F3);
       case AttendanceStatus.sick:       return const Color(0xFFFF9800);
       case AttendanceStatus.absent:     return const Color(0xFFF44336);
@@ -38,6 +41,7 @@ enum AttendanceStatus {
 
   static AttendanceStatus fromString(String? s) {
     switch (s) {
+      case 'late':        return AttendanceStatus.late;
       case 'permission': return AttendanceStatus.permission;
       case 'sick':        return AttendanceStatus.sick;
       case 'absent':       return AttendanceStatus.absent;
@@ -59,6 +63,9 @@ class AttendanceRecord {
   final DateTime date;
   final AttendanceStatus status;
   final String? notes;
+  final String source; // 'manual' or 'self_service'
+  final String? createdBy;
+  final String? updatedBy;
 
   AttendanceRecord({
     required this.id,
@@ -69,6 +76,9 @@ class AttendanceRecord {
     required this.date,
     required this.status,
     this.notes,
+    this.source = 'manual',
+    this.createdBy,
+    this.updatedBy,
   });
 
   factory AttendanceRecord.fromJson(Map<String, dynamic> j) => AttendanceRecord(
@@ -84,7 +94,12 @@ class AttendanceRecord {
         date: DateTime.parse(j['date'] as String),
         status: AttendanceStatus.fromString(j['status'] as String?),
         notes: j['notes'] as String?,
+        source: j['source'] as String? ?? 'manual',
+        createdBy: j['created_by'] as String?,
+        updatedBy: j['updated_by'] as String?,
       );
+
+  bool get isSelfService => source == 'self_service';
 
   // Work duration in minutes (null if not yet clocked out)
   int? get durationMinutes {
@@ -988,7 +1003,7 @@ class _AttendanceCard extends StatelessWidget {
     final status = record.status;
     final statusColor = status.color;
     final statusLabel = status.label;
-    final showClock = status == AttendanceStatus.present;
+    final showClock = record.clockIn != null || record.clockOut != null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1080,6 +1095,19 @@ class _AttendanceCard extends StatelessWidget {
                         color: statusColor,
                         fontWeight: FontWeight.w600)),
               ),
+              if (record.isSelfService) ...[
+                const SizedBox(height: 4),
+                const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.gps_fixed_rounded,
+                      size: 10, color: AppColors.textSecondary),
+                  SizedBox(width: 2),
+                  Text('Self clock-in',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 9,
+                          color: AppColors.textSecondary)),
+                ]),
+              ],
             ]),
             const SizedBox(width: 4),
             const Icon(Icons.edit_outlined,

@@ -5,6 +5,7 @@ import '../../core/models/staff_role.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/auth/providers/auth_provider.dart';
+import 'clock_in_out_control.dart';
 
 class _NavItem {
   final String label;
@@ -207,6 +208,9 @@ class AppDrawer extends ConsumerWidget {
                 ],
               ),
             ),
+
+            // ── Clock In/Out ──
+            const ClockInOutControl(),
 
             const Divider(color: Colors.white12, height: 1),
             const SizedBox(height: 8),

@@ -29,9 +29,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Digunakan untuk mengambil foto profil staff</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat.</string>
+	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat dan memverifikasi presensi staff saat clock in/out.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat.</string>
+	<string>Kami menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat dan memverifikasi presensi staff saat clock in/out.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Digunakan untuk menyimpan foto profil staff</string>
 	<key>NSPhotoLibraryUsageDescription</key>
