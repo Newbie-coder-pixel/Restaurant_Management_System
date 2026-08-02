@@ -198,7 +198,7 @@ serve(async (req: Request) => {
     // `order_id` from this notification is no longer the real orders.id UUID.
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, status, table_id, branch_id, subtotal, tax_amount, discount_amount, total_amount")
+      .select("id, status, table_id, branch_id, subtotal, tax_amount, discount_amount, total_amount, served_at")
       .eq("midtrans_order_id", order_id)
       .single();
 
@@ -222,12 +222,35 @@ serve(async (req: Request) => {
     // Midtrans, or a mismatched order_id) without ever being checked against
     // that order's total_amount.
     if (isPaid) {
-      const expected = Number(order.total_amount);
+      // orders.total_amount NEVER includes the dine-in overtime charge (Rp5000
+      // per hour or fraction thereof, after 2 hours from served_at) — it's a
+      // purely client-side, live-computed value (see calculateOvertimeCharge()
+      // in lib/shared/models/order_model.dart) that's never persisted back to
+      // the DB. Without adding it here too, ANY order that went into overtime
+      // (and was correctly charged that amount by midtrans-create-token) would
+      // permanently fail this check with "Amount mismatch", and since Midtrans
+      // retries a failing webhook with the exact same gross_amount, it would
+      // never succeed — the order would stay unpaid forever even though the
+      // customer paid in full. Mirrors midtrans-create-token/index.ts exactly
+      // — keep both in sync.
+      const kMaxDineInMinutes = 120; // kMaxDineInDuration = 2 hours
+      const kOvertimeChargePerHour = 5000;
+      const servedAt = order.served_at as string | null;
+      let overtimeCharge = 0;
+      if (servedAt) {
+        const elapsedMinutes = (Date.now() - new Date(servedAt).getTime()) / 60000;
+        const overMinutes = elapsedMinutes - kMaxDineInMinutes;
+        if (overMinutes > 0) {
+          overtimeCharge = Math.ceil(overMinutes / 60) * kOvertimeChargePerHour;
+        }
+      }
+      const tolerance = overtimeCharge > 0 ? kOvertimeChargePerHour : 1;
+      const expected = Number(order.total_amount) + overtimeCharge;
       const received = Number(gross_amount);
       if (
         !Number.isFinite(expected) ||
         !Number.isFinite(received) ||
-        Math.abs(expected - received) > 1 // Rp1 rounding tolerance
+        Math.abs(expected - received) > tolerance
       ) {
         console.error(
           `Amount mismatch for order ${internalOrderId}: expected=${expected} received=${received}`
