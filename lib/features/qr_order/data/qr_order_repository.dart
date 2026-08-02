@@ -304,6 +304,31 @@ await _client.from('order_items').insert(orderItemsData);
     return QrOrderModel.fromMap(normalized);
   }
 
+  // ── Active order for a table (prevents disconnected duplicate orders when
+  // the same table's QR is scanned again while an order is already open) ──
+  Future<QrOrderModel?> fetchActiveOrderForTable(String tableId) async {
+    final orderResp = await _client
+        .from('orders')
+        .select(
+          'id, order_number, queue_number, table_id, table_name, '
+          'customer_name, customer_phone, total_amount, status, payment_status, '
+          'payment_method, created_at, updated_at, branch_id, notes',
+        )
+        .eq('table_id', tableId)
+        .not('status', 'in', '(paid,cancelled)')
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    if (orderResp == null) return null;
+
+    final itemsResp = await _client
+        .from('order_items')
+        .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
+        .eq('order_id', orderResp['id'] as String);
+
+    return QrOrderModel.fromMap(_normalizeOrderMap(orderResp, itemsResp));
+  }
+
   Future<QrOrderModel?> fetchByQueueNumber(String queueNumber) async {
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);

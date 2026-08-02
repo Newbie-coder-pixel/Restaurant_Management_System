@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
+import '../models/qr_order_model.dart';
 
 final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, branchId) async => ref.read(qrOrderRepositoryProvider).fetchMenuByBranch(branchId),
@@ -12,6 +13,13 @@ final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, Stri
 
 final _tableInfoProvider = FutureProvider.family<Map<String, dynamic>?, String>(
   (ref, tableId) async => ref.read(qrOrderRepositoryProvider).fetchTableInfo(tableId),
+);
+
+// Prevents disconnected duplicate orders: if this table already has an
+// active (unpaid, uncancelled) order, a fresh QR scan should offer to join
+// it rather than silently starting an unrelated second order.
+final _activeOrderForTableProvider = FutureProvider.family<QrOrderModel?, String>(
+  (ref, tableId) async => ref.read(qrOrderRepositoryProvider).fetchActiveOrderForTable(tableId),
 );
 
 final _selectedCategoryProvider = StateProvider<String?>((ref) => null);
@@ -28,6 +36,7 @@ class QrMenuScreen extends ConsumerStatefulWidget {
 class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _fabAnimCtrl;
   final _searchCtrl = TextEditingController();
+  bool _activeOrderPromptShown = false;
 
   @override
   void initState() {
@@ -70,9 +79,81 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
     return map;
   }
 
+  void _joinActiveOrder(QrOrderModel order) {
+    ref.read(addOrderModeProvider.notifier).state = AddOrderModeState(
+      orderId: order.id,
+      queueNumber: order.queueNumber,
+      tableId: order.tableId,
+    );
+    ref.read(activeQrCartNotifierProvider).clearCart();
+  }
+
+  Future<void> _showActiveOrderDialog(QrOrderModel order) async {
+    if (!mounted) return;
+    final itemCount = order.items.fold<int>(0, (s, i) => s + i.quantity);
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('This table already has an order',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          content: Text(
+            'Order #${order.queueNumber} ($itemCount item${itemCount == 1 ? '' : 's'}) is '
+            'already open at this table. If you\'re dining together, add your items to it '
+            'or view its status — only start a separate order if you\'re a different party.',
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+          ),
+          actionsOverflowDirection: VerticalDirection.down,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Start a separate order',
+                  style: TextStyle(fontFamily: 'Poppins')),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.go(
+                    '/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
+              },
+              child: const Text('View order status',
+                  style: TextStyle(fontFamily: 'Poppins')),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _joinActiveOrder(order);
+              },
+              child: Text('Add to Order #${order.queueNumber}',
+                  style: const TextStyle(fontFamily: 'Poppins')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tableInfoAsync = ref.watch(_tableInfoProvider(widget.tableId));
+
+    ref.listen<AsyncValue<QrOrderModel?>>(
+      _activeOrderForTableProvider(widget.tableId),
+      (previous, next) {
+        final order = next.valueOrNull;
+        if (order == null || _activeOrderPromptShown) return;
+        // Already in add-order mode for this exact order (e.g. came back
+        // from "Add Order" on the tracker screen) — nothing to prompt.
+        if (ref.read(addOrderModeProvider)?.orderId == order.id) return;
+        _activeOrderPromptShown = true;
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _showActiveOrderDialog(order));
+      },
+    );
 
     return tableInfoAsync.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
