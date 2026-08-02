@@ -121,7 +121,7 @@ serve(async (req: Request) => {
     // (which is now unique per attempt and won't match the `id` column).
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, status, payment_status, total_amount, branch_id")
+      .select("id, status, payment_status, total_amount, branch_id, served_at")
       .eq("id", internalOrderId)
       .single();
 
@@ -144,9 +144,37 @@ serve(async (req: Request) => {
     // directly as the gross_amount sent to Midtrans without ever being checked
     // against the `order.total_amount` fetched above — a client could request
     // a Snap token for any amount regardless of the order's actual price.
-    // Rp1 tolerance for rounding.
-    const expectedAmount = Math.round(Number(order.total_amount));
-    if (Math.abs(expectedAmount - amount) > 1) {
+    //
+    // orders.total_amount NEVER includes the dine-in overtime charge (Rp5000
+    // per hour or fraction thereof, after 2 hours from served_at) — it's a
+    // purely client-side, live-computed value (see calculateOvertimeCharge()
+    // in lib/shared/models/order_model.dart) that's never persisted back to
+    // the DB, because it depends on "now" at payment time, not a value that
+    // can be durably cached. Without adding it here too, ANY order that goes
+    // into overtime would 400 forever with "gross_amount does not match
+    // order total" — the client's total (which correctly includes overtime)
+    // would never match the DB's (which structurally never does).
+    // Mirrors calculateOvertimeCharge()'s constants exactly — keep in sync.
+    const kMaxDineInMinutes = 120; // kMaxDineInDuration = 2 hours
+    const kOvertimeChargePerHour = 5000;
+    function calculateOvertimeCharge(servedAt: string | null): number {
+      if (!servedAt) return 0;
+      const elapsedMinutes = (Date.now() - new Date(servedAt).getTime()) / 60000;
+      const overMinutes = elapsedMinutes - kMaxDineInMinutes;
+      if (overMinutes <= 0) return 0;
+      const overHours = Math.ceil(overMinutes / 60);
+      return overHours * kOvertimeChargePerHour;
+    }
+    const overtimeCharge = calculateOvertimeCharge(order.served_at as string | null);
+
+    // Rp1 tolerance normally; widened to one overtime-hour-bucket when the
+    // order is actually in overtime, to absorb the race between the client
+    // computing overtimeCharge at render time and the server recomputing it
+    // here a few seconds later (both use "now", so they can land in
+    // different hour buckets right at an hour boundary).
+    const tolerance = overtimeCharge > 0 ? kOvertimeChargePerHour : 1;
+    const expectedAmount = Math.round(Number(order.total_amount)) + overtimeCharge;
+    if (Math.abs(expectedAmount - amount) > tolerance) {
       console.error(
         `gross_amount mismatch: order=${internalOrderId} expected=${expectedAmount} received=${amount}`
       );
