@@ -3,7 +3,7 @@
 import 'dart:math';
 import 'package:geolocator/geolocator.dart';
 
-/// Model untuk data cabang restaurant
+/// Model for restaurant branch data
 class RestaurantBranch {
   final String id;
   final String name;
@@ -26,7 +26,7 @@ class RestaurantBranch {
   });
 }
 
-/// Result wrapper untuk lokasi + cabang terdekat
+/// Result wrapper for location + nearest branch
 class NearestBranchResult {
   final RestaurantBranch branch;
   final double distanceKm;
@@ -40,7 +40,7 @@ class NearestBranchResult {
 }
 
 class LocationService {
-  /// Cek apakah location service aktif & permission sudah granted
+  /// Check whether the location service is active & permission has been granted
   Future<bool> isLocationReady() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return false;
@@ -50,7 +50,7 @@ class LocationService {
         permission == LocationPermission.whileInUse;
   }
 
-  /// Request permission — kembalikan true jika granted
+  /// Request permission — returns true if granted
   Future<bool> requestPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return false;
@@ -69,7 +69,7 @@ class LocationService {
         permission == LocationPermission.whileInUse;
   }
 
-  /// Dapatkan posisi user saat ini
+  /// Get the user's current position
   Future<Position?> getCurrentPosition() async {
     try {
       return await Geolocator.getCurrentPosition(
@@ -83,7 +83,7 @@ class LocationService {
     }
   }
 
-  /// Hitung jarak antara dua koordinat (km) — Haversine formula
+  /// Calculate the distance between two coordinates (km) — Haversine formula
   double calculateDistance(
     double lat1,
     double lon1,
@@ -106,7 +106,7 @@ class LocationService {
 
   double _toRad(double deg) => deg * (pi / 180);
 
-  /// Temukan cabang terdekat dari posisi user
+  /// Find the nearest branch from the user's position
   NearestBranchResult? findNearestBranch(
     Position userPosition,
     List<RestaurantBranch> branches,
@@ -149,7 +149,7 @@ class LocationService {
     return findNearestBranch(position, branches);
   }
 
-  /// Format jarak jadi string yang readable
+  /// Format distance into a readable string
   String formatDistance(double km) {
     if (km < 1) {
       return '${(km * 1000).round()} m';

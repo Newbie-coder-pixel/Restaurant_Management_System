@@ -125,14 +125,14 @@ class InventoryService {
     );
   }
 
-  /// Dipanggil dari order_screen saat order → preparing.
-  /// [menuItemName] diisi nama menu agar histori terpakai lebih informatif.
+  /// Called from order_screen when an order moves to → preparing.
+  /// [menuItemName] holds the menu item name so the usage history is more informative.
   Future<void> deductFromOrder({
     required String inventoryItemId,
     required String branchId,
     required double quantity,
     required String orderId,
-    String? menuItemName,       // ← BARU: nama menu untuk kolom menu_item_name
+    String? menuItemName,       // ← NEW: menu item name for the menu_item_name column
     String? createdBy,
   }) async {
     await _client.rpc('increment_inventory_field', params: {
@@ -147,31 +147,31 @@ class InventoryService {
       type: 'order_deduct',
       quantity: quantity,
       referenceId: orderId,
-      note: menuItemName != null ? 'Dari order: $menuItemName' : 'Deducted from order',
+      note: menuItemName != null ? 'From order: $menuItemName' : 'Deducted from order',
       createdBy: createdBy,
-      menuItemName: menuItemName,   // ← BARU
+      menuItemName: menuItemName,   // ← NEW
     );
 
     await _checkAndUpdateMenuAvailability(inventoryItemId, branchId);
   }
 
-  /// Potong stok inventory berdasarkan resep (bahan baku per menu).
+  /// Deduct inventory stock based on the recipe (ingredients per menu item).
   ///
-  /// [requirements] = daftar kebutuhan bahan: nama bahan (harus cocok dengan
-  /// `inventory_items.name` di cabang ini) + jumlah total yang harus dipotong
-  /// (sudah dikalikan quantity order).
+  /// [requirements] = list of ingredient needs: ingredient name (must match
+  /// `inventory_items.name` in this branch) + total quantity to deduct
+  /// (already multiplied by the order quantity).
   ///
-  /// Dicocokkan berdasarkan NAMA (bukan ID) karena `inventory_items` bersifat
-  /// harian (row baru setiap hari lewat [rolloverDailyStock]), sehingga ID
-  /// yang tersimpan di resep menu bisa saja sudah tidak berlaku untuk hari ini.
+  /// Matched by NAME (not ID) because `inventory_items` is daily (a new row
+  /// each day via [rolloverDailyStock]), so the ID stored in a menu recipe
+  /// may no longer be valid for today.
   ///
-  /// Item yang namanya tidak ditemukan di stok hari ini akan dilewati dengan
-  /// aman (dikembalikan lewat [notFound]) agar tidak menggagalkan seluruh
-  /// proses "mulai masak" hanya karena satu bahan belum terdaftar di inventory.
+  /// Items whose name isn't found in today's stock are safely skipped
+  /// (returned via [notFound]) so a single unregistered ingredient doesn't
+  /// fail the whole "start cooking" process.
   Future<List<String>> deductIngredientsForOrder({
     required String branchId,
     required String orderId,
-    required Map<String, double> requirements, // nama bahan → qty yang dipotong
+    required Map<String, double> requirements, // ingredient name → qty to deduct
     String? menuItemName,
     String? createdBy,
   }) async {
@@ -296,7 +296,7 @@ class InventoryService {
     );
   }
 
-  /// Roll over stok akhir → stok awal hari berikutnya.
+  /// Roll over closing stock → next day's opening stock.
   /// ✅ FIX: carry over unit_secondary & unit_conversion
   Future<void> rolloverDailyStock(String branchId) async {
     final tomorrow = DateTime.now()
@@ -324,7 +324,7 @@ class InventoryService {
         'cost_per_unit': item.costPerUnit,
         'linked_menu_ids': item.linkedMenuIds,
         'date': tomorrow,
-        // ✅ FIX: carry over satuan sekunder
+        // ✅ FIX: carry over the secondary unit
         'unit_secondary': item.unitSecondary,
         'unit_conversion': item.unitConversion,
       };
@@ -346,7 +346,7 @@ class InventoryService {
     String? note,
     String? referenceId,
     String? createdBy,
-    String? menuItemName,   // ← BARU
+    String? menuItemName,   // ← NEW
   }) async {
     await _client.from('inventory_transactions').insert({
       'inventory_item_id': inventoryItemId,
@@ -356,7 +356,7 @@ class InventoryService {
       'notes': note,
       'reference_id': referenceId,
       'performed_by': createdBy,
-      'menu_item_name': menuItemName,   // ← BARU: nama menu tampil di histori
+      'menu_item_name': menuItemName,   // ← NEW: menu item name shown in history
     });
   }
 
@@ -405,7 +405,7 @@ class InventoryService {
         }
       }
     } catch (_) {
-      // Tidak crash jika menu update gagal
+      // Don't crash if the menu update fails
     }
   }
 

@@ -193,30 +193,30 @@ class MenuIngredient {
 
 // ─── MENU INGREDIENT DRAFT ────────────────────────────────────────────────────
 
-/// Digunakan sementara di form sebelum disimpan ke DB.
-/// Mendukung input dalam satuan sekunder (butir, ml, dll).
+/// Used temporarily in the form before being saved to the DB.
+/// Supports input in a secondary unit (piece, ml, etc.).
 ///
-/// Contoh: Telur — unit=kg, unitSecondary=butir, unitConversion=6
-///   → staff input "2 butir" → disimpan quantity=0.333 kg di DB
+/// Example: Egg — unit=kg, unitSecondary=piece, unitConversion=6
+///   → staff inputs "2 pieces" → stored as quantity=0.333 kg in the DB
 class MenuIngredientDraft {
   final String inventoryItemId;
   final String inventoryItemName;
 
-  /// Satuan utama dari inventory (kg, liter, pcs, dll)
+  /// Primary unit from inventory (kg, liter, pcs, etc.)
   final String unit;
 
-  /// Satuan sekunder jika ada (butir, ml, lembar, dll) — nullable
+  /// Secondary unit if any (piece, ml, sheet, etc.) — nullable
   final String? unitSecondary;
 
-  /// Berapa satuan kecil dalam 1 satuan utama. Contoh: 1 kg = 6 butir → 6.0
+  /// How many small units make up 1 primary unit. Example: 1 kg = 6 pieces → 6.0
   final double unitConversion;
 
-  /// Quantity selalu disimpan dalam satuan UTAMA (kg, liter).
-  /// Konversi dilakukan saat user input dalam satuan sekunder.
+  /// Quantity is always stored in the PRIMARY unit (kg, liter).
+  /// Conversion happens when the user inputs in the secondary unit.
   final double quantity;
 
-  /// True = user sedang input/lihat dalam satuan sekunder (butir, ml).
-  /// False = user input dalam satuan utama (kg, liter).
+  /// True = user is currently inputting/viewing in the secondary unit (piece, ml).
+  /// False = user is inputting in the primary unit (kg, liter).
   final bool useSecondaryUnit;
 
   final double costPerUnit;
@@ -232,21 +232,21 @@ class MenuIngredientDraft {
     this.costPerUnit = 0,
   });
 
-  /// Apakah item ini punya satuan sekunder yang valid
+  /// Whether this item has a valid secondary unit
   bool get hasSecondaryUnit =>
       unitSecondary != null &&
       unitSecondary!.isNotEmpty &&
       unitConversion > 1;
 
-  /// Qty yang ditampilkan ke user (dalam satuan yang sedang aktif)
+  /// Qty shown to the user (in the currently active unit)
   double get displayQty =>
       useSecondaryUnit && hasSecondaryUnit ? quantity * unitConversion : quantity;
 
-  /// Label satuan yang ditampilkan ke user
+  /// Unit label shown to the user
   String get displayUnit =>
       useSecondaryUnit && hasSecondaryUnit ? unitSecondary! : unit;
 
-  /// Konversi qty dari tampilan user → satuan utama untuk disimpan ke DB
+  /// Convert qty from the user-facing display → primary unit for DB storage
   static double toStorageQty({
     required double inputQty,
     required bool useSecondary,
@@ -279,7 +279,7 @@ class MenuIngredientDraft {
         inventoryItemId: inventoryItemId,
         inventoryItemName: inventoryItemName,
         unit: unit,
-        quantity: quantity, // sudah dalam satuan utama
+        quantity: quantity, // already in the primary unit
         costPerUnit: costPerUnit,
       );
 }

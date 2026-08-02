@@ -22,12 +22,12 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
   TimeOfDay _time = const TimeOfDay(hour: 19, minute: 0);
 
   bool _isSearching = false;
-  int _duration = 120; // default 2 jam
+  int _duration = 120; // default 2 hours
   Map<String, dynamic>? _assignedTable;
   String? _assignError;
-  String? _confirmationCode; // di-generate saat meja berhasil ditemukan
+  String? _confirmationCode; // generated once a table is successfully found
 
-  // ── Validasi waktu booking tidak kurang dari 2 jam dari sekarang ──
+  // ── Validate that the booking time is at least 2 hours from now ──
   String? _validateBookingTime() {
     final bookingDateTime = DateTime(
       _date.year, _date.month, _date.day,
@@ -35,13 +35,13 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
     );
     final minAllowed = DateTime.now().add(const Duration(hours: 2));
     if (bookingDateTime.isBefore(minAllowed)) {
-      return 'Booking minimal 2 jam sebelum waktu kedatangan.\nPilih waktu minimal ${_formatDateDisplay(minAllowed)} ${minAllowed.hour.toString().padLeft(2, '0')}:${minAllowed.minute.toString().padLeft(2, '0')}.';
+      return 'Bookings must be made at least 2 hours before arrival.\nPlease choose a time no earlier than ${_formatDateDisplay(minAllowed)} ${minAllowed.hour.toString().padLeft(2, '0')}:${minAllowed.minute.toString().padLeft(2, '0')}.';
     }
     return null;
   }
 
   Future<void> _findAvailableTable() async {
-    // Validasi waktu dulu sebelum cari meja
+    // Validate the time first before searching for a table
     final timeError = _validateBookingTime();
     if (timeError != null) {
       setState(() {
@@ -61,7 +61,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
     try {
       final dateStr = _formatDate(_date);
 
-      // ── Cek apakah tanggal ini adalah hari tutup restoran ──
+      // ── Check whether this date is a restaurant closure day ──
       final closureRes = await Supabase.instance.client
           .from('restaurant_closures')
           .select('reason')
@@ -73,8 +73,8 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
         final reason = closureRes['reason'] as String?;
         setState(() {
           _assignError = reason != null && reason.isNotEmpty
-              ? '🚫 Restoran tutup pada tanggal ini.\nAlasan: $reason\n\nSilakan pilih tanggal lain.'
-              : '🚫 Restoran tutup pada tanggal ini.\nSilakan pilih tanggal lain.';
+              ? '🚫 The restaurant is closed on this date.\nReason: $reason\n\nPlease choose another date.'
+              : '🚫 The restaurant is closed on this date.\nPlease choose another date.';
           _isSearching = false;
         });
         return;
@@ -90,13 +90,13 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
 
       if ((tables as List).isEmpty) {
         setState(() {
-          _assignError = 'Tidak ada meja tersedia untuk $_guests orang';
+          _assignError = 'No table available for $_guests guests';
           _isSearching = false;
         });
         return;
       }
 
-      // Ambil semua booking aktif di tanggal yang sama, lalu filter overlap durasi
+      // Get all active bookings on the same date, then filter by duration overlap
       final existingBookings = await Supabase.instance.client
           .from('bookings')
           .select('table_id, booking_time, duration_minutes')
@@ -104,7 +104,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
           .eq('booking_date', dateStr)
           .inFilter('status', ['pending', 'confirmed', 'seated']);
 
-      // Hitung interval booking baru: [newStart, newEnd) dalam menit
+      // Compute the new booking interval: [newStart, newEnd) in minutes
       final newStart = _time.hour * 60 + _time.minute;
       final newEnd = newStart + _duration;
 
@@ -114,7 +114,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
         final existStart = int.parse(parts[0]) * 60 + int.parse(parts[1]);
         final existDur   = (b['duration_minutes'] as int?) ?? 120;
         final existEnd   = existStart + existDur;
-        // Overlap jika dua interval saling berpotongan
+        // Overlaps if the two intervals intersect
         return newStart < existEnd && newEnd > existStart;
       }).map((b) => b['table_id'] as String?).where((id) => id != null).toSet();
 
@@ -125,7 +125,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
       if (available.isEmpty) {
         setState(() {
           _assignError =
-              'Semua meja untuk $_guests orang sudah penuh di waktu tersebut.\nCoba waktu lain.';
+              'All tables for $_guests guests are fully booked at that time.\nTry a different time.';
           _isSearching = false;
         });
         return;
@@ -145,7 +145,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
   }
 
   String _generateConfirmationCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // hindari 0/O, 1/I agar tidak ambigu
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // avoid 0/O, 1/I to prevent ambiguity
     final rng = Random();
     final suffix = List.generate(4, (_) => chars[rng.nextInt(chars.length)]).join();
     final d = _date;
@@ -194,12 +194,12 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
               ),
               const SizedBox(width: 12),
               const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Reservasi Baru',
+                Text('New Reservation',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700,
                         fontSize: 18)),
-                Text('Meja akan dipilihkan otomatis',
+                Text('A table will be assigned automatically',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 12,
@@ -213,22 +213,22 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Nama ────────────────────────────────
+                    // ── Name ─────────────────────────────────
                     TextField(
                       controller: _nameCtrl,
                       onChanged: (_) => setState(() {}),
                       decoration: const InputDecoration(
-                          labelText: 'Nama Tamu *',
+                          labelText: 'Guest Name *',
                           prefixIcon: Icon(Icons.person_outline)),
                     ),
                     const SizedBox(height: 12),
 
-                    // ── No HP ────────────────────────────────
+                    // ── Phone Number ─────────────────────────
                     TextField(
                       controller: _phoneCtrl,
                       keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
-                          labelText: 'No. HP',
+                          labelText: 'Phone Number',
                           prefixIcon: Icon(Icons.phone_outlined)),
                     ),
                     const SizedBox(height: 12),
@@ -243,7 +243,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Jumlah tamu ──────────────────────────
+                    // ── Guest Count ───────────────────────────
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -255,7 +255,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                             color: Color(0xFF1A1A2E), size: 20),
                         const SizedBox(width: 8),
                         const Flexible(
-                          child: Text('Jumlah Tamu',
+                          child: Text('Guest Count',
                               style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontWeight: FontWeight.w500),
@@ -300,7 +300,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     ),
                     const SizedBox(height: 12),
 
-                    // ── Tanggal & Waktu ──────────────────────
+                    // ── Date & Time ───────────────────────────
                     Row(children: [
                       Expanded(child: _dateTile()),
                       const SizedBox(width: 8),
@@ -308,17 +308,17 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     ]),
                     const SizedBox(height: 8),
 
-                    // ── Durasi ───────────────────────────────
+                    // ── Duration ──────────────────────────────
                     DropdownButtonFormField<int>(
                       initialValue: _duration,
                       decoration: const InputDecoration(
-                          labelText: 'Durasi',
+                          labelText: 'Duration',
                           prefixIcon: Icon(Icons.timer_outlined)),
                       items: const [
-                        DropdownMenuItem(value: 60,  child: Text('1 jam (60 menit)',   style: TextStyle(fontFamily: 'Poppins'))),
-                        DropdownMenuItem(value: 90,  child: Text('1.5 jam (90 menit)', style: TextStyle(fontFamily: 'Poppins'))),
-                        DropdownMenuItem(value: 120, child: Text('2 jam (120 menit)',  style: TextStyle(fontFamily: 'Poppins'))),
-                        DropdownMenuItem(value: 180, child: Text('3 jam (180 menit)',  style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 60,  child: Text('1 hour (60 min)',   style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 90,  child: Text('1.5 hours (90 min)', style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 120, child: Text('2 hours (120 min)',  style: TextStyle(fontFamily: 'Poppins'))),
+                        DropdownMenuItem(value: 180, child: Text('3 hours (180 min)',  style: TextStyle(fontFamily: 'Poppins'))),
                       ],
                       onChanged: (v) {
                         if (v != null) {
@@ -348,7 +348,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                         SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Booking minimal 2 jam sebelum kedatangan. Pembatalan < 2 jam dikenakan biaya.',
+                            'Bookings must be made at least 2 hours before arrival. Cancellations < 2 hours are subject to a fee.',
                             style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 11,
@@ -359,7 +359,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Tombol cari meja ─────────────────────
+                    // ── Find table button ────────────────────
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -382,8 +382,8 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                             : const Icon(Icons.search, size: 18),
                         label: Text(
                           _isSearching
-                              ? 'Mencari meja...'
-                              : 'Cek & Pilihkan Meja Otomatis',
+                              ? 'Searching for a table...'
+                              : 'Check & Auto-Assign Table',
                           style: const TextStyle(
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w600),
@@ -392,7 +392,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     ),
                     const SizedBox(height: 12),
 
-                    // ── Hasil auto-assign ────────────────────
+                    // ── Auto-assign result ────────────────────
                     if (_assignedTable != null)
                       Container(
                         padding: const EdgeInsets.all(14),
@@ -410,14 +410,14 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Meja ${_assignedTable!['table_number']} — Kapasitas ${_assignedTable!['capacity']} orang',
+                                  'Table ${_assignedTable!['table_number']} — Capacity ${_assignedTable!['capacity']} guests',
                                   style: const TextStyle(
                                       fontFamily: 'Poppins',
                                       fontWeight: FontWeight.w700,
                                       color: Color(0xFF2E7D32)),
                                 ),
                                 Text(
-                                  'Bentuk: ${_assignedTable!['shape']} • Lantai ${_assignedTable!['floor_level']}',
+                                  'Shape: ${_assignedTable!['shape']} • Floor ${_assignedTable!['floor_level']}',
                                   style: const TextStyle(
                                       fontFamily: 'Poppins',
                                       fontSize: 12,
@@ -430,7 +430,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                                         size: 13, color: Color(0xFF1565C0)),
                                     const SizedBox(width: 4),
                                     Text(
-                                      'Kode: $_confirmationCode',
+                                      'Code: $_confirmationCode',
                                       style: const TextStyle(
                                           fontFamily: 'Poppins',
                                           fontSize: 12,
@@ -472,7 +472,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     const Divider(),
                     const SizedBox(height: 12),
 
-                    // ── Alergi ───────────────────────────────
+                    // ── Allergies ─────────────────────────────
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -487,7 +487,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                             Icon(Icons.warning_amber_rounded,
                                 color: Color(0xFFE65100), size: 18),
                             SizedBox(width: 6),
-                            Text('Info Alergi & Pantangan Makanan',
+                            Text('Allergy & Dietary Restriction Info',
                                 style: TextStyle(
                                     fontFamily: 'Poppins',
                                     fontWeight: FontWeight.w600,
@@ -500,7 +500,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                             maxLines: 2,
                             decoration: const InputDecoration(
                               hintText:
-                                  'Contoh: Alergi kacang, tidak makan babi, vegetarian...',
+                                  'Example: Peanut allergy, no pork, vegetarian...',
                               hintStyle: TextStyle(
                                   fontFamily: 'Poppins', fontSize: 12),
                               border: OutlineInputBorder(),
@@ -515,14 +515,14 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     ),
                     const SizedBox(height: 12),
 
-                    // ── Catatan tambahan ─────────────────────
+                    // ── Additional notes ──────────────────────
                     TextField(
                       controller: _notesCtrl,
                       maxLines: 2,
                       decoration: const InputDecoration(
-                          labelText: 'Catatan Tambahan (opsional)',
+                          labelText: 'Additional Notes (optional)',
                           hintText:
-                              'Contoh: Ulang tahun, minta dekorasi bunga...',
+                              'Example: Birthday, request flower decoration...',
                           prefixIcon: Icon(Icons.notes_outlined)),
                     ),
                     const SizedBox(height: 8),
@@ -537,7 +537,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
             Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Batal',
+                child: const Text('Cancel',
                     style: TextStyle(fontFamily: 'Poppins')),
               ),
               const SizedBox(width: 8),
@@ -553,7 +553,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10))),
                 icon: const Icon(Icons.check, size: 16),
-                label: const Text('Konfirmasi Reservasi',
+                label: const Text('Confirm Reservation',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600)),
@@ -596,7 +596,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Tanggal',
+                    const Text('Date',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 10,
@@ -639,7 +639,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Waktu',
+                    const Text('Time',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 10,
@@ -662,9 +662,9 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
     final notes   = _notesCtrl.text.trim();
     String? specialReq;
     if (allergy.isNotEmpty && notes.isNotEmpty) {
-      specialReq = '🚨 Alergi: $allergy\n📝 Catatan: $notes';
+      specialReq = '🚨 Allergy: $allergy\n📝 Notes: $notes';
     } else if (allergy.isNotEmpty) {
-      specialReq = '🚨 Alergi: $allergy';
+      specialReq = '🚨 Allergy: $allergy';
     } else if (notes.isNotEmpty) {
       specialReq = notes;
     }

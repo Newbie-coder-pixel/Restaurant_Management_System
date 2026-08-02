@@ -32,13 +32,13 @@ class _CustomerResetPasswordScreenState
     final confirmPass = _confirmCtrl.text.trim();
 
     if (newPass.isEmpty) {
-      _err('Password baru wajib diisi.'); return;
+      _err('New password is required.'); return;
     }
     if (newPass.length < 6) {
-      _err('Password minimal 6 karakter.'); return;
+      _err('Password must be at least 6 characters.'); return;
     }
     if (newPass != confirmPass) {
-      _err('Konfirmasi password tidak cocok.'); return;
+      _err('Password confirmation does not match.'); return;
     }
 
     setState(() => _loading = true);
@@ -50,7 +50,7 @@ class _CustomerResetPasswordScreenState
     } on AuthException catch (e) {
       if (mounted) _err(_translate(e.message));
     } catch (_) {
-      if (mounted) _err('Gagal mereset password. Coba lagi.');
+      if (mounted) _err('Failed to reset password. Please try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -59,15 +59,15 @@ class _CustomerResetPasswordScreenState
   String _translate(String raw) {
     final msg = raw.toLowerCase();
     if (msg.contains('same password')) {
-      return 'Password baru tidak boleh sama dengan password lama.';
+      return 'The new password cannot be the same as the old password.';
     }
     if (msg.contains('weak password') || msg.contains('password should be')) {
-      return 'Password terlalu lemah. Gunakan minimal 6 karakter.';
+      return 'Password is too weak. Use at least 6 characters.';
     }
     if (msg.contains('session') || msg.contains('expired')) {
-      return 'Link sudah kedaluwarsa. Minta link reset baru.';
+      return 'The link has expired. Please request a new reset link.';
     }
-    return 'Terjadi kesalahan: $raw';
+    return 'An error occurred: $raw';
   }
 
   void _err(String m) {
@@ -162,7 +162,7 @@ class _CustomerResetPasswordScreenState
         },
       ),
       const SizedBox(height: 32),
-      const Text('Password Berhasil Diubah! 🎉',
+      const Text('Password Successfully Changed! 🎉',
           textAlign: TextAlign.center,
           style: TextStyle(
               fontFamily: 'Poppins',
@@ -178,7 +178,7 @@ class _CustomerResetPasswordScreenState
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Text(
-          'Password kamu sudah diperbarui.\nSilakan masuk dengan password baru.',
+          'Your password has been updated.\nPlease log in with your new password.',
           textAlign: TextAlign.center,
           style: TextStyle(
               fontFamily: 'Poppins',
@@ -200,7 +200,7 @@ class _CustomerResetPasswordScreenState
                 borderRadius: BorderRadius.circular(14)),
             elevation: 0,
           ),
-          child: const Text('Kembali ke Beranda',
+          child: const Text('Back to Home',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 16,
@@ -256,7 +256,7 @@ class _CustomerResetPasswordScreenState
           const SizedBox(width: 16),
           const Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Buat Password Baru',
+              Text('Create New Password',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 18,
@@ -264,7 +264,7 @@ class _CustomerResetPasswordScreenState
                       color: Color(0xFF1A1A2E),
                       letterSpacing: -0.3)),
               SizedBox(height: 4),
-              Text('Masukkan password baru kamu di bawah ini.',
+              Text('Enter your new password below.',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 13,
@@ -276,12 +276,12 @@ class _CustomerResetPasswordScreenState
       ),
       const SizedBox(height: 32),
 
-      // Password baru with strength indicator
-      _label('Password Baru', Icons.lock_outline),
+      // New password with strength indicator
+      _label('New Password', Icons.lock_outline),
       const SizedBox(height: 8),
       _field(
         ctrl: _newPassCtrl,
-        hint: 'Minimal 6 karakter',
+        hint: 'At least 6 characters',
         obscure: _obscureNew,
         suffix: IconButton(
           icon: Icon(_obscureNew
@@ -298,7 +298,7 @@ class _CustomerResetPasswordScreenState
           child: Row(children: [
             Icon(Icons.info_outline, size: 14, color: Colors.orange.shade600),
             const SizedBox(width: 6),
-            Text('Minimal 6 karakter untuk keamanan yang lebih baik',
+            Text('At least 6 characters for better security',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
@@ -307,12 +307,12 @@ class _CustomerResetPasswordScreenState
         ),
       const SizedBox(height: 20),
 
-      // Konfirmasi password
-      _label('Konfirmasi Password', Icons.lock_outline),
+      // Confirm password
+      _label('Confirm Password', Icons.lock_outline),
       const SizedBox(height: 8),
       _field(
         ctrl: _confirmCtrl,
-        hint: 'Ulangi password baru',
+        hint: 'Repeat your new password',
         obscure: _obscureConfirm,
         suffix: IconButton(
           icon: Icon(_obscureConfirm
@@ -331,7 +331,7 @@ class _CustomerResetPasswordScreenState
           child: Row(children: [
             Icon(Icons.error_outline, size: 14, color: Colors.red.shade400),
             const SizedBox(width: 6),
-            Text('Password tidak cocok',
+            Text('Passwords do not match',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
@@ -364,7 +364,7 @@ class _CustomerResetPasswordScreenState
                   children: [
                     Icon(Icons.save_outlined, size: 18),
                     SizedBox(width: 10),
-                    Text('Simpan Password Baru',
+                    Text('Save New Password',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 15,
@@ -390,7 +390,7 @@ class _CustomerResetPasswordScreenState
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Pastikan password baru kamu mudah diingat namun sulit ditebak.',
+                'Make sure your new password is easy to remember but hard to guess.',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 11,

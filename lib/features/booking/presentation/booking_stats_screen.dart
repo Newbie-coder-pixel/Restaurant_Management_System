@@ -19,12 +19,12 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
   // ── Branch filter (superadmin only) ──────────────────
   bool _isSuperAdmin = false;
   List<Map<String, dynamic>> _branches = [];
-  String? _selectedBranchId; // null = semua cabang
+  String? _selectedBranchId; // null = all branches
 
-  // ── Periode yang dipilih ──────────────────────────────
+  // ── Selected period ────────────────────────────────────
   _Period _period = _Period.week;
 
-  // ── Data statistik ────────────────────────────────────
+  // ── Statistics data ────────────────────────────────────
   int _totalBookings    = 0;
   int _totalPax         = 0;
   int _confirmedCount   = 0;
@@ -33,7 +33,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
   int _completedCount   = 0;
   int _waitlistedCount  = 0;
 
-  // Peak hours: key = jam (0-23), value = jumlah booking
+  // Peak hours: key = hour (0-23), value = booking count
   Map<int, int> _peakHours = {};
 
   // Source breakdown: key = source string, value = count
@@ -59,7 +59,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
     }
   }
 
-  // ── Load semua branch (superadmin only) ───────────────
+  // ── Load all branches (superadmin only) ───────────────
   Future<void> _loadBranches() async {
     try {
       final res = await Supabase.instance.client
@@ -76,7 +76,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
     }
   }
 
-  // ── Hitung rentang tanggal berdasarkan periode ────────
+  // ── Compute the date range based on the period ────────
   (DateTime, DateTime) _dateRange() {
     final now = DateTime.now();
     switch (_period) {
@@ -96,8 +96,8 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
     if (!_isSuperAdmin && _branchId == null) return;
     setState(() => _isLoading = true);
 
-    // Superadmin: pakai _selectedBranchId (null = semua cabang)
-    // Role lain: wajib pakai _branchId sendiri
+    // Superadmin: use _selectedBranchId (null = all branches)
+    // Other roles: must use their own _branchId
     final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
 
     try {
@@ -116,7 +116,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
       final res = await q;
       final rows = (res as List).cast<Map<String, dynamic>>();
 
-      // Reset semua counter
+      // Reset all counters
       int total = 0, pax = 0, confirmed = 0, cancelled = 0,
           noShow = 0, completed = 0, waitlisted = 0;
       final hours    = <int, int>{};
@@ -151,7 +151,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
         final date  = r['booking_date'] as String? ?? '';
         daily[date] = (daily[date] ?? 0) + 1;
 
-        // Lead time: selisih booking_date - created_at dalam hari
+        // Lead time: booking_date - created_at difference in days
         final bookingDate = DateTime.tryParse(date);
         final createdAt   = DateTime.tryParse(r['created_at'] as String? ?? '');
         if (bookingDate != null && createdAt != null) {
@@ -183,7 +183,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
     }
   }
 
-  // ── Rate kalkulasi ─────────────────────────────────────
+  // ── Rate calculations ──────────────────────────────────
   double get _cancellationRate =>
       _totalBookings == 0 ? 0 : _cancelledCount / _totalBookings * 100;
   double get _noShowRate =>
@@ -197,7 +197,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Statistik Booking'),
+        title: const Text('Booking Statistics'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         titleTextStyle: const TextStyle(
@@ -220,7 +220,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 11,
@@ -316,7 +316,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
       )),
       const SizedBox(width: 10),
       Expanded(child: _summaryCard(
-        label: 'Total Tamu',
+        label: 'Total Guests',
         value: '$_totalPax',
         icon: Icons.people_outline,
         color: AppColors.available,
@@ -327,7 +327,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
         value: '${_avgLeadTimeDays.toStringAsFixed(1)}h',
         icon: Icons.schedule_outlined,
         color: AppColors.reserved,
-        subtitle: 'hari sebelum',
+        subtitle: 'days in advance',
       )),
     ]);
   }
@@ -389,18 +389,18 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Breakdown Status',
+        const Text('Status Breakdown',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
                 fontSize: 14)),
         const SizedBox(height: 14),
-        _rateRow('Selesai', _completedCount, _completionRate,
+        _rateRow('Completed', _completedCount, _completionRate,
             const Color(0xFF4CAF50)),
-        _rateRow('Dibatalkan', _cancelledCount, _cancellationRate,
+        _rateRow('Cancelled', _cancelledCount, _cancellationRate,
             AppColors.accent),
-        _rateRow('Tidak Hadir', _noShowCount, _noShowRate, Colors.orange),
-        _rateRow('Dikonfirmasi', _confirmedCount,
+        _rateRow('No Show', _noShowCount, _noShowRate, Colors.orange),
+        _rateRow('Confirmed', _confirmedCount,
             _totalBookings == 0 ? 0 : _confirmedCount / _totalBookings * 100,
             AppColors.available),
         _rateRow('Waitlist', _waitlistedCount,
@@ -441,12 +441,12 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
     );
   }
 
-  // ── Peak hours bar chart (manual, tanpa library) ───────
+  // ── Peak hours bar chart (manual, no library) ──────────
   Widget _buildPeakHoursChart() {
     if (_peakHours.isEmpty) return const SizedBox.shrink();
 
     final maxVal = _peakHours.values.fold(0, (a, b) => a > b ? a : b);
-    // Tampilkan jam operasional: 10:00 - 22:00
+    // Show operating hours: 10:00 - 22:00
     final hours = List.generate(13, (i) => i + 10);
 
     return Container(
@@ -468,7 +468,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
                 fontWeight: FontWeight.w700,
                 fontSize: 14)),
         const SizedBox(height: 4),
-        const Text('Jam tersibuk berdasarkan jumlah booking',
+        const Text('Busiest hours by booking count',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
@@ -534,12 +534,12 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
       'app':        ('📱', 'App'),
       'website':    ('🌐', 'Website'),
       'ai_chatbot': ('🤖', 'AI Chatbot'),
-      'phone':      ('📞', 'Telepon'),
+      'phone':      ('📞', 'Phone'),
       'walk_in':    ('🚶', 'Walk-in'),
       'whatsapp':   ('💬', 'WhatsApp'),
     };
 
-    // Urut dari terbanyak
+    // Sort from most to least
     final sorted = _sourceBreakdown.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
@@ -556,13 +556,13 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Channel Booking',
+        const Text('Booking Channel',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
                 fontSize: 14)),
         const SizedBox(height: 4),
-        const Text('Dari mana tamu melakukan reservasi',
+        const Text('Where guests make their reservations',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
@@ -617,7 +617,7 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
     );
   }
 
-  // ── Daily trend: 7/30/90 hari terakhir ─────────────────
+  // ── Daily trend: last 7/30/90 days ─────────────────────
   Widget _buildDailyTrend() {
     if (_dailyTrend.isEmpty) return const SizedBox.shrink();
 
@@ -643,13 +643,13 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Tren Harian',
+        const Text('Daily Trend',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
                 fontSize: 14)),
         const SizedBox(height: 4),
-        const Text('Jumlah booking per hari',
+        const Text('Number of bookings per day',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
@@ -721,9 +721,9 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
 
 // ── Period enum ────────────────────────────────────────────
 enum _Period {
-  week('7 Hari'),
-  month('Bulan Ini'),
-  quarter('90 Hari');
+  week('7 Days'),
+  month('This Month'),
+  quarter('90 Days');
 
   final String label;
   const _Period(this.label);

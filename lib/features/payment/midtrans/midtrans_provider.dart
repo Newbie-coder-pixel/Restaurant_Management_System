@@ -1,6 +1,6 @@
 // lib/features/payment/midtrans/midtrans_provider.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// Riverpod Provider untuk alur pembayaran Midtrans
+// Riverpod Provider for the Midtrans payment flow
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'dart:async';
@@ -15,9 +15,9 @@ import 'midtrans_service.dart';
 
 enum MidtransFlowStep {
   idle,
-  creatingToken,   // sedang minta snap_token ke Edge Function
-  waitingPayment,  // user ada di halaman Snap Midtrans
-  polling,         // menunggu webhook (VA / QRIS bisa lambat)
+  creatingToken,   // requesting a snap_token from the Edge Function
+  waitingPayment,  // user is on the Midtrans Snap page
+  polling,         // waiting for the webhook (VA / QRIS can be slow)
   done,
 }
 
@@ -27,9 +27,9 @@ class MidtransState {
   final String? orderId;
   final String? errorMessage;
   final MidtransPaymentResult? result;
-  final MidtransPaymentStatus? confirmedStatus; // dari DB setelah webhook
+  final MidtransPaymentStatus? confirmedStatus; // from the DB after the webhook
 
-  // Progress polling (0.0 – 1.0)
+  // Polling progress (0.0 – 1.0)
   final int pollingAttempt;
   final int maxPollingAttempts;
 
@@ -91,19 +91,19 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
 
   Timer? _pollingTimer;
 
-  // ── Token pembatalan ────────────────────────────────────────────────────
+  // ── Cancellation token ────────────────────────────────────────────────────
   //
-  // PENTING: tanpa ini, memanggil reset() saat polling sedang berjalan
-  // TIDAK benar-benar menghentikan loop di _startPolling(). Loop akan terus
-  // jalan di background dan menimpa balik `state` yang sudah di-reset, jadi
-  // overlay "Mengecek status pembayaran..." bisa muncul lagi tiba-tiba
-  // walau user sudah menutupnya.
+  // IMPORTANT: without this, calling reset() while polling is in progress
+  // does NOT actually stop the loop in _startPolling(). The loop keeps
+  // running in the background and overwrites the `state` that was just
+  // reset, so the "Checking payment status..." overlay can suddenly
+  // reappear even after the user has closed it.
   //
-  // Setiap pemanggilan pay()/reset() menaikkan _activeRequestId. Kode yang
-  // sedang berjalan (hasil await sebelumnya) menyimpan requestId miliknya
-  // sendiri dan selalu cek apakah masih cocok dengan _activeRequestId
-  // sebelum melanjutkan/menulis state. Kalau sudah tidak cocok → berarti
-  // sudah di-reset/dibatalkan oleh proses baru → langsung berhenti.
+  // Every call to pay()/reset() increments _activeRequestId. Code that is
+  // currently running (resumed after a previous await) holds its own
+  // requestId and always checks whether it still matches _activeRequestId
+  // before continuing/writing state. If it no longer matches → it means
+  // a new process has reset/cancelled it → stop immediately.
   int _activeRequestId = 0;
 
   @override
@@ -118,8 +118,8 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
     required String branchId,
     void Function(MidtransPaymentStatus status)? onStatusConfirmed,
   }) async {
-    // Request baru → token lama (kalau ada) jadi basi & loop-nya akan
-    // berhenti sendiri di pengecekan requestId berikutnya.
+    // New request → the old token (if any) becomes stale & its loop will
+    // stop on its own at the next requestId check.
     final requestId = ++_activeRequestId;
 
     state = state.copyWith(
@@ -128,14 +128,14 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
       orderId: order.id,
     );
 
-    // 1. Buat Snap token
+    // 1. Create the Snap token
     final tokenResult = await MidtransService.createSnapToken(
       order: order,
       branchId: branchId,
     );
 
-    // Kalau sudah di-reset/dibatalkan selama menunggu token → hentikan,
-    // jangan tulis state lagi (mencegah overlay muncul lagi tiba-tiba).
+    // If it has been reset/cancelled while waiting for the token → stop,
+    // don't write state again (prevents the overlay from suddenly reappearing).
     if (requestId != _activeRequestId) return;
 
     if (!tokenResult.success) {
@@ -151,7 +151,7 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
       snapToken: tokenResult.snapToken,
     );
 
-    // 2. Buka Snap UI — blocking sampai user selesai/tutup
+    // 2. Open the Snap UI — blocks until the user finishes/closes it
     final payResult = await MidtransService.startPayment(
       snapToken: tokenResult.snapToken!,
       orderId: order.id,
@@ -162,7 +162,7 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
     state = state.copyWith(result: payResult);
 
     if (payResult.isCancelled) {
-      // User tutup halaman tanpa bayar
+      // User closed the page without paying
       state = state.copyWith(
         step: MidtransFlowStep.idle,
         confirmedStatus: MidtransPaymentStatus.cancelled,
@@ -181,8 +181,8 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
       return;
     }
 
-    // 3. Polling DB — untuk success/pending, tunggu webhook update DB
-    //    (jangan rely pada callback SDK untuk update status)
+    // 3. Poll the DB — for success/pending, wait for the webhook to update the DB
+    //    (don't rely on the SDK callback for status updates)
     if (payResult.needsPolling) {
       await _startPolling(
         requestId: requestId,
@@ -192,7 +192,7 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
     }
   }
 
-  // ── Polling: cek DB setiap 3 detik sampai paid/failed ────────────────────
+  // ── Polling: check the DB every 3 seconds until paid/failed ────────────────────
   Future<void> _startPolling({
     required int requestId,
     required String orderId,
@@ -208,8 +208,8 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
     for (int i = 1; i <= maxAttempts; i++) {
       await Future.delayed(const Duration(seconds: 3));
 
-      // Sudah di-reset/dibatalkan (mis. user klik "Tutup" di overlay) →
-      // hentikan loop sekarang, jangan tulis state lagi.
+      // Already reset/cancelled (e.g. user clicked "Close" in the overlay) →
+      // stop the loop now, don't write state again.
       if (!mounted || requestId != _activeRequestId) return;
 
       state = state.copyWith(pollingAttempt: i);
@@ -232,14 +232,14 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
         state = state.copyWith(
           step: MidtransFlowStep.idle,
           confirmedStatus: dbStatus,
-          errorMessage: 'Pembayaran ${dbStatus.label.toLowerCase()}',
+          errorMessage: 'Payment ${dbStatus.label.toLowerCase()}',
         );
         onStatusConfirmed?.call(dbStatus);
         return;
       }
     }
 
-    // Timeout polling — bayar mungkin masih pending (VA belum ditransfer)
+    // Polling timeout — payment may still be pending (VA not yet transferred)
     state = state.copyWith(
       step: MidtransFlowStep.done,
       confirmedStatus: MidtransPaymentStatus.pending,
@@ -247,7 +247,7 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
     onStatusConfirmed?.call(MidtransPaymentStatus.pending);
   }
 
-  // ── Manual cek status (tombol "Cek Status" di UI) ────────────────────────
+  // ── Manual status check ("Check Status" button in the UI) ────────────────────────
   Future<void> checkStatus(String orderId) async {
     state = state.copyWith(step: MidtransFlowStep.polling, clearError: true);
     final status = await MidtransService.checkPaymentStatus(orderId);
@@ -258,9 +258,9 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
   }
 
   void reset() {
-    // Naikkan requestId → pay()/_startPolling() yang masih berjalan di
-    // background akan berhenti sendiri di pengecekan berikutnya, tidak
-    // akan menimpa balik state yang baru saja di-reset ini.
+    // Increment requestId → any pay()/_startPolling() still running in the
+    // background will stop on its own at the next check, and won't
+    // overwrite the state that was just reset here.
     _activeRequestId++;
     _pollingTimer?.cancel();
     state = const MidtransState();
@@ -273,13 +273,13 @@ class MidtransNotifier extends StateNotifier<MidtransState> {
 // PROVIDERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Provider per order (family by orderId) agar state tidak bercampur
+// Provider per order (family by orderId) so state doesn't get mixed up
 final midtransProvider =
     StateNotifierProvider.family<MidtransNotifier, MidtransState, String>(
   (ref, orderId) => MidtransNotifier(),
 );
 
-// Provider global untuk satu sesi aktif (CashierScreen)
+// Global provider for a single active session (CashierScreen)
 final activeMidtransProvider =
     StateNotifierProvider<MidtransNotifier, MidtransState>(
   (ref) => MidtransNotifier(),

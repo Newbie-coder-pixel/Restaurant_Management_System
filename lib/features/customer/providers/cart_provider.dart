@@ -44,8 +44,8 @@ class CartState {
 
   double get subtotal => items.fold(0, (s, i) => s + i.subtotal);
   double get serviceCharge => subtotal * 0.03;
-  double get pb1Amount => subtotal * 0.10; // fix: dari subtotal saja, bukan subtotal+serviceCharge
-  double get tax => 0; // PPN dihapus, tetap ada agar tidak breaking change
+  double get pb1Amount => subtotal * 0.10; // fix: from subtotal only, not subtotal+serviceCharge
+  double get tax => 0; // VAT removed, kept so it's not a breaking change
   double get total => subtotal + serviceCharge + pb1Amount;
   int get itemCount => items.fold(0, (s, i) => s + i.quantity);
   bool get isEmpty => items.isEmpty;

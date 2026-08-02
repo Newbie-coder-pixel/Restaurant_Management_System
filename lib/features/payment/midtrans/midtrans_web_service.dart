@@ -1,30 +1,30 @@
 // lib/features/payment/midtrans/midtrans_web_service.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// Implementasi WEB untuk pembayaran Midtrans via Snap.js
+// WEB implementation for Midtrans payments via Snap.js
 //
-// File ini HANYA dikompilasi di web (dart.library.js_interop tersedia).
-// Di Android/iOS, midtrans_web_stub.dart yang dipakai.
+// This file is ONLY compiled on web (dart.library.js_interop available).
+// On Android/iOS, midtrans_web_stub.dart is used instead.
 //
-// Alur:
-//   1. initialize() → inject snap.js dari CDN Midtrans + helper JS wrapper
-//   2. pay()        → panggil window._rmsSnapPay() → buka Snap popup
-//   3. Snap callback (onSuccess/onPending/onError/onClose) → resolve Future
+// Flow:
+//   1. initialize() → inject snap.js from the Midtrans CDN + a JS helper wrapper
+//   2. pay()        → call window._rmsSnapPay() → open the Snap popup
+//   3. Snap callback (onSuccess/onPending/onError/onClose) → resolve the Future
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'dart:async';
 import 'dart:js_interop';
-import 'dart:js_interop_unsafe'; // getProperty / setProperty pada JSObject
+import 'dart:js_interop_unsafe'; // getProperty / setProperty on JSObject
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 import '../models/midtrans_model.dart';
 
-// ── JS Interop: cek apakah snap.js sudah dimuat (window.snap tersedia) ────────
+// ── JS Interop: check whether snap.js has been loaded (window.snap available) ────────
 @JS('snap')
 external JSAny? get _snapGlobal;
 
-// ── JS Interop: panggil helper wrapper yang kita inject ───────────────────────
-// Wrapper ini membungkus window.snap.pay() agar bisa dipanggil dari Dart
-// dengan JSFunction sebagai callback.
+// ── JS Interop: call the helper wrapper we injected ───────────────────────────
+// This wrapper wraps window.snap.pay() so it can be called from Dart
+// with a JSFunction as the callback.
 @JS('_rmsSnapPay')
 external void _rmsSnapPay(
   String token,
@@ -40,24 +40,24 @@ class MidtransWebService {
   static bool _helperInjected = false;
   static Completer<void>? _loadCompleter;
 
-  // ── Inisialisasi: inject snap.js + JS helper ke DOM ──────────────────────
+  // ── Initialization: inject snap.js + JS helper into the DOM ──────────────────────
   //
-  // Dipanggil dari MidtransService.initialize() saat platform web.
-  // Aman dipanggil berkali-kali — idempotent.
+  // Called from MidtransService.initialize() on the web platform.
+  // Safe to call multiple times — idempotent.
   static Future<void> initialize({
     required String clientKey,
     required bool isProduction,
   }) async {
-    // 1. Inject helper JS dulu (synchronous, tidak perlu tunggu load event)
+    // 1. Inject the helper JS first (synchronous, no need to wait for the load event)
     if (!_helperInjected) {
       _injectHelperScript();
       _helperInjected = true;
     }
 
-    // 2. Kalau snap.js sudah dimuat sebelumnya, selesai
+    // 2. If snap.js was already loaded previously, we're done
     if (_scriptLoaded) return;
 
-    // 3. Kalau sedang loading (concurrent calls), tunggu yang sedang jalan
+    // 3. If it's currently loading (concurrent calls), wait for that to finish
     if (_loadCompleter != null && !_loadCompleter!.isCompleted) {
       return _loadCompleter!.future;
     }
@@ -68,25 +68,25 @@ class MidtransWebService {
         ? 'https://app.midtrans.com'
         : 'https://app.sandbox.midtrans.com';
 
-    // Buat tag <script src="...snap.js" data-client-key="...">
+    // Create a <script src="...snap.js" data-client-key="..."> tag
     final script =
         web.document.createElement('script') as web.HTMLScriptElement;
     script.src = '$baseUrl/snap/snap.js';
     script.setAttribute('data-client-key', clientKey);
-    // CATATAN: JANGAN set atribut 'crossorigin' di sini.
-    // Kalau diset, browser akan memuat script ini dalam mode CORS dan
-    // mewajibkan server mengirim header Access-Control-Allow-Origin.
-    // Server snap.js Midtrans TIDAK mengirim header itu (script ini memang
-    // didesain dimuat lewat <script> tag biasa, bukan lewat fetch()/CORS),
-    // jadi request-nya akan diblokir browser dengan error CORS dan
-    // snap.js gagal dimuat sama sekali.
+    // NOTE: DO NOT set the 'crossorigin' attribute here.
+    // If set, the browser will load this script in CORS mode and require
+    // the server to send an Access-Control-Allow-Origin header. Midtrans's
+    // snap.js server does NOT send that header (this script is designed to
+    // be loaded via a regular <script> tag, not via fetch()/CORS), so the
+    // request would be blocked by the browser with a CORS error and
+    // snap.js would fail to load entirely.
 
     // Load success
     script.addEventListener(
       'load',
       ((web.Event _) {
         _scriptLoaded = true;
-        debugPrint('[MidtransWeb] snap.js berhasil dimuat dari $baseUrl');
+        debugPrint('[MidtransWeb] snap.js loaded successfully from $baseUrl');
         if (!(_loadCompleter?.isCompleted ?? true)) {
           _loadCompleter!.complete();
         }
@@ -97,17 +97,17 @@ class MidtransWebService {
     script.addEventListener(
       'error',
       ((web.Event _) {
-        debugPrint('[MidtransWeb] Gagal memuat snap.js dari $baseUrl');
+        debugPrint('[MidtransWeb] Failed to load snap.js from $baseUrl');
         if (!(_loadCompleter?.isCompleted ?? true)) {
           _loadCompleter!.completeError(
             Exception(
-                'Gagal memuat Snap.js. Periksa koneksi internet dan refresh.'),
+                'Failed to load Snap.js. Check your internet connection and refresh.'),
           );
         }
       }).toJS,
     );
 
-    // Ganti placeholder (dari index.html) atau append ke <head>
+    // Replace the placeholder (from index.html) or append to <head>
     final placeholder =
         web.document.getElementById('midtrans-snap-script-placeholder');
     if (placeholder != null) {
@@ -116,13 +116,13 @@ class MidtransWebService {
       (web.document.head ?? web.document.body)?.append(script);
     }
 
-    // Tunggu snap.js selesai dimuat (maks. 15 detik)
+    // Wait for snap.js to finish loading (max. 15 seconds)
     try {
       await _loadCompleter!.future.timeout(
         const Duration(seconds: 15),
         onTimeout: () {
           throw TimeoutException(
-            '[MidtransWeb] Timeout memuat snap.js (15 detik)',
+            '[MidtransWeb] Timeout loading snap.js (15 seconds)',
           );
         },
       );
@@ -133,19 +133,19 @@ class MidtransWebService {
     }
   }
 
-  // ── Inject JS helper: membungkus window.snap.pay() ───────────────────────
+  // ── Inject JS helper: wraps window.snap.pay() ───────────────────────
   //
-  // Kenapa perlu wrapper?
-  //   dart:js_interop tidak bisa langsung pass Dart closure sebagai property
-  //   object literal ke snap.pay(token, { onSuccess: fn, ... }).
-  //   Jadi kita definisikan window._rmsSnapPay() di JS, dan dari Dart kita
-  //   panggil itu dengan JSFunction arguments — jauh lebih bersih.
+  // Why do we need a wrapper?
+  //   dart:js_interop cannot directly pass a Dart closure as an object
+  //   literal property to snap.pay(token, { onSuccess: fn, ... }).
+  //   So we define window._rmsSnapPay() in JS, and call it from Dart
+  //   with JSFunction arguments — much cleaner.
   static void _injectHelperScript() {
     const helperCode = r'''
 window._rmsSnapPay = function(token, onSuccess, onPending, onError, onClose) {
   if (!window.snap || typeof window.snap.pay !== 'function') {
     if (typeof onError === 'function') {
-      onError({ status_message: 'Snap.js belum siap. Coba refresh halaman.' });
+      onError({ status_message: 'Snap.js is not ready yet. Try refreshing the page.' });
     }
     return;
   }
@@ -158,7 +158,7 @@ window._rmsSnapPay = function(token, onSuccess, onPending, onError, onClose) {
     });
   } catch (e) {
     if (typeof onError === 'function') {
-      onError({ status_message: 'Gagal membuka halaman pembayaran: ' + String(e) });
+      onError({ status_message: 'Failed to open the payment page: ' + String(e) });
     }
   }
 };
@@ -171,32 +171,32 @@ window._rmsSnapPay = function(token, onSuccess, onPending, onError, onClose) {
     debugPrint('[MidtransWeb] Helper script _rmsSnapPay injected');
   }
 
-  // ── Buka Snap UI dan tunggu hasilnya ─────────────────────────────────────
+  // ── Open the Snap UI and wait for the result ─────────────────────────────
   //
   // Return: MidtransPaymentResult (success / pending / failure / cancelled)
-  // Timeout 15 menit — VA transfer bisa butuh beberapa menit.
+  // 15-minute timeout — VA transfers can take a few minutes.
   static Future<MidtransPaymentResult> pay({
     required String snapToken,
     required String orderId,
     required String clientKey,
     required bool isProduction,
   }) async {
-    // Lazy init: kalau snap.js belum dimuat, muat dulu
+    // Lazy init: if snap.js hasn't been loaded yet, load it first
     if (!_scriptLoaded || _snapGlobal == null) {
       try {
         await initialize(clientKey: clientKey, isProduction: isProduction);
       } catch (e) {
-        debugPrint('[MidtransWeb] Gagal init saat pay(): $e');
+        debugPrint('[MidtransWeb] Failed to init during pay(): $e');
         return MidtransPaymentResult.failure(
-          'Gagal memuat halaman pembayaran. Periksa koneksi dan coba refresh.',
+          'Failed to load the payment page. Check your connection and try refreshing.',
         );
       }
     }
 
-    // Sanity check: window.snap harus tersedia setelah load
+    // Sanity check: window.snap must be available after loading
     if (_snapGlobal == null) {
       return MidtransPaymentResult.failure(
-        'Snap.js tidak tersedia. Coba refresh halaman.',
+        'Snap.js is not available. Try refreshing the page.',
       );
     }
 
@@ -206,7 +206,7 @@ window._rmsSnapPay = function(token, onSuccess, onPending, onError, onClose) {
       _rmsSnapPay(
         snapToken,
 
-        // onSuccess — pembayaran berhasil (kartu kredit, GoPay, QRIS confirmed)
+        // onSuccess — payment successful (credit card, GoPay, QRIS confirmed)
         ((JSAny? resultJs) {
           if (completer.isCompleted) return;
           completer.complete(
@@ -218,7 +218,7 @@ window._rmsSnapPay = function(token, onSuccess, onPending, onError, onClose) {
           );
         }).toJS,
 
-        // onPending — butuh konfirmasi lanjut (VA, QRIS belum scan)
+        // onPending — needs further confirmation (VA, QRIS not scanned yet)
         ((JSAny? resultJs) {
           if (completer.isCompleted) return;
           completer.complete(
@@ -229,15 +229,15 @@ window._rmsSnapPay = function(token, onSuccess, onPending, onError, onClose) {
           );
         }).toJS,
 
-        // onError — pembayaran ditolak / expired / error
+        // onError — payment declined / expired / error
         ((JSAny? resultJs) {
           if (completer.isCompleted) return;
           final msg = _readProp(resultJs, 'status_message') ??
-              'Pembayaran gagal. Silakan coba lagi.';
+              'Payment failed. Please try again.';
           completer.complete(MidtransPaymentResult.failure(msg));
         }).toJS,
 
-        // onClose — user tutup popup Snap tanpa selesaikan pembayaran
+        // onClose — user closed the Snap popup without completing payment
         (() {
           if (completer.isCompleted) return;
           completer.complete(MidtransPaymentResult.cancelled());
@@ -246,18 +246,18 @@ window._rmsSnapPay = function(token, onSuccess, onPending, onError, onClose) {
     } catch (e) {
       debugPrint('[MidtransWeb] _rmsSnapPay error: $e');
       return MidtransPaymentResult.failure(
-        'Gagal membuka halaman pembayaran: $e',
+        'Failed to open the payment page: $e',
       );
     }
 
-    // Tunggu salah satu callback dipanggil Snap (maks. 15 menit)
+    // Wait for one of the Snap callbacks to be called (max. 15 minutes)
     return completer.future.timeout(
       const Duration(minutes: 15),
       onTimeout: () => MidtransPaymentResult.pending(orderId: orderId),
     );
   }
 
-  // ── Helper: baca string property dari JS result object ───────────────────
+  // ── Helper: read a string property from the JS result object ───────────────────
   static String? _readProp(JSAny? jsValue, String key) {
     if (jsValue == null) return null;
     try {
@@ -265,7 +265,7 @@ window._rmsSnapPay = function(token, onSuccess, onPending, onError, onClose) {
       final val = obj.getProperty<JSAny?>(key.toJS);
       if (val == null) return null;
       if (val.isA<JSString>()) return (val as JSString).toDart;
-      // Fallback untuk tipe lain (number, dll)
+      // Fallback for other types (number, etc.)
       final dartVal = val.dartify();
       return dartVal?.toString();
     } catch (e) {

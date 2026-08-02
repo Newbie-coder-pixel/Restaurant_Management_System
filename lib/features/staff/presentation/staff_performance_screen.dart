@@ -30,7 +30,7 @@ class StaffPerformance {
   final double avgWorkHours;
   final double attendanceRatePct;
   final double orderCompletionRatePct;
-  // --- field baru ---
+  // --- new fields ---
   final int totalShiftsScheduled;
   final int onTimeShifts;
   final double punctualityRatePct;
@@ -116,9 +116,9 @@ class StaffPerformance {
 // Screen
 // ─────────────────────────────────────────────
 class StaffPerformanceScreen extends ConsumerStatefulWidget {
-  // null  = semua branch (superadmin "Semua Cabang")
-  // ''    = non-superadmin tanpa branch (edge case, anggap semua)
-  // id    = branch tertentu
+  // null  = all branches (superadmin "All Branches")
+  // ''    = non-superadmin without a branch (edge case, treat as all)
+  // id    = specific branch
   final String? branchId;
 
   const StaffPerformanceScreen({super.key, this.branchId});
@@ -153,7 +153,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
   @override
   void initState() {
     super.initState();
-    // null atau string kosong keduanya berarti "semua branch"
+    // null or an empty string both mean "all branches"
     _selectedBranchId = (widget.branchId == null || widget.branchId!.isEmpty)
         ? null
         : widget.branchId;
@@ -212,12 +212,12 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
       final monthStart = DateTime(_selectedMonth.year, _selectedMonth.month);
       final monthEnd = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
 
-      // _selectedBranchId == null → semua branch (superadmin "Semua Cabang")
-      // _selectedBranchId != null → filter ke branch tertentu
+      // _selectedBranchId == null → all branches (superadmin "All Branches")
+      // _selectedBranchId != null → filter to a specific branch
       final response = await Supabase.instance.client.rpc(
         'get_staff_performance',
         params: {
-          'p_branch_id': _selectedBranchId, // null dikirim apa adanya ke RPC
+          'p_branch_id': _selectedBranchId, // null is sent as-is to the RPC
           'p_month_start': monthStart.toIso8601String(),
           'p_month_end': monthEnd.toIso8601String(),
         },
@@ -268,7 +268,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
                   ..._branches.map((b) => DropdownMenuItem<String?>(
@@ -305,7 +305,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
                     : _filtered.isEmpty
                         ? const Center(
                             child: Text(
-                              'Tidak ada data staff.',
+                              'No staff data available.',
                               style: TextStyle(color: Colors.white54),
                             ),
                           )
@@ -362,7 +362,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
                     padding: const EdgeInsets.only(right: 6),
                     child: ChoiceChip(
                       label: Text(
-                        role == 'all' ? 'Semua' : role,
+                        role == 'all' ? 'All' : role,
                         style: TextStyle(
                           fontSize: 12,
                           color: selected ? Colors.white : Colors.white60,
@@ -389,7 +389,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
       initialDate: _selectedMonth,
       firstDate: DateTime(2024),
       lastDate: DateTime.now(),
-      helpText: 'Pilih Bulan',
+      helpText: 'Select Month',
     );
     if (picked != null) {
       setState(() {
@@ -409,14 +409,14 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
             const Icon(Icons.error_outline, color: Color(0xFFE94560), size: 48),
             const SizedBox(height: 12),
             Text(
-              'Gagal memuat data:\n$_error',
+              'Failed to load data:\n$_error',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white54, fontSize: 13),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadData,
-              child: const Text('Coba Lagi'),
+              child: const Text('Try Again'),
             ),
           ],
         ),
@@ -474,7 +474,7 @@ class _StaffCard extends StatelessWidget {
               ),
             ],
           ),
-          // Trailing: tampilkan grade + final score
+          // Trailing: show grade + final score
           trailing: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -495,24 +495,24 @@ class _StaffCard extends StatelessWidget {
             _ScoreSummaryRow(staff: staff),
             const SizedBox(height: 12),
 
-            // ── Order sebagai Waiter ──
+            // ── Orders as Waiter ──
             if (staff.role == 'waiter' || staff.totalOrdersAsWaiter > 0) ...[
-              const _SectionTitle(title: 'Sebagai Waiter', icon: Icons.restaurant),
+              const _SectionTitle(title: 'As Waiter', icon: Icons.restaurant),
               const SizedBox(height: 8),
               _MetricsRow(children: [
                 _MetricTile(
-                  label: 'Total Order',
+                  label: 'Total Orders',
                   value: '${staff.totalOrdersAsWaiter}',
                   icon: Icons.receipt_long,
                 ),
                 _MetricTile(
-                  label: 'Selesai',
+                  label: 'Completed',
                   value: '${staff.completedOrdersWaiter}',
                   icon: Icons.check_circle_outline,
                   color: const Color(0xFF4CAF50),
                 ),
                 _MetricTile(
-                  label: 'Batal',
+                  label: 'Cancelled',
                   value: '${staff.cancelledOrdersWaiter}',
                   icon: Icons.cancel_outlined,
                   color: const Color(0xFFE94560),
@@ -526,24 +526,24 @@ class _StaffCard extends StatelessWidget {
               ]),
               const SizedBox(height: 4),
               _RevenueTile(
-                label: 'Revenue ditangani',
+                label: 'Revenue handled',
                 value: currency.format(staff.revenueHandled),
               ),
               const SizedBox(height: 12),
             ],
 
-            // ── Order sebagai Kasir ──
+            // ── Orders as Cashier ──
             if (staff.role == 'cashier' || staff.totalOrdersAsCashier > 0) ...[
-              const _SectionTitle(title: 'Sebagai Kasir', icon: Icons.point_of_sale),
+              const _SectionTitle(title: 'As Cashier', icon: Icons.point_of_sale),
               const SizedBox(height: 8),
               _MetricsRow(children: [
                 _MetricTile(
-                  label: 'Total Order',
+                  label: 'Total Orders',
                   value: '${staff.totalOrdersAsCashier}',
                   icon: Icons.receipt_long,
                 ),
                 _MetricTile(
-                  label: 'Selesai',
+                  label: 'Completed',
                   value: '${staff.completedOrdersCashier}',
                   icon: Icons.check_circle_outline,
                   color: const Color(0xFF4CAF50),
@@ -551,36 +551,36 @@ class _StaffCard extends StatelessWidget {
               ]),
               const SizedBox(height: 4),
               _RevenueTile(
-                label: 'Revenue diproses',
+                label: 'Revenue processed',
                 value: currency.format(staff.revenueProcessed),
               ),
               const SizedBox(height: 12),
             ],
 
-            // ── Kehadiran ──
-            const _SectionTitle(title: 'Kehadiran Bulan Ini', icon: Icons.calendar_today),
+            // ── Attendance ──
+            const _SectionTitle(title: 'Attendance This Month', icon: Icons.calendar_today),
             const SizedBox(height: 8),
             _MetricsRow(children: [
               _MetricTile(
-                label: 'Hadir',
+                label: 'Present',
                 value: '${staff.daysHadir}',
                 icon: Icons.check_circle,
                 color: const Color(0xFF4CAF50),
               ),
               _MetricTile(
-                label: 'Alpha',
+                label: 'Absent',
                 value: '${staff.daysAlpha}',
                 icon: Icons.cancel,
                 color: const Color(0xFFE94560),
               ),
               _MetricTile(
-                label: 'Izin',
+                label: 'Permission',
                 value: '${staff.daysIzin}',
                 icon: Icons.event_busy_outlined,
                 color: const Color(0xFF64B5F6),
               ),
               _MetricTile(
-                label: 'Sakit',
+                label: 'Sick',
                 value: '${staff.daysSakit}',
                 icon: Icons.medical_services_outlined,
                 color: const Color(0xFFFFB74D),
@@ -589,14 +589,14 @@ class _StaffCard extends StatelessWidget {
             const SizedBox(height: 6),
             _MetricsRow(children: [
               _MetricTile(
-                label: 'Cuti',
+                label: 'Leave',
                 value: '${staff.daysCuti}',
                 icon: Icons.beach_access_outlined,
                 color: const Color(0xFFBA68C8),
               ),
               _MetricTile(
-                label: 'Rata Jam',
-                value: '${staff.avgWorkHours.toStringAsFixed(1)}j',
+                label: 'Avg Hours',
+                value: '${staff.avgWorkHours.toStringAsFixed(1)}h',
                 icon: Icons.timer_outlined,
               ),
               const Expanded(child: SizedBox()),
@@ -606,23 +606,23 @@ class _StaffCard extends StatelessWidget {
             _AttendanceBar(pct: staff.attendanceRatePct),
             const SizedBox(height: 12),
 
-            // ── Ketepatan Waktu (Punctuality) ──
-            const _SectionTitle(title: 'Ketepatan Waktu', icon: Icons.access_time),
+            // ── Punctuality ──
+            const _SectionTitle(title: 'Punctuality', icon: Icons.access_time),
             const SizedBox(height: 8),
             _MetricsRow(children: [
               _MetricTile(
-                label: 'Total Shift',
+                label: 'Total Shifts',
                 value: '${staff.totalShiftsScheduled}',
                 icon: Icons.calendar_view_week,
               ),
               _MetricTile(
-                label: 'Tepat Waktu',
+                label: 'On Time',
                 value: '${staff.onTimeShifts}',
                 icon: Icons.alarm_on,
                 color: const Color(0xFF4CAF50),
               ),
               _MetricTile(
-                label: 'Terlambat',
+                label: 'Late',
                 value: '${staff.totalShiftsScheduled - staff.onTimeShifts}',
                 icon: Icons.alarm_off,
                 color: const Color(0xFFE94560),
@@ -712,11 +712,11 @@ class _ScoreSummaryRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _ScoreItem(label: 'Kehadiran', value: staff.attendanceScore, color: const Color(0xFF4CAF50)),
+          _ScoreItem(label: 'Attendance', value: staff.attendanceScore, color: const Color(0xFF4CAF50)),
           _Divider(),
           _ScoreItem(label: 'Order', value: staff.orderScore, color: const Color(0xFF64B5F6)),
           _Divider(),
-          _ScoreItem(label: 'Tepat Waktu', value: staff.punctualityScore, color: const Color(0xFFFFB74D)),
+          _ScoreItem(label: 'Punctuality', value: staff.punctualityScore, color: const Color(0xFFFFB74D)),
           _Divider(),
           _ScoreItem(label: 'Final', value: staff.finalScore, color: const Color(0xFFE94560), isBold: true),
         ],

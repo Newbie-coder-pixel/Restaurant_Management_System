@@ -1,9 +1,9 @@
 // lib/features/payment/models/midtrans_model.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// Model untuk semua hasil dari alur pembayaran Midtrans
+// Model for all results from the Midtrans payment flow
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Status pembayaran dari DB / webhook ──────────────────────────────────────
+// ── Payment status from DB / webhook ──────────────────────────────────────
 enum MidtransPaymentStatus {
   paid,
   pending,
@@ -16,12 +16,12 @@ enum MidtransPaymentStatus {
 extension MidtransPaymentStatusExt on MidtransPaymentStatus {
   String get label {
     switch (this) {
-      case MidtransPaymentStatus.paid:      return 'Lunas';
-      case MidtransPaymentStatus.pending:   return 'Menunggu Pembayaran';
-      case MidtransPaymentStatus.failed:    return 'Gagal';
-      case MidtransPaymentStatus.refunded:  return 'Dikembalikan';
-      case MidtransPaymentStatus.cancelled: return 'Dibatalkan';
-      case MidtransPaymentStatus.unknown:   return 'Tidak Diketahui';
+      case MidtransPaymentStatus.paid:      return 'Paid';
+      case MidtransPaymentStatus.pending:   return 'Awaiting Payment';
+      case MidtransPaymentStatus.failed:    return 'Failed';
+      case MidtransPaymentStatus.refunded:  return 'Refunded';
+      case MidtransPaymentStatus.cancelled: return 'Cancelled';
+      case MidtransPaymentStatus.unknown:   return 'Unknown';
     }
   }
 
@@ -32,7 +32,7 @@ extension MidtransPaymentStatusExt on MidtransPaymentStatus {
       this == MidtransPaymentStatus.cancelled;
 }
 
-// ── Hasil dari Edge Function midtrans-create-token ───────────────────────────
+// ── Result from the midtrans-create-token Edge Function ───────────────────────────
 class MidtransTokenResult {
   final bool success;
   final String? snapToken;
@@ -64,7 +64,7 @@ class MidtransTokenResult {
       MidtransTokenResult._(success: false, errorMessage: message);
 }
 
-// ── Hasil dari startPayment (setelah user selesai di halaman Snap) ────────────
+// ── Result from startPayment (after the user finishes on the Snap page) ────────────
 enum MidtransPaymentResultType { success, pending, failed, cancelled }
 
 class MidtransPaymentResult {
@@ -118,25 +118,25 @@ class MidtransPaymentResult {
   bool get isFailed => type == MidtransPaymentResultType.failed;
   bool get isCancelled => type == MidtransPaymentResultType.cancelled;
 
-  /// Perlu polling? True kalau user sudah konfirmasi tapi status masih pending
-  /// (contoh: bayar QRIS / VA, webhook belum masuk)
+  /// Needs polling? True if the user has confirmed but the status is still pending
+  /// (e.g.: paying via QRIS / VA, webhook not received yet)
   bool get needsPolling =>
       type == MidtransPaymentResultType.pending ||
       type == MidtransPaymentResultType.success;
 }
 
-// ── Label metode pembayaran Midtrans → nama tampilan ─────────────────────────
+// ── Midtrans payment method label → display name ─────────────────────────
 class MidtransPaymentMethod {
   static String label(String paymentType) {
     switch (paymentType.toLowerCase()) {
-      case 'credit_card':   return 'Kartu Kredit/Debit';
-      case 'bca_va':        return 'Transfer BCA Virtual Account';
-      case 'bni_va':        return 'Transfer BNI Virtual Account';
-      case 'bri_va':        return 'Transfer BRI Virtual Account';
+      case 'credit_card':   return 'Credit/Debit Card';
+      case 'bca_va':        return 'BCA Virtual Account Transfer';
+      case 'bni_va':        return 'BNI Virtual Account Transfer';
+      case 'bri_va':        return 'BRI Virtual Account Transfer';
       case 'mandiri_bill':  return 'Mandiri Bill Payment';
       case 'permata_va':    return 'Permata Virtual Account';
-      case 'other_va':      return 'Transfer Virtual Account';
-      case 'bank_transfer': return 'Transfer Bank';
+      case 'other_va':      return 'Virtual Account Transfer';
+      case 'bank_transfer': return 'Bank Transfer';
       case 'gopay':         return 'GoPay';
       case 'shopeepay':     return 'ShopeePay';
       case 'qris':          return 'QRIS';

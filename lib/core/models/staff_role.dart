@@ -12,41 +12,41 @@ enum StaffRole {
     switch (this) {
       case StaffRole.superadmin: return 'Super Admin';
       case StaffRole.manager: return 'Manager';
-      case StaffRole.cashier: return 'Kasir';
-      case StaffRole.waiter: return 'Pelayan';
-      case StaffRole.kitchen: return 'Dapur';
+      case StaffRole.cashier: return 'Cashier';
+      case StaffRole.waiter: return 'Waiter';
+      case StaffRole.kitchen: return 'Kitchen';
       case StaffRole.host: return 'Host';
     }
   }
 
   String get accessDescription {
     switch (this) {
-      case StaffRole.superadmin: return 'Akses penuh ke semua fitur & semua cabang';
-      case StaffRole.manager:    return 'Laporan, menu, inventori, staff, & operasional';
-      case StaffRole.cashier:    return 'Kasir, order, & lihat menu';
-      case StaffRole.waiter:     return 'Kelola order & lihat meja';
+      case StaffRole.superadmin: return 'Full access to all features & all branches';
+      case StaffRole.manager:    return 'Reports, menu, inventory, staff, & operations';
+      case StaffRole.cashier:    return 'Cashier, orders, & menu viewing';
+      case StaffRole.waiter:     return 'Manage orders & view tables';
       case StaffRole.kitchen:    return 'Kitchen Display System (KDS)';
-      case StaffRole.host:       return 'Manajemen meja & reservasi';
+      case StaffRole.host:       return 'Table management & reservations';
     }
   }
 
   List<String> get accessFeatures {
     switch (this) {
       case StaffRole.superadmin:
-        return ['Laporan & Analitik', 'Manajemen Meja', 'Reservasi', 'Order',
-                'Kasir & Pembayaran', 'Dapur (KDS)', 'Menu', 'Inventori',
-                'Staff', 'Multi Cabang', 'AI Chatbot'];
+        return ['Reports & Analytics', 'Table Management', 'Reservations', 'Order',
+                'Cashier & Payment', 'Kitchen (KDS)', 'Menu', 'Inventory',
+                'Staff', 'Multi Branch', 'AI Chatbot'];
       case StaffRole.manager:
-        return ['Laporan & Analitik', 'Manajemen Meja', 'Reservasi', 'Order',
-                'Kasir & Pembayaran', 'Menu', 'Inventori', 'Staff', 'AI Chatbot'];
+        return ['Reports & Analytics', 'Table Management', 'Reservations', 'Order',
+                'Cashier & Payment', 'Menu', 'Inventory', 'Staff', 'AI Chatbot'];
       case StaffRole.cashier:
-        return ['Kasir & Pembayaran', 'Order', 'Menu'];
+        return ['Cashier & Payment', 'Order', 'Menu'];
       case StaffRole.waiter:
-        return ['Order', 'Manajemen Meja'];
+        return ['Order', 'Table Management'];
       case StaffRole.kitchen:
-        return ['Dapur (KDS)'];
+        return ['Kitchen (KDS)'];
       case StaffRole.host:
-        return ['Manajemen Meja', 'Reservasi'];
+        return ['Table Management', 'Reservations'];
     }
   }
 

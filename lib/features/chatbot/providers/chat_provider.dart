@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/chatbot_api.dart';
 
-// Persists chat history across navigation — tidak hilang saat pindah halaman
+// Persists chat history across navigation — doesn't get lost when changing pages
 class ChatState {
   final List<ChatMessage> messages;
   final bool isTyping;

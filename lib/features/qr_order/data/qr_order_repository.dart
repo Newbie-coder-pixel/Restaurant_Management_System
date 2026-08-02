@@ -21,7 +21,7 @@ class QrOrderRepository {
     final queueNumber = await _generateQueueNumber(branchId);
 
     try {
-      debugPrint('🔄 Membuat QR Order: $queueNumber | Items: ${session.items.length}');
+      debugPrint('🔄 Creating QR Order: $queueNumber | Items: ${session.items.length}');
 
       // 1. Insert orders
       final orderResponse = await _client
@@ -30,15 +30,15 @@ class QrOrderRepository {
             'queue_number': queueNumber,
             'order_number': queueNumber,
             'table_id': session.tableId,
-            'table_name': session.tableName ?? 'Meja ${session.tableId}',
-            'customer_name': session.customerName ?? 'Tamu',
+            'table_name': session.tableName ?? 'Table ${session.tableId}',
+            'customer_name': session.customerName ?? 'Guest',
             if (session.customerPhone != null && session.customerPhone!.isNotEmpty) 'customer_phone': session.customerPhone,
             'customer_email': session.customerEmail ?? '',
             'subtotal': session.subtotal,
             'tax_amount': session.pb1Amount,
             'total_amount': session.totalAmount,
             'status': 'created',
-            'payment_status': 'unpaid', // FIX: konsisten dengan staff order
+            'payment_status': 'unpaid', // FIX: consistent with staff order
             'payment_method': session.paymentMethod?.name.toLowerCase() ?? 'kasir',
             'branch_id': branchId,
             'order_type': 'qr_order',
@@ -60,7 +60,7 @@ class QrOrderRepository {
             'menu_item_name': cartItem.menuItem.name,
             'unit_price': cartItem.menuItem.price,
             'quantity': cartItem.quantity,
-            // subtotal tidak di-insert karena generated column di Supabase
+            // subtotal is not inserted because it's a generated column in Supabase
           };
           if (cartItem.notes != null && cartItem.notes!.isNotEmpty) {
             itemData['special_requests'] = cartItem.notes;
@@ -69,27 +69,27 @@ class QrOrderRepository {
         }).toList();
 
 await _client.from('order_items').insert(orderItemsData);
-        debugPrint('✅ ${orderItemsData.length} items tersimpan');
+        debugPrint('✅ ${orderItemsData.length} items saved');
 
-        // Inventory di-deduct di order_screen.dart saat status → preparing.
-        // Tidak di-deduct di sini untuk menghindari double deduction.
+        // Inventory is deducted in order_screen.dart when status → preparing.
+        // Not deducted here to avoid double deduction.
       }
 
-      // 3. Update status meja SEGERA setelah insert
+      // 3. Update table status IMMEDIATELY after insert
       if (session.tableId.isNotEmpty) {
         try {
-          debugPrint('🔍 tableId yang akan diupdate: "${session.tableId}"');
+          debugPrint('🔍 tableId to be updated: "${session.tableId}"');
 
-          // Cek dulu apakah meja ada dan status saat ini
+          // First check whether the table exists and its current status
           final checkResult = await _client
               .from('restaurant_tables')
               .select('id, status')
               .eq('id', session.tableId)
               .maybeSingle();
-          debugPrint('🔍 Meja ditemukan: $checkResult');
+          debugPrint('🔍 Table found: $checkResult');
 
           if (checkResult != null) {
-            // ✅ FIX: hapus .select() dari update — ini penyebab return []
+            // ✅ FIX: removed .select() from update — this was causing it to return []
             await _client
                 .from('restaurant_tables')
                 .update({
@@ -97,58 +97,58 @@ await _client.from('order_items').insert(orderItemsData);
                   'updated_at': DateTime.now().toIso8601String(),
                 })
                 .eq('id', session.tableId);
-            debugPrint('✅ Update selesai');
+            debugPrint('✅ Update complete');
 
-            // Verifikasi dengan query terpisah
+            // Verify with a separate query
             final verify = await _client
                 .from('restaurant_tables')
                 .select('id, status')
                 .eq('id', session.tableId)
                 .maybeSingle();
-            debugPrint('✅ Status meja setelah update: ${verify?['status']}');
+            debugPrint('✅ Table status after update: ${verify?['status']}');
           } else {
-            debugPrint('⚠️ Meja tidak ditemukan dengan id: ${session.tableId}');
+            debugPrint('⚠️ Table not found with id: ${session.tableId}');
           }
         } catch (e) {
-          debugPrint('⚠️ Gagal update status meja: $e');
+          debugPrint('⚠️ Failed to update table status: $e');
         }
       } else {
-        debugPrint('⚠️ tableId kosong, skip update meja');
+        debugPrint('⚠️ tableId is empty, skipping table update');
       }
 
-      // 4. Fetch ulang order beserta items
+      // 4. Re-fetch the order along with its items
       await Future.delayed(const Duration(milliseconds: 500));
       QrOrderModel? fullOrder = await fetchOrder(orderId);
 
       if (fullOrder != null) {
-        debugPrint('✅ Order dibuat: ${fullOrder.items.length} items, total ${fullOrder.totalAmount}');
+        debugPrint('✅ Order created: ${fullOrder.items.length} items, total ${fullOrder.totalAmount}');
         return fullOrder;
       }
 
-      // Fallback jika fetch gagal
+      // Fallback if the fetch fails
       return QrOrderModel.fromMap(_normalizeOrderMap(orderResponse, const []));
 
     } catch (e, stack) {
-      debugPrint('❌ Gagal create order: $e\n$stack');
+      debugPrint('❌ Failed to create order: $e\n$stack');
       rethrow;
     }
   }
 
   // ─── Add Items to Existing Order ──────────────────────────────────────────
-  /// Menambah item baru ke order yang sudah ada (tambah pesanan).
-  /// Hanya boleh dipanggil saat status order masih `created`.
-  /// Item lama TIDAK diubah sama sekali.
+  /// Adds new items to an existing order (add order).
+  /// May only be called while the order status is still `created`.
+  /// Existing items are NOT modified at all.
   Future<QrOrderModel> addItemsToOrder({
     required String orderId,
     required List<QrCartItem> newItems,
   }) async {
-    if (newItems.isEmpty) throw Exception('Tidak ada item baru untuk ditambahkan');
+    if (newItems.isEmpty) throw Exception('No new items to add');
 
     try {
-      debugPrint('🔄 Tambah ${newItems.length} item ke order $orderId');
+      debugPrint('🔄 Adding ${newItems.length} item(s) to order $orderId');
 
-      // 1. Cek status order — hanya boleh `created`
-      //    Juga pastikan tidak ada item yang sudah sent_to_kitchen (extra guard)
+      // 1. Check order status — must be `created`
+      //    Also make sure no item has already been sent_to_kitchen (extra guard)
       final orderCheck = await _client
           .from('orders')
           .select('id, status, total_amount, subtotal')
@@ -158,13 +158,13 @@ await _client.from('order_items').insert(orderItemsData);
       final currentStatus = orderCheck['status'] as String;
       if (currentStatus != 'created') {
         throw Exception(
-          'Pesanan tidak dapat diubah karena sudah berstatus "$currentStatus". '
-          'Hanya pesanan yang belum masuk dapur yang bisa ditambah.',
+          'Order cannot be changed because it already has status "$currentStatus". '
+          'Only orders that have not yet been sent to the kitchen can be added to.',
         );
       }
 
-      // 2. Insert item-item baru ke order_items
-      //    `sent_to_kitchen_at` dibiarkan null → item baru belum dikirim ke dapur
+      // 2. Insert the new items into order_items
+      //    `sent_to_kitchen_at` left null → new items not yet sent to the kitchen
       final orderItemsData = newItems.map((cartItem) {
         final itemData = <String, dynamic>{
           'order_id': orderId,
@@ -172,8 +172,8 @@ await _client.from('order_items').insert(orderItemsData);
           'menu_item_name': cartItem.menuItem.name,
           'unit_price': cartItem.menuItem.price,
           'quantity': cartItem.quantity,
-          // subtotal adalah generated column di DB, tidak perlu di-insert
-          // sent_to_kitchen_at: null (belum dikirim, staff yang akan send)
+          // subtotal is a generated column in the DB, no need to insert it
+          // sent_to_kitchen_at: null (not sent yet, staff will send it)
         };
         if (cartItem.notes != null && cartItem.notes!.isNotEmpty) {
           itemData['special_requests'] = cartItem.notes;
@@ -182,16 +182,16 @@ await _client.from('order_items').insert(orderItemsData);
       }).toList();
 
       await _client.from('order_items').insert(orderItemsData);
-      debugPrint('✅ ${orderItemsData.length} item baru tersimpan');
+      debugPrint('✅ ${orderItemsData.length} new item(s) saved');
 
-      // 3. Fetch ulang semua items untuk hitung ulang total
+      // 3. Re-fetch all items to recompute the total
       final allItemsResp = await _client
           .from('order_items')
           .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
           .eq('order_id', orderId);
 
-      // 4. Hitung ulang total dari semua item (lama + baru)
-      //    Rumus: subtotal → service_charge 3% → pb1 10% dari (subtotal + SC)
+      // 4. Recompute the total from all items (old + new)
+      //    Formula: subtotal → service_charge 3% → pb1 10% of (subtotal + SC)
       double newSubtotal = 0;
       for (final item in allItemsResp) {
         final unitPrice = (item['unit_price'] as num?)?.toDouble() ?? 0;
@@ -202,28 +202,28 @@ await _client.from('order_items').insert(orderItemsData);
       final newPb1 = (newSubtotal + newServiceCharge) * 0.10;
       final newTotal = newSubtotal + newServiceCharge + newPb1;
 
-      // 5. Update semua kolom finansial di orders
-      //    Sesuai skema DB: subtotal, service_charge_amount, pb1_amount,
-      //    tax_amount (diisi pb1 agar konsisten dengan createOrder), total_amount
+      // 5. Update all financial columns on orders
+      //    Per the DB schema: subtotal, service_charge_amount, pb1_amount,
+      //    tax_amount (set to pb1 to stay consistent with createOrder), total_amount
       await _client.from('orders').update({
         'subtotal': newSubtotal,
         'service_charge_amount': newServiceCharge,
         'pb1_amount': newPb1,
-        'tax_amount': newPb1,   // konsisten dengan createOrder yang pakai tax_amount = pb1
+        'tax_amount': newPb1,   // consistent with createOrder, which uses tax_amount = pb1
         'total_amount': newTotal,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', orderId);
 
-      debugPrint('✅ Total diupdate: Rp ${newTotal.toStringAsFixed(0)}');
+      debugPrint('✅ Total updated: Rp ${newTotal.toStringAsFixed(0)}');
 
-      // 6. Fetch ulang full order
+      // 6. Re-fetch the full order
       await Future.delayed(const Duration(milliseconds: 300));
       final fullOrder = await fetchOrder(orderId);
-      if (fullOrder == null) throw Exception('Gagal memuat order setelah update');
+      if (fullOrder == null) throw Exception('Failed to load order after update');
 
       return fullOrder;
     } catch (e, stack) {
-      debugPrint('❌ Gagal addItemsToOrder: $e\n$stack');
+      debugPrint('❌ Failed addItemsToOrder: $e\n$stack');
       rethrow;
     }
   }
@@ -280,7 +280,7 @@ await _client.from('order_items').insert(orderItemsData);
     return controller.stream;
   }
 
-  // ── Fetch order + items (DUA QUERY TERPISAH) ─────────────────────────────
+  // ── Fetch order + items (TWO SEPARATE QUERIES) ─────────────────────────────
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     final orderResp = await _client
         .from('orders')
@@ -335,7 +335,7 @@ await _client.from('order_items').insert(orderItemsData);
   ) {
     final orderItems = rawItems.map((e) {
       final item = Map<String, dynamic>.from(e as Map);
-      // Pastikan KEDUA key tersedia agar fromMap bisa baca unit_price maupun price
+      // Make sure BOTH keys are available so fromMap can read unit_price or price
       final unitPrice = item['unit_price'] ?? item['price'];
       item['unit_price'] = unitPrice;
       item['price'] = unitPrice;
@@ -369,7 +369,7 @@ await _client.from('order_items').insert(orderItemsData);
 
       final menuIds = (items as List).map((e) => e['id'] as String).toList();
 
-      // 2. Fetch allergens & dietary tags secara paralel
+      // 2. Fetch allergens & dietary tags in parallel
       final results = await Future.wait([
         _client
             .from('menu_item_allergens')
@@ -394,7 +394,7 @@ await _client.from('order_items').insert(orderItemsData);
         dietaryMap.putIfAbsent(id, () => []).add(row['dietary_tag'] as String);
       }
 
-      // 4. Merge ke setiap item
+      // 4. Merge into each item
       return items.map<Map<String, dynamic>>((item) {
         final id = item['id'] as String;
         return {
@@ -430,7 +430,7 @@ await _client.from('order_items').insert(orderItemsData);
 
   Future<String> _generateQueueNumber(String branchId) async {
     final now = DateTime.now().toUtc();
-    // Pakai UTC midnight agar konsisten dengan timestamp Supabase (UTC)
+    // Use UTC midnight to stay consistent with Supabase timestamps (UTC)
     final startOfDayUtc = DateTime.utc(now.year, now.month, now.day);
     try {
       final rows = await _client
@@ -492,7 +492,7 @@ final qrOrderWatchProvider =
 });
 
 // ─── Add Items Notifier ────────────────────────────────────────────────────────
-/// Provider untuk menambah item ke order yang sudah ada.
+/// Provider for adding items to an existing order.
 /// State: AsyncValue<QrOrderModel?> — null = idle, loading, data, error
 class QrAddItemsNotifier extends StateNotifier<AsyncValue<QrOrderModel?>> {
   final QrOrderRepository _repo;

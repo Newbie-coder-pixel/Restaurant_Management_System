@@ -10,9 +10,9 @@ extension TransferStatusX on TransferStatus {
       };
 
   String get label => switch (this) {
-        TransferStatus.pending   => 'Menunggu Konfirmasi',
-        TransferStatus.received  => 'Diterima',
-        TransferStatus.cancelled => 'Dibatalkan',
+        TransferStatus.pending   => 'Awaiting Confirmation',
+        TransferStatus.received  => 'Received',
+        TransferStatus.cancelled => 'Cancelled',
       };
 
   static TransferStatus fromString(String? s) => switch (s) {
@@ -34,7 +34,7 @@ class TransferStockModel {
   final DateTime createdAt;
   final DateTime? receivedAt;
 
-  // Join fields (opsional, diisi saat fetch dengan select)
+  // Join fields (optional, populated when fetched with a select join)
   final String? itemName;
   final String? itemUnit;
   final String? fromBranchName;

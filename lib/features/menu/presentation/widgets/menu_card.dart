@@ -9,8 +9,8 @@ import 'add_menu_form.dart';
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
-/// Icon mapping untuk setiap jenis alergen.
-/// Tambah atau ubah entry sesuai kebutuhan bisnis.
+/// Icon mapping for each allergen type.
+/// Add or change entries as the business needs.
 const Map<String, IconData> _allergenIcons = {
   'gluten': Icons.grain,
   'dairy': Icons.water_drop_outlined,
@@ -24,7 +24,7 @@ const Map<String, IconData> _allergenIcons = {
   'wheat': Icons.grass_outlined,
 };
 
-/// Icon mapping untuk label dietary.
+/// Icon mapping for dietary labels.
 const Map<String, IconData> _dietaryIcons = {
   'vegan': Icons.eco,
   'vegetarian': Icons.local_florist,
@@ -37,7 +37,7 @@ const Map<String, IconData> _dietaryIcons = {
   'spicy': Icons.local_fire_department,
 };
 
-/// Warna per label dietary agar terasa kontekstual.
+/// Color per dietary label so it feels contextual.
 const Map<String, Color> _dietaryColors = {
   'vegan': Color(0xFF2E7D32),
   'vegetarian': Color(0xFF388E3C),
@@ -103,7 +103,7 @@ class _MenuCardState extends ConsumerState<MenuCard>
       if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Gagal mengubah status menu'),
+            content: Text('Failed to change menu status'),
             backgroundColor: Colors.red,
           ),
         );
@@ -128,12 +128,12 @@ class _MenuCardState extends ConsumerState<MenuCard>
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Hapus Menu?'),
-        content: Text('Menu "${widget.menu.name}" akan dihapus permanen.'),
+        title: const Text('Delete Menu Item?'),
+        content: Text('"${widget.menu.name}" will be permanently deleted.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             style:
@@ -144,7 +144,7 @@ class _MenuCardState extends ConsumerState<MenuCard>
                   .read(menuProvider.notifier)
                   .deleteMenu(widget.menu.id);
             },
-            child: const Text('Hapus'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -166,8 +166,8 @@ class _MenuCardState extends ConsumerState<MenuCard>
   }
 
   String get _statusLabel {
-    if (widget.menu.isSeasonal) return 'Musiman';
-    return widget.menu.isAvailable ? 'Tersedia' : 'Habis';
+    if (widget.menu.isSeasonal) return 'Seasonal';
+    return widget.menu.isAvailable ? 'Available' : 'Out of Stock';
   }
 
   @override
@@ -176,8 +176,8 @@ class _MenuCardState extends ConsumerState<MenuCard>
     final colorScheme = theme.colorScheme;
     final menu = widget.menu;
 
-    // Cek apakah ada data allergen / dietary untuk ditampilkan
-    // allergens & dietaryLabels non-nullable (default const []), cukup cek isNotEmpty
+    // Check whether there's allergen / dietary data to display
+    // allergens & dietaryLabels are non-nullable (default const []), just check isNotEmpty
     final hasAllergens = menu.allergens.isNotEmpty;
     final hasDietary = menu.dietaryLabels.isNotEmpty;
     final hasBadgeSection = hasAllergens || hasDietary;
@@ -255,8 +255,8 @@ class _MenuCardState extends ConsumerState<MenuCard>
                       ),
 
                       // ── Allergen & Dietary Badges ──────────────────────
-                      // Hanya render section ini jika ada data,
-                      // sehingga card tanpa data tidak punya gap kosong.
+                      // Only render this section if there's data,
+                      // so a card without data doesn't have an empty gap.
                       if (hasBadgeSection) ...[
                         const SizedBox(height: 6),
                         _AllergenDietarySection(
@@ -293,7 +293,7 @@ class _MenuCardState extends ConsumerState<MenuCard>
                                 icon: Icons.delete_outline,
                                 color: Colors.red.shade400,
                                 onTap: _handleDelete,
-                                tooltip: 'Hapus',
+                                tooltip: 'Delete',
                               ),
                             ],
                           ),
@@ -329,9 +329,9 @@ class _MenuCardState extends ConsumerState<MenuCard>
 
 // ─── COSTING DETAIL SHEET ─────────────────────────────────────────────────────
 
-/// Bottom sheet yang menampilkan detail costing per menu item:
-/// daftar ingredients, cost per bahan, total COGS, gross profit, dan margin.
-/// Hanya visible untuk admin/manager — customer tidak punya akses ke screen ini.
+/// Bottom sheet showing per-menu-item costing detail:
+/// ingredient list, cost per ingredient, total COGS, gross profit, and margin.
+/// Only visible to admin/manager — customers don't have access to this screen.
 class _MenuCostingSheet extends ConsumerStatefulWidget {
   final MenuItem menu;
   const _MenuCostingSheet({required this.menu});
@@ -364,7 +364,7 @@ class _MenuCostingSheetState extends ConsumerState<_MenuCostingSheet> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Gagal memuat data bahan';
+          _error = 'Failed to load ingredient data';
           _isLoading = false;
         });
       }
@@ -411,7 +411,7 @@ class _MenuCostingSheetState extends ConsumerState<_MenuCostingSheet> {
                           style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
-                      Text('Detail Bahan & Kalkulasi Profit',
+                      Text('Ingredient Detail & Profit Calculation',
                           style: theme.textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurface.withValues(alpha: 0.5))),
                     ],
@@ -458,11 +458,11 @@ class _MenuCostingSheetState extends ConsumerState<_MenuCostingSheet> {
             children: [
               const Icon(Icons.blender_outlined, size: 16),
               const SizedBox(width: 6),
-              Text('Bahan / Resep',
+              Text('Ingredients / Recipe',
                   style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700)),
               const Spacer(),
-              Text('${ingredients.length} bahan',
+              Text('${ingredients.length} ingredients',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurface.withValues(alpha: 0.5))),
             ],
@@ -482,11 +482,11 @@ class _MenuCostingSheetState extends ConsumerState<_MenuCostingSheet> {
                   Icon(Icons.info_outline, size: 28,
                       color: colorScheme.onSurface.withValues(alpha: 0.3)),
                   const SizedBox(height: 8),
-                  Text('Belum ada bahan terdaftar',
+                  Text('No ingredients registered yet',
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurface.withValues(alpha: 0.45))),
                   const SizedBox(height: 4),
-                  Text('Tambahkan bahan saat edit menu',
+                  Text('Add ingredients when editing the menu item',
                       style: theme.textTheme.bodySmall?.copyWith(
                           fontSize: 11,
                           color: colorScheme.onSurface.withValues(alpha: 0.3))),
@@ -510,11 +510,11 @@ class _MenuCostingSheetState extends ConsumerState<_MenuCostingSheet> {
               children: [
                 Icon(Icons.timer_outlined, size: 18, color: Colors.blue.shade600),
                 const SizedBox(width: 10),
-                Text('Estimasi waktu persiapan',
+                Text('Estimated prep time',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.blue.shade700)),
                 const Spacer(),
-                Text('${menu.preparationTimeMinutes} menit',
+                Text('${menu.preparationTimeMinutes} min',
                     style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: Colors.blue.shade700)),
@@ -529,9 +529,9 @@ class _MenuCostingSheetState extends ConsumerState<_MenuCostingSheet> {
 
 // ─── SUMMARY ROW ──────────────────────────────────────────────────────────────
 
-/// 3 kartu ringkasan: Harga Jual, Est. COGS, dan Margin.
-/// COGS dihitung dari ingredients × cost_per_unit inventory.
-/// Jika belum ada ingredients, semua nilai tampil sebagai '-'.
+/// 3 summary cards: Selling Price, Est. COGS, and Margin.
+/// COGS is calculated from ingredients × inventory cost_per_unit.
+/// If there are no ingredients yet, all values show as '-'.
 class _SummaryRow extends StatelessWidget {
   final MenuItem menu;
   final List<MenuIngredient> ingredients;
@@ -542,7 +542,7 @@ class _SummaryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasIngredients = ingredients.isNotEmpty;
 
-    // Kalkulasi COGS dari costPerUnit yang tersimpan di MenuIngredient
+    // Calculate COGS from costPerUnit stored on MenuIngredient
     final totalCost = hasIngredients
         ? ingredients.fold<double>(
             0, (sum, ing) => sum + (ing.costPerUnit * ing.quantity))
@@ -556,7 +556,7 @@ class _SummaryRow extends StatelessWidget {
     return Row(
       children: [
         _SummaryCard(
-          label: 'Harga Jual',
+          label: 'Selling Price',
           value: 'Rp ${_fmt(menu.price)}',
           icon: Icons.sell_outlined,
           color: Colors.blue.shade600,
@@ -673,7 +673,7 @@ class _IngredientRow extends StatelessWidget {
           ),
           const SizedBox(width: 10),
 
-          // Nama + qty
+          // Name + qty
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -716,8 +716,8 @@ class _IngredientRow extends StatelessWidget {
 
 // ─── ALLERGEN & DIETARY SECTION ───────────────────────────────────────────────
 
-/// Wrapper yang menampilkan baris allergen (merah/warning) dan
-/// baris dietary (warna per-label) secara vertikal jika keduanya ada.
+/// Wrapper that shows the allergen row (red/warning) and the
+/// dietary row (color per label) stacked vertically if both exist.
 class _AllergenDietarySection extends StatelessWidget {
   final List<String> allergens;
   final List<String> dietaryLabels;
@@ -734,7 +734,7 @@ class _AllergenDietarySection extends StatelessWidget {
       children: [
         // Allergen row
         if (allergens.isNotEmpty) _AllergenBadges(allergens: allergens),
-        // Dietary row — tambah gap jika kedua row ada
+        // Dietary row — add a gap if both rows exist
         if (dietaryLabels.isNotEmpty) ...[
           if (allergens.isNotEmpty) const SizedBox(height: 4),
           _DietaryBadges(labels: dietaryLabels),
@@ -746,8 +746,8 @@ class _AllergenDietarySection extends StatelessWidget {
 
 // ─── ALLERGEN BADGES ──────────────────────────────────────────────────────────
 
-/// Baris chip kecil berwarna merah/amber untuk peringatan alergen.
-/// Tap chip → tampilkan tooltip nama alergen lengkap (capitalize).
+/// Row of small red/amber chips for allergen warnings.
+/// Tap a chip → show a tooltip with the full allergen name (capitalized).
 class _AllergenBadges extends StatelessWidget {
   final List<String> allergens;
 
@@ -764,12 +764,12 @@ class _AllergenBadges extends StatelessWidget {
         final label = _capitalize(allergen);
 
         return Tooltip(
-          message: 'Mengandung: $label',
+          message: 'Contains: $label',
           preferBelow: false,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
             decoration: BoxDecoration(
-              // Merah transparan → sinyal bahaya/warning
+              // Transparent red → hazard/warning signal
               color: Colors.red.shade50,
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
@@ -802,8 +802,8 @@ class _AllergenBadges extends StatelessWidget {
 
 // ─── DIETARY BADGES ───────────────────────────────────────────────────────────
 
-/// Baris chip kecil berwarna per-label untuk informasi dietary.
-/// Warna diambil dari [_dietaryColors]; fallback ke teal jika tidak ada.
+/// Row of small chips colored per label for dietary information.
+/// Color is taken from [_dietaryColors]; falls back to teal if not found.
 class _DietaryBadges extends StatelessWidget {
   final List<String> labels;
 
@@ -863,7 +863,7 @@ String _capitalize(String s) {
   return s[0].toUpperCase() + s.substring(1);
 }
 
-// ─── SUB-WIDGETS (tidak berubah) ──────────────────────────────────────────────
+// ─── SUB-WIDGETS (unchanged) ──────────────────────────────────────────────────
 
 class _MenuImage extends StatelessWidget {
   final String? imageUrl;
@@ -1012,7 +1012,7 @@ class _AvailabilityToggle extends StatelessWidget {
               ),
             const SizedBox(width: 4),
             Text(
-              isAvailable ? 'Aktif' : 'Nonaktif',
+              isAvailable ? 'Active' : 'Inactive',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,

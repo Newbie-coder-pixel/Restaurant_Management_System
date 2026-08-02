@@ -22,17 +22,17 @@ class _AddTableDialogState extends State<AddTableDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Tambah Meja Baru',
+      title: const Text('Add New Table',
         style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(
           controller: _numberCtrl,
           decoration: const InputDecoration(
-            labelText: 'Nomor Meja', hintText: 'contoh: A1, VIP-1'),
+            labelText: 'Table Number', hintText: 'example: A1, VIP-1'),
         ),
         const SizedBox(height: 16),
         Row(children: [
-          const Text('Kapasitas:', style: TextStyle(fontFamily: 'Poppins')),
+          const Text('Capacity:', style: TextStyle(fontFamily: 'Poppins')),
           const Spacer(),
           IconButton(
             icon: const Icon(Icons.remove),
@@ -51,7 +51,7 @@ class _AddTableDialogState extends State<AddTableDialog> {
         const SizedBox(height: 8),
         const Align(
           alignment: Alignment.centerLeft,
-          child: Text('Bentuk:', style: TextStyle(fontFamily: 'Poppins')),
+          child: Text('Shape:', style: TextStyle(fontFamily: 'Poppins')),
         ),
         const SizedBox(height: 8),
         Row(
@@ -82,7 +82,7 @@ class _AddTableDialogState extends State<AddTableDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Batal'),
+          child: const Text('Cancel'),
         ),
         ElevatedButton(
           onPressed: () {
@@ -93,7 +93,7 @@ class _AddTableDialogState extends State<AddTableDialog> {
               'shape': _shape.name,
             });
           },
-          child: const Text('Tambah'),
+          child: const Text('Add'),
         ),
       ],
     );

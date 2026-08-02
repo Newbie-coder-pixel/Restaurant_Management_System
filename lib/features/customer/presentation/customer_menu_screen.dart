@@ -17,7 +17,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
   String? _selectedCategoryId;
   bool _loading = true;
   String _search = '';
-  String _branchName = ''; // ✅ TAMBAH: simpan nama branch
+  String _branchName = ''; // ✅ ADDED: store the branch name
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -25,13 +25,13 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
     super.initState();
     _load();
 
-    // ✅ FIX: setBranch dipanggil saat screen dibuka, bukan saat item ditambah
-    // Gunakan addPostFrameCallback agar ref.read aman dipanggil setelah build pertama
+    // ✅ FIX: setBranch is called when the screen opens, not when an item is added
+    // Use addPostFrameCallback so ref.read is safe to call after the first build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(cartProvider.notifier).setBranch(
           widget.branchId,
-          _branchName, // akan diupdate setelah _load() selesai
+          _branchName, // will be updated after _load() completes
         );
       }
     });
@@ -45,7 +45,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
 
   Future<void> _load() async {
     try {
-      // ✅ FIX: fetch branch name sekaligus
+      // ✅ FIX: fetch the branch name at the same time
       final branchRes = await Supabase.instance.client
           .from('branches')
           .select('name')
@@ -75,7 +75,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
           _loading = false;
         });
 
-        // ✅ Update setBranch dengan nama yang sudah ter-fetch
+        // ✅ Update setBranch with the fetched name
         ref.read(cartProvider.notifier).setBranch(widget.branchId, name);
       }
     } catch (_) {
@@ -132,7 +132,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                             Icon(Icons.restaurant_menu_outlined,
                                 size: 80, color: Colors.grey.shade300),
                             const SizedBox(height: 16),
-                            Text('Tidak ada menu ditemukan',
+                            Text('No menu items found',
                                 style: TextStyle(
                                     fontFamily: 'Poppins',
                                     fontSize: 16,
@@ -140,7 +140,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                                     fontWeight: FontWeight.w500)),
                             const SizedBox(height: 8),
                             Text(
-                                'Coba kata kunci lain atau pilih kategori berbeda',
+                                'Try a different keyword or choose another category',
                                 style: TextStyle(
                                     fontFamily: 'Poppins',
                                     fontSize: 13,
@@ -168,8 +168,8 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                               item: item,
                               cartQty: qty,
                               onAdd: () {
-                                // ✅ setBranch sudah dipanggil di initState,
-                                // tidak perlu dipanggil lagi di sini
+                                // ✅ setBranch was already called in initState,
+                                // no need to call it again here
                                 ref.read(cartProvider.notifier).addItem(
                                     CartItem(
                                       menuItemId: item['id'],
@@ -213,9 +213,9 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         flexibleSpace: FlexibleSpaceBar(
-          // ✅ Tampilkan nama branch di header
+          // ✅ Show the branch name in the header
           title: Text(
-            _branchName.isNotEmpty ? _branchName : 'Menu Restoran',
+            _branchName.isNotEmpty ? _branchName : 'Restaurant Menu',
             style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w600,
@@ -252,7 +252,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                       borderRadius: BorderRadius.circular(10)),
                   child: const Icon(Icons.calendar_today_outlined,
                       color: Colors.white, size: 18)),
-              tooltip: 'Booking meja',
+              tooltip: 'Book a table',
               onPressed: () =>
                   context.push('/customer/booking/${widget.branchId}'),
             ),
@@ -265,7 +265,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
       child: TextField(
           onChanged: (v) => setState(() => _search = v),
           decoration: InputDecoration(
-            hintText: 'Cari menu favoritmu...',
+            hintText: 'Search for your favorite menu...',
             hintStyle: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 14,
@@ -302,7 +302,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
           separatorBuilder: (_, __) => const SizedBox(width: 10),
           itemBuilder: (_, i) {
             if (i == 0) {
-              return _chip('Semua Menu', _selectedCategoryId == null,
+              return _chip('All Menu', _selectedCategoryId == null,
                   () => setState(() => _selectedCategoryId = null));
             }
             final cat = _categories[i - 1];
@@ -390,7 +390,7 @@ class _CartFab extends StatelessWidget {
             ),
           ]),
           const SizedBox(width: 10),
-          const Text('Keranjang',
+          const Text('Cart',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   color: Colors.white,
@@ -607,8 +607,8 @@ class _MenuCard extends StatelessWidget {
   String _getCategoryName(String? catId) {
     if (catId == null) return 'Menu';
     const names = [
-      'Makanan', 'Nasi', 'Sayur', 'Sup',
-      'Minuman', 'Camilan', 'Dessert', 'Jus'
+      'Food', 'Rice', 'Vegetables', 'Soup',
+      'Drinks', 'Snacks', 'Dessert', 'Juice'
     ];
     return names[catId.hashCode.abs() % names.length];
   }

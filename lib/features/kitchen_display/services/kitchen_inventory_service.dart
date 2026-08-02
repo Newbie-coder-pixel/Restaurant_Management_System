@@ -1,17 +1,17 @@
 // lib/features/kitchen_display/services/kitchen_inventory_service.dart
 //
-// Menghubungkan Dapur (KDS) ↔ Menu (resep/ingredients) ↔ Inventory.
+// Connects the Kitchen (KDS) ↔ Menu (recipes/ingredients) ↔ Inventory.
 //
-// Saat staff dapur menekan "Mulai Masak" (order → preparing), service ini
-// akan:
-//   1. Ambil resep (menu_ingredients) untuk setiap menu item dalam order.
-//   2. Kalikan quantity resep dengan quantity yang dipesan.
-//   3. Potong stok inventory sesuai bahan yang terpakai (dicocokkan per nama,
-//      karena inventory bersifat harian).
+// When kitchen staff tap "Start Cooking" (order → preparing), this service
+// will:
+//   1. Fetch the recipe (menu_ingredients) for each menu item in the order.
+//   2. Multiply the recipe quantity by the ordered quantity.
+//   3. Deduct inventory stock for the ingredients used (matched by name,
+//      since inventory is tracked daily).
 //
-// Dirancang untuk gagal secara aman: kalau satu bahan tidak ditemukan di
-// inventory hari ini, bahan itu dilewati (dilaporkan lewat [KitchenDeductionResult])
-// tanpa menggagalkan proses masak untuk item lain.
+// Designed to fail safely: if an ingredient isn't found in today's
+// inventory, it's skipped (reported via [KitchenDeductionResult])
+// without failing the cooking process for other items.
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,16 +20,16 @@ import '../../../shared/models/order_model.dart';
 import '../../menu/presentation/services/menu_service.dart';
 import '../../inventory/services/inventory_service.dart';
 
-/// Ringkasan hasil pemotongan stok untuk satu order.
+/// Summary of the stock deduction result for one order.
 class KitchenDeductionResult {
-  /// Nama bahan baku yang berhasil dipotong stoknya.
+  /// Names of the ingredients whose stock was successfully deducted.
   final List<String> deducted;
 
-  /// Nama bahan baku yang tidak ditemukan di inventory cabang ini hari ini
-  /// (kemungkinan belum didaftarkan / salah penamaan).
+  /// Names of ingredients not found in this branch's inventory today
+  /// (likely not registered yet / a naming mismatch).
   final List<String> notFoundInInventory;
 
-  /// Menu item yang dipesan tapi belum punya resep (menu_ingredients kosong).
+  /// Menu items that were ordered but don't have a recipe yet (empty menu_ingredients).
   final List<String> menusWithoutRecipe;
 
   const KitchenDeductionResult({
@@ -50,8 +50,8 @@ class KitchenInventoryService {
       : _menuService = MenuService(client),
         _inventoryService = InventoryService(client);
 
-  /// Potong stok inventory untuk semua item dalam [order] sesuai resep menu.
-  /// Dipanggil sekali saat order pindah status ke "preparing".
+  /// Deduct inventory stock for all items in [order] per the menu recipe.
+  /// Called once when the order status changes to "preparing".
   Future<KitchenDeductionResult> deductStockForOrder({
     required OrderModel order,
     String? createdBy,
@@ -68,12 +68,12 @@ class KitchenInventoryService {
     try {
       recipes = await _menuService.fetchIngredientsForMenuItems(menuItemIds);
     } catch (e) {
-      debugPrint('⚠️ KitchenInventoryService: gagal memuat resep menu: $e');
+      debugPrint('⚠️ KitchenInventoryService: failed to load menu recipes: $e');
       return const KitchenDeductionResult();
     }
 
-    // Gabungkan kebutuhan bahan dari semua item order (menjumlahkan bila ada
-    // bahan yang sama dipakai lebih dari satu menu dalam order yang sama).
+    // Combine ingredient requirements across all order items (summing when
+    // the same ingredient is used by more than one menu in the same order).
     final requirements = <String, double>{};
     final menusWithoutRecipe = <String>[];
 
@@ -108,7 +108,7 @@ class KitchenInventoryService {
         createdBy: createdBy,
       );
     } catch (e) {
-      debugPrint('⚠️ KitchenInventoryService: gagal memotong stok: $e');
+      debugPrint('⚠️ KitchenInventoryService: failed to deduct stock: $e');
     }
 
     final deducted = requirements.keys

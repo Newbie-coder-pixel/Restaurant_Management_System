@@ -36,13 +36,13 @@ class _ChatMessage {
 
 // ── Quick Actions ──────────────────────────────────────────────────────
 const _quickActions = [
-  ('✨ Rekomendasi', 'Rekomendasikan menu untuk saya'),
-  ('🍽️ Lihat Menu', 'Apa saja menu yang tersedia?'),
-  ('🛒 Pesan Makanan', 'Saya ingin memesan makanan'),
-  ('📅 Reservasi Meja', 'Saya ingin reservasi meja'),
-  ('🌿 Vegetarian', 'Ada menu vegetarian apa saja?'),
-  ('⚠️ Info Alergen', 'Saya punya alergi, bisa bantu cek menu?'),
-  ('⏰ Jam Buka', 'Jam berapa restoran buka dan tutup?'),
+  ('✨ Recommendation', 'Recommend a menu for me'),
+  ('🍽️ View Menu', 'What menu items are available?'),
+  ('🛒 Order Food', 'I want to order food'),
+  ('📅 Table Reservation', 'I want to reserve a table'),
+  ('🌿 Vegetarian', 'What vegetarian menu items do you have?'),
+  ('⚠️ Allergen Info', 'I have allergies, can you help check the menu?'),
+  ('⏰ Opening Hours', 'What time does the restaurant open and close?'),
 ];
 
 // ── Screen ─────────────────────────────────────────────────────────────
@@ -71,16 +71,16 @@ class _CustomerChatbotScreenState
   String? _cachedBranchName;
   RecommendationResult? _cachedRecommendations;
 
-  // Semua branch -- dipakai saat chatbot dibuka tanpa branchId
+  // All branches -- used when the chatbot is opened without a branchId
   List<Map<String, dynamic>> _allBranches = [];
 
-  // Branch yang dipilih user saat mode tanpa branchId
+  // Branch chosen by the user in the mode without a branchId
   String? _selectedBranchId;
 
-  // Raw menu items list — digunakan untuk resolve menuItemId saat order
+  // Raw menu items list — used to resolve menuItemId when ordering
   List<Map<String, dynamic>> _menuItems = [];
 
-  // Nama customer yang dikumpulkan dari percakapan (fallback untuk booking)
+  // Customer name collected from the conversation (fallback for booking)
   String? _collectedCustomerName;
 
   DateTime? _lastEscalatedAt;
@@ -90,9 +90,9 @@ class _CustomerChatbotScreenState
         const Duration(minutes: 5);
   }
 
-  // Sama seperti ChatbotApi (staff) — di build native tidak ada origin untuk
-  // path relatif '/api/chat', jadi harus nembak domain Vercel customer app
-  // eksplisit. Override dev lokal: `--dart-define=CHAT_API_BASE_URL=http://localhost:3000`
+  // Same as ChatbotApi (staff) — native builds have no origin for the
+  // relative path '/api/chat', so we must hit the customer app's Vercel
+  // domain explicitly. Local dev override: `--dart-define=CHAT_API_BASE_URL=http://localhost:3000`
   String get _proxyUrl {
     if (kIsWeb) return '/api/chat';
     const override = String.fromEnvironment('CHAT_API_BASE_URL');
@@ -100,26 +100,26 @@ class _CustomerChatbotScreenState
     return '$base/api/chat';
   }
 
-  // Prioritas: widget.branchId → _selectedBranchId (dipilih user) → ''
+  // Priority: widget.branchId → _selectedBranchId (chosen by user) → ''
   String get _branchId => widget.branchId ?? _selectedBranchId ?? '';
 
-  // Muncul hanya saat user trigger aksi yang butuh branch (booking/order)
+  // Only appears when the user triggers an action that needs a branch (booking/order)
   bool _showBranchPicker = false;
   bool get _needsBranchSelection => _showBranchPicker && _selectedBranchId == null && widget.branchId == null;
 
   @override
   void initState() {
     super.initState();
-    // Sambut customer — sama untuk semua mode
+    // Welcome the customer — same for all modes
     _addBot(
-      'Halo! 👋 Selamat datang di layanan customer support kami.\n\n'
-      'Saya bisa membantu Anda dengan:\n'
-      '• 🍽️ Informasi menu & bahan\n'
-      '• 🛒 Pemesanan makanan\n'
-      '• ⚠️ Info alergen & diet khusus\n'
-      '• 📅 Reservasi meja\n'
-      '• ⏰ Jam operasional\n\n'
-      'Silakan pilih topik di bawah atau ketik pertanyaan Anda 👇',
+      'Hello! 👋 Welcome to our customer support service.\n\n'
+      'I can help you with:\n'
+      '• 🍽️ Menu & ingredient information\n'
+      '• 🛒 Food ordering\n'
+      '• ⚠️ Allergen & special diet info\n'
+      '• 📅 Table reservations\n'
+      '• ⏰ Operating hours\n\n'
+      'Please choose a topic below or type your question 👇',
     );
     _loadBranchData();
   }
@@ -187,7 +187,7 @@ class _CustomerChatbotScreenState
       _menuItems = List<Map<String, dynamic>>.from(items as List);
 
       if (_menuItems.isEmpty) {
-        _cachedMenuText = '(belum ada menu)';
+        _cachedMenuText = '(no menu yet)';
         return;
       }
 
@@ -218,7 +218,7 @@ class _CustomerChatbotScreenState
       final buf = StringBuffer();
       for (final item in _menuItems) {
         final id = item['id'] as String;
-        final cat = (item['menu_categories'] as Map?)?['name'] ?? 'Umum';
+        final cat = (item['menu_categories'] as Map?)?['name'] ?? 'General';
         final price = (item['price'] as num?)?.toStringAsFixed(0) ?? '0';
         final desc = item['description'] as String?;
         final prepTime = item['preparation_time_minutes'] as int?;
@@ -228,10 +228,10 @@ class _CustomerChatbotScreenState
 
         buf.write('- ${item['name']} (Rp $price) [$cat]');
         if (desc != null && desc.isNotEmpty) buf.write(' — $desc');
-        if (prepTime != null) buf.write(' | Waktu saji: ${prepTime}mnt');
-        if (isSeasonal) buf.write(' | 🌿 Menu Musiman');
+        if (prepTime != null) buf.write(' | Prep time: ${prepTime}min');
+        if (isSeasonal) buf.write(' | 🌿 Seasonal Menu');
         if (alergenList.isNotEmpty) {
-          buf.write(' | ⚠️ Alergen: ${alergenList.join(', ')}');
+          buf.write(' | ⚠️ Allergen: ${alergenList.join(', ')}');
         }
         if (dietList.isNotEmpty) {
           buf.write(' | 🥗 Diet: ${dietList.join(', ')}');
@@ -241,38 +241,38 @@ class _CustomerChatbotScreenState
       _cachedMenuText = buf.toString().trim();
     } catch (e) {
       debugPrint('Error loading branch data: $e');
-      _cachedMenuText = '(gagal memuat menu)';
+      _cachedMenuText = '(failed to load menu)';
     }
   }
 
-  // ── Branch Selection (saat tidak ada branchId dari widget) ────────
-  /// Dipanggil saat user mengetuk tombol cabang di UI picker.
+  // ── Branch Selection (when there's no branchId from the widget) ────
+  /// Called when the user taps a branch button in the UI picker.
   Future<void> _selectBranch(Map<String, dynamic> branch) async {
     final id = branch['id'] as String;
-    final name = branch['name'] as String? ?? 'Restoran';
+    final name = branch['name'] as String? ?? 'Restaurant';
 
     setState(() {
       _selectedBranchId = id;
     });
 
-    // Tampilkan pesan konfirmasi pilihan
+    // Show a confirmation message for the selection
     _addBot(
-      '✅ Anda memilih *$name*.\n\n'
-      'Sedang memuat data cabang... ⏳',
+      '✅ You selected *$name*.\n\n'
+      'Loading branch data... ⏳',
     );
 
-    // Load semua data branch yang dipilih
+    // Load all data for the selected branch
     await _loadBranchData();
 
     if (mounted) {
       _addBot(
-        'Siap! Saya sekarang bisa membantu Anda di *$name* dengan:\n'
-        '• 🍽️ Informasi menu & harga\n'
-        '• 🛒 Pemesanan makanan\n'
-        '• 📅 Reservasi meja\n'
-        '• ⚠️ Info alergen & diet\n'
-        '• ⏰ Jam operasional\n\n'
-        'Silakan pilih topik di bawah atau ketik pertanyaan Anda 👇',
+        'Ready! I can now help you at *$name* with:\n'
+        '• 🍽️ Menu & price information\n'
+        '• 🛒 Food ordering\n'
+        '• 📅 Table reservations\n'
+        '• ⚠️ Allergen & diet info\n'
+        '• ⏰ Operating hours\n\n'
+        'Please choose a topic below or type your question 👇',
       );
     }
   }
@@ -304,120 +304,120 @@ class _CustomerChatbotScreenState
     final now = DateTime.now();
     final todayStr = '${now.day} ${_bulanIndo(now.month)} ${now.year}';
 
-    // Mode: ada branchId spesifik
+    // Mode: specific branchId present
     if (_branchId.isNotEmpty) {
       final openTime = _cachedOpeningTime ?? '10:00';
       final closeTime = _cachedClosingTime ?? '22:00';
-      final branchName = _cachedBranchName ?? 'Restoran Kami';
-      final menuText = _cachedMenuText ?? '(menu sedang dimuat)';
+      final branchName = _cachedBranchName ?? 'Our Restaurant';
+      final menuText = _cachedMenuText ?? '(menu loading)';
       final recoText = _cachedRecommendations != null
           ? RecommendationService.formatForPrompt(_cachedRecommendations!)
           : '';
 
       return '''
-Kamu adalah asisten AI customer support untuk $branchName yang ramah dan helpful.
-Hari ini: $todayStr
-Jam Operasional: $openTime - $closeTime WIB
-Cabang saat ini: $branchName
+You are a friendly and helpful AI customer support assistant for $branchName.
+Today: $todayStr
+Operating Hours: $openTime - $closeTime WIB
+Current branch: $branchName
 
-DAFTAR MENU TERSEDIA (gunakan data ini, jangan karang sendiri):
+AVAILABLE MENU LIST (use this data, do not make things up):
 $menuText
 
-${recoText.isNotEmpty ? '$recoText\n' : ''}KEMAMPUAN KAMU:
-1. INFO MENU - jawab pertanyaan tentang menu, harga, bahan, deskripsi
-2. INFO ALERGEN - bantu customer dengan alergi, lihat kolom "Alergen" di data menu
-3. INFO DIET - bantu customer dengan preferensi diet (vegetarian, vegan, dll)
-4. INFO JAM BUKA - sampaikan jam operasional di atas
-5. RESERVASI MEJA - proses booking meja untuk customer di cabang $branchName
-6. REKOMENDASI - gunakan data REKOMENDASI MENU PERSONAL di atas jika ada
-7. PEMESANAN MAKANAN - bantu customer memesan makanan via chatbot
+${recoText.isNotEmpty ? '$recoText\n' : ''}YOUR CAPABILITIES:
+1. MENU INFO - answer questions about the menu, prices, ingredients, descriptions
+2. ALLERGEN INFO - help customers with allergies, see the "Allergen" column in the menu data
+3. DIET INFO - help customers with dietary preferences (vegetarian, vegan, etc.)
+4. OPENING HOURS INFO - state the operating hours above
+5. TABLE RESERVATION - process table bookings for customers at the $branchName branch
+6. RECOMMENDATION - use the PERSONAL MENU RECOMMENDATION data above if available
+7. FOOD ORDERING - help customers order food via the chatbot
 
-ALUR PEMESANAN MAKANAN:
-Saat customer ingin memesan makanan:
-1. Tanya menu apa yang ingin dipesan dan berapa porsi (bisa lebih dari 1 item)
-2. Konfirmasi ringkasan pesanan customer (nama menu PERSIS sesuai daftar, jumlah, harga satuan, total)
-3. Setelah customer konfirmasi, output PERSIS format ini (tanpa teks lain setelahnya):
+FOOD ORDERING FLOW:
+When a customer wants to order food:
+1. Ask which menu items they want to order and how many portions (can be more than 1 item)
+2. Confirm a summary of the customer's order (menu name EXACTLY as listed, quantity, unit price, total)
+3. After the customer confirms, output EXACTLY this format (with no other text after it):
 
 ACTION:create_order
-{"items":[{"name":"Nama Menu Persis","quantity":2,"notes":"catatan atau null"},{"name":"Nama Menu Lain","quantity":1,"notes":null}]}
+{"items":[{"name":"Exact Menu Name","quantity":2,"notes":"note or null"},{"name":"Another Menu Name","quantity":1,"notes":null}]}
 
-ATURAN PENTING PEMESANAN:
-- Nama menu di JSON HARUS PERSIS sama dengan daftar menu (case-sensitive)
-- Jangan output ACTION:create_order sebelum customer mengkonfirmasi pesanan
-- Jika menu tidak ada di daftar, tolak dengan sopan
-- Setelah output action, jangan tambahkan teks lagi
+IMPORTANT ORDERING RULES:
+- The menu name in the JSON MUST be EXACTLY the same as in the menu list (case-sensitive)
+- Do not output ACTION:create_order before the customer confirms the order
+- If the menu item isn't in the list, politely decline
+- After outputting the action, do not add any more text
 
-ALUR RESERVASI MEJA:
-Saat customer ingin reservasi:
-1. Tanya: nama, jumlah orang, tanggal kedatangan, jam kedatangan, nomor HP (WAJIB)
-2. Interpretasi tanggal dengan cerdas (besok = hari ini +1, minggu depan = perkirakan)
-3. VALIDASI TANGGAL (WAJIB - JANGAN LEWATI):
-   - Hari ini adalah $todayStr
-   - Tanggal reservasi HARUS hari ini ($todayStr) atau di masa depan
-   - TOLAK KERAS jika tanggal sudah lewat (kemarin, minggu lalu, bulan lalu, dll)
-   - Contoh TOLAK: jika hari ini 7 Mei 2026, maka tanggal 6 Mei 2026 atau sebelumnya DILARANG
-   - Jika customer memberi tanggal lampau, JANGAN output ACTION:create_booking, minta tanggal ulang
-4. VALIDASI JAM: harus antara $openTime - $closeTime WIB
-4. Nomor HP WAJIB diisi — jika customer belum memberikan, MINTA terlebih dahulu dan jelaskan bahwa nomor HP diperlukan untuk konfirmasi kedatangan. JANGAN proses booking tanpa nomor HP.
-5. Setelah semua data lengkap (nama, jumlah, tanggal, jam, DAN nomor HP), output PERSIS format ini:
+TABLE RESERVATION FLOW:
+When a customer wants to make a reservation:
+1. Ask for: name, number of guests, arrival date, arrival time, phone number (REQUIRED)
+2. Interpret the date intelligently (tomorrow = today +1, next week = estimate)
+3. DATE VALIDATION (REQUIRED - DO NOT SKIP):
+   - Today is $todayStr
+   - The reservation date MUST be today ($todayStr) or in the future
+   - STRICTLY REJECT if the date has already passed (yesterday, last week, last month, etc.)
+   - Example REJECT: if today is May 7, 2026, then May 6, 2026 or earlier is NOT ALLOWED
+   - If the customer gives a past date, DO NOT output ACTION:create_booking, ask for the date again
+4. TIME VALIDATION: must be between $openTime - $closeTime WIB
+4. Phone number is REQUIRED — if the customer hasn't provided it, ASK for it first and explain that a phone number is needed to confirm the reservation. DO NOT process the booking without a phone number.
+5. Once all data is complete (name, guest count, date, time, AND phone number), output EXACTLY this format:
 
 ACTION:create_booking
-{"customer_name":"Nama Tamu","guest_count":2,"booking_date":"2026-03-19","booking_time":"10:00","phone":"08xx","special_requests":"catatan atau null"}
+{"customer_name":"Guest Name","guest_count":2,"booking_date":"2026-03-19","booking_time":"10:00","phone":"08xx","special_requests":"note or null"}
 
-ATURAN NOMOR HP:
-- Field "phone" TIDAK BOLEH null atau kosong
-- Nomor HP harus valid: diawali 08 atau +62, panjang 10-13 digit (contoh: 081234567890)
-- Jika customer memberi nomor yang terlalu pendek atau tidak valid, MINTA ulang dengan sopan
-- Jika customer menolak memberikan nomor HP, jelaskan dengan sopan bahwa nomor HP wajib untuk konfirmasi kedatangan dan tidak bisa dilewati
+PHONE NUMBER RULES:
+- The "phone" field MUST NOT be null or empty
+- The phone number must be valid: starting with 08 or +62, 10-13 digits long (example: 081234567890)
+- If the customer gives a number that's too short or invalid, politely ASK again
+- If the customer refuses to give a phone number, politely explain that a phone number is required to confirm the reservation and cannot be skipped
 
-ATURAN BAHASA (WAJIB):
-- Deteksi bahasa dari pesan customer secara otomatis
-- Balas SELALU dalam bahasa yang SAMA dengan pesan customer
-- Nama menu tetap ditulis PERSIS sesuai daftar menu
+LANGUAGE RULES (REQUIRED):
+- Automatically detect the language from the customer's message
+- ALWAYS reply in the SAME language as the customer's message
+- Menu names must still be written EXACTLY as in the menu list
 
-ATURAN PENTING:
-- Gunakan emoji secukupnya
-- Jika customer komplain/tidak puas, akui dengan empati dan tawarkan eskalasi ke staff
+IMPORTANT RULES:
+- Use emojis in moderation
+- If the customer complains/is dissatisfied, acknowledge it with empathy and offer escalation to staff
 - Format booking_date: YYYY-MM-DD, booking_time: HH:MM
 ''';
     }
 
-    // Mode: tanpa branchId - tampilkan info semua cabang dari database
+    // Mode: no branchId - show info for all branches from the database
     final branchLines = _allBranches.isEmpty
-        ? '(data cabang sedang dimuat)'
+        ? '(branch data loading)'
         : _allBranches.map((b) {
             final name = b['name'] as String? ?? '-';
             final address = b['address'] as String? ?? '';
             final open = (b['opening_time'] as String?)?.substring(0, 5) ?? '10:00';
             final close = (b['closing_time'] as String?)?.substring(0, 5) ?? '22:00';
             final addrPart = address.isNotEmpty ? ' ($address)' : '';
-            return '$name$addrPart | Jam: $open - $close WIB';
+            return '$name$addrPart | Hours: $open - $close WIB';
           }).join('\n');
 
     return '''
-Kamu adalah asisten AI customer support untuk restoran kami yang ramah dan helpful.
-Hari ini: $todayStr
+You are a friendly and helpful AI customer support assistant for our restaurant.
+Today: $todayStr
 
-DAFTAR CABANG KAMI (data nyata dari sistem):
+OUR BRANCH LIST (real data from the system):
 $branchLines
 
-KEMAMPUAN KAMU:
-1. INFO CABANG - jelaskan lokasi, jam operasional setiap cabang di atas
-2. ARAHKAN KE CABANG - jika customer ingin pesan atau booking, minta mereka ke halaman Beranda, pilih cabang, lalu buka Chat AI dari sana
-3. INFO UMUM - jawab pertanyaan umum tentang restoran
+YOUR CAPABILITIES:
+1. BRANCH INFO - explain the location and operating hours of each branch above
+2. DIRECT TO BRANCH - if the customer wants to order or book, ask them to go to the Home page, choose a branch, then open the AI Chat from there
+3. GENERAL INFO - answer general questions about the restaurant
 
-PENTING:
-- Kamu TAHU semua cabang beserta jam dan alamatnya - JANGAN bilang tidak tahu info cabang
-- Untuk pesan makanan atau booking di cabang tertentu, arahkan customer ke halaman Beranda
-- Gunakan emoji secukupnya
-- Balas dalam bahasa yang sama dengan customer (Indonesia atau Inggris)
+IMPORTANT:
+- You DO know all branches along with their hours and addresses - DO NOT say you don't know branch info
+- For food orders or bookings at a specific branch, direct the customer to the Home page
+- Use emojis in moderation
+- Reply in the same language as the customer (Indonesian or English)
 ''';
   }
 
   static String _bulanIndo(int bulan) {
     const list = [
-      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      '', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ];
     return list[bulan];
   }
@@ -454,7 +454,7 @@ PENTING:
 
   // ── Parse Response ─────────────────────────────────────────────────
   Future<void> _parseAndHandleResponse(String raw) async {
-    // Cek order action dulu
+    // Check order action first
     const orderMarker = 'ACTION:create_order';
     final orderIdx = raw.indexOf(orderMarker);
     if (orderIdx != -1) {
@@ -474,7 +474,7 @@ PENTING:
       }
     }
 
-    // Cek booking action
+    // Check booking action
     const bookingMarker = 'ACTION:create_booking';
     final bookingIdx = raw.indexOf(bookingMarker);
     if (bookingIdx != -1) {
@@ -487,7 +487,7 @@ PENTING:
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
           final displayMsg = before.isNotEmpty
               ? before
-              : '📅 Baik, saya akan memproses reservasi Anda!';
+              : '📅 Alright, I will process your reservation!';
           _addBot(displayMsg);
           await _createBooking(data);
           return;
@@ -505,18 +505,18 @@ PENTING:
     try {
       final rawItems = data['items'] as List<dynamic>?;
       if (rawItems == null || rawItems.isEmpty) {
-        _addBot('⚠️ Maaf, pesanan tidak valid. Silakan coba lagi.');
+        _addBot('⚠️ Sorry, the order is invalid. Please try again.');
         return;
       }
 
       if (_branchId.isEmpty) {
-        _addBot('⚠️ Maaf, informasi cabang tidak ditemukan.');
+        _addBot('⚠️ Sorry, branch information was not found.');
         return;
       }
 
-      // Set branch di cart
+      // Set branch on the cart
       final cartNotifier = ref.read(cartProvider.notifier);
-      cartNotifier.setBranch(_branchId, _cachedBranchName ?? 'Restoran');
+      cartNotifier.setBranch(_branchId, _cachedBranchName ?? 'Restaurant');
 
       final List<String> notFound = [];
       final List<String> added = [];
@@ -527,10 +527,10 @@ PENTING:
         final quantity = (itemMap['quantity'] as num?)?.toInt() ?? 1;
         final notes = itemMap['notes'] as String?;
 
-        // Cari menu item berdasarkan nama (case-insensitive tolerant tapi exact-match prefer)
+        // Find the menu item by name (case-insensitive tolerant but exact-match preferred)
         Map<String, dynamic>? found;
 
-        // 1. Exact match dulu
+        // 1. Exact match first
         for (final m in _menuItems) {
           if ((m['name'] as String).toLowerCase() ==
               requestedName.toLowerCase()) {
@@ -569,39 +569,39 @@ PENTING:
 
       if (added.isEmpty) {
         _addBot(
-          '⚠️ Tidak ada menu yang cocok ditemukan:\n'
+          '⚠️ No matching menu items were found:\n'
           '${notFound.map((n) => '• $n').join('\n')}\n\n'
-          'Silakan cek nama menu dan coba lagi.',
+          'Please check the menu name and try again.',
         );
         return;
       }
 
-      // Tampilkan konfirmasi sebelum ke checkout
+      // Show a confirmation before going to checkout
       final cart = ref.read(cartProvider);
       final subtotal = cart.subtotal;
       final tax = cart.tax;
       final total = cart.total;
 
       String msg =
-          '✅ Item berhasil ditambahkan ke keranjang!\n\n'
-          '🛒 *Ringkasan Pesanan:*\n'
+          '✅ Items successfully added to cart!\n\n'
+          '🛒 *Order Summary:*\n'
           '${added.map((a) => '• $a').join('\n')}\n';
 
       if (notFound.isNotEmpty) {
         msg +=
-            '\n⚠️ Menu berikut tidak ditemukan:\n'
+            '\n⚠️ The following menu items were not found:\n'
             '${notFound.map((n) => '• $n').join('\n')}\n';
       }
 
       msg +=
           '\n💰 Subtotal: Rp ${_fmtPrice(subtotal)}\n'
-          '🧾 Pajak (11%): Rp ${_fmtPrice(tax)}\n'
+          '🧾 Tax (11%): Rp ${_fmtPrice(tax)}\n'
           '💵 Total: Rp ${_fmtPrice(total)}\n\n'
-          'Mengarahkan ke halaman checkout... 🚀';
+          'Redirecting to the checkout page... 🚀';
 
       _addBot(msg);
 
-      // Delay sedikit biar pesan terbaca, lalu navigate
+      // Short delay so the message can be read, then navigate
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) {
         context.push('/customer/checkout');
@@ -611,8 +611,8 @@ PENTING:
     } catch (e) {
       debugPrint('Create order error: $e');
       _addBot(
-        '⚠️ Maaf, terjadi kendala saat memproses pesanan.\n'
-        'Silakan coba lagi atau pesan langsung di menu.',
+        '⚠️ Sorry, there was a problem processing the order.\n'
+        'Please try again or order directly from the menu.',
       );
     }
   }
@@ -627,39 +627,39 @@ PENTING:
     return buffer.toString();
   }
 
-  // ── Validasi nomor HP Indonesia (10–13 digit, diawali 08 atau +62) ──
+  // ── Validate Indonesian phone number (10–13 digits, starting with 08 or +62) ──
   static bool _isValidPhone(String? phone) {
     if (phone == null || phone.isEmpty || phone == 'null') return false;
     final digits = phone.replaceAll(RegExp(r'[\s\-()]'), '');
-    // Format: 08xxxxxxxxx (10-13 digit) atau +628xxxxxxxxx
+    // Format: 08xxxxxxxxx (10-13 digits) or +628xxxxxxxxx
     return RegExp(r'^(\+62|62|0)8[0-9]{8,11}$').hasMatch(digits);
   }
 
-  // ── Resolve nama customer dari berbagai sumber ─────────────────────
-  // Prioritas: 1) JSON dari AI, 2) nama yang pernah disebut di chat, 3) user metadata, 4) 'Tamu'
+  // ── Resolve customer name from various sources ─────────────────────
+  // Priority: 1) JSON from AI, 2) name mentioned earlier in the chat, 3) user metadata, 4) 'Guest'
   String _resolveCustomerName(Map<String, dynamic> data) {
-    // 1. Cek JSON dari AI — valid jika bukan null, kosong, atau 'Tamu'
+    // 1. Check JSON from AI — valid if not null, empty, or 'Tamu' (guest placeholder the AI may emit)
     final fromJson = data['customer_name'] as String?;
     if (fromJson != null && fromJson.trim().isNotEmpty && fromJson.trim() != 'Tamu') {
       _collectedCustomerName = fromJson.trim();
       return _collectedCustomerName!;
     }
 
-    // 2. Cek nama yang sudah dikumpulkan dari percakapan sebelumnya
+    // 2. Check for a name already collected from a previous conversation
     if (_collectedCustomerName != null && _collectedCustomerName!.isNotEmpty) {
       return _collectedCustomerName!;
     }
 
-    // 3. Coba ekstrak dari history chat — cari pesan user pendek (kemungkinan jawaban nama)
-    // Biasanya AI bertanya "siapa nama Anda?" lalu user menjawab dengan nama singkat
+    // 3. Try to extract from chat history — look for a short user message (likely a name answer)
+    // The AI usually asks "what's your name?" and the user replies with a short name
     for (int i = _messages.length - 1; i >= 0; i--) {
       final msg = _messages[i];
       if (msg.role != 'user') continue;
       final text = msg.content.trim();
-      // Nama biasanya: 1-3 kata, tidak mengandung angka, tidak terlalu panjang
+      // A name is usually: 1-3 words, no digits, not too long
       final words = text.split(RegExp(r'\s+'));
       if (words.length <= 3 && text.length <= 40 && !text.contains(RegExp(r'[0-9]'))) {
-        // Pastikan pesan sebelumnya (dari bot) adalah pertanyaan nama
+        // Make sure the previous message (from the bot) was asking for a name
         if (i > 0) {
           final prevBot = _messages[i - 1];
           if (prevBot.role == 'assistant') {
@@ -673,7 +673,7 @@ PENTING:
       }
     }
 
-    // 4. Fallback ke user metadata Supabase (jika login)
+    // 4. Fallback to Supabase user metadata (if logged in)
     final user = ref.read(customerUserProvider).value;
     if (user != null) {
       final meta = user.userMetadata;
@@ -681,24 +681,24 @@ PENTING:
       if (metaName != null && metaName.isNotEmpty) return metaName;
     }
 
-    return 'Tamu';
+    return 'Guest';
   }
 
-  // ── Create Booking + Auto-Assign + Notifikasi Customer ────────────
+  // ── Create Booking + Auto-Assign + Customer Notification ────────────
   Future<void> _createBooking(Map<String, dynamic> data) async {
     try {
       final user = ref.read(customerUserProvider).value;
 
-      // Validasi nomor HP sebelum proses
+      // Validate phone number before processing
       final phone = data['phone'] as String?;
       if (!_isValidPhone(phone)) {
         _addBot(
-          '⚠️ Nomor HP tidak valid.\n\n'
-          'Nomor HP Indonesia harus:\n'
-          '• Diawali dengan 08 atau +62\n'
-          '• Terdiri dari 10–13 digit\n\n'
-          'Contoh: 081234567890\n\n'
-          'Silakan berikan nomor HP yang valid untuk melanjutkan reservasi.',
+          '⚠️ Invalid phone number.\n\n'
+          'An Indonesian phone number must:\n'
+          '• Start with 08 or +62\n'
+          '• Be 10–13 digits long\n\n'
+          'Example: 081234567890\n\n'
+          'Please provide a valid phone number to continue the reservation.',
         );
         return;
       }
@@ -715,7 +715,7 @@ PENTING:
         int.parse(tp[1]),
       );
 
-      // ── Validasi tanggal tidak boleh di masa lalu ──────────────────
+      // ── Validate that the date is not in the past ──────────────────
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final bookingDate = DateTime(
@@ -728,15 +728,15 @@ PENTING:
         final todayFormatted =
             '${today.day} ${_bulanIndo(today.month)} ${today.year}';
         _addBot(
-          '⚠️ Tanggal reservasi tidak valid.\n\n'
-          'Tanggal *$dateStr* sudah lewat. '
-          'Reservasi hanya bisa dilakukan untuk hari ini ($todayFormatted) atau setelahnya.\n\n'
-          'Silakan berikan tanggal yang benar. 📅',
+          '⚠️ Invalid reservation date.\n\n'
+          'The date *$dateStr* has already passed. '
+          'Reservations can only be made for today ($todayFormatted) or later.\n\n'
+          'Please provide a correct date. 📅',
         );
         return;
       }
 
-      // ── Validasi jam operasional ───────────────────────────────────
+      // ── Validate operating hours ───────────────────────────────────
       final openTime = _cachedOpeningTime ?? '10:00';
       final closeTime = _cachedClosingTime ?? '22:00';
       final openParts = openTime.split(':');
@@ -749,9 +749,9 @@ PENTING:
 
       if (bookingMinutes < openMinutes || bookingMinutes > closeMinutes) {
         _addBot(
-          '⚠️ Jam reservasi tidak valid.\n\n'
-          'Jam *$timeStr* di luar jam operasional kami ($openTime - $closeTime WIB).\n\n'
-          'Silakan pilih jam antara $openTime hingga $closeTime WIB. ⏰',
+          '⚠️ Invalid reservation time.\n\n'
+          'The time *$timeStr* is outside our operating hours ($openTime - $closeTime WIB).\n\n'
+          'Please choose a time between $openTime and $closeTime WIB. ⏰',
         );
         return;
       }
@@ -771,14 +771,14 @@ PENTING:
 
       if (result.isConfirmed) {
         _addBot(
-          '✅ Reservasi berhasil dikonfirmasi!\n\n'
-          '👤 Nama: $resolvedName\n'
-          '👥 Jumlah tamu: ${data['guest_count']} orang\n'
-          '📅 Tanggal: ${data['booking_date']}\n'
-          '⏰ Jam: ${data['booking_time']} WIB\n'
-          '🪑 Meja: ${result.tableNumber ?? '-'}\n'
-          '${_hasSpecialRequest(data) ? '📝 Catatan: ${data['special_requests']}\n' : ''}\n'
-          'Notifikasi konfirmasi sudah dikirim ke HP Anda. Sampai jumpa! 😊',
+          '✅ Reservation confirmed!\n\n'
+          '👤 Name: $resolvedName\n'
+          '👥 Number of guests: ${data['guest_count']}\n'
+          '📅 Date: ${data['booking_date']}\n'
+          '⏰ Time: ${data['booking_time']} WIB\n'
+          '🪑 Table: ${result.tableNumber ?? '-'}\n'
+          '${_hasSpecialRequest(data) ? '📝 Note: ${data['special_requests']}\n' : ''}\n'
+          'A confirmation notification has been sent to your phone. See you soon! 😊',
         );
 
         if (user != null) {
@@ -794,13 +794,13 @@ PENTING:
         }
       } else if (result.isWaitlisted) {
         _addBot(
-          '📋 Reservasi Anda masuk daftar tunggu.\n\n'
-          '👤 Nama: $resolvedName\n'
-          '👥 Jumlah tamu: ${data['guest_count']} orang\n'
-          '📅 Tanggal: ${data['booking_date']}\n'
-          '⏰ Jam: ${data['booking_time']} WIB\n\n'
-          'Saat ini meja belum tersedia di jam tersebut. '
-          'Staff kami akan menghubungi Anda segera. 🙏',
+          '📋 Your reservation has been added to the waitlist.\n\n'
+          '👤 Name: $resolvedName\n'
+          '👥 Number of guests: ${data['guest_count']}\n'
+          '📅 Date: ${data['booking_date']}\n'
+          '⏰ Time: ${data['booking_time']} WIB\n\n'
+          'No table is available at that time right now. '
+          'Our staff will contact you shortly. 🙏',
         );
 
         if (user != null) {
@@ -816,9 +816,9 @@ PENTING:
         }
       } else {
         _addBot(
-          '⚠️ Maaf, terjadi kendala saat memproses reservasi.\n'
+          '⚠️ Sorry, there was a problem processing the reservation.\n'
           '${result.message != null ? '${result.message!}\n' : ''}'
-          'Silakan hubungi kami langsung atau coba lagi.',
+          'Please contact us directly or try again.',
         );
       }
 
@@ -826,8 +826,8 @@ PENTING:
     } catch (e) {
       debugPrint('Create booking error: $e');
       _addBot(
-        '⚠️ Maaf, terjadi kendala saat memproses reservasi.\n'
-        'Silakan hubungi kami langsung atau coba lagi.',
+        '⚠️ Sorry, there was a problem processing the reservation.\n'
+        'Please contact us directly or try again.',
       );
     }
   }
@@ -882,10 +882,10 @@ PENTING:
     final text = (quick ?? _msgCtrl.text).trim();
     if (text.isEmpty || _isTyping) return;
 
-    // Jika picker sedang tampil (user belum pilih cabang), blokir
+    // If the picker is currently shown (user hasn't picked a branch yet), block
     if (_needsBranchSelection) return;
 
-    // Deteksi apakah pesan butuh branch spesifik (booking / order)
+    // Detect whether the message needs a specific branch (booking / order)
     if (_branchId.isEmpty && widget.branchId == null && _selectedBranchId == null) {
       final lower = text.toLowerCase();
       const branchTriggers = [
@@ -894,7 +894,7 @@ PENTING:
       ];
       final needsBranch = branchTriggers.any((t) => lower.contains(t));
       if (needsBranch) {
-        // Tampilkan pesan user dulu, lalu munculkan picker
+        // Show the user's message first, then bring up the picker
         setState(() {
           _messages.add(_ChatMessage(
             role: 'user',
@@ -905,8 +905,8 @@ PENTING:
         });
         _scrollToBottom();
         _addBot(
-          'Untuk membantu Anda dengan hal itu, saya perlu tahu cabang mana yang Anda tuju. '
-          'Silakan pilih cabang di bawah ini 👇',
+          'To help you with that, I need to know which branch you\'re asking about. '
+          'Please choose a branch below 👇',
         );
         return;
       }
@@ -932,10 +932,10 @@ PENTING:
       if (_cachedMenuText == null && _allBranches.isEmpty) await _loadBranchData();
 
       final promptText = sentimentResult.shouldEscalate
-          ? '$text\n\n[SISTEM: Customer tampak '
-              '${sentimentResult.level == SentimentLevel.urgent ? "dalam situasi darurat" : "kecewa/tidak puas"}. '
-              'Respons dengan empati tinggi, akui perasaan customer terlebih dahulu, '
-              'tawarkan solusi konkret, dan sampaikan bahwa staff kami siap membantu langsung.]'
+          ? '$text\n\n[SYSTEM: The customer appears to be '
+              '${sentimentResult.level == SentimentLevel.urgent ? "in an urgent situation" : "upset/dissatisfied"}. '
+              'Respond with high empathy, acknowledge the customer\'s feelings first, '
+              'offer a concrete solution, and let them know our staff is ready to help directly.]'
           : text;
 
       final raw = await _callAI(promptText);
@@ -955,13 +955,13 @@ PENTING:
         if (sentimentResult.level == SentimentLevel.urgent) {
           _addBot(detectedLang == 'en'
               ? '🚨 Your message has been forwarded to our staff who will assist you shortly.'
-              : '🚨 Pesan Anda telah diteruskan ke staff kami yang akan segera membantu.');
+              : '🚨 Your message has been forwarded to our staff, who will assist you shortly.');
         }
       }
     } catch (e) {
       _addBot(detectedLang == 'en'
           ? '⚠️ Sorry, something went wrong. Please try again or contact us directly.'
-          : '⚠️ Maaf, terjadi kesalahan. Silakan coba lagi atau hubungi kami langsung.');
+          : '⚠️ Sorry, something went wrong. Please try again or contact us directly.');
     } finally {
       if (mounted) setState(() => _isTyping = false);
       _scrollToBottom();
@@ -1015,7 +1015,7 @@ PENTING:
               )
             else if (_selectedBranchId == null && widget.branchId == null)
               Text(
-                'Pilih cabang untuk mulai',
+                'Choose a branch to start',
                 style: TextStyle(
                   fontSize: 11,
                   color: Colors.green[200],
@@ -1029,7 +1029,7 @@ PENTING:
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
         actions: [
-          // Badge cart jika ada item
+          // Cart badge if there are items
           Consumer(
             builder: (context, ref, _) {
               final cartCount = ref.watch(cartProvider).itemCount;
@@ -1040,7 +1040,7 @@ PENTING:
                   children: [
                     IconButton(
                       icon: const Icon(Icons.shopping_cart_outlined, size: 22),
-                      tooltip: 'Lihat Keranjang',
+                      tooltip: 'View Cart',
                       onPressed: () => context.push('/customer/checkout'),
                     ),
                     Positioned(
@@ -1069,12 +1069,12 @@ PENTING:
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
-            tooltip: 'Chat Baru',
+            tooltip: 'New Chat',
             onPressed: () {
               setState(() {
                 _messages.clear();
                 _sessionId = null;
-                // Reset branch selection jika mode tanpa branchId
+                // Reset branch selection if in the mode without a branchId
                 if (widget.branchId == null) {
                   _selectedBranchId = null;
                   _showBranchPicker = false;
@@ -1086,7 +1086,7 @@ PENTING:
                   _menuItems = [];
                 }
               });
-              _addBot('Halo lagi! 👋 Ada yang bisa saya bantu?');
+              _addBot('Hi again! 👋 How can I help you?');
             },
           ),
           const SizedBox(width: 4),
@@ -1099,7 +1099,7 @@ PENTING:
       body: Column(
         children: [
           Expanded(child: _buildMessages()),
-          // Picker muncul hanya saat user trigger aksi yang butuh branch
+          // Picker only appears when the user triggers an action that needs a branch
           if (_needsBranchSelection) _buildBranchPicker(),
           _buildQuickActions(),
           _buildInput(),
@@ -1129,7 +1129,7 @@ PENTING:
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
-                '🏠 Pilih Cabang',
+                '🏠 Choose a Branch',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -1407,7 +1407,7 @@ PENTING:
                   onSubmitted: (_) => _send(),
                   textInputAction: TextInputAction.send,
                   decoration: InputDecoration(
-                    hintText: 'Tulis pesan...',
+                    hintText: 'Type a message...',
                     hintStyle:
                         TextStyle(color: Colors.grey[400], fontSize: 14),
                     border: InputBorder.none,

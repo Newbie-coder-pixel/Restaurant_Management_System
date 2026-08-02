@@ -1,26 +1,26 @@
 // lib/features/customer/services/recommendation_service.dart
 //
-// Layer rekomendasi:
-// 1. Personal History  — item yang sering dipesan customer ini
-// 2. Collaborative     — item yang sering dipesan BARENG item favorit customer
-// 3. Popular Fallback  — menu terpopuler di branch (untuk customer baru/guest)
+// Recommendation layers:
+// 1. Personal History  — items this customer frequently orders
+// 2. Collaborative     — items frequently ordered TOGETHER WITH the customer's favorite items
+// 3. Popular Fallback  — most popular menu items at the branch (for new/guest customers)
 //
-// Sebelumnya SEMUA 3 layer (termasuk fallback popular) filter
-// orders.status == 'completed' — status yang tidak pernah dimiliki order
-// (order lunas statusnya 'paid'; 'completed' itu status booking). Akibatnya
-// getRecommendations() selalu return kosong, tanpa error apapun yang
-// kelihatan — fitur rekomendasi ini secara diam-diam tidak pernah
-// menghasilkan apa-apa sejak dibuat.
+// Previously ALL 3 layers (including the popular fallback) filtered on
+// orders.status == 'completed' — a status an order never has
+// (a paid order's status is 'paid'; 'completed' is a booking status). As a
+// result, getRecommendations() always returned empty, with no visible
+// error — this recommendation feature silently never produced anything
+// since it was created.
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// ── Model hasil rekomendasi ────────────────────────────────────────────
+// ── Recommendation result model ────────────────────────────────────────
 class RecommendedItem {
   final String menuItemId;
   final String menuItemName;
-  final double score;       // Skor relevansi (makin tinggi makin relevan)
-  final String reason;      // Label untuk ditampilkan ke customer
+  final double score;       // Relevance score (higher = more relevant)
+  final String reason;      // Label to display to the customer
 
   const RecommendedItem({
     required this.menuItemId,
@@ -44,16 +44,16 @@ class RecommendationResult {
 
 // ── Service ────────────────────────────────────────────────────────────
 class RecommendationService {
-  /// Entry point utama.
-  /// Panggil ini dari chatbot saat customer minta rekomendasi.
+  /// Main entry point.
+  /// Call this from the chatbot when a customer asks for a recommendation.
   static Future<RecommendationResult> getRecommendations({
     required String branchId,
-    String? customerUserId,   // null jika belum login
-    String? customerPhone,    // opsional, untuk tracking guest
+    String? customerUserId,   // null if not logged in
+    String? customerPhone,    // optional, for guest tracking
     int limit = 5,
   }) async {
     try {
-      // ── Layer 1: Personal (jika sudah login) ──────────────────────
+      // ── Layer 1: Personal (if logged in) ──────────────────────────
       if (customerUserId != null) {
         final personal = await _getPersonalRecommendations(
           branchId: branchId,
@@ -68,8 +68,8 @@ class RecommendationService {
         }
       }
 
-      // ── Layer 2: Collaborative (berdasarkan co-occurrence) ────────
-      // Ambil menu favorit customer dulu sebagai seed
+      // ── Layer 2: Collaborative (based on co-occurrence) ────────────
+      // First get the customer's favorite menu items as a seed
       final seedItems = customerUserId != null
           ? await _getCustomerFavorites(
               branchId: branchId,
@@ -82,7 +82,7 @@ class RecommendationService {
         final collaborative = await _getCollaborativeRecommendations(
           branchId: branchId,
           seedItemIds: seedItems,
-          excludeItemIds: seedItems, // Jangan rekomendasikan yang sudah sering dipesan
+          excludeItemIds: seedItems, // Don't recommend items already frequently ordered
           limit: limit,
         );
         if (collaborative.isNotEmpty) {
@@ -109,7 +109,7 @@ class RecommendationService {
   }
 
   // ── Layer 1: Personal History ──────────────────────────────────────
-  // Query item yang paling sering dipesan customer ini dalam 90 hari terakhir
+  // Query the items this customer has ordered most in the last 90 days
   static Future<List<RecommendedItem>> _getPersonalRecommendations({
     required String branchId,
     required String customerUserId,
@@ -119,7 +119,7 @@ class RecommendationService {
       final sb = Supabase.instance.client;
       final since = DateTime.now().subtract(const Duration(days: 90));
 
-      // Ambil semua order_items dari order customer ini yang completed
+      // Get all order_items from this customer's completed orders
       final res = await sb
           .from('order_items')
           .select(
@@ -131,7 +131,7 @@ class RecommendationService {
 
       if ((res as List).isEmpty) return [];
 
-      // Hitung frekuensi + total quantity per menu item
+      // Calculate frequency + total quantity per menu item
       final Map<String, _ItemScore> scores = {};
       for (final item in res) {
         final id = item['menu_item_id'] as String? ?? '';
@@ -146,7 +146,7 @@ class RecommendationService {
 
       if (scores.isEmpty) return [];
 
-      // Sort by frequency desc, ambil top N
+      // Sort by frequency desc, take top N
       final sorted = scores.values.toList()
         ..sort((a, b) => b.frequency.compareTo(a.frequency));
 
@@ -154,7 +154,7 @@ class RecommendationService {
             menuItemId: s.id,
             menuItemName: s.name,
             score: s.frequency.toDouble(),
-            reason: 'Favorit kamu 🩷',
+            reason: 'Your favorite 🩷',
           )).toList();
     } catch (e) {
       debugPrint('[Recommendation] Personal error: $e');
@@ -162,7 +162,7 @@ class RecommendationService {
     }
   }
 
-  // ── Helper: Ambil ID item favorit customer (seed untuk collaborative) ─
+  // ── Helper: Get the customer's favorite item IDs (seed for collaborative) ─
   static Future<List<String>> _getCustomerFavorites({
     required String branchId,
     required String customerUserId,
@@ -198,8 +198,8 @@ class RecommendationService {
   }
 
   // ── Layer 2: Collaborative Filtering (Item Co-occurrence) ─────────
-  // Cari order lain yang mengandung seed items → lihat item lain apa
-  // yang sering muncul bareng → rekomendasikan itu
+  // Find other orders that contain the seed items → see what other items
+  // frequently appear alongside them → recommend those
   static Future<List<RecommendedItem>> _getCollaborativeRecommendations({
     required String branchId,
     required List<String> seedItemIds,
@@ -210,7 +210,7 @@ class RecommendationService {
       final sb = Supabase.instance.client;
       final since = DateTime.now().subtract(const Duration(days: 60));
 
-      // Cari semua order_id yang mengandung salah satu seed item
+      // Find all order_ids that contain one of the seed items
       final seedOrders = await sb
           .from('order_items')
           .select('order_id, orders!inner(branch_id, status, created_at)')
@@ -228,7 +228,7 @@ class RecommendationService {
 
       if (orderIds.isEmpty) return [];
 
-      // Dari order-order tersebut, ambil semua item lainnya
+      // From those orders, get all the other items
       final coItems = await sb
           .from('order_items')
           .select('menu_item_id, menu_item_name, quantity')
@@ -237,7 +237,7 @@ class RecommendationService {
 
       if ((coItems as List).isEmpty) return [];
 
-      // Hitung co-occurrence score
+      // Calculate co-occurrence score
       final Map<String, _ItemScore> scores = {};
       for (final item in coItems) {
         final id = item['menu_item_id'] as String? ?? '';
@@ -257,7 +257,7 @@ class RecommendationService {
             menuItemId: s.id,
             menuItemName: s.name,
             score: s.frequency.toDouble(),
-            reason: 'Sering dipesan bareng favoritmu ⭐',
+            reason: 'Often ordered together with your favorites ⭐',
           )).toList();
     } catch (e) {
       debugPrint('[Recommendation] Collaborative error: $e');
@@ -266,7 +266,7 @@ class RecommendationService {
   }
 
   // ── Layer 3: Popular Items (fallback) ─────────────────────────────
-  // Menu yang paling banyak dipesan di branch ini dalam 30 hari terakhir
+  // The most-ordered menu items at this branch in the last 30 days
   static Future<List<RecommendedItem>> _getPopularItems({
     required String branchId,
     required int limit,
@@ -298,7 +298,7 @@ class RecommendationService {
 
       if (scores.isEmpty) return [];
 
-      // Score = frekuensi order × total qty (biar yang sering dipesan banyak naik)
+      // Score = order frequency × total qty (so items ordered often & in bulk rank higher)
       final sorted = scores.values.toList()
         ..sort((a, b) =>
             (b.frequency * b.totalQty).compareTo(a.frequency * a.totalQty));
@@ -307,7 +307,7 @@ class RecommendationService {
             menuItemId: s.id,
             menuItemName: s.name,
             score: (s.frequency * s.totalQty).toDouble(),
-            reason: 'Terpopuler minggu ini 🔥',
+            reason: 'Most popular this week 🔥',
           )).toList();
     } catch (e) {
       debugPrint('[Recommendation] Popular error: $e');
@@ -315,13 +315,13 @@ class RecommendationService {
     }
   }
 
-  /// Format hasil rekomendasi jadi teks untuk dimasukkan ke system prompt AI.
-  /// AI akan menggunakan data ini saat customer minta rekomendasi.
+  /// Format the recommendation result as text to feed into the AI system prompt.
+  /// The AI will use this data when a customer asks for a recommendation.
   static String formatForPrompt(RecommendationResult result) {
-    if (result.isEmpty) return '(belum ada data rekomendasi)';
+    if (result.isEmpty) return '(no recommendation data yet)';
 
     final buf = StringBuffer();
-    buf.writeln('REKOMENDASI MENU PERSONAL (${result.strategyUsed}):');
+    buf.writeln('PERSONAL MENU RECOMMENDATION (${result.strategyUsed}):');
     for (int i = 0; i < result.items.length; i++) {
       final item = result.items[i];
       buf.writeln('${i + 1}. ${item.menuItemName} — ${item.reason}');
@@ -330,7 +330,7 @@ class RecommendationService {
   }
 }
 
-// ── Helper class internal ──────────────────────────────────────────────
+// ── Internal helper class ────────────────────────────────────────────
 class _ItemScore {
   final String id;
   final String name;

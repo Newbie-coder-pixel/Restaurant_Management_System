@@ -10,12 +10,12 @@ enum QrOrderStatus {
 
   String get label {
     switch (this) {
-      case QrOrderStatus.created:   return 'Pesanan Masuk';
-      case QrOrderStatus.preparing: return 'Sedang Dimasak';
-      case QrOrderStatus.ready:     return 'Siap Disajikan';
-      case QrOrderStatus.served:    return 'Sedang Makan';
-      case QrOrderStatus.paid:      return 'Selesai & Dibayar';
-      case QrOrderStatus.cancelled: return 'Dibatalkan';
+      case QrOrderStatus.created:   return 'Order Received';
+      case QrOrderStatus.preparing: return 'Being Cooked';
+      case QrOrderStatus.ready:     return 'Ready to Serve';
+      case QrOrderStatus.served:    return 'Now Dining';
+      case QrOrderStatus.paid:      return 'Completed & Paid';
+      case QrOrderStatus.cancelled: return 'Cancelled';
     }
   }
 
@@ -112,7 +112,7 @@ class QrOrderModel {
   final String tableName;
   final String customerName;
   final List<QrOrderItemModel> items;
-  final double totalAmountFromDb; // simpan nilai DB tapi jangan pakai langsung
+  final double totalAmountFromDb; // store the DB value but don't use it directly
   final QrOrderStatus status;
   final QrPaymentStatus paymentStatus;
   final String paymentMethod;
@@ -143,25 +143,25 @@ class QrOrderModel {
     this.billRequestedAt,
   });
 
-  // ── Kalkulasi yang benar ──────────────────────────────────────────
+  // ── Correct calculation ──────────────────────────────────────────
   double get subtotal {
     if (items.isEmpty) return 0.0;
     final computed = items.fold(0.0, (sum, i) => sum + i.subtotal);
-    // Guard: kalau semua items punya price=0, data corrupt → kembalikan 0
+    // Guard: if all items have price=0, data is corrupt → return 0
     return computed;
   }
 
   double get serviceCharge => subtotal * 0.03;
   double get pb1Amount => (subtotal + serviceCharge) * 0.10;
 
-  /// Total yang benar:
-  /// 1. Kalau items ada DAN subtotal > 0 → hitung dari items
-  /// 2. Fallback ke totalAmountFromDb (sudah include tax saat disimpan)
+  /// Correct total:
+  /// 1. If items exist AND subtotal > 0 → compute from items
+  /// 2. Fallback to totalAmountFromDb (already includes tax when saved)
   double get totalAmount {
     if (items.isNotEmpty && subtotal > 0) {
       return subtotal + serviceCharge + pb1Amount;
     }
-    // totalAmountFromDb sudah tersimpan dengan tax di createOrder()
+    // totalAmountFromDb was already stored with tax in createOrder()
     return totalAmountFromDb;
   }
 

@@ -1,10 +1,10 @@
 // lib/features/customer/presentation/customer_landing_screen.dart
 //
 // CHANGES v4:
-// 1. Semua perubahan dari v3 dipertahankan
-// 2. Tab "Pesanan" sekarang punya 2 sub-tab:
-//    - "Riwayat" → CustomerOrderHistoryScreen
-//    - "Cek Pesanan" → _EmbeddedOrderTracker
+// 1. All changes from v3 retained
+// 2. The "Orders" tab now has 2 sub-tabs:
+//    - "History" → CustomerOrderHistoryScreen
+//    - "Track Order" → _EmbeddedOrderTracker
 
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -15,13 +15,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'customer_login_screen.dart';
 import 'customer_my_bookings_screen.dart';
 import 'customer_chatbot_screen.dart';
-import 'customer_order_history_screen.dart'; // ← TAMBAH INI
+import 'customer_order_history_screen.dart'; // ← ADDED THIS
 import '../providers/customer_auth_provider.dart';
 import '../providers/cart_provider.dart';
 import 'widgets/cart_bottom_bar.dart';
 import '../../../../core/services/notification_service.dart';
 
-// ── Provider cabang aktif ─────────────────────────────────────────
+// ── Active branches provider ─────────────────────────────────────────
 final _customerBranchesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final res = await Supabase.instance.client
@@ -53,7 +53,7 @@ class _NearestError extends _NearestState {
   _NearestError(this.msg);
 }
 
-// ── Nearest Branch Notifier ───────────────────────────────────────
+// ── Nearest Branch Notifier ─────────────────────────────────────
 class _NearestBranchNotifier extends StateNotifier<_NearestState> {
   _NearestBranchNotifier() : super(_NearestInitial());
 
@@ -62,7 +62,7 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
 
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      state = _NearestError('GPS tidak aktif. Aktifkan lokasi di pengaturan.');
+      state = _NearestError('GPS is not active. Enable location in settings.');
       return;
     }
 
@@ -86,7 +86,7 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
         ),
       );
     } catch (_) {
-      state = _NearestError('Gagal mendapatkan lokasi. Coba lagi.');
+      state = _NearestError('Failed to get location. Please try again.');
       return;
     }
 
@@ -97,7 +97,7 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
     }).toList();
 
     if (branchesWithCoord.isEmpty) {
-      state = _NearestError('Data koordinat cabang belum tersedia.');
+      state = _NearestError('Branch coordinate data is not yet available.');
       return;
     }
 
@@ -117,7 +117,7 @@ class _NearestBranchNotifier extends StateNotifier<_NearestState> {
     if (nearest != null) {
       state = _NearestLoaded(nearest, minDist);
     } else {
-      state = _NearestError('Tidak dapat menemukan cabang terdekat.');
+      state = _NearestError('Could not find the nearest branch.');
     }
   }
 
@@ -141,7 +141,7 @@ final _nearestBranchProvider =
         (ref) => _NearestBranchNotifier());
 
 // ════════════════════════════════════════════
-// SCREEN UTAMA
+// MAIN SCREEN
 // ════════════════════════════════════════════
 class CustomerLandingScreen extends ConsumerStatefulWidget {
   final int initialTab;
@@ -254,7 +254,7 @@ class _CustomerLandingScreenState
     if (email != null && email.isNotEmpty) return email;
     final phone = user.phone;
     if (phone != null && phone.isNotEmpty) return phone;
-    return 'Pelanggan';
+    return 'Customer';
   }
 
   String _avatarUrl(User user) {
@@ -269,8 +269,8 @@ class _CustomerLandingScreenState
 
   // ── TOP BAR ──────────────────────────────────────────────────
   Widget _buildTopBar(User user) {
-    // ← UBAH 'Cek Pesanan' → 'Pesanan'
-    const titles = ['Beranda', 'Booking Meja', 'Pesanan', 'Chat AI'];
+    // ← CHANGED 'Track Order' → 'Orders'
+    const titles = ['Home', 'Table Booking', 'Orders', 'AI Chat'];
     final displayName = _displayName(user);
     final firstName = displayName.split(' ').first;
     final initial =
@@ -321,7 +321,7 @@ class _CustomerLandingScreenState
                       fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  'Halo, $firstName 👋',
+                  'Hi, $firstName 👋',
                   style: const TextStyle(
                       color: Colors.white70, fontSize: 11),
                 ),
@@ -351,15 +351,15 @@ class _CustomerLandingScreenState
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24)),
-        title: const Text('Keluar?',
+        title: const Text('Log out?',
             style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: const Text('Kamu akan keluar dari akun.',
+        content: const Text('You will be logged out of your account.',
             style: TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal',
+            child: const Text('Cancel',
                 style:
                     TextStyle(fontFamily: 'Poppins', color: Colors.grey)),
           ),
@@ -369,7 +369,7 @@ class _CustomerLandingScreenState
               await NotificationService.removeToken();
               await Supabase.instance.client.auth.signOut();
             },
-            child: const Text('Keluar',
+            child: const Text('Log Out',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     color: Color(0xFFE94560),
@@ -394,7 +394,7 @@ class _CustomerLandingScreenState
           maintainState: false,
           child: const CustomerMyBookingsScreen(),
         ),
-        // ← GANTI _EmbeddedOrderTracker dengan _OrderTab
+        // ← REPLACED _EmbeddedOrderTracker with _OrderTab
         Visibility(
           visible: _tab == 2,
           maintainState: true,
@@ -412,10 +412,10 @@ class _CustomerLandingScreenState
   // ── BOTTOM NAV ───────────────────────────────────────────────
   Widget _buildBottomNav() {
     const items = [
-      (Icons.home_outlined, Icons.home_rounded, 'Beranda'),
+      (Icons.home_outlined, Icons.home_rounded, 'Home'),
       (Icons.calendar_today_outlined, Icons.calendar_today_rounded, 'Booking'),
-      (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Pesanan'),
-      (Icons.smart_toy_outlined, Icons.smart_toy_rounded, 'Chat AI'),
+      (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Orders'),
+      (Icons.smart_toy_outlined, Icons.smart_toy_rounded, 'AI Chat'),
     ];
 
     return Container(
@@ -491,7 +491,7 @@ class _CustomerLandingScreenState
 }
 
 // ════════════════════════════════════════════
-// ORDER TAB — sub-tab Riwayat & Cek Pesanan
+// ORDER TAB — History & Track Order sub-tabs
 // ════════════════════════════════════════════
 class _OrderTab extends StatefulWidget {
   const _OrderTab();
@@ -540,8 +540,8 @@ class _OrderTabState extends State<_OrderTab>
             indicatorColor: const Color(0xFFE94560),
             indicatorWeight: 3,
             tabs: const [
-              Tab(text: 'Riwayat'),
-              Tab(text: 'Cek Pesanan'),
+              Tab(text: 'History'),
+              Tab(text: 'Track Order'),
             ],
           ),
         ),
@@ -631,7 +631,7 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
         if (mounted) {
           setState(() {
             _error =
-                'Pesanan tidak ditemukan. Periksa kembali nomor pesananmu.';
+                'Order not found. Please check your order number again.';
             _loading = false;
           });
         }
@@ -656,7 +656,7 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Terjadi kesalahan. Coba lagi.';
+          _error = 'An error occurred. Please try again.';
           _loading = false;
         });
       }
@@ -684,7 +684,7 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
                     decoration: const BoxDecoration(
                         color: Color(0xFF1D9E75), shape: BoxShape.circle)),
                 const SizedBox(width: 6),
-                const Text('Live tracking aktif',
+                const Text('Live tracking active',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
@@ -709,13 +709,13 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
           ]),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Masukkan Nomor Pesanan',
+          const Text('Enter Order Number',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w700,
                   fontSize: 16)),
           const SizedBox(height: 6),
-          const Text('Nomor pesanan ada di struk atau layar konfirmasi.',
+          const Text('The order number is on your receipt or confirmation screen.',
               style: TextStyle(
                   fontFamily: 'Poppins', fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 16),
@@ -735,7 +735,7 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
                       fontWeight: FontWeight.w600,
                       letterSpacing: 1.2),
                   decoration: const InputDecoration(
-                    hintText: 'Contoh: WEB-20260327-1234',
+                    hintText: 'Example: WEB-20260327-1234',
                     hintStyle: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.normal,
@@ -811,7 +811,7 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Masukkan nomor pesanan di atas\nuntuk melihat status.',
+              'Enter your order number above\nto see its status.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontFamily: 'Poppins',
@@ -899,7 +899,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Selamat datang,',
+                    Text('Welcome,',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             color: Colors.white.withValues(alpha: 0.8),
@@ -912,7 +912,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                             fontSize: 22,
                             fontWeight: FontWeight.w800)),
                     const SizedBox(height: 10),
-                    const Text('Apa yang ingin kamu lakukan hari ini?',
+                    const Text('What would you like to do today?',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             color: Colors.white70,
@@ -944,7 +944,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Aksi Cepat',
+                const Text('Quick Actions',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700,
@@ -955,7 +955,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
-                  child: const Text('Lihat Semua',
+                  child: const Text('View All',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 12,
@@ -969,8 +969,8 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               Expanded(
                 child: _ActionCard(
                   icon: Icons.restaurant_menu_rounded,
-                  label: 'Pesan Makanan',
-                  subtitle: 'Lihat menu & order',
+                  label: 'Order Food',
+                  subtitle: 'View menu & order',
                   color: const Color(0xFFE94560),
                   onTap: _scrollToBranches)),
             ]),
@@ -979,32 +979,32 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               Expanded(
                 child: _ActionCard(
                   icon: Icons.calendar_today_rounded,
-                  label: 'Booking Meja',
-                  subtitle: 'Reservasi sekarang',
+                  label: 'Table Booking',
+                  subtitle: 'Reserve now',
                   color: const Color(0xFF0F3460),
                   onTap: () => onSwitchTab(1))),
               const SizedBox(width: 14),
               Expanded(
                 child: _ActionCard(
                   icon: Icons.receipt_long_rounded,
-                  label: 'Cek Pesanan',
-                  subtitle: 'Status & riwayat',
+                  label: 'Track Order',
+                  subtitle: 'Status & history',
                   color: const Color(0xFF1D9E75),
                   onTap: () => onSwitchTab(2))),
             ]),
             const SizedBox(height: 28),
 
-            // ── Cabang Kami
+            // ── Our Branches
             Container(
               key: branchSectionKey,
-              child: const Text('Cabang Kami',
+              child: const Text('Our Branches',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
                       fontSize: 18,
                       color: Color(0xFF1A1A2E)))),
             const SizedBox(height: 6),
-            const Text('Pilih cabang untuk melihat menu & memesan',
+            const Text('Choose a branch to view the menu & order',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 13,
@@ -1027,7 +1027,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 child: const Row(children: [
                   Icon(Icons.error_outline, color: Colors.red, size: 18),
                   SizedBox(width: 10),
-                  Text('Gagal memuat cabang',
+                  Text('Failed to load branches',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 13,
@@ -1038,7 +1038,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(32),
-                      child: Text('Belum ada cabang aktif',
+                      child: Text('No active branches yet',
                           style: TextStyle(
                               fontFamily: 'Poppins', color: Colors.grey)),
                     ));
@@ -1058,7 +1058,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
   }
 
   static String _safeName(User? user) {
-    if (user == null) return 'Pelanggan';
+    if (user == null) return 'Customer';
     final meta = user.userMetadata;
     if (meta != null) {
       final fullName = meta['full_name'];
@@ -1072,7 +1072,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     }
     final email = user.email;
     if (email != null && email.isNotEmpty) return email.split('@').first;
-    return 'Pelanggan';
+    return 'Customer';
   }
 }
 
@@ -1183,14 +1183,14 @@ class _PromptCard extends StatelessWidget {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-              Text('Temukan cabang terdekat',
+              Text('Find the nearest branch',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF1A1A2E))),
               SizedBox(height: 4),
-              Text('Ketuk untuk aktifkan lokasi',
+              Text('Tap to enable location',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
@@ -1227,7 +1227,7 @@ class _LoadingCard extends StatelessWidget {
               valueColor:
                   AlwaysStoppedAnimation(Color(0xFF0F3460)))),
         SizedBox(width: 14),
-        Text('Mencari cabang terdekat...',
+        Text('Finding the nearest branch...',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 13,
@@ -1269,7 +1269,7 @@ class _ResultCard extends StatelessWidget {
       final closeMin =
           int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
       final nowMin = now.hour * 60 + now.minute;
-      // Handle closing time melewati tengah malam (misal 10:00 - 01:00)
+      // Handle closing time crossing midnight (e.g. 10:00 - 01:00)
       if (closeMin < openMin) {
         return nowMin >= openMin || nowMin <= closeMin;
       }
@@ -1281,7 +1281,7 @@ class _ResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = branch['name'] as String? ?? 'Cabang';
+    final name = branch['name'] as String? ?? 'Branch';
     final address = branch['address'] as String? ?? '';
     final isOpen = _isOpen();
 
@@ -1340,7 +1340,7 @@ class _ResultCard extends StatelessWidget {
                         : const Color(0xFFFCE4EC),
                     borderRadius: BorderRadius.circular(6)),
                   child: Text(
-                    isOpen ? 'Buka' : 'Tutup',
+                    isOpen ? 'Open' : 'Closed',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 10,
@@ -1424,7 +1424,7 @@ class _ErrorCard extends StatelessWidget {
               color: const Color(0xFF0F3460).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text('Coba lagi',
+            child: const Text('Try Again',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
@@ -1528,7 +1528,7 @@ class _LocationPermissionSheet extends StatelessWidget {
             child: const Icon(Icons.location_on_rounded,
                 size: 40, color: Colors.white)),
           const SizedBox(height: 20),
-          const Text('Izinkan Akses Lokasi',
+          const Text('Allow Location Access',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 20,
@@ -1536,7 +1536,7 @@ class _LocationPermissionSheet extends StatelessWidget {
                   color: Color(0xFF1A1A2E))),
           const SizedBox(height: 10),
           Text(
-            'Kami menggunakan lokasi Anda untuk\nmenampilkan cabang restoran terdekat.',
+            'We use your location to\nshow the nearest restaurant branch.',
             textAlign: TextAlign.center,
             style: TextStyle(
                 fontFamily: 'Poppins',
@@ -1544,13 +1544,13 @@ class _LocationPermissionSheet extends StatelessWidget {
                 color: Colors.grey[600],
                 height: 1.5)),
           const SizedBox(height: 22),
-          _benefitRow(Icons.store_rounded, 'Cabang terdekat dari posisi Anda'),
+          _benefitRow(Icons.store_rounded, 'Nearest branch to your location'),
           const SizedBox(height: 8),
           _benefitRow(
-              Icons.access_time_rounded, 'Info buka/tutup yang relevan'),
+              Icons.access_time_rounded, 'Relevant open/closed info'),
           const SizedBox(height: 8),
           _benefitRow(
-              Icons.navigation_rounded, 'Langsung navigasi ke cabang'),
+              Icons.navigation_rounded, 'Navigate directly to the branch'),
           const SizedBox(height: 28),
           SizedBox(
             width: double.infinity,
@@ -1563,7 +1563,7 @@ class _LocationPermissionSheet extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 0),
-              child: const Text('Izinkan Akses Lokasi',
+              child: const Text('Allow Location Access',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 15,
@@ -1577,7 +1577,7 @@ class _LocationPermissionSheet extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14))),
-              child: Text('Lewati',
+              child: Text('Skip',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 14,
@@ -1587,7 +1587,7 @@ class _LocationPermissionSheet extends StatelessWidget {
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(Icons.lock_outline, size: 12, color: Colors.grey[400]),
             const SizedBox(width: 6),
-            Text('Lokasi hanya digunakan saat aplikasi terbuka',
+            Text('Location is only used while the app is open',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
@@ -1640,7 +1640,7 @@ class _BranchCard extends StatelessWidget {
       final closeMin =
           int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
       final nowMin = now.hour * 60 + now.minute;
-      // Handle closing time melewati tengah malam (misal 10:00 - 01:00)
+      // Handle closing time crossing midnight (e.g. 10:00 - 01:00)
       if (closeMin < openMin) {
         return nowMin >= openMin || nowMin <= closeMin;
       }
@@ -1652,7 +1652,7 @@ class _BranchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = branch['name'] as String? ?? 'Cabang';
+    final name = branch['name'] as String? ?? 'Branch';
     final address = branch['address'] as String? ?? '';
     final open =
         (branch['opening_time'] as String?)?.substring(0, 5) ?? '10:00';
@@ -1712,7 +1712,7 @@ class _BranchCard extends StatelessWidget {
                                 : const Color(0xFFFCE4EC),
                             borderRadius: BorderRadius.circular(6)),
                           child: Text(
-                            isOpen ? 'Buka' : 'Tutup',
+                            isOpen ? 'Open' : 'Closed',
                             style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 10,
@@ -1769,7 +1769,7 @@ class _BranchCard extends StatelessWidget {
                     size: 18),
                   const SizedBox(width: 10),
                   Text(
-                    isOpen ? '🍽️ Pesan Sekarang' : 'Sedang Tutup',
+                    isOpen ? '🍽️ Order Now' : 'Currently Closed',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 14,
@@ -1851,12 +1851,12 @@ class _OrderStatusCard extends StatelessWidget {
   const _OrderStatusCard({required this.order, required this.items});
 
   static const _statusLabels = {
-    'new': '🆕 Pesanan Baru',
-    'preparing': '👨‍🍳 Sedang Dimasak',
-    'ready': '✅ Siap Disajikan',
-    'served': '🍽️ Sudah Disajikan',
-    'paid': '💳 Lunas',
-    'cancelled': '❌ Dibatalkan',
+    'new': '🆕 New Order',
+    'preparing': '👨‍🍳 Preparing',
+    'ready': '✅ Ready to Serve',
+    'served': '🍽️ Served',
+    'paid': '💳 Paid',
+    'cancelled': '❌ Cancelled',
   };
   static const _statusColors = {
     'new': Color(0xFF6B7280),
@@ -1867,12 +1867,12 @@ class _OrderStatusCard extends StatelessWidget {
     'cancelled': Color(0xFFE94560),
   };
   static const _statusMessages = {
-    'new': '⏳ Pesananmu sedang menunggu konfirmasi dapur.',
-    'preparing': '🔥 Dapur sedang memasak pesananmu, sebentar lagi!',
-    'ready': '🎉 Pesananmu siap! Pelayan akan segera mengantarkan.',
-    'served': '😊 Pesananmu sudah disajikan. Selamat menikmati!',
-    'paid': '✅ Pembayaran selesai. Terima kasih sudah berkunjung!',
-    'cancelled': '❌ Pesanan ini dibatalkan.',
+    'new': '⏳ Your order is waiting for kitchen confirmation.',
+    'preparing': '🔥 The kitchen is preparing your order, almost there!',
+    'ready': '🎉 Your order is ready! A server will bring it to you shortly.',
+    'served': '😊 Your order has been served. Enjoy your meal!',
+    'paid': '✅ Payment complete. Thank you for visiting!',
+    'cancelled': '❌ This order was cancelled.',
   };
 
   @override
@@ -1909,7 +1909,7 @@ class _OrderStatusCard extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                           fontSize: 18)),
                   if (customerName != null)
-                    Text('Atas nama: $customerName',
+                    Text('Under the name: $customerName',
                         style: const TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 13,
@@ -1946,7 +1946,7 @@ class _OrderStatusCard extends StatelessWidget {
         const Divider(height: 24, thickness: 1),
         _StatusProgress(status: status),
         const SizedBox(height: 20),
-        const Text('Item Pesanan',
+        const Text('Order Items',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
@@ -2058,7 +2058,7 @@ class _OrderStatusCard extends StatelessWidget {
                   size: 14, color: Color(0xFF0F3460)),
               SizedBox(width: 8),
               Expanded(
-                child: Text('💡 Pembayaran di kasir saat pesanan siap.',
+                child: Text('💡 Pay at the cashier when the order is ready.',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
@@ -2089,7 +2089,7 @@ class _StatusProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const steps = ['new', 'preparing', 'ready', 'served', 'paid'];
-    const labels = ['Baru', 'Masak', 'Siap', 'Saji', 'Lunas'];
+    const labels = ['New', 'Cooking', 'Ready', 'Served', 'Paid'];
     final currentIdx = steps.indexOf(status);
     final isCancelled = status == 'cancelled';
 
@@ -2107,7 +2107,7 @@ class _StatusProgress extends StatelessWidget {
                 color: Color(0xFFE94560), size: 20),
           ),
           const SizedBox(width: 10),
-          const Text('Pesanan dibatalkan',
+          const Text('Order cancelled',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 13,

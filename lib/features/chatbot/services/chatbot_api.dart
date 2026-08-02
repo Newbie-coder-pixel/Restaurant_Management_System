@@ -39,12 +39,13 @@ class OrderItemData {
 }
 
 class ChatbotApi {
-  // Di web, /api/chat relatif ke origin yang sedang di-serve (Vercel project
-  // staff app). Di build native (Android/iOS/desktop) tidak ada origin
-  // seperti itu, jadi harus nembak domain Vercel staff app secara eksplisit
-  // — sebelumnya ini hardcode ke 'http://localhost:3000' yang di HP asli
-  // merujuk ke HP itu sendiri, jadi chatbot selalu gagal di luar dev lokal.
-  // Override untuk dev lokal: `--dart-define=CHAT_API_BASE_URL=http://localhost:3000`
+  // On web, /api/chat is relative to the origin currently being served
+  // (Vercel staff app project). On native builds (Android/iOS/desktop) there
+  // is no such origin, so it has to hit the staff app's Vercel domain
+  // explicitly — this used to be hardcoded to 'http://localhost:3000',
+  // which on a real phone points back to the phone itself, so the chatbot
+  // always failed outside of local dev.
+  // Override for local dev: `--dart-define=CHAT_API_BASE_URL=http://localhost:3000`
   static String get _proxyUrl {
     if (kIsWeb) return '/api/chat';
     const override = String.fromEnvironment('CHAT_API_BASE_URL');
@@ -57,80 +58,80 @@ class ChatbotApi {
   static String _systemPrompt(String branchId,
       {String openingTime = '10:00',
       String closingTime = '22:00',
-      String menuText = '(menu belum dimuat)'}) {
+      String menuText = '(menu not loaded yet)'}) {
     final now = DateTime.now();
     final todayStr = '${now.day} ${_bulanIndo(now.month)} ${now.year}';
     return '''
-Kamu adalah asisten AI RestaurantOS yang ramah dan profesional untuk staff restoran.
+You are RestaurantOS's friendly and professional AI assistant for restaurant staff.
 Branch ID: $branchId
-Hari ini: $todayStr
+Today: $todayStr
 
-DAFTAR MENU YANG TERSEDIA DI RESTORAN INI (GUNAKAN DATA INI, JANGAN KARANG SENDIRI):
+LIST OF MENU ITEMS AVAILABLE AT THIS RESTAURANT (USE THIS DATA, DON'T MAKE THINGS UP):
 $menuText
-Hanya rekomendasikan atau proses pesanan dari daftar menu di atas. Jika item tidak ada di daftar, sampaikan bahwa menu tersebut tidak tersedia.
+Only recommend or process orders from the menu list above. If an item isn't on the list, say that menu item isn't available.
 
-ALUR PEMESANAN WAJIB:
-Saat customer/staff menyebut ingin memesan makanan/minuman:
-1. Tampilkan pilihan menu yang tersedia dari daftar di atas
-2. Tunggu user memilih item (dengan nama atau nomor). Jika user menjawab sesuatu yang BUKAN nama/nomor menu (contoh: "tidak ada", "gak", "tidak", dll) SEBELUM memilih menu, ULANGI pertanyaan pilih menu dengan ramah.
-3. Setelah user memilih item yang VALID dari daftar, konfirmasi item dan tanya: "Ada catatan khusus untuk pesanan ini? (contoh: tanpa sayur, tidak pedas, ekstra saus) Ketik 'tidak ada' jika tidak ada."
-4. Jawaban "tidak ada" atau "gak ada" di tahap ini = notes: null. LANGSUNG proses, JANGAN tanya ulang.
-5. Setelah mendapat jawaban notes, output konfirmasi + ACTION JSON:
+MANDATORY ORDERING FLOW:
+When a customer/staff member says they want to order food/drinks:
+1. Show the available menu choices from the list above
+2. Wait for the user to pick an item (by name or number). If the user answers with something that is NOT a menu name/number (e.g. "none", "nah", "no", etc.) BEFORE picking a menu item, REPEAT the menu selection question politely.
+3. After the user picks a VALID item from the list, confirm the item and ask: "Any special notes for this order? (e.g. no vegetables, not spicy, extra sauce) Type 'none' if there aren't any."
+4. An answer of "none" or "no" at this stage = notes: null. Process it IMMEDIATELY, DON'T ask again.
+5. After getting the notes answer, output the confirmation + ACTION JSON:
 
 ACTION:create_order
-{"items":[{"name":"Nama Menu","qty":1,"notes":"catatan atau null"}],"table_notes":"info meja jika ada"}
+{"items":[{"name":"Menu Item Name","qty":1,"notes":"note or null"}],"table_notes":"table info if any"}
 
-PENTING ALUR PESANAN:
-- Urutan: tampil menu → user pilih → tanya notes → proses. JANGAN skip urutan ini.
-- "tidak ada" HANYA valid sebagai jawaban notes SETELAH user sudah memilih menu.
-- Jika user belum pilih menu lalu bilang "tidak ada", itu artinya mereka belum mau pesan, BUKAN notes.
+IMPORTANT ABOUT THE ORDER FLOW:
+- Order: show menu → user picks → ask for notes → process. DON'T skip this order.
+- "none" is ONLY a valid notes answer AFTER the user has already picked a menu item.
+- If the user hasn't picked a menu item yet and says "none", it means they don't want to order yet, NOT that it's a note.
 
-ALUR BOOKING/RESERVASI MEJA:
-Saat customer/staff ingin booking meja:
-1. Tanya nama tamu, jumlah orang, tanggal kedatangan, jam kedatangan, dan nomor HP (opsional)
-2. TANGGAL: user boleh menyebut tanggal dalam format apapun. Kamu harus cerdas menginterpretasikannya:
-   - "14 maret" → 14 Maret ${now.year} (SELALU asumsikan tahun sekarang jika tidak disebutkan)
-   - "besok" → hari ini + 1
-   - "minggu depan" → perkirakan tanggalnya
-   - JANGAN pernah minta user untuk menulis ulang tanggal hanya karena tidak ada tahun. Asumsikan saja.
-3. VALIDASI tanggal (HANYA tolak jika benar-benar sudah lewat):
-   - Hari ini adalah $todayStr
-   - VALID ✅: tanggal hari ini atau setelahnya → langsung proses
-   - LEWAT ❌: tanggal sebelum hari ini → tolak sopan
-4. VALIDASI jam: Operasional $openingTime - $closingTime WIB. Tolak jika di luar rentang ini.
-5. Setelah semua data lengkap dan valid, langsung output format ini PERSIS:
+TABLE BOOKING/RESERVATION FLOW:
+When a customer/staff member wants to book a table:
+1. Ask for the guest's name, party size, arrival date, arrival time, and phone number (optional)
+2. DATE: the user may mention the date in any format. You must interpret it intelligently:
+   - "march 14" → March 14, ${now.year} (ALWAYS assume the current year if not stated)
+   - "tomorrow" → today + 1
+   - "next week" → estimate the date
+   - NEVER ask the user to rewrite the date just because the year is missing. Just assume it.
+3. VALIDATE the date (ONLY reject if it's truly already past):
+   - Today is $todayStr
+   - VALID ✅: today's date or later → process immediately
+   - PAST ❌: a date before today → politely decline
+4. VALIDATE the time: Operating hours are $openingTime - $closingTime local time. Decline if outside this range.
+5. Once all data is complete and valid, output this EXACT format:
 
 ACTION:create_booking
-{"customer_name":"Nama Tamu","guest_count":2,"booking_date":"2026-03-19","booking_time":"10:00","phone":"08xx atau null","special_requests":"catatan atau null"}
+{"customer_name":"Guest Name","guest_count":2,"booking_date":"2026-03-19","booking_time":"10:00","phone":"08xx or null","special_requests":"note or null"}
 
-Format booking_date: YYYY-MM-DD
-Format booking_time: HH:MM
+booking_date format: YYYY-MM-DD
+booking_time format: HH:MM
 
-PENTING:
-- Jawab dalam Bahasa Indonesia yang ramah dan singkat
-- Gunakan emoji secukupnya
-- Untuk pertanyaan di luar restoran, arahkan kembali ke topik restoran
-- Selalu sebut tanggal LENGKAP (hari + bulan + tahun) saat meminta atau mengkonfirmasi tanggal
+IMPORTANT:
+- Reply in friendly, concise English
+- Use emoji sparingly
+- For questions unrelated to the restaurant, redirect back to restaurant topics
+- Always state the FULL date (day + month + year) when asking for or confirming a date
 ''';
   }
 
-  static String _bulanIndo(int bulan) {
+  static String _bulanIndo(int month) {
     const list = [
       '',
-      'Januari',
-      'Februari',
-      'Maret',
+      'January',
+      'February',
+      'March',
       'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
+      'May',
+      'June',
+      'July',
+      'August',
       'September',
-      'Oktober',
+      'October',
       'November',
-      'Desember'
+      'December'
     ];
-    return list[bulan];
+    return list[month];
   }
 
   static Future<ChatResponse> sendMessage({
@@ -168,12 +169,12 @@ PENTING:
     return {'opening': '10:00', 'closing': '22:00'};
   }
 
-  // ✅ FIXED: handle branchId null/kosong + 2 query terpisah untuk hindari error 400
+  // ✅ FIXED: handle branchId null/empty + 2 separate queries to avoid error 400
   static Future<String> _fetchMenu(String branchId) async {
-    // Guard: jangan query kalau branchId kosong
-    if (branchId.isEmpty) return '(branch belum dipilih)';
+    // Guard: don't query if branchId is empty
+    if (branchId.isEmpty) return '(branch not selected yet)';
     try {
-      // Query 1: Ambil menu items tanpa join
+      // Query 1: Fetch menu items without a join
       final items = await Supabase.instance.client
           .from('menu_items')
           .select('name, price, description, is_available, category_id')
@@ -181,15 +182,15 @@ PENTING:
           .eq('is_available', true)
           .order('name');
 
-      if ((items as List).isEmpty) return '(belum ada menu)';
+      if ((items as List).isEmpty) return '(no menu items yet)';
 
-      // Query 2: Ambil semua kategori untuk branch ini
+      // Query 2: Fetch all categories for this branch
       final categories = await Supabase.instance.client
           .from('menu_categories')
           .select('id, name')
           .eq('branch_id', branchId);
 
-      // Buat map id -> nama kategori
+      // Build a map of id -> category name
       final catMap = <String, String>{};
       for (final cat in (categories as List)) {
         catMap[cat['id'] as String] = cat['name'] as String;
@@ -206,7 +207,7 @@ PENTING:
       return buf.toString().trim();
     } catch (e) {
       debugPrint('Error fetch menu: $e');
-      return '(gagal memuat menu)';
+      return '(failed to load menu)';
     }
   }
 
@@ -215,7 +216,7 @@ PENTING:
     final hours = await _fetchBranchHours(branchId);
     final menuText = branchId.isNotEmpty
         ? await _fetchMenu(branchId)
-        : '(pilih cabang untuk melihat menu)';
+        : '(select a branch to see the menu)';
     final recent =
         history.length > 14 ? history.sublist(history.length - 14) : history;
     final messages = [
@@ -250,12 +251,12 @@ PENTING:
       return _parseResponse(raw);
     }
 
-    // Error 404 → fungsi /api/chat belum ter-deploy di Vercel
+    // Error 404 → the /api/chat function isn't deployed on Vercel yet
     if (res.statusCode == 404) {
       throw Exception(
-        'Proxy 404: Serverless function /api/chat tidak ditemukan. '
-        'Pastikan file api/chat.js sudah ter-deploy di Vercel '
-        'dan vercel.json memiliki blok "functions".',
+        'Proxy 404: Serverless function /api/chat not found. '
+        'Make sure api/chat.js is deployed on Vercel '
+        'and vercel.json has a "functions" block.',
       );
     }
 
@@ -278,8 +279,8 @@ PENTING:
               reply: before.isNotEmpty
                   ? before
                   : isBooking
-                      ? '📅 Reservasi siap dikonfirmasi!'
-                      : '✅ Pesanan siap dikonfirmasi!',
+                      ? '📅 Reservation ready to confirm!'
+                      : '✅ Order ready to confirm!',
               action: isBooking ? 'create_booking' : 'create_order',
               actionData: actionData,
             );
@@ -292,17 +293,17 @@ PENTING:
 
   static ChatResponse _mockResponse(String message) {
     final msg = message.toLowerCase();
-    if (msg.contains('menu') || msg.contains('makanan')) {
+    if (msg.contains('menu') || msg.contains('food')) {
       return const ChatResponse(
           reply:
-              '🍽️ Buka halaman Menu di drawer navigasi (☰) untuk melihat menu lengkap.');
+              '🍽️ Open the Menu page in the navigation drawer (☰) to see the full menu.');
     }
-    if (msg.contains('booking') || msg.contains('reservasi')) {
+    if (msg.contains('booking') || msg.contains('reservation')) {
       return const ChatResponse(
           reply:
-              '📅 Buka halaman Reservasi di drawer navigasi (☰) untuk membuat reservasi.');
+              '📅 Open the Reservations page in the navigation drawer (☰) to make a reservation.');
     }
     return const ChatResponse(
-        reply: '🤖 Chatbot sedang tidak tersedia. Silakan coba lagi nanti.');
+        reply: '🤖 Chatbot is currently unavailable. Please try again later.');
   }
 }

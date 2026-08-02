@@ -34,7 +34,7 @@ class _OperatingExpenseScreenState
   final _rentCtrl = TextEditingController();
   final _otherCtrl = TextEditingController();
 
-  // Estimasi
+  // Estimate
   final _portionsCtrl = TextEditingController();
 
   int _selectedYear = DateTime.now().year;
@@ -61,9 +61,9 @@ class _OperatingExpenseScreenState
         _selectedMonth = expense.periodMonth;
         setState(() {});
       } else {
-        // Belum ada data periode ini — mulai dari 0, bukan kosong, supaya
-        // warning "wajib diisi" langsung kelihatan dan user sadar field
-        // mana saja yang harus diisi.
+        // No data for this period yet — start from 0, not empty, so the
+        // "required" warning is immediately visible and the user knows which
+        // fields still need to be filled in.
         _laborCtrl.text = '0';
         _electricityCtrl.text = '0';
         _waterCtrl.text = '0';
@@ -93,13 +93,13 @@ class _OperatingExpenseScreenState
   double _getDouble(TextEditingController ctrl) =>
       double.tryParse(ctrl.text) ?? 0;
 
-  // Validator bersama: field wajib diisi dengan angka (boleh 0, tidak boleh
-  // kosong/negatif/tidak valid) — supaya user tidak asal skip field biaya.
+  // Shared validator: the field must be filled with a number (0 is allowed,
+  // but not empty/negative/invalid) — so the user can't just skip a cost field.
   String? _requiredNonNegative(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+    if (v == null || v.trim().isEmpty) return 'Required';
     final n = double.tryParse(v);
-    if (n == null) return 'Tidak valid';
-    if (n < 0) return 'Tidak boleh negatif';
+    if (n == null) return 'Invalid';
+    if (n < 0) return 'Cannot be negative';
     return null;
   }
 
@@ -140,7 +140,7 @@ class _OperatingExpenseScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
-              '✅ Biaya operasional berhasil disimpan dan dialokasikan ulang'),
+              '✅ Operating expense saved and reallocated successfully'),
           backgroundColor: const Color(0xFF2E7D32),
           behavior: SnackBarBehavior.floating,
           shape:
@@ -161,7 +161,7 @@ class _OperatingExpenseScreenState
       drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text(
-          'Biaya Operasional Bulanan',
+          'Monthly Operating Expense',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
         ),
         centerTitle: false,
@@ -193,7 +193,7 @@ class _OperatingExpenseScreenState
                     items: [
                       DropdownMenuItem<String?>(
                         value: null,
-                        child: Text('Semua Cabang',
+                        child: Text('All Branches',
                             style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 12,
@@ -225,7 +225,7 @@ class _OperatingExpenseScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Periode
+              // Period
               _PeriodSelector(
                 year: _selectedYear,
                 month: _selectedMonth,
@@ -238,24 +238,24 @@ class _OperatingExpenseScreenState
 
               // Labor
               const CostingSectionHeader(
-                title: 'Biaya Tenaga Kerja (Labor)',
+                title: 'Labor Cost',
                 icon: Icons.people_rounded,
                 color: Color(0xFF1565C0),
               ),
               const SizedBox(height: 12),
               CurrencyInputField(
-                label: 'Total Gaji Semua Staf / bulan',
+                label: 'Total Wages for All Staff / month',
                 hint: '15000000',
                 controller: _laborCtrl,
-                helperText: 'Termasuk gaji pokok + tunjangan',
+                helperText: 'Includes base salary + allowances',
                 accentColor: const Color(0xFF1565C0),
                 isRequired: true,
                 onChanged: (_) => setState(() {}),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                  if (v == null || v.trim().isEmpty) return 'Required';
                   final n = double.tryParse(v);
-                  if (n == null) return 'Tidak valid';
-                  if (n <= 0) return 'Harus lebih dari 0';
+                  if (n == null) return 'Invalid';
+                  if (n <= 0) return 'Must be greater than 0';
                   return null;
                 },
               ),
@@ -263,13 +263,13 @@ class _OperatingExpenseScreenState
 
               // Utilities
               const CostingSectionHeader(
-                title: 'Biaya Utilitas',
+                title: 'Utility Cost',
                 icon: Icons.bolt_rounded,
                 color: Color(0xFFF57F17),
               ),
               const SizedBox(height: 12),
               CurrencyInputField(
-                label: 'Listrik',
+                label: 'Electricity',
                 hint: '2500000',
                 controller: _electricityCtrl,
                 accentColor: const Color(0xFFF57F17),
@@ -279,7 +279,7 @@ class _OperatingExpenseScreenState
               ),
               const SizedBox(height: 10),
               CurrencyInputField(
-                label: 'Air (PDAM)',
+                label: 'Water (Utility Company)',
                 hint: '500000',
                 controller: _waterCtrl,
                 accentColor: const Color(0xFFF57F17),
@@ -299,7 +299,7 @@ class _OperatingExpenseScreenState
               ),
               const SizedBox(height: 10),
               CurrencyInputField(
-                label: 'Internet / Telepon',
+                label: 'Internet / Phone',
                 hint: '350000',
                 controller: _internetCtrl,
                 accentColor: const Color(0xFFF57F17),
@@ -311,13 +311,13 @@ class _OperatingExpenseScreenState
 
               // Overhead
               const CostingSectionHeader(
-                title: 'Sewa & Overhead',
+                title: 'Rent & Overhead',
                 icon: Icons.location_city_rounded,
                 color: Color(0xFF6A1B9A),
               ),
               const SizedBox(height: 12),
               CurrencyInputField(
-                label: 'Biaya Sewa Tempat / bulan',
+                label: 'Rent Cost / month',
                 hint: '8000000',
                 controller: _rentCtrl,
                 accentColor: const Color(0xFF6A1B9A),
@@ -327,7 +327,7 @@ class _OperatingExpenseScreenState
               ),
               const SizedBox(height: 10),
               CurrencyInputField(
-                label: 'Overhead Lainnya (asuransi, perizinan, dll)',
+                label: 'Other Overhead (insurance, licensing, etc.)',
                 hint: '1000000',
                 controller: _otherCtrl,
                 accentColor: const Color(0xFF6A1B9A),
@@ -337,9 +337,9 @@ class _OperatingExpenseScreenState
               ),
               const SizedBox(height: 20),
 
-              // Estimasi porsi
+              // Estimated portions
               const CostingSectionHeader(
-                title: 'Estimasi Penjualan',
+                title: 'Sales Estimate',
                 icon: Icons.bar_chart_rounded,
                 color: Color(0xFF2E7D32),
               ),
@@ -348,7 +348,7 @@ class _OperatingExpenseScreenState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Estimasi Total Porsi Terjual / bulan',
+                    'Estimated Total Portions Sold / month',
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
@@ -364,8 +364,8 @@ class _OperatingExpenseScreenState
                     decoration: InputDecoration(
                       hintText: '3000',
                       helperText:
-                          'Digunakan untuk menghitung alokasi biaya per porsi',
-                      suffixText: 'porsi',
+                          'Used to calculate the cost allocation per portion',
+                      suffixText: 'portions',
                       filled: true,
                       fillColor:
                           theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
@@ -384,7 +384,7 @@ class _OperatingExpenseScreenState
                     validator: (v) {
                       final n = int.tryParse(v ?? '');
                       if (n == null || n <= 0) {
-                        return 'Estimasi porsi harus > 0';
+                        return 'Estimated portions must be > 0';
                       }
                       return null;
                     },
@@ -403,13 +403,13 @@ class _OperatingExpenseScreenState
                 child: Column(
                   children: [
                     _TotalLine(
-                        'Total Biaya Operasional / bulan',
+                        'Total Operating Expense / month',
                         formatIdr(_totalLive),
                         theme.colorScheme.onInverseSurface,
                         true),
                     const SizedBox(height: 4),
                     _TotalLine(
-                        '⚡ Alokasi per porsi',
+                        '⚡ Allocated per portion',
                         formatIdr(_costPerPortionLive),
                         const Color(0xFF81C784),
                         true),
@@ -418,7 +418,7 @@ class _OperatingExpenseScreenState
               ),
               const SizedBox(height: 24),
 
-              // ✅ RIVERPOD: Consumer wrapper dihapus — isSaving sudah di-watch di atas
+              // ✅ RIVERPOD: Consumer wrapper removed — isSaving is already watched above
               FilledButton.icon(
                 onPressed: isSaving ? null : _save,
                 icon: isSaving
@@ -430,8 +430,8 @@ class _OperatingExpenseScreenState
                       )
                     : const Icon(Icons.save_rounded),
                 label: Text(isSaving
-                    ? 'Menyimpan & Mengalokasikan...'
-                    : 'Simpan & Alokasikan ke Semua Menu'),
+                    ? 'Saving & Allocating...'
+                    : 'Save & Allocate to All Menu Items'),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   textStyle: const TextStyle(
@@ -489,8 +489,8 @@ class _PeriodSelector extends StatelessWidget {
   });
 
   static const _months = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
   @override
@@ -503,7 +503,7 @@ class _PeriodSelector extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Bulan',
+              Text('Month',
                   style: theme.textTheme.labelMedium
                       ?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
@@ -535,7 +535,7 @@ class _PeriodSelector extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tahun',
+              Text('Year',
                   style: theme.textTheme.labelMedium
                       ?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),

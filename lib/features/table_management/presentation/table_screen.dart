@@ -17,8 +17,8 @@ class TableScreen extends ConsumerStatefulWidget {
 
 class _TableScreenState extends ConsumerState<TableScreen> {
   List<TableModel> _tables = [];
-  // table_id → waktu makanan disajikan (order aktif terbaru di meja itu).
-  // Dipakai TableCard untuk hitung batas 2 jam makan & biaya kelebihan waktu.
+  // table_id → time the food was served (most recent active order at that table).
+  // Used by TableCard to compute the 2-hour dine-in limit & overtime charge.
   Map<String, DateTime?> _servedAtByTable = {};
   bool _isLoading = true;
   String? _branchId;
@@ -27,7 +27,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
 
   // Multi-branch (superadmin only)
   List<_BranchItem> _branches = [];
-  String? _selectedBranchId; // null = semua branch
+  String? _selectedBranchId; // null = all branches
   StaffRole? _userRole;
 
   @override
@@ -85,8 +85,8 @@ class _TableScreenState extends ConsumerState<TableScreen> {
   }
 
   Future<void> _load() async {
-    // superadmin: pakai _selectedBranchId (bisa null = semua branch)
-    // role lain: wajib pakai _branchId sendiri
+    // superadmin: uses _selectedBranchId (can be null = all branches)
+    // other roles: must use their own _branchId
     final isSuperadmin = _userRole == StaffRole.superadmin;
     final targetBranch = isSuperadmin ? _selectedBranchId : _branchId;
 
@@ -118,8 +118,8 @@ class _TableScreenState extends ConsumerState<TableScreen> {
     }
   }
 
-  // ── Ambil served_at dari order aktif tiap meja ────────────────────────
-  // Dipakai untuk menghitung batas 2 jam makan sejak makanan disajikan.
+  // ── Fetch served_at from each table's active order ────────────────────
+  // Used to compute the 2-hour dine-in limit from when the food was served.
   Future<Map<String, DateTime?>> _loadServedAtByTable(String? targetBranch) async {
     try {
       var query = Supabase.instance.client
@@ -154,8 +154,8 @@ class _TableScreenState extends ConsumerState<TableScreen> {
           table: 'restaurant_tables',
           callback: (_) => _load(),
         )
-        // Order berubah status (mis. → served) juga perlu memicu reload,
-        // supaya badge batas waktu makan di TableCard ikut ter-update.
+        // Order status changes (e.g. → served) also need to trigger a reload,
+        // so the dine-in time limit badge in TableCard updates too.
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -177,12 +177,12 @@ class _TableScreenState extends ConsumerState<TableScreen> {
     ).eq('id', id);
   }
 
-  // ── Seed data: buat meja contoh jika kosong ──────────────────
+  // ── Seed data: create sample tables if empty ──────────────────
   Future<void> _seedTables() async {
     if (_branchId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('❌ Branch ID tidak ditemukan. Coba logout & login ulang.'),
+          content: Text('❌ Branch ID not found. Try logging out & back in.'),
           backgroundColor: Colors.red,
         ));
       }
@@ -211,14 +211,14 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('✅ 8 meja contoh berhasil ditambahkan!'),
+          content: Text('✅ 8 sample tables added successfully!'),
           backgroundColor: Color(0xFF4CAF50),
         ));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('❌ Gagal: $e'),
+          content: Text('❌ Failed: $e'),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 8),
         ));
@@ -293,7 +293,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                       style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
                   ..._branches.map((b) => DropdownMenuItem<String?>(
                     value: b.id,
@@ -316,7 +316,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          // Simpan messenger sebelum async gap
+          // Store the messenger before the async gap
           final messenger = ScaffoldMessenger.of(context);
 
           final result = await showDialog<Map<String, dynamic>>(
@@ -325,15 +325,15 @@ class _TableScreenState extends ConsumerState<TableScreen> {
           );
           if (result == null || !mounted) return;
 
-          // Superadmin: pakai branch yang dipilih di sidebar,
-          // fallback ke branch sendiri jika pilih "Semua"
+          // Superadmin: use the branch selected in the sidebar,
+          // fallback to their own branch if "All" is selected
           final targetBranch = (_userRole == StaffRole.superadmin)
               ? (_selectedBranchId ?? _branchId)
               : _branchId;
 
           if (targetBranch == null) {
             messenger.showSnackBar(const SnackBar(
-              content: Text('❌ Pilih branch terlebih dahulu di sidebar'),
+              content: Text('❌ Select a branch in the sidebar first'),
               backgroundColor: Colors.red,
             ));
             return;
@@ -351,7 +351,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
             });
             if (mounted) {
               messenger.showSnackBar(SnackBar(
-                content: Text('✅ Meja ${result["number"]} berhasil ditambahkan'),
+                content: Text('✅ Table ${result["number"]} added successfully'),
                 backgroundColor: const Color(0xFF4CAF50),
               ));
             }
@@ -360,8 +360,8 @@ class _TableScreenState extends ConsumerState<TableScreen> {
             final isDuplicate = e.code == '23505';
             messenger.showSnackBar(SnackBar(
               content: Text(isDuplicate
-                ? '❌ Meja "${result["number"]}" sudah ada di branch ini'
-                : '❌ Gagal menambahkan meja: ${e.message}'),
+                ? '❌ Table "${result["number"]}" already exists in this branch'
+                : '❌ Failed to add table: ${e.message}'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 4),
             ));
@@ -369,7 +369,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
         },
         backgroundColor: AppColors.accent,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Tambah Meja',
+        label: const Text('Add Table',
           style: TextStyle(
             color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
       ),
@@ -446,7 +446,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            _filterChip(null, 'Semua'),
+            _filterChip(null, 'All'),
             ...TableStatus.values.map((s) => _filterChip(s, s.label)),
           ],
         ),
@@ -478,18 +478,18 @@ class _TableScreenState extends ConsumerState<TableScreen> {
     );
   }
 
-  // ── Empty state: database kosong, tawarkan seed data ─────────
+  // ── Empty state: database is empty, offer seed data ─────────
   Widget _buildEmptyState() => Center(
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       const Icon(Icons.table_restaurant_outlined, size: 72,
         color: AppColors.textHint),
       const SizedBox(height: 16),
-      const Text('Belum ada meja',
+      const Text('No tables yet',
         style: TextStyle(
           fontFamily: 'Poppins', fontWeight: FontWeight.w700,
           fontSize: 20, color: AppColors.textSecondary)),
       const SizedBox(height: 8),
-      const Text('Tambah meja satu per satu, atau\nmuat data contoh untuk setup cepat',
+      const Text('Add tables one by one, or\nload sample data for a quick setup',
         textAlign: TextAlign.center,
         style: TextStyle(fontFamily: 'Poppins', color: AppColors.textHint)),
       const SizedBox(height: 28),
@@ -498,35 +498,35 @@ class _TableScreenState extends ConsumerState<TableScreen> {
         onPressed: () => showDialog(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Muat Data Contoh?',
+            title: const Text('Load Sample Data?',
               style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             content: const Text(
-              'Ini akan menambahkan 8 meja contoh (A1, A2, B1-B3, C1-C2, VIP1) '
-              'ke database. Cocok untuk pertama kali setup.',
+              'This will add 8 sample tables (A1, A2, B1-B3, C1-C2, VIP1) '
+              'to the database. Good for first-time setup.',
               style: TextStyle(fontFamily: 'Poppins')),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Batal')),
+                child: const Text('Cancel')),
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
                   _seedTables();
                 },
-                child: const Text('Ya, Muat Data')),
+                child: const Text('Yes, Load Data')),
             ],
           ),
         ),
         icon: const Icon(Icons.auto_fix_high),
-        label: const Text('Muat 8 Meja Contoh',
+        label: const Text('Load 8 Sample Tables',
           style: TextStyle(
             fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
       ),
       const SizedBox(height: 12),
-      const Text('atau gunakan tombol "+ Tambah Meja" di bawah',
+      const Text('or use the "+ Add Table" button below',
         style: TextStyle(
           fontFamily: 'Poppins', fontSize: 12, color: AppColors.textHint)),
     ]),
@@ -536,7 +536,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       const Icon(Icons.filter_list_off, size: 48, color: AppColors.textHint),
       const SizedBox(height: 12),
-      Text('Tidak ada meja dengan status "${_filterStatus?.label}"',
+      Text('No tables with status "${_filterStatus?.label}"',
         style: const TextStyle(
           fontFamily: 'Poppins', color: AppColors.textSecondary)),
     ]),

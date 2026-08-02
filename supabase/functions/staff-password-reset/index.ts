@@ -1,27 +1,27 @@
 // supabase/functions/staff-password-reset/index.ts
 // ─────────────────────────────────────────────────────────────────────────────
-// Edge Function: Reset Password Staff via kode OTP WhatsApp (Fonnte)
+// Edge Function: Staff password reset via WhatsApp OTP code (Fonnte)
 //
-// Dipanggil TANPA auth header (staff belum bisa login) — deploy dengan
-// --no-verify-jwt. Keamanan diverifikasi lewat kode OTP, bukan JWT Supabase.
+// Called WITHOUT an auth header (staff can't log in yet) — deployed with
+// --no-verify-jwt. Security is verified via the OTP code, not a Supabase JWT.
 //
-// step="request": cari staff by email, kirim kode 6-digit ke WhatsApp
-//   (staff.phone) via Fonnte, simpan HASH kode-nya (bukan plaintext) di
-//   staff_password_reset_otps dengan masa berlaku 5 menit.
-// step="verify": cocokkan kode + email, kalau valid langsung update
-//   password staff itu lewat Supabase Admin API (service role).
+// step="request": look up staff by email, send a 6-digit code to WhatsApp
+//   (staff.phone) via Fonnte, store a HASH of the code (not plaintext) in
+//   staff_password_reset_otps with a 5-minute validity window.
+// step="verify": match the code + email; if valid, update that staff
+//   member's password directly via the Supabase Admin API (service role).
 //
-// Respons untuk step="request" SELALU generic message yang sama, baik
-// email/staff ketemu atau tidak — supaya tidak bisa dipakai untuk
-// menebak email staff mana yang valid (enumeration).
+// The response for step="request" is ALWAYS the same generic message,
+// whether the email/staff is found or not — so it can't be used to
+// guess which staff emails are valid (enumeration).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Origin diizinkan lewat env var ALLOWED_ORIGINS (comma-separated) di Supabase
-// Edge Function secrets — sebelumnya "*" mengizinkan situs manapun memicu
-// permintaan OTP (dan ikut kena rate limit staff itu sendiri) dari browser.
+// Origin allowed via the ALLOWED_ORIGINS env var (comma-separated) in Supabase
+// Edge Function secrets — previously "*" allowed any site to trigger an OTP
+// request (and consume that staff member's own rate limit) from a browser.
 function resolveAllowedOrigin(req: Request): string {
   const allowed = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
     .split(",").map((s) => s.trim()).filter(Boolean);
@@ -39,16 +39,16 @@ function buildCorsHeaders(req: Request) {
 
 const OTP_TTL_MINUTES = 5;
 const MAX_ATTEMPTS = 5;
-// Batas permintaan kode OTP per staff dalam 1 jam — sebelumnya tidak ada
-// rate limit sama sekali di step "request", jadi bisa dipakai untuk (a) banjir
-// WhatsApp korban dengan kode reset berulang, dan (b) terus-menerus
-// meng-invalidate kode aktif sehingga user asli tidak pernah sempat pakai
-// kodenya sendiri (DoS terhadap reset password akun sendiri).
+// Limit on OTP requests per staff member within 1 hour — previously there was
+// no rate limit at all on the "request" step, so it could be used to (a) flood
+// a victim's WhatsApp with repeated reset codes, and (b) continuously
+// invalidate the active code so the real user never gets a chance to use
+// their own code (DoS against resetting one's own account password).
 const RATE_LIMIT_WINDOW_MINUTES = 60;
 const RATE_LIMIT_MAX_REQUESTS = 3;
 const GENERIC_REQUEST_MSG =
-  "Kalau email terdaftar dan punya nomor WhatsApp, kode reset sudah dikirim.";
-const GENERIC_VERIFY_ERROR = "Kode salah atau sudah kedaluwarsa.";
+  "If the email is registered and has a WhatsApp number on file, a reset code has been sent.";
+const GENERIC_VERIFY_ERROR = "Incorrect or expired code.";
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -89,10 +89,10 @@ Deno.serve(async (req) => {
 
   const step = body.step as string | undefined;
 
-  // ── STEP 1: minta kode OTP ────────────────────────────────────────────────
+  // ── STEP 1: request OTP code ────────────────────────────────────────────────
   if (step === "request") {
     const email = String(body.email ?? "").trim().toLowerCase();
-    if (!email) return json({ error: "Email wajib diisi" }, 400);
+    if (!email) return json({ error: "Email is required" }, 400);
 
     const { data: staff } = await supabase
       .from("staff")
@@ -101,13 +101,13 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!staff || !staff.is_active || !staff.phone) {
-      // Generic response — tidak bocorkan apakah email terdaftar/punya HP.
+      // Generic response — don't leak whether the email is registered/has a phone.
       return json({ message: GENERIC_REQUEST_MSG });
     }
 
-    // Rate limit per staff — kalau sudah kena limit, diam-diam tolak (tetap
-    // generic message, jangan bocorkan alasan) dan JANGAN invalidate kode
-    // aktif yang mungkin sedang dipakai user asli.
+    // Rate limit per staff member — if already over the limit, silently reject
+    // (still the generic message, don't leak the reason) and do NOT invalidate
+    // the active code that the real user might currently be using.
     const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000).toISOString();
     const { count: recentCount } = await supabase
       .from("staff_password_reset_otps")
@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
       return json({ message: GENERIC_REQUEST_MSG });
     }
 
-    // Invalidate kode lama yang belum kepakai, supaya cuma 1 kode aktif.
+    // Invalidate any old unused code, so only 1 code is active at a time.
     await supabase
       .from("staff_password_reset_otps")
       .update({ consumed: true })
@@ -137,10 +137,10 @@ Deno.serve(async (req) => {
     });
 
     const message =
-      `🔐 *Kode Reset Password*\n\n` +
-      `Halo ${staff.full_name}, kode reset password kamu:\n\n` +
+      `🔐 *Password Reset Code*\n\n` +
+      `Hello ${staff.full_name}, your password reset code:\n\n` +
       `*${otp}*\n\n` +
-      `Berlaku ${OTP_TTL_MINUTES} menit. Jangan bagikan kode ini ke siapa pun.`;
+      `Valid for ${OTP_TTL_MINUTES} minutes. Do not share this code with anyone.`;
 
     try {
       await fetch("https://api.fonnte.com/send", {
@@ -162,17 +162,17 @@ Deno.serve(async (req) => {
     return json({ message: GENERIC_REQUEST_MSG });
   }
 
-  // ── STEP 2: verifikasi kode + set password baru ───────────────────────────
+  // ── STEP 2: verify code + set new password ───────────────────────────
   if (step === "verify") {
     const email = String(body.email ?? "").trim().toLowerCase();
     const otp = String(body.otp ?? "").trim();
     const newPassword = String(body.new_password ?? "");
 
     if (!email || !otp || !newPassword) {
-      return json({ error: "Email, kode OTP, dan password baru wajib diisi" }, 400);
+      return json({ error: "Email, OTP code, and new password are required" }, 400);
     }
     if (newPassword.length < 6) {
-      return json({ error: "Password minimal 6 karakter" }, 400);
+      return json({ error: "Password must be at least 6 characters" }, 400);
     }
 
     const { data: staff } = await supabase
@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
       return json({ error: GENERIC_VERIFY_ERROR }, 400);
     }
 
-    // Kode benar → invalidate supaya tidak bisa dipakai ulang (replay).
+    // Code is correct → invalidate it so it can't be reused (replay).
     await supabase
       .from("staff_password_reset_otps")
       .update({ consumed: true })
@@ -223,11 +223,11 @@ Deno.serve(async (req) => {
     );
     if (updateError) {
       console.error("updateUserById error:", updateError);
-      return json({ error: "Gagal update password. Coba lagi." }, 500);
+      return json({ error: "Failed to update password. Please try again." }, 500);
     }
 
-    return json({ message: "Password berhasil diubah" });
+    return json({ message: "Password changed successfully" });
   }
 
-  return json({ error: "step tidak dikenal" }, 400);
+  return json({ error: "Unknown step" }, 400);
 });

@@ -46,34 +46,34 @@ class PrepTimeService {
   static const String _prodUrl =
       'https://restaurant-ml-api-production.up.railway.app';
 
-  /// Base URL API prediksi ML.
+  /// Base URL for the ML prediction API.
   ///
-  /// SELALU pakai server production, di semua platform (web, Android, iOS).
-  /// Sebelumnya build non-web (APK/App Store) selalu diarahkan ke
-  /// 'http://localhost:8000' — di HP asli itu merujuk ke HP itu sendiri, jadi
-  /// prediksi selalu gagal timeout di luar web/emulator dev. Untuk dev lokal,
-  /// override lewat: `flutter run --dart-define=ML_API_BASE_URL=http://10.0.2.2:8000`
-  /// (emulator Android) atau `http://localhost:8000` (simulator iOS/desktop/web dev).
+  /// ALWAYS use the production server, on all platforms (web, Android, iOS).
+  /// Previously non-web builds (APK/App Store) were always directed to
+  /// 'http://localhost:8000' — on a real phone that refers to the phone itself, so
+  /// predictions always failed with a timeout outside of web/dev emulator. For local
+  /// dev, override via: `flutter run --dart-define=ML_API_BASE_URL=http://10.0.2.2:8000`
+  /// (Android emulator) or `http://localhost:8000` (iOS simulator/desktop/web dev).
   static String get _baseUrl {
     const override = String.fromEnvironment('ML_API_BASE_URL');
     return override.isNotEmpty ? override : _prodUrl;
   }
 
-  /// Prediksi waktu masak berdasarkan items order yang dipilih.
+  /// Predicts cooking time based on the selected order items.
   ///
-  /// [items]     — list item order beserta prep time masing-masing menu
-  /// [branchId]  — dipakai server untuk resolve model per-branch +
-  ///               equipment_factor, dan dipakai di sini untuk hitung
-  ///               queue_length dari Supabase secara otomatis
+  /// [items]     — list of order items along with each menu item's prep time
+  /// [branchId]  — used by the server to resolve the per-branch model +
+  ///               equipment_factor, and used here to automatically compute
+  ///               queue_length from Supabase
   static Future<PrepTimeResult?> predict({
     required List<PrepTimeRequestItem> items,
     required String branchId,
   }) async {
     try {
-      // Hitung jam sekarang
+      // Get the current hour
       final hourOfDay = DateTime.now().hour;
 
-      // Hitung panjang antrian dapur dari Supabase
+      // Compute the kitchen queue length from Supabase
       final queueLength = await _getQueueLength(branchId);
 
       // Hit ML API
@@ -84,9 +84,9 @@ class PrepTimeService {
           'items':        items.map((i) => i.toJson()).toList(),
           'hour_of_day':  hourOfDay,
           'queue_length': queueLength,
-          // Sebelumnya branch_id TIDAK PERNAH dikirim, jadi server selalu
-          // resolve ke scope "global" — model per-branch & equipment_factor
-          // per-branch tidak pernah kepakai walau sudah di-retrain di server.
+          // Previously branch_id was NEVER sent, so the server always
+          // resolved to the "global" scope — the per-branch model & per-branch
+          // equipment_factor were never actually used even after being retrained on the server.
           if (branchId.isNotEmpty) 'branch_id': branchId,
         }),
       ).timeout(const Duration(seconds: 10));
@@ -104,7 +104,7 @@ class PrepTimeService {
     }
   }
 
-  /// Hitung jumlah order yang sedang dimasak di dapur saat ini.
+  /// Counts the number of orders currently being cooked in the kitchen.
   static Future<int> _getQueueLength(String branchId) async {
     try {
       final res = await Supabase.instance.client
@@ -119,20 +119,20 @@ class PrepTimeService {
     }
   }
 
-  /// Format estimasi menjadi string yang ramah ditampilkan ke user.
-  /// Contoh: 17 → "± 17 menit"  |  65 → "± 1 jam 5 menit"
+  /// Formats the estimate into a user-friendly display string.
+  /// Example: 17 → "± 17 min"  |  65 → "± 1 hr 5 min"
   static String formatEstimate(int minutes) {
-    if (minutes < 60) return '± $minutes menit';
+    if (minutes < 60) return '± $minutes min';
     final h = minutes ~/ 60;
     final m = minutes % 60;
-    return m == 0 ? '± $h jam' : '± $h jam $m menit';
+    return m == 0 ? '± $h hr' : '± $h hr $m min';
   }
 
-  /// Estimasi kasar TANPA ML — dipakai HANYA sebagai fallback saat [predict]
-  /// gagal (server tidak terjangkau, timeout, dll), supaya customer tetap
-  /// lihat angka kira-kira daripada kartu estimasi hilang tanpa keterangan.
-  /// Layar pemanggil wajib menandai ini berbeda dari hasil ML asli (mis. label
-  /// "estimasi kasar") — jangan tampilkan seolah-olah hasil model.
+  /// Rough estimate WITHOUT ML — used ONLY as a fallback when [predict]
+  /// fails (server unreachable, timeout, etc.), so the customer still
+  /// sees an approximate number instead of the estimate card disappearing with no explanation.
+  /// The calling screen must mark this as different from a real ML result (e.g. label
+  /// "rough estimate") — don't display it as if it were the model's output.
   static int rawFallbackEstimate(List<PrepTimeRequestItem> items) {
     if (items.isEmpty) return 0;
     final total = items.fold<int>(

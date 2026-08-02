@@ -27,7 +27,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     super.dispose();
   }
 
-  // ─── Terjemahan error Supabase → Bahasa Indonesia ──────────────
+  // ─── Translate Supabase errors → English ──────────────
   String _translateAuthError(String raw) {
     final msg = raw.toLowerCase();
 
@@ -35,54 +35,54 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     if (msg.contains('user already registered') ||
         msg.contains('email already') ||
         msg.contains('already been registered')) {
-      return 'Email ini sudah terdaftar. Silakan masuk atau gunakan email lain.';
+      return 'This email is already registered. Please log in or use another email.';
     }
     // Login
     if (msg.contains('invalid login credentials') ||
         msg.contains('invalid credentials') ||
         msg.contains('wrong password')) {
-      return 'Email atau password salah. Periksa kembali dan coba lagi.';
+      return 'Incorrect email or password. Please check and try again.';
     }
     if (msg.contains('email not confirmed')) {
-      return 'Email belum dikonfirmasi. Cek inbox kamu dan klik link verifikasi.';
+      return 'Email not confirmed yet. Check your inbox and click the verification link.';
     }
     if (msg.contains('too many requests') || msg.contains('rate limit')) {
-      return 'Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.';
+      return 'Too many attempts. Please wait a few minutes and try again.';
     }
     // Password
     if (msg.contains('password should be') ||
         msg.contains('password must be') ||
         msg.contains('weak password')) {
-      return 'Password terlalu lemah. Gunakan minimal 6 karakter.';
+      return 'Password is too weak. Use at least 6 characters.';
     }
     // Email format
     if (msg.contains('unable to validate email') ||
         msg.contains('invalid email')) {
-      return 'Format email tidak valid. Periksa kembali alamat emailmu.';
+      return 'Invalid email format. Please check your email address.';
     }
     // OTP
     if (msg.contains('token has expired') || msg.contains('otp expired')) {
-      return 'Kode OTP sudah kedaluwarsa. Minta kode baru.';
+      return 'The OTP code has expired. Please request a new code.';
     }
     if (msg.contains('token is invalid') ||
         msg.contains('invalid otp') ||
         msg.contains('invalid token')) {
-      return 'Kode OTP salah. Periksa kembali kode yang dikirim ke HP kamu.';
+      return 'Incorrect OTP code. Please check the code sent to your phone.';
     }
     if (msg.contains('phone') && msg.contains('already')) {
-      return 'Nomor HP ini sudah terdaftar.';
+      return 'This phone number is already registered.';
     }
     // Network
     if (msg.contains('network') ||
         msg.contains('connection') ||
         msg.contains('timeout')) {
-      return 'Koneksi bermasalah. Periksa internet kamu dan coba lagi.';
+      return 'Connection problem. Check your internet and try again.';
     }
     if (msg.contains('server error') || msg.contains('500')) {
-      return 'Server sedang bermasalah. Coba lagi dalam beberapa saat.';
+      return 'The server is having issues. Please try again shortly.';
     }
     // Fallback
-    return 'Terjadi kesalahan: $raw';
+    return 'An error occurred: $raw';
   }
 
   // ─── AUTH METHODS ──────────────────────────────────────────────
@@ -96,7 +96,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     } on AuthException catch (e) {
       _err(_translateAuthError(e.message));
     } catch (_) {
-      _err('Login Google gagal. Coba lagi.');
+      _err('Google login failed. Please try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -106,37 +106,37 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     final email = _emailCtrl.text.trim();
     final pass = _passCtrl.text.trim();
 
-    // Validasi lokal sebelum hit API
+    // Local validation before hitting the API
     if (_isSignUp && _nameCtrl.text.trim().isEmpty) {
-      _err('Nama lengkap wajib diisi.');
+      _err('Full name is required.');
       return;
     }
     if (_isSignUp) {
       final phone = _phoneCtrl.text.trim();
       if (phone.isEmpty) {
-        _err('Nomor telepon wajib diisi.');
+        _err('Phone number is required.');
         return;
       }
-      // Validasi format nomor Indonesia: 08xx / +628xx / 628xx
+      // Validate Indonesian number format: 08xx / +628xx / 628xx
       final phoneRegex = RegExp(r'^(\+62|62|0)8[0-9]{8,11}$');
       if (!phoneRegex.hasMatch(phone.replaceAll(RegExp(r'\s|-'), ''))) {
-        _err('Format nomor telepon tidak valid. Contoh: 08123456789 atau +6281234567890');
+        _err('Invalid phone number format. Example: 08123456789 or +6281234567890');
         return;
       }
     }
     if (email.isEmpty) {
-      _err('Email wajib diisi.');
+      _err('Email is required.');
       return;
     }
-    // Validasi format email dasar
+    // Basic email format validation
     final emailRegex = RegExp(
       r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$',
     );
     if (!emailRegex.hasMatch(email)) {
-      _err('Format email tidak valid. Contoh: nama@gmail.com');
+      _err('Invalid email format. Example: name@gmail.com');
       return;
     }
-    // Whitelist domain email valid — komprehensif berdasarkan data global & Indonesia
+    // Whitelist of valid email domains — comprehensive, based on global & Indonesian data
     final domain = email.split('@').last.toLowerCase();
     const validDomains = {
       // ── Google ─────────────────────────────────────────────
@@ -207,7 +207,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       'fastmail.com',
       'fastmail.fm',
       'hey.com',
-      // ── Global lainnya ─────────────────────────────────────
+      // ── Other global providers ─────────────────────────────
       'aol.com',
       'aim.com',
       'zoho.com',
@@ -234,7 +234,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       'list.ru',
       'internet.ru',
       'rediffmail.com',
-      // ── Asia Pasifik ───────────────────────────────────────
+      // ── Asia Pacific ───────────────────────────────────────
       '163.com',
       '126.com',
       'qq.com',
@@ -246,7 +246,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       'wp.pl',
       'o2.pl',
       'interia.pl',
-      // ── ISP / Telecom global ───────────────────────────────
+      // ── Global ISP / Telecom ───────────────────────────────
       'comcast.net',
       'att.net',
       'sbcglobal.net',
@@ -274,7 +274,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       'ig.com.br',
       'telenet.be',
       'skynet.be',
-      // ── Indonesia — domain resmi ───────────────────────────
+      // ── Indonesia — official domains ───────────────────────
       'go.id',
       'ac.id',
       'sch.id',
@@ -286,7 +286,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       'biz.id',
       'mil.id',
       'desa.id',
-      // ── Indonesia — universitas negeri ─────────────────────
+      // ── Indonesia — public universities ─────────────────────
       'ui.ac.id',
       'student.ui.ac.id',
       'ugm.ac.id',
@@ -321,7 +321,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       'undiksha.ac.id',
       'unmul.ac.id',
       'untan.ac.id',
-      // ── Indonesia — universitas swasta ─────────────────────
+      // ── Indonesia — private universities ────────────────────
       'binus.ac.id',
       'binus.edu',
       'student.binus.ac.id',
@@ -349,7 +349,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       'stiki.ac.id',
       'isbi.ac.id',
       'isi.ac.id',
-      // ── Indonesia — politeknik & sekolah tinggi ────────────
+      // ── Indonesia — polytechnics & colleges ─────────────────
       'polinema.ac.id',
       'pens.ac.id',
       'tel.ac.id',
@@ -359,26 +359,26 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       'poltekkes-denpasar.ac.id',
     };
 
-    // Cek exact domain ATAU suffix (misal: staff.ui.ac.id → valid karena berakhir .ui.ac.id)
+    // Check exact domain OR suffix (e.g. staff.ui.ac.id → valid because it ends with .ui.ac.id)
     final isValid = validDomains.contains(domain) ||
         validDomains.any((d) => domain.endsWith('.$d'));
     if (!isValid) {
-      _err('Domain email tidak dikenali. Gunakan email dari provider resmi (Gmail, Yahoo, Outlook, iCloud, dll) atau email institusi (.ac.id / .go.id).');
+      _err('Email domain not recognized. Use an email from an official provider (Gmail, Yahoo, Outlook, iCloud, etc.) or an institutional email (.ac.id / .go.id).');
       return;
     }
     if (pass.isEmpty) {
-      _err('Password wajib diisi.');
+      _err('Password is required.');
       return;
     }
     if (pass.length < 6) {
-      _err('Password minimal 6 karakter.');
+      _err('Password must be at least 6 characters.');
       return;
     }
 
     setState(() => _loading = true);
     try {
       if (_isSignUp) {
-        // Normalisasi nomor telepon ke format +62
+        // Normalize the phone number to +62 format
         String phone = _phoneCtrl.text.trim().replaceAll(RegExp(r'\s|-'), '');
         if (phone.startsWith('0')) phone = '+62${phone.substring(1)}';
         if (phone.startsWith('62') && !phone.startsWith('+')) phone = '+$phone';
@@ -391,7 +391,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
             'phone_number': phone,
           },
         );
-        // Simpan nomor telepon ke tabel profiles / update user jika sudah ada
+        // Save the phone number to the profiles table / update user if it already exists
         if (res.user != null) {
           try {
             await Supabase.instance.client
@@ -404,11 +404,11 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                   'created_at': DateTime.now().toIso8601String(),
                 }, onConflict: 'id');
           } catch (_) {
-            // Tabel customers mungkin belum ada, nomor tetap tersimpan di auth metadata
+            // The customers table might not exist yet; the number is still saved in auth metadata
           }
         }
         if (mounted) {
-          _info('Akun berhasil dibuat! Cek email untuk konfirmasi. 📧');
+          _info('Account created successfully! Check your email to confirm. 📧');
         }
       } else {
         final res = await Supabase.instance.client.auth
@@ -418,13 +418,13 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     } on AuthException catch (e) {
       if (mounted) _err(_translateAuthError(e.message));
     } catch (_) {
-      if (mounted) _err('Terjadi kesalahan. Periksa koneksi internet kamu.');
+      if (mounted) _err('An error occurred. Check your internet connection.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  // ─── FORGOT PASSWORD ───────────────────────────────────────────
+  // ─── FORGOT PASSWORD ─────────────────────────────────────────
   Future<void> _forgotPassword() async {
     final resetCtrl = TextEditingController(text: _emailCtrl.text.trim());
 
@@ -447,7 +447,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 child: const Icon(Icons.lock_reset_outlined,
                     color: Colors.white, size: 22)),
               const SizedBox(width: 12),
-              const Text('Lupa Password',
+              const Text('Forgot Password',
                   style: TextStyle(fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700, fontSize: 18)),
             ]),
@@ -466,7 +466,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                         SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Kami akan mengirimkan link reset password ke email Anda',
+                            'We will send a password reset link to your email',
                             style: TextStyle(fontFamily: 'Poppins',
                                 fontSize: 12, color: Color(0xFF92400E)),
                           ),
@@ -482,10 +482,10 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                     style: const TextStyle(
                         fontFamily: 'Poppins', fontSize: 14),
                     decoration: InputDecoration(
-                      labelText: 'Alamat Email',
+                      labelText: 'Email Address',
                       labelStyle: const TextStyle(fontFamily: 'Poppins',
                           fontSize: 12, color: Color(0xFF6B7280)),
-                      hintText: 'contoh: nama@email.com',
+                      hintText: 'example: name@email.com',
                       hintStyle: const TextStyle(fontFamily: 'Poppins',
                           fontSize: 13, color: Colors.grey),
                       prefixIcon: const Icon(Icons.email_outlined,
@@ -511,7 +511,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 ),
-                child: const Text('Batal',
+                child: const Text('Cancel',
                     style: TextStyle(fontFamily: 'Poppins',
                         fontSize: 14, color: Color(0xFF6B7280)))),
               ElevatedButton(
@@ -524,7 +524,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                             !email.contains('.')) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: const Text('Masukkan email yang valid.',
+                              content: const Text('Enter a valid email.',
                                   style: TextStyle(fontFamily: 'Poppins')),
                               backgroundColor: const Color(0xFFE94560),
                               behavior: SnackBarBehavior.floating,
@@ -544,8 +544,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                           if (ctx.mounted) Navigator.pop(ctx);
                           if (mounted) {
                             _info(
-                              'Link reset password dikirim ke $email. '
-                              'Cek inbox atau folder spam kamu. 📧');
+                              'Password reset link sent to $email. '
+                              'Check your inbox or spam folder. 📧');
                           }
                         } on AuthException catch (e) {
                           if (mounted) {
@@ -553,7 +553,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                           }
                         } catch (_) {
                           if (mounted) {
-                            _err('Gagal mengirim email. Coba lagi.');
+                            _err('Failed to send email. Please try again.');
                           }
                         } finally {
                           if (ctx.mounted) setS(() => sending = false);
@@ -572,7 +572,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                         width: 20, height: 20,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                    : const Text('Kirim Link Reset',
+                    : const Text('Send Reset Link',
                         style: TextStyle(fontFamily: 'Poppins',
                             fontWeight: FontWeight.w600, fontSize: 14)),
               ),
@@ -654,7 +654,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 children: [
                   Icon(Icons.language, color: Colors.white70, size: 16),
                   SizedBox(width: 8),
-                  Text('ID', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
+                  Text('EN', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
                 ],
               ),
             ),
@@ -673,22 +673,22 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                   color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
               ]),
               const Spacer(),
-              const Text('Reservasi &\nPesanan Online',
+              const Text('Reservations &\nOnline Ordering',
                 style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
                   fontSize: 54, fontWeight: FontWeight.w800, height: 1.1,
                   letterSpacing: -0.5)),
               const SizedBox(height: 24),
               const Text(
-                'Nikmati kemudahan memesan makanan\n'
-                'dan reservasi meja favorit kamu\n'
-                'kapan saja, di mana saja.',
+                'Enjoy the convenience of ordering food\n'
+                'and reserving your favorite table\n'
+                'anytime, anywhere.',
                 style: TextStyle(fontFamily: 'Poppins',
                   color: Colors.white70, fontSize: 16, height: 1.7)),
               const SizedBox(height: 48),
               Wrap(spacing: 12, runSpacing: 12, children: [
-                _pill('🍽️ Menu lengkap'), _pill('📅 Reservasi mudah'),
-                _pill('📦 Lacak pesanan'), _pill('🤖 AI Chatbot'),
-                _pill('💳 Pembayaran digital'),
+                _pill('🍽️ Full menu'), _pill('📅 Easy reservations'),
+                _pill('📦 Track orders'), _pill('🤖 AI Chatbot'),
+                _pill('💳 Digital payments'),
               ]),
               const Spacer(),
               const Text('© 2026 RestaurantOS', style: TextStyle(
@@ -770,11 +770,11 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const Text('Selamat Datang', textAlign: TextAlign.center,
+      const Text('Welcome', textAlign: TextAlign.center,
         style: TextStyle(fontFamily: 'Poppins', fontSize: 28,
           fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E), letterSpacing: -0.5)),
       const SizedBox(height: 8),
-      const Text('Masuk untuk melanjutkan ke akun Anda',
+      const Text('Log in to continue to your account',
         textAlign: TextAlign.center,
         style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
           color: Color(0xFF6B7280), height: 1.5)),
@@ -782,12 +782,12 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       _socialBtn(
         icon: SizedBox(width: 22, height: 22,
           child: CustomPaint(painter: _GoogleIconPainter())),
-        label: 'Lanjutkan dengan Google', onTap: _signInGoogle),
+        label: 'Continue with Google', onTap: _signInGoogle),
       const SizedBox(height: 28),
       const Row(children: [
         Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
         Padding(padding: EdgeInsets.symmetric(horizontal: 14),
-          child: Text('atau', style: TextStyle(fontFamily: 'Poppins',
+          child: Text('or', style: TextStyle(fontFamily: 'Poppins',
             fontSize: 13, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500))),
         Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
       ]),
@@ -800,12 +800,12 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       if (_isSignUp) ...[
-        _field(ctrl: _nameCtrl, hint: 'Nama lengkap', icon: Icons.person_outline),
+        _field(ctrl: _nameCtrl, hint: 'Full name', icon: Icons.person_outline),
         const SizedBox(height: 14),
         _phoneField(),
         const SizedBox(height: 14),
       ],
-      _field(ctrl: _emailCtrl, hint: 'Alamat Email',
+      _field(ctrl: _emailCtrl, hint: 'Email Address',
         icon: Icons.email_outlined, type: TextInputType.emailAddress),
       const SizedBox(height: 14),
       _field(ctrl: _passCtrl, hint: 'Password',
@@ -817,9 +817,9 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
           onPressed: () => setState(() => _obscure = !_obscure))),
       const SizedBox(height: 24),
       _primaryBtn(
-        label: _isSignUp ? 'Buat Akun' : 'Masuk', onTap: _submitEmail),
+        label: _isSignUp ? 'Create Account' : 'Log In', onTap: _submitEmail),
       const SizedBox(height: 16),
-      // Lupa password — hanya tampil saat mode login
+      // Forgot password — only shown in login mode
       if (!_isSignUp)
         Center(
           child: TextButton(
@@ -827,7 +827,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
-            child: const Text('Lupa password?',
+            child: const Text('Forgot password?',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
                 color: Color(0xFFE94560), fontWeight: FontWeight.w600))),
         ),
@@ -836,7 +836,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            _isSignUp ? 'Sudah punya akun?' : 'Belum punya akun?',
+            _isSignUp ? 'Already have an account?' : "Don't have an account?",
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
               color: Color(0xFF6B7280))),
           TextButton(
@@ -849,7 +849,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
               minimumSize: Size.zero,
             ),
             child: Text(
-              _isSignUp ? 'Masuk' : 'Daftar',
+              _isSignUp ? 'Log In' : 'Sign Up',
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
                 color: Color(0xFF0F3460), fontWeight: FontWeight.w700))),
         ],
@@ -861,10 +861,10 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     keyboardType: TextInputType.phone,
     style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
     decoration: InputDecoration(
-      labelText: 'Nomor Telepon',
+      labelText: 'Phone Number',
       labelStyle: const TextStyle(fontFamily: 'Poppins',
           fontSize: 12, color: Color(0xFF6B7280)),
-      hintText: 'Contoh: 08123456789',
+      hintText: 'Example: 08123456789',
       hintStyle: const TextStyle(
           fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF9CA3AF)),
       prefixIcon: const Icon(Icons.phone_outlined,

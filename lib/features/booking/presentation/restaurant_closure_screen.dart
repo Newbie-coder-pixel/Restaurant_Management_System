@@ -7,7 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
 
-// Model sederhana untuk branch
+// Simple model for a branch
 class _Branch {
   final String id;
   final String name;
@@ -24,10 +24,10 @@ class RestaurantClosureScreen extends ConsumerStatefulWidget {
 
 class _RestaurantClosureScreenState
     extends ConsumerState<RestaurantClosureScreen> {
-  // Branch aktif yang sedang ditampilkan
+  // The currently displayed active branch
   String? _selectedBranchId;
 
-  // Daftar cabang (hanya diisi untuk Super Admin)
+  // List of branches (only populated for Super Admin)
   List<_Branch> _branches = [];
   bool _isSuperAdmin = false;
 
@@ -45,17 +45,17 @@ class _RestaurantClosureScreenState
       _isSuperAdmin = staff.role == StaffRole.superadmin;
 
       if (_isSuperAdmin) {
-        // Super Admin: load semua branch dulu, lalu pilih pertama
+        // Super Admin: load all branches first, then pick the first one
         _loadBranches();
       } else {
-        // Staff biasa: langsung pakai branch sendiri
+        // Regular staff: use their own branch directly
         _selectedBranchId = staff.branchId;
         _loadClosures();
       }
     }
   }
 
-  /// Load semua branch dari Supabase (hanya Super Admin)
+  /// Load all branches from Supabase (Super Admin only)
   Future<void> _loadBranches() async {
     setState(() => _isLoading = true);
     try {
@@ -124,7 +124,7 @@ class _RestaurantClosureScreenState
     final today = DateTime.now();
     final todayStr = _fmtDate(today);
     if (dateStr.compareTo(todayStr) < 0) {
-      _showSnack('Tidak bisa mengubah tanggal yang sudah lewat', Colors.orange);
+      _showSnack('Cannot change a date that has already passed', Colors.orange);
       return;
     }
 
@@ -150,25 +150,25 @@ class _RestaurantClosureScreenState
         builder: (ctx) => AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Ada Booking Aktif',
+          title: const Text('Active Bookings Exist',
               style: TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
           content: Text(
-            'Tanggal ${_fmtDisplayDate(day)} masih ada booking aktif.\n\n'
-            'Apakah tetap ingin menutup restoran di tanggal ini?',
+            '${_fmtDisplayDate(day)} still has active bookings.\n\n'
+            'Do you still want to close the restaurant on this date?',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child:
-                  const Text('Batal', style: TextStyle(fontFamily: 'Poppins')),
+                  const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
             ),
             ElevatedButton(
               style:
                   ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Tetap Tutup',
+              child: const Text('Close Anyway',
                   style:
                       TextStyle(fontFamily: 'Poppins', color: Colors.white)),
             ),
@@ -192,10 +192,10 @@ class _RestaurantClosureScreenState
         'created_by': staff?.id,
       });
       await _loadClosures();
-      _showSnack('✅ ${_fmtDisplayDate(day)} ditandai sebagai hari tutup',
+      _showSnack('✅ ${_fmtDisplayDate(day)} marked as a closed day',
           const Color(0xFF4CAF50));
     } catch (e) {
-      _showSnack('Gagal simpan: $e', Colors.red);
+      _showSnack('Failed to save: $e', Colors.red);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -211,9 +211,9 @@ class _RestaurantClosureScreenState
           .eq('closure_date', dateStr);
       await _loadClosures();
       _showSnack(
-          '✅ Tanggal tutup dihapus — restoran kembali buka', AppColors.available);
+          '✅ Closure date removed — restaurant is open again', AppColors.available);
     } catch (e) {
-      _showSnack('Gagal hapus: $e', Colors.red);
+      _showSnack('Failed to delete: $e', Colors.red);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -229,7 +229,7 @@ class _RestaurantClosureScreenState
           const Icon(Icons.store_rounded, color: AppColors.primary),
           const SizedBox(width: 8),
           Expanded(
-            child: Text('Tutup ${_fmtDisplayDate(day)}',
+            child: Text('Close ${_fmtDisplayDate(day)}',
                 style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w700,
@@ -237,7 +237,7 @@ class _RestaurantClosureScreenState
           ),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Alasan tutup (opsional):',
+          const Text('Closure reason (optional):',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 13)),
           const SizedBox(height: 10),
           TextField(
@@ -245,7 +245,7 @@ class _RestaurantClosureScreenState
             autofocus: true,
             maxLines: 2,
             decoration: InputDecoration(
-              hintText: 'Contoh: Hari Raya, Renovasi, Private Event...',
+              hintText: 'Example: Holiday, Renovation, Private Event...',
               hintStyle:
                   const TextStyle(fontFamily: 'Poppins', fontSize: 12),
               border:
@@ -257,13 +257,13 @@ class _RestaurantClosureScreenState
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
             child:
-                const Text('Batal', style: TextStyle(fontFamily: 'Poppins')),
+                const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
           ),
           ElevatedButton(
             style:
                 ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Simpan',
+            child: const Text('Save',
                 style:
                     TextStyle(fontFamily: 'Poppins', color: Colors.white)),
           ),
@@ -302,7 +302,7 @@ class _RestaurantClosureScreenState
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Hari Tutup Restoran'),
+        title: const Text('Restaurant Closure Days'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         titleTextStyle: const TextStyle(
@@ -403,10 +403,10 @@ class _RestaurantClosureScreenState
             Expanded(
               child: Text(
                 _isSuperAdmin
-                    ? 'Pilih cabang di pojok kanan atas, lalu ketuk tanggal untuk menandai/membatalkan hari tutup. '
-                        'Perubahan hanya berlaku untuk cabang yang dipilih.'
-                    : 'Ketuk tanggal di kalender untuk menandai/membatalkan hari tutup restoran. '
-                        'Booking baru tidak bisa dibuat di tanggal yang ditandai tutup.',
+                    ? 'Select a branch in the top right corner, then tap a date to mark/unmark it as a closure day. '
+                        'Changes only apply to the selected branch.'
+                    : 'Tap a date on the calendar to mark/unmark the restaurant\'s closure day. '
+                        'New bookings can\'t be made on dates marked as closed.',
                 style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
@@ -544,7 +544,7 @@ class _RestaurantClosureScreenState
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-          'Jadwal Tutup${_isSuperAdmin && _selectedBranchId != null ? ' — ${_branches.where((b) => b.id == _selectedBranchId).map((b) => b.name).firstOrNull ?? ""}' : ''} (${upcoming.length})',
+          'Closure Schedule${_isSuperAdmin && _selectedBranchId != null ? ' — ${_branches.where((b) => b.id == _selectedBranchId).map((b) => b.name).firstOrNull ?? ""}' : ''} (${upcoming.length})',
             style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
@@ -570,7 +570,7 @@ class _RestaurantClosureScreenState
             child: Column(children: [
               Icon(Icons.store_rounded, size: 40, color: AppColors.textHint),
               SizedBox(height: 8),
-              Text('Belum ada jadwal tutup',
+              Text('No closure days scheduled yet',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       color: AppColors.textSecondary)),
@@ -628,7 +628,7 @@ class _RestaurantClosureScreenState
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text('Hari ini',
+                    child: const Text('Today',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 10,
@@ -638,7 +638,7 @@ class _RestaurantClosureScreenState
                 ],
               ]),
               subtitle: Text(
-                reason ?? 'Tanpa keterangan',
+                reason ?? 'No reason given',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
@@ -652,7 +652,7 @@ class _RestaurantClosureScreenState
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline,
                     color: AppColors.accent, size: 20),
-                tooltip: 'Hapus hari tutup',
+                tooltip: 'Remove closure day',
                 onPressed: () => _removeClosure(dateStr),
               ),
             ),
@@ -662,7 +662,7 @@ class _RestaurantClosureScreenState
   }
 
   String _dayName(int weekday) {
-    const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return days[weekday - 1];
   }
 }

@@ -20,9 +20,9 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   bool _isSubmitting = false;
 
   // ── ML state ────────────────────────────────────────────────────────────────
-  int?  _estimatedMinutes;   // hasil prediksi ML, ATAU estimasi kasar fallback
+  int?  _estimatedMinutes;   // ML prediction result, OR a rough fallback estimate
   bool  _isFetchingEstimate = false;
-  bool  _isFallbackEstimate = false; // true kalau _estimatedMinutes bukan dari ML
+  bool  _isFallbackEstimate = false; // true if _estimatedMinutes is not from ML
   List<QrCartItem> _lastCartItems = [];
 
   @override
@@ -50,7 +50,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     super.dispose();
   }
 
-  // ── ML: Fetch estimasi waktu ───────────────────────────────────────────────
+  // ── ML: Fetch time estimate ───────────────────────────────────────────────
   Future<void> _fetchEstimate(QrOrderSession cart) async {
     if (cart.isEmpty) {
       setState(() {
@@ -76,8 +76,8 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
     if (mounted) {
       setState(() {
-        // Server tidak terjangkau → estimasi kasar (jumlah menu prep time,
-        // tanpa ML/buffer) daripada banner estimasi hilang tanpa keterangan.
+        // Server unreachable → rough estimate (sum of menu prep times,
+        // without ML/buffer) rather than the estimate banner disappearing with no explanation.
         _estimatedMinutes = result?.estimatedMinutes ??
             PrepTimeService.rawFallbackEstimate(items);
         _isFallbackEstimate = result == null;
@@ -111,10 +111,10 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     );
   }
 
-  // ── Show confirmation dialog sebelum order ────────────────────────────────
+  // ── Show confirmation dialog before ordering ────────────────────────────────
   Future<void> _showOrderConfirmationDialog() async {
     final addMode = ref.read(addOrderModeProvider);
-    // Di mode tambah pesanan, skip validasi form nama/HP
+    // In add-order mode, skip name/phone form validation
     if (addMode == null && !_formKey.currentState!.validate()) return;
 
     final colorScheme = Theme.of(context).colorScheme;
@@ -144,7 +144,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                     color: colorScheme.primary, size: 24),
                 const SizedBox(width: 10),
                 Text(
-                  'Konfirmasi Pesanan',
+                  'Confirm Order',
                   style: theme.textTheme.titleLarge
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),
@@ -160,18 +160,18 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(children: [
-                  _buildInfoRow(theme, colorScheme, 'Nama',
+                  _buildInfoRow(theme, colorScheme, 'Name',
                       _nameCtrl.text.trim()),
                   const SizedBox(height: 8),
-                  _buildInfoRow(theme, colorScheme, 'No. HP',
+                  _buildInfoRow(theme, colorScheme, 'Phone No.',
                       _phoneCtrl.text.trim().isEmpty ? '-' : _phoneCtrl.text.trim()),
                   const SizedBox(height: 8),
-                  _buildInfoRow(theme, colorScheme, 'Meja', tableName),
+                  _buildInfoRow(theme, colorScheme, 'Table', tableName),
                   const SizedBox(height: 8),
                   _buildInfoRow(theme, colorScheme, 'Total',
                       _formatPrice(cart.totalAmount)),
                   const SizedBox(height: 8),
-                  _buildInfoRow(theme, colorScheme, 'Item',
+                  _buildInfoRow(theme, colorScheme, 'Items',
                       '${cart.items.length} item'),
                 ]),
               ),
@@ -195,7 +195,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Pesanan yang telah dikirim ke dapur tidak dapat dibatalkan.',
+                          'Orders that have been sent to the kitchen cannot be cancelled.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: colorScheme.onErrorContainer,
                             fontWeight: FontWeight.w600,
@@ -213,7 +213,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Pastikan pesanan sudah benar sebelum melanjutkan.',
+                          'Make sure your order is correct before continuing.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: colorScheme.onErrorContainer,
                           ),
@@ -235,7 +235,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Cek Lagi'),
+                    child: const Text('Check Again'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -251,7 +251,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                       elevation: 0,
                     ),
                     child: const Text(
-                      'Pesan Sekarang',
+                      'Order Now',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -276,13 +276,13 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
     final addMode = ref.read(addOrderModeProvider);
 
-    // ── Mode Tambah Pesanan (order sudah ada) ──────────────────────────────
+    // ── Add-Order Mode (order already exists) ──────────────────────────────
     if (addMode != null) {
       await _confirmAddItems(addMode);
       return;
     }
 
-    // ── Mode Normal (buat order baru) ──────────────────────────────────────
+    // ── Normal Mode (create a new order) ──────────────────────────────────────
     final notifier = ref.read(activeQrCartNotifierProvider);
     notifier.setCustomerInfo(name: _nameCtrl.text.trim(), phone: _phoneCtrl.text.trim());
 
@@ -294,15 +294,15 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
         ? activeTable.tableId
         : widget.tableId;
 
-    debugPrint('🔍 [CartScreen] tableId dari activeQrTableProvider: "${activeTable.tableId}"');
-    debugPrint('🔍 [CartScreen] tableId dari widget: "${widget.tableId}"');
-    debugPrint('🔍 [CartScreen] tableId yang akan dipakai: "$tableId"');
+    debugPrint('🔍 [CartScreen] tableId from activeQrTableProvider: "${activeTable.tableId}"');
+    debugPrint('🔍 [CartScreen] tableId from widget: "${widget.tableId}"');
+    debugPrint('🔍 [CartScreen] tableId that will be used: "$tableId"');
 
     if (branchId.isEmpty) {
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Branch ID tidak ditemukan. Silakan scan ulang QR meja.'),
+          content: Text('Branch ID not found. Please rescan the table QR code.'),
           backgroundColor: Colors.red));
       }
       return;
@@ -312,7 +312,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       setState(() => _isSubmitting = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Table ID tidak ditemukan. Silakan scan ulang QR meja.'),
+          content: Text('Table ID not found. Please rescan the table QR code.'),
           backgroundColor: Colors.red));
       }
       return;
@@ -331,12 +331,12 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
       if (mounted) {
         final estimasiText = _estimatedMinutes != null
-            ? ' Estimasi siap: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
+            ? ' Estimated ready: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
             : '';
 
         context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Pesanan #${order.queueNumber} berhasil dikirim ke dapur!$estimasiText'),
+          content: Text('Order #${order.queueNumber} sent to the kitchen!$estimasiText'),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 4),
         ));
@@ -344,14 +344,14 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membuat pesanan: $e'), backgroundColor: Colors.red));
+          SnackBar(content: Text('Failed to create order: $e'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  // ── Confirm tambah item ke order yang sudah ada ────────────────────────────
+  // ── Confirm adding items to an existing order ────────────────────────────
   Future<void> _confirmAddItems(AddOrderModeState addMode) async {
     final cart = ref.read(activeQrCartProvider);
     final notifier = ref.read(activeQrCartNotifierProvider);
@@ -363,7 +363,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
         newItems: cart.items,
       );
 
-      if (updatedOrder == null) throw Exception('Gagal menambah pesanan');
+      if (updatedOrder == null) throw Exception('Failed to add to order');
 
       // Clear cart & reset mode
       notifier.clearCart();
@@ -371,16 +371,16 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
       if (mounted) {
         final estimasiText = _estimatedMinutes != null
-            ? ' Estimasi siap: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
+            ? ' Estimated ready: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
             : '';
 
-        // Kembali ke tracker screen order yang sama
+        // Return to the same order's tracker screen
         context.go(
           '/qr/${addMode.tableId}/track/${addMode.orderId}?queue=${addMode.queueNumber}',
         );
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-            '✅ Pesanan tambahan berhasil dikirim ke dapur!$estimasiText',
+            '✅ Additional order sent to the kitchen!$estimasiText',
           ),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 4),
@@ -390,7 +390,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal menambah pesanan: $e'),
+            content: Text('Failed to add to order: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -418,7 +418,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
         content: TextField(
           controller: ctrl, maxLines: 3, autofocus: true,
           decoration: InputDecoration(
-            hintText: 'Contoh: tidak pedas, tanpa bawang...',
+            hintText: 'Example: not spicy, no onions...',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             contentPadding: const EdgeInsets.all(12))),
         actions: [
@@ -427,16 +427,16 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
               notifier.updateNotes(item.menuItem.id, '');
               Navigator.pop(ctx);
             },
-            child: const Text('Hapus Catatan', style: TextStyle(color: Colors.grey))),
+            child: const Text('Remove Note', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             onPressed: () {
               notifier.updateNotes(item.menuItem.id, ctrl.text.trim());
               Navigator.pop(ctx);
-              // Update estimasi setelah notes berubah
+              // Update the estimate after notes change
               final cart = ref.read(activeQrCartProvider);
               _fetchEstimate(cart);
             },
-            child: const Text('Simpan')),
+            child: const Text('Save')),
         ],
       ),
     );
@@ -452,22 +452,22 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     if (cart.isEmpty) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Keranjang'),
+          title: const Text('Cart'),
           leading: BackButton(onPressed: () => context.pop()),
         ),
         body: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.shopping_cart_outlined, size: 80, color: colorScheme.outline),
             const SizedBox(height: 16),
-            Text('Keranjangmu kosong', style: theme.textTheme.titleMedium),
+            Text('Your cart is empty', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            Text('Pilih menu terlebih dahulu',
+            Text('Choose a menu item first',
               style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () => context.pop(),
               icon: const Icon(Icons.arrow_back),
-              label: const Text('Kembali ke Menu')),
+              label: const Text('Back to Menu')),
           ]),
         ),
       );
@@ -479,9 +479,9 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: Text(isAddMode ? 'Tambah Pesanan' : 'Keranjang Pesanan'),
+        title: Text(isAddMode ? 'Add Order' : 'Order Cart'),
         leading: BackButton(onPressed: () {
-          // Saat back dari add mode, reset mode agar tidak stuck
+          // When backing out of add mode, reset the mode so it doesn't get stuck
           if (isAddMode) {
             ref.read(addOrderModeProvider.notifier).state = null;
             notifier.clearCart();
@@ -494,12 +494,12 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
               showDialog(
                 context: context,
                 builder: (_) => AlertDialog(
-                  title: const Text('Kosongkan Keranjang?'),
-                  content: const Text('Semua item akan dihapus dari keranjang.'),
+                  title: const Text('Clear Cart?'),
+                  content: const Text('All items will be removed from the cart.'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Batal')),
+                      child: const Text('Cancel')),
                     TextButton(
                       onPressed: () {
                         notifier.clearCart();
@@ -507,12 +507,12 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                         context.pop();
                       },
                       style: TextButton.styleFrom(foregroundColor: colorScheme.error),
-                      child: const Text('Kosongkan')),
+                      child: const Text('Clear')),
                   ],
                 ),
               );
             },
-            child: Text('Kosongkan',
+            child: Text('Clear',
               style: TextStyle(color: colorScheme.error, fontSize: 13)),
           ),
         ],
@@ -521,7 +521,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
         key: _formKey,
         child: CustomScrollView(
           slivers: [
-            // ── Banner Estimasi ML ─────────────────────────────────────────
+            // ── ML Estimate Banner ─────────────────────────────────────────
             if (_isFetchingEstimate || _estimatedMinutes != null)
               SliverToBoxAdapter(
                 child: Padding(
@@ -543,8 +543,8 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                         children: [
                           Text(
                             _isFallbackEstimate
-                                ? 'Estimasi Kasar (offline)'
-                                : 'Estimasi Waktu Siap',
+                                ? 'Rough Estimate (offline)'
+                                : 'Estimated Ready Time',
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: colorScheme.onPrimaryContainer,
                               fontWeight: FontWeight.w600)),
@@ -557,7 +557,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                                   strokeWidth: 2,
                                   color: colorScheme.primary)),
                               const SizedBox(width: 8),
-                              Text('Menghitung...',
+                              Text('Calculating...',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onPrimaryContainer)),
                             ])
@@ -577,7 +577,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                 ),
               ),
 
-            // ── Banner mode tambah pesanan ──────────────────────────────────
+            // ── Add-order mode banner ──────────────────────────────────
             if (isAddMode)
               SliverToBoxAdapter(
                 child: Padding(
@@ -599,13 +599,13 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Mode Tambah Pesanan',
+                              'Add Order Mode',
                               style: theme.textTheme.labelMedium?.copyWith(
                                 color: colorScheme.onSecondaryContainer,
                                 fontWeight: FontWeight.bold),
                             ),
                             Text(
-                              'No. Antrian: ${addMode.queueNumber} · Item lama tidak bisa diubah',
+                              'Queue No.: ${addMode.queueNumber} · Existing items cannot be changed',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSecondaryContainer
                                     .withValues(alpha: 0.75)),
@@ -621,7 +621,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Text('${cart.totalItems} item pesanan',
+                child: Text('${cart.totalItems} item(s) ordered',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: colorScheme.outline)),
               ),
@@ -652,7 +652,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
               ),
             ),
 
-            // Di mode tambah pesanan, form nama/HP tidak diperlukan
+            // In add-order mode, the name/phone form is not needed
             if (!isAddMode)
               SliverToBoxAdapter(
                 child: Padding(
@@ -660,7 +660,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                   child: _CustomerInfoCard(
                     nameCtrl:  _nameCtrl,
                     phoneCtrl: _phoneCtrl,
-                    tableName: cart.tableName ?? 'Meja'),
+                    tableName: cart.tableName ?? 'Table'),
                 ),
               ),
 
@@ -746,7 +746,7 @@ class _CartItemTile extends StatelessWidget {
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.primary, fontWeight: FontWeight.w500)),
                   const SizedBox(width: 8),
-                  // ── Badge prep time ──────────────────────────────────
+                  // ── Prep time badge ──────────────────────────────────
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
@@ -755,7 +755,7 @@ class _CartItemTile extends StatelessWidget {
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.timer_outlined, size: 11, color: Colors.orange.shade700),
                       const SizedBox(width: 3),
-                      Text('${item.menuItem.preparationTimeMinutes} mnt',
+                      Text('${item.menuItem.preparationTimeMinutes} min',
                         style: TextStyle(fontSize: 10,
                           color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
                     ])),
@@ -801,7 +801,7 @@ class _CartItemTile extends StatelessWidget {
                   Expanded(child: Text(
                     (item.notes != null && item.notes!.isNotEmpty)
                         ? item.notes!
-                        : 'Tambah catatan (tidak pedas, dll...)',
+                        : 'Add a note (not spicy, etc...)',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: (item.notes != null && item.notes!.isNotEmpty)
                           ? colorScheme.primary : colorScheme.outline,
@@ -871,7 +871,7 @@ class _CustomerInfoCard extends StatelessWidget {
         Row(children: [
           Icon(Icons.person_outline, size: 18, color: colorScheme.primary),
           const SizedBox(width: 8),
-          Text('Informasi Pelanggan',
+          Text('Customer Information',
             style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
         ]),
         const SizedBox(height: 14),
@@ -879,7 +879,7 @@ class _CustomerInfoCard extends StatelessWidget {
           initialValue: tableName,
           readOnly: true,
           decoration: InputDecoration(
-            labelText: 'Nomor Meja',
+            labelText: 'Table Number',
             prefixIcon: const Icon(Icons.table_restaurant_outlined),
             filled: true,
             border: OutlineInputBorder(
@@ -890,16 +890,16 @@ class _CustomerInfoCard extends StatelessWidget {
           controller: nameCtrl,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
-            labelText: 'Nama Pemesan *',
-            hintText: 'Contoh: Budi',
+            labelText: 'Customer Name *',
+            hintText: 'Example: John',
             prefixIcon: const Icon(Icons.badge_outlined),
             filled: true,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
           validator: (val) {
-            if (val == null || val.trim().isEmpty) return 'Nama tidak boleh kosong';
-            if (val.trim().length < 2) return 'Nama terlalu pendek';
+            if (val == null || val.trim().isEmpty) return 'Name cannot be empty';
+            if (val.trim().length < 2) return 'Name is too short';
             return null;
           }),
         const SizedBox(height: 10),
@@ -907,10 +907,10 @@ class _CustomerInfoCard extends StatelessWidget {
           controller: phoneCtrl,
           keyboardType: TextInputType.phone,
           decoration: InputDecoration(
-            labelText: 'Nomor Telepon (opsional)',
-            hintText: 'Contoh: 08123456789',
+            labelText: 'Phone Number (optional)',
+            hintText: 'Example: 08123456789',
             prefixIcon: const Icon(Icons.phone_outlined),
-            helperText: 'Format: 08xxxxxxxxxx (10–13 digit)',
+            helperText: 'Format: 08xxxxxxxxxx (10-13 digits)',
             filled: true,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
@@ -919,7 +919,7 @@ class _CustomerInfoCard extends StatelessWidget {
             if (val == null || val.trim().isEmpty) return null;
             final digits = val.trim().replaceAll(RegExp(r'\s+'), '');
             if (!RegExp(r'^08\d{8,11}$').hasMatch(digits)) {
-              return 'Masukkan nomor valid (08xxxxxxxxxx, 10–13 digit)';
+              return 'Enter a valid number (08xxxxxxxxxx, 10-13 digits)';
             }
             return null;
           }),
@@ -950,12 +950,12 @@ class _OrderSummaryCard extends StatelessWidget {
         Row(children: [
           Icon(Icons.receipt_outlined, size: 18, color: colorScheme.primary),
           const SizedBox(width: 8),
-          Text('Ringkasan Tambahan',
+          Text('Additional Summary',
             style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
         ]),
         const SizedBox(height: 14),
 
-        // Daftar item
+        // Item list
         ...cart.items.map((item) => Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(children: [
@@ -973,7 +973,7 @@ class _OrderSummaryCard extends StatelessWidget {
         Divider(color: colorScheme.outlineVariant, height: 20, thickness: 0.5),
 
         if (!isAddMode) ...[
-          // Mode normal: tampilkan breakdown lengkap
+          // Normal mode: show the full breakdown
           Row(children: [
             Text('Subtotal',
               style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
@@ -1009,9 +1009,9 @@ class _OrderSummaryCard extends StatelessWidget {
                   fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ])),
         ] else ...[
-          // Mode tambah pesanan: hanya tampilkan subtotal item baru + info pajak dihitung otomatis
+          // Add-order mode: only show new items' subtotal + note that tax is auto-calculated
           Row(children: [
-            Text('Subtotal item baru',
+            Text('New items subtotal',
               style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
             const Spacer(),
             Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
@@ -1028,7 +1028,7 @@ class _OrderSummaryCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'PB1 & Service Charge dihitung otomatis dari total keseluruhan pesanan.',
+                  'PB1 & Service Charge are calculated automatically from the order total.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colorScheme.outline, fontSize: 11),
                 ),
@@ -1085,12 +1085,12 @@ class _CartBottomBar extends StatelessWidget {
                   SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
                   SizedBox(width: 10),
-                  Text('Mengirim ke Dapur...'),
+                  Text('Sending to Kitchen...'),
                 ])
               : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   const Icon(Icons.send_outlined, size: 20),
                   const SizedBox(width: 8),
-                  Text('Pesan Sekarang',
+                  Text('Order Now',
                     style: theme.textTheme.labelLarge?.copyWith(
                       color: colorScheme.onPrimary, fontWeight: FontWeight.bold)),
                   const SizedBox(width: 12),
@@ -1099,10 +1099,10 @@ class _CartBottomBar extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: colorScheme.onPrimary.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20)),
-                    // Saat add mode: tampilkan subtotal item baru saja (bukan total+pajak)
+                    // In add mode: show only the new items' subtotal (not total+tax)
                     child: Text(
                       isAddMode
-                          ? '${_formatPrice(cart.subtotal)} (item baru)'
+                          ? '${_formatPrice(cart.subtotal)} (new items)'
                           : _formatPrice(cart.totalAmount),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onPrimary, fontWeight: FontWeight.bold))),

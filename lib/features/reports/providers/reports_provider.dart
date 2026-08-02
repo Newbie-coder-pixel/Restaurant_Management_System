@@ -14,7 +14,7 @@ import '../../costing/providers/costing_providers.dart';
 enum ReportPeriod { week, month }
 
 extension ReportPeriodExt on ReportPeriod {
-  String get label => this == ReportPeriod.week ? 'Minggu Ini' : 'Bulan Ini';
+  String get label => this == ReportPeriod.week ? 'This Week' : 'This Month';
   int get days => this == ReportPeriod.week ? 7 : 30;
 }
 
@@ -29,7 +29,7 @@ class ReportsState {
   final List<FlSpot> revenueSpots;
   final List<OrderModel> recentOrders;
   final List<Map<String, dynamic>> topMenus;
-  final List<String> topMenuCategories; // daftar unik kategori untuk filter
+  final List<String> topMenuCategories; // unique list of categories for filtering
   final List<Map<String, dynamic>> menuMargins;
   final List<Map<String, dynamic>> branchRevenue;
   final List<Map<String, dynamic>> branches;
@@ -123,7 +123,7 @@ Future<void> init() async {
 
   final staff = _ref.read(currentStaffProvider);
   if (staff == null) {
-    // Staff belum ready, coba lagi setelah delay singkat
+    // Staff not ready yet, retry after a short delay
     await Future.delayed(const Duration(milliseconds: 300));
     final retryStaff = _ref.read(currentStaffProvider);
     if (retryStaff == null) return;
@@ -133,9 +133,9 @@ Future<void> init() async {
       branchId: retryStaff.role == StaffRole.superadmin ? null : retryStaff.branchId,
     );
   } else {
-    // Guard sisi provider — laporan/analitik hanya untuk manager & superadmin.
-    // Router sudah membatasi navigasi ke /reports, tapi provider ini dijaga
-    // ulang di sini supaya tidak bergantung 100% pada satu titik enforcement.
+    // Provider-side guard — reports/analytics are only for manager & superadmin.
+    // The router already restricts navigation to /reports, but this provider
+    // re-enforces it here so it doesn't depend 100% on a single enforcement point.
     if (!_canViewReports(staff.role)) return;
     _state = _state.copyWith(
       isSuperAdmin: staff.role == StaffRole.superadmin,
@@ -211,20 +211,20 @@ Future<void> init() async {
       final t = today.add(const Duration(days: 1));
       return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
     }();
-    // PENTING: DateTime(y,m,d) di sini adalah waktu LOKAL (WIB). Sebelumnya
-    // langsung dipanggil .toIso8601String() tanpa .toUtc() dulu, hasilnya
-    // string TANPA offset/'Z' (mis. "2026-08-02T00:00:00.000") — Postgres
-    // membaca string tanpa offset itu sebagai UTC, bukan WIB, jadi window
-    // "hari ini" bergeser ±7 jam dari tengah malam WIB sebenarnya. Fix:
-    // konversi ke UTC dulu supaya instant yang dikirim ke DB akurat.
+    // IMPORTANT: DateTime(y,m,d) here is LOCAL time (WIB). Previously
+    // .toIso8601String() was called directly without .toUtc() first, which
+    // produced a string WITHOUT an offset/'Z' (e.g. "2026-08-02T00:00:00.000")
+    // — Postgres reads a string without an offset as UTC, not WIB, so the
+    // "today" window shifted ±7 hours from actual WIB midnight. Fix: convert
+    // to UTC first so the instant sent to the DB is accurate.
     final todayStart =
         DateTime(today.year, today.month, today.day).toUtc().toIso8601String();
     final tomorrowStart = DateTime(today.year, today.month, today.day + 1)
         .toUtc()
         .toIso8601String();
 
-    // Hitung range berdasarkan periode yang dipilih
-    final periodDays = _state.period.days; // 7 atau 30
+    // Calculate the range based on the selected period
+    final periodDays = _state.period.days; // 7 or 30
     final periodStartDate = today.subtract(Duration(days: periodDays - 1));
     final periodStartIso = DateTime(
             periodStartDate.year, periodStartDate.month, periodStartDate.day)
@@ -242,7 +242,7 @@ Future<void> init() async {
       if (effectiveBranchId != null) ordQ = ordQ.eq('branch_id', effectiveBranchId);
       final ordRes = await ordQ;
 
-      // ── Revenue dari payments ──────────────────────────────────
+      // ── Revenue from payments ──────────────────────────────────
       var payQ = Supabase.instance.client
           .from('payments')
           .select('amount, created_at')
@@ -253,9 +253,9 @@ Future<void> init() async {
       final payRes = await payQ;
 
       // ── Today bookings ─────────────────────────────────────────
-      // Exclude cancelled/no-show — sebelumnya tidak difilter status sama
-      // sekali, jadi booking yang batal/tidak datang ikut menggembungkan
-      // angka "Booking Hari Ini".
+      // Exclude cancelled/no-show — previously the status wasn't filtered at
+      // all, so cancelled/no-show bookings were inflating the "Bookings Today"
+      // number.
       var bookQ = Supabase.instance.client
           .from('bookings')
           .select('id')
@@ -265,7 +265,7 @@ Future<void> init() async {
       if (effectiveBranchId != null) bookQ = bookQ.eq('branch_id', effectiveBranchId);
       final bookRes = await bookQ;
 
-      // ── Revenue chart (periode dipilih) ────────────────────────
+      // ── Revenue chart (selected period) ─────────────────────────
       var weekQ = Supabase.instance.client
           .from('payments')
           .select('amount, created_at')
@@ -284,7 +284,7 @@ Future<void> init() async {
       final recentRes =
           await recentQ.order('created_at', ascending: false).limit(20);
 
-      // ── COGS dari inventory_transactions ───────────────────────
+      // ── COGS from inventory_transactions ────────────────────────
       double todayCogs = 0;
       try {
         var cogsQ = Supabase.instance.client
@@ -303,14 +303,14 @@ Future<void> init() async {
           todayCogs += qty * cost;
         }
       } catch (e) {
-        debugPrint('⚠️ Gagal fetch COGS: $e');
+        debugPrint('⚠️ Failed to fetch COGS: $e');
       }
 
       // ── Top Menu ───────────────────────────────────────────────
       List<Map<String, dynamic>> topMenus = [];
       List<String> topMenuCategories = [];
       try {
-        // Join ke menu_items → menu_categories supaya dapat nama kategori
+        // Join to menu_items → menu_categories to get the category name
         var topMenuQ = Supabase.instance.client
             .from('order_items')
             .select(
@@ -331,10 +331,10 @@ Future<void> init() async {
           final qty = (row['quantity'] as num?)?.toInt() ?? 0;
           final rev = (row['subtotal'] as num?)?.toDouble() ?? 0;
 
-          // Ambil nama kategori dari join (nullable karena item lama mungkin null)
+          // Get the category name from the join (nullable since older items may be null)
           final menuItem = row['menu_items'] as Map<String, dynamic>?;
           final menuCat = menuItem?['menu_categories'] as Map<String, dynamic>?;
-          final categoryName = menuCat?['name'] as String? ?? 'Lainnya';
+          final categoryName = menuCat?['name'] as String? ?? 'Other';
 
           if (!agg.containsKey(name)) {
             agg[name] = {
@@ -350,26 +350,27 @@ Future<void> init() async {
 
         topMenus = agg.values.toList()
           ..sort((a, b) => (b['qty'] as int).compareTo(a['qty'] as int));
-        // TIDAK dipotong top-20 di sini — UI (_TopMenuSection._filtered) yang
-        // men-take(10) SETELAH filter kategori diterapkan. Sebelumnya list ini
-        // dipotong top-20 dulu sebelum kategori dikumpulkan/difilter, jadi
-        // kategori yang best-seller-nya di luar top-20 global (mis. menu
-        // "Minuman" di resto yang didominasi makanan) terlihat kosong padahal
-        // datanya ada, cuma belum sampai ke daftar ini.
+        // NOT truncated to top-20 here — the UI (_TopMenuSection._filtered)
+        // takes(10) AFTER the category filter is applied. Previously this
+        // list was truncated to top-20 before categories were collected/
+        // filtered, so a category whose best-seller fell outside the global
+        // top-20 (e.g. "Beverages" at a food-dominated restaurant) appeared
+        // empty even though the data existed — it just hadn't made it into
+        // this list.
 
-        // Kumpulkan daftar kategori unik (urut abjad, 'Semua' di depan)
+        // Collect the list of unique categories (alphabetical, 'All' first)
         final catSet = topMenus.map((m) => m['category'] as String).toSet();
-        topMenuCategories = ['Semua', ...catSet.toList()..sort()];
+        topMenuCategories = ['All', ...catSet.toList()..sort()];
       } catch (e) {
-        debugPrint('⚠️ Gagal fetch top menus: $e');
+        debugPrint('⚠️ Failed to fetch top menus: $e');
       }
 
-      // ── Menu Margins dari costingProvider ──────────────────────
-      // Tidak query ulang — pakai data yang sudah ada di costingProvider
+      // ── Menu Margins from costingProvider ───────────────────────
+      // No re-querying — use the data already in costingProvider
       List<Map<String, dynamic>> menuMargins = [];
       try {
         final costingNotifier = _ref.read(costingProvider);
-        // Load dulu kalau belum ada datanya
+        // Load first if there's no data yet
         if (costingNotifier.costings.isEmpty) {
           await costingNotifier.loadAll();
         }
@@ -386,16 +387,16 @@ Future<void> init() async {
           };
         }).toList();
 
-        // Sort by margin descending (tertinggi dulu)
+        // Sort by margin descending (highest first)
         menuMargins.sort(
           (a, b) =>
               (b['margin'] as double).compareTo(a['margin'] as double),
         );
       } catch (e) {
-        debugPrint('⚠️ Gagal fetch menu margins dari costingProvider: $e');
+        debugPrint('⚠️ Failed to fetch menu margins from costingProvider: $e');
       }
 
-      // ── Revenue per Cabang (superadmin only) ───────────────────
+      // ── Revenue per Branch (superadmin only) ────────────────────
       List<Map<String, dynamic>> branchRevenue = [];
       if (_state.isSuperAdmin && _state.branches.isNotEmpty) {
         try {
@@ -425,11 +426,11 @@ Future<void> init() async {
             ..sort((a, b) =>
                 (b['revenue'] as double).compareTo(a['revenue'] as double));
         } catch (e) {
-          debugPrint('⚠️ Gagal fetch branch revenue: $e');
+          debugPrint('⚠️ Failed to fetch branch revenue: $e');
         }
       }
 
-      // ── Process revenue chart (dinamis sesuai periode) ────────
+      // ── Process revenue chart (dynamic per period) ─────────────
       final Map<int, double> dayRevenue = {
         for (int i = 0; i < periodDays; i++) i: 0.0,
       };

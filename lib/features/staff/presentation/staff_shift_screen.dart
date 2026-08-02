@@ -4,11 +4,11 @@ import '../../../shared/models/staff_model.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../core/theme/app_theme.dart';
 
-// Model lokal untuk shift
+// Local model for a shift
 class StaffShift {
   final String? id;
   final String staffId;
-  final int dayOfWeek; // 0=Senin ... 6=Minggu
+  final int dayOfWeek; // 0=Monday ... 6=Sunday
   final String startTime; // format "HH:mm"
   final String endTime;
 
@@ -35,7 +35,7 @@ class StaffShift {
         'end_time': endTime,
       };
 
-  // durasi shift dalam jam (untuk display)
+  // shift duration in hours (for display)
   double get durationHours {
     final s = startTime.split(':');
     final e = endTime.split(':');
@@ -56,17 +56,17 @@ class StaffShiftScreen extends StatefulWidget {
 
 class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerProviderStateMixin {
   static const _days = [
-    'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
   ];
-  static const _dayShort = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+  static const _dayShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  // Preset shift umum untuk restoran
+  // Common shift presets for restaurants
   static const _presets = [
-    {'label': '🌅 Pagi',  'start': '07:00', 'end': '15:00', 'icon': Icons.wb_sunny},
-    {'label': '☀️ Siang', 'start': '11:00', 'end': '19:00', 'icon': Icons.sunny},
-    {'label': '🌤️ Sore',  'start': '15:00', 'end': '23:00', 'icon': Icons.brightness_5},
-    {'label': '🌙 Malam', 'start': '18:00', 'end': '02:00', 'icon': Icons.nightlight_round},
-    {'label': '⭐ Full',  'start': '09:00', 'end': '21:00', 'icon': Icons.star},
+    {'label': '🌅 Morning',   'start': '07:00', 'end': '15:00', 'icon': Icons.wb_sunny},
+    {'label': '☀️ Midday',    'start': '11:00', 'end': '19:00', 'icon': Icons.sunny},
+    {'label': '🌤️ Afternoon', 'start': '15:00', 'end': '23:00', 'icon': Icons.brightness_5},
+    {'label': '🌙 Night',     'start': '18:00', 'end': '02:00', 'icon': Icons.nightlight_round},
+    {'label': '⭐ Full',      'start': '09:00', 'end': '21:00', 'icon': Icons.star},
   ];
 
   // shifts[dayIndex] = list of StaffShift
@@ -116,7 +116,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat shift: $e'), backgroundColor: Colors.red));
+          SnackBar(content: Text('Failed to load shifts: $e'), backgroundColor: Colors.red));
       }
     }
   }
@@ -126,9 +126,9 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
     return int.parse(parts[0]) * 60 + int.parse(parts[1]);
   }
 
-  // Cek apakah dua shift bertabrakan, termasuk shift overnight (mis. 22:00–02:00).
-  // Shift overnight (end < start) di-normalkan ke end + 1440, lalu dicek overlap
-  // dalam tiga skenario: langsung, shift2 geser mundur, shift1 geser mundur.
+  // Check whether two shifts overlap, including overnight shifts (e.g. 22:00–02:00).
+  // Overnight shifts (end < start) are normalized to end + 1440, then overlap is checked
+  // across three scenarios: direct, shift2 shifted back, shift1 shifted back.
   bool _isOverlapping(String start1, String end1, String start2, String end2) {
     final s1 = _toMinutes(start1);
     var e1 = _toMinutes(end1);
@@ -167,7 +167,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text('Tambah Shift — ${_days[day]}',
+                child: Text('Add Shift — ${_days[day]}',
                     style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
               ),
             ],
@@ -181,7 +181,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
               ),
               child: Column(
                 children: [
-                  const Text('⚡ Preset Cepat',
+                  const Text('⚡ Quick Presets',
                       style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey)),
                   const SizedBox(height: 12),
                   Wrap(
@@ -214,13 +214,13 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                   const SizedBox(height: 12),
                   Row(children: [
                     Expanded(child: _TimePickerTile(
-                      label: 'Mulai',
+                      label: 'Start',
                       value: startTime,
                       onChanged: (v) => ss(() => startTime = v),
                     )),
                     const SizedBox(width: 16),
                     Expanded(child: _TimePickerTile(
-                      label: 'Selesai',
+                      label: 'End',
                       value: endTime,
                       onChanged: (v) => ss(() => endTime = v),
                     )),
@@ -253,7 +253,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
+                child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins'))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
@@ -262,7 +262,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () {
                 if (startTime == endTime) {
-                  ss(() => errorMsg = 'Jam mulai dan selesai tidak boleh sama.');
+                  ss(() => errorMsg = 'Start and end time cannot be the same.');
                   return;
                 }
                 final existing = _shifts[day] ?? [];
@@ -271,7 +271,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                 if (overlapping.isNotEmpty) {
                   final conflict = overlapping.first;
                   ss(() => errorMsg =
-                      'Bertabrakan dengan shift ${conflict.startTime}–${conflict.endTime}.');
+                      'Conflicts with shift ${conflict.startTime}–${conflict.endTime}.');
                   return;
                 }
                 Navigator.pop(ctx);
@@ -285,7 +285,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                   _dirtyDays.add(day);
                 });
               },
-              child: const Text('Tambah', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              child: const Text('Add', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -304,7 +304,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
   Future<void> _saveAll() async {
     if (_dirtyDays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Tidak ada perubahan untuk disimpan.'),
+          content: Text('No changes to save.'),
           backgroundColor: Colors.grey));
       return;
     }
@@ -348,7 +348,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
               children: [
                 const Icon(Icons.check_circle, color: Colors.white, size: 20),
                 const SizedBox(width: 12),
-                Expanded(child: Text('✅ Jadwal shift berhasil disimpan (${savedDays.length} hari diperbarui)')),
+                Expanded(child: Text('✅ Shift schedule saved successfully (${savedDays.length} day(s) updated)')),
               ],
             ),
             backgroundColor: const Color(0xFF4CAF50),
@@ -356,18 +356,18 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
       } else if (savedDays.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('❌ Gagal menyimpan semua perubahan. Cek koneksi dan coba lagi.'),
+            content: Text('❌ Failed to save all changes. Check your connection and try again.'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 4)));
       } else {
         const dayNames = [
-          'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
+          'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
         ];
         final failedNames = failedDays.map((d) => dayNames[d]).join(', ');
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
-                '⚠️ ${savedDays.length} hari berhasil disimpan.\n'
-                'Gagal: $failedNames — coba simpan ulang.'),
+                '⚠️ ${savedDays.length} day(s) saved successfully.\n'
+                'Failed: $failedNames — please try saving again.'),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 5)));
       }
@@ -383,7 +383,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
 
     if (sourceDays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Belum ada hari lain yang punya jadwal shift.'),
+          content: Text('No other days have a shift schedule yet.'),
           backgroundColor: Colors.orange));
       return;
     }
@@ -403,7 +403,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
               child: const Icon(Icons.copy, color: AppColors.primary, size: 24),
             ),
             const SizedBox(width: 12),
-            const Text('Copy dari hari...',
+            const Text('Copy from day...',
                 style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
           ],
         ),
@@ -453,7 +453,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
     if (nonOverlapping.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Semua shift dari hari itu bertabrakan dengan shift yang sudah ada.'),
+            content: Text('All shifts from that day conflict with existing shifts.'),
             backgroundColor: Colors.orange));
       }
       return;
@@ -471,7 +471,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
 
     if (mounted && skipped > 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('$skipped shift dilewati karena bertabrakan dengan jadwal yang ada.'),
+          content: Text('$skipped shift(s) skipped due to conflicts with the existing schedule.'),
           backgroundColor: Colors.orange));
     }
   }
@@ -507,7 +507,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
       backgroundColor: AppColors.background,
       appBar: AppBar(
         elevation: 0,
-        title: Text('Jadwal Shift — ${widget.staff.fullName}',
+        title: Text('Shift Schedule — ${widget.staff.fullName}',
             style: const TextStyle(
                 fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w700)),
         backgroundColor: AppColors.primary,
@@ -550,7 +550,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                   child: ElevatedButton.icon(
                     onPressed: _saveAll,
                     icon: const Icon(Icons.save_outlined, color: AppColors.primary, size: 18),
-                    label: const Text('Simpan',
+                    label: const Text('Save',
                         style: TextStyle(
                             color: AppColors.primary, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
@@ -639,7 +639,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                             style: const TextStyle(
                                 fontFamily: 'Poppins', fontSize: 18,
                                 fontWeight: FontWeight.w700, color: AppColors.primary)),
-                        const Text('Hari aktif',
+                        const Text('Active days',
                             style: TextStyle(
                                 fontFamily: 'Poppins', fontSize: 10,
                                 color: AppColors.textSecondary)),
@@ -648,7 +648,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                             style: const TextStyle(
                                 fontFamily: 'Poppins', fontSize: 18,
                                 fontWeight: FontWeight.w700, color: AppColors.primary)),
-                        const Text('Total jam',
+                        const Text('Total hours',
                             style: TextStyle(
                                 fontFamily: 'Poppins', fontSize: 10,
                                 color: AppColors.textSecondary)),
@@ -687,7 +687,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 12),
                             child: Row(children: [
-                              // hari badge
+                              // day badge
                               Container(
                                 width: 50, height: 50,
                                 decoration: BoxDecoration(
@@ -747,7 +747,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                                     if (dayShifts.isNotEmpty)
                                       Text(
                                         '${dayShifts.length} shift · '
-                                        '${dayShifts.fold(0.0, (s, sh) => s + sh.durationHours).toStringAsFixed(1)} jam',
+                                        '${dayShifts.fold(0.0, (s, sh) => s + sh.durationHours).toStringAsFixed(1)} hrs',
                                         style: const TextStyle(
                                             fontFamily: 'Poppins',
                                             fontSize: 11,
@@ -760,7 +760,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                                           color: Colors.grey.shade100,
                                           borderRadius: BorderRadius.circular(4),
                                         ),
-                                        child: const Text('Libur',
+                                        child: const Text('Day Off',
                                             style: TextStyle(
                                                 fontFamily: 'Poppins',
                                                 fontSize: 10,
@@ -774,7 +774,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                                 Container(
                                   margin: const EdgeInsets.only(right: 4),
                                   child: const Icon(Icons.fiber_manual_record, size: 10, color: Colors.orange)),
-                              // copy dari hari lain
+                              // copy from another day
                               Container(
                                 decoration: BoxDecoration(
                                   color: Colors.grey.shade100,
@@ -783,12 +783,12 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                                 child: IconButton(
                                   icon: const Icon(Icons.copy_outlined,
                                       size: 18, color: AppColors.textSecondary),
-                                  tooltip: 'Copy dari hari lain',
+                                  tooltip: 'Copy from another day',
                                   onPressed: () => _copyFromDayDialog(day),
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              // tambah shift
+                              // add shift
                               Container(
                                 decoration: BoxDecoration(
                                   color: dayShifts.isNotEmpty ? AppColors.primary.withValues(alpha: 0.1) : Colors.grey.shade100,
@@ -800,7 +800,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                                       color: dayShifts.isNotEmpty
                                           ? AppColors.primary
                                           : Colors.grey),
-                                  tooltip: 'Tambah shift',
+                                  tooltip: 'Add shift',
                                   onPressed: () => _addShiftDialog(day),
                                 ),
                               ),

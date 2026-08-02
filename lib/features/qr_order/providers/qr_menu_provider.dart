@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/qr_order_repository.dart';
-// MenuItem sudah didefinisikan di qr_cart_provider — re-export dari sini
-// supaya file lain cukup import qr_menu_provider saja jika perlu.
+// MenuItem is already defined in qr_cart_provider — re-exported here
+// so other files can simply import qr_menu_provider if needed.
 export 'qr_cart_provider.dart' show MenuItem;
 
-// ─── State class untuk menu ───────────────────────────────────────────────────
+// ─── State class for the menu ───────────────────────────────────────────────────
 
 class QrMenuState {
   final List<Map<String, dynamic>> rawItems;
@@ -43,7 +43,7 @@ class QrMenuNotifier extends StateNotifier<QrMenuState> {
   Future<void> loadMenu(String branchId) async {
     if (branchId.isEmpty) {
       state = state.copyWith(
-        error: 'Branch ID tidak valid',
+        error: 'Invalid Branch ID',
         isLoading: false,
       );
       return;

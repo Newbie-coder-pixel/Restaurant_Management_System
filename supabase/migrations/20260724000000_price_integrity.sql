@@ -1,36 +1,37 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Price integrity patch — diterapkan ke production 2026-07-24
+-- Price integrity patch — applied to production 2026-07-24
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- Lanjutan dari 20260723000000_rls_policies_applied.sql. Menutup temuan
--- kritis yang belum disentuh di patch sebelumnya: harga order (QR order dan
--- jalur lain) dihitung di Flutter dan dipercaya mentah-mentah saat insert ke
--- `orders`/`order_items`, tanpa validasi ke harga menu asli di server.
+-- Follow-up to 20260723000000_rls_policies_applied.sql. Closes a critical
+-- finding not touched by the previous patch: order prices (QR orders and
+-- other paths) are computed in Flutter and trusted as-is on insert into
+-- `orders`/`order_items`, with no server-side validation against the real
+-- menu prices.
 --
--- Root cause yang dikonfirmasi lewat baca kode (qr_order_repository.dart) +
--- test langsung ke REST API pakai anon key:
---   • order_items.unit_price diambil dari objek menu di sisi Flutter, BUKAN
---     di-lookup ulang ke menu_items.price di server.
---   • orders.subtotal/tax_amount/total_amount juga dihitung di Flutter saat
---     INSERT awal (sebelum order_items ada), jadi tidak ada apa pun di server
---     yang mencocokkan totalnya ke isi keranjang sebenarnya.
---   • midtrans-create-token (Edge Function, tidak ada di repo sebelumnya,
---     di-download dari project untuk pertama kali di patch ini) fetch
---     order.total_amount dari DB tapi TIDAK PERNAH memakainya untuk
---     memvalidasi `gross_amount` yang dikirim client — gross_amount client
---     dipakai mentah-mentah untuk membuat transaksi Midtrans.
+-- Root cause confirmed by reading the code (qr_order_repository.dart) + live
+-- testing against the REST API with the anon key:
+--   • order_items.unit_price is taken from the menu object on the Flutter
+--     side, NOT re-looked-up against menu_items.price on the server.
+--   • orders.subtotal/tax_amount/total_amount are also computed in Flutter
+--     during the initial INSERT (before order_items exist), so nothing on
+--     the server ever matches the total to what's actually in the cart.
+--   • midtrans-create-token (Edge Function, not previously in the repo,
+--     downloaded from the project for the first time as part of this patch)
+--     fetches order.total_amount from the DB but NEVER used it to validate
+--     the client-sent `gross_amount` — the client's gross_amount was used
+--     as-is to create the Midtrans transaction.
 --
--- Semua fix di bawah sudah dites langsung: insert order dengan total_amount
--- dipalsukan Rp1 lalu order_items dengan unit_price Rp1 → DITOLAK dengan
--- error jelas ("total_amount tidak boleh lebih kecil dari subtotal..").
--- Insert order dengan total yang benar (formula QR: subtotal + 3% service
--- charge + 10% PB1) → tetap berhasil normal, tidak ada regresi.
+-- All fixes below have been tested live: inserting an order with a forged
+-- total_amount of Rp1, then order_items with a unit_price of Rp1 → REJECTED
+-- with a clear error ("total_amount tidak boleh lebih kecil dari subtotal..").
+-- Inserting an order with the correct total (QR formula: subtotal + 3%
+-- service charge + 10% PB1) → still succeeds normally, no regression.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ── 1. order_items: paksa unit_price = harga asli menu_items ────────────────
--- subtotal adalah GENERATED ALWAYS (unit_price * quantity) — begitu unit_price
--- benar, subtotal otomatis ikut benar, tidak bisa dimanipulasi client sama
--- sekali (Postgres menolak insert value ke generated column).
+-- ── 1. order_items: force unit_price = the real menu_items price ───────────
+-- subtotal is GENERATED ALWAYS (unit_price * quantity) — once unit_price is
+-- correct, subtotal is automatically correct too and cannot be manipulated by
+-- the client at all (Postgres rejects inserting a value into a generated column).
 create or replace function public.enforce_order_item_true_price()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
@@ -49,14 +50,13 @@ create trigger trg_enforce_order_item_true_price
 before insert or update on public.order_items
 for each row execute function public.enforce_order_item_true_price();
 
--- ── 2. Setiap order_items berubah → recompute orders.subtotal dari SUM ──────
--- item asli (yang sekarang sudah pasti benar berkat trigger #1).
--- set_config('app.trusted_recompute', ...) menandai UPDATE ini sebagai update
--- terpercaya dari sistem, supaya tidak diblokir oleh trigger
--- enforce_anon_order_update_only_bill (lihat migration sebelumnya) yang
--- membatasi anon cuma boleh ubah kolom bill_requested — tanpa flag ini,
--- update subtotal otomatis akan ikut diblokir untuk order QR yang JUJUR
--- sekalipun, bukan cuma yang dipalsukan.
+-- ── 2. Whenever order_items change → recompute orders.subtotal from the SUM ─
+-- of the real items (which is now guaranteed correct thanks to trigger #1).
+-- set_config('app.trusted_recompute', ...) marks this UPDATE as a trusted
+-- system update, so it isn't blocked by the enforce_anon_order_update_only_bill
+-- trigger (see previous migration) which restricts anon to only changing the
+-- bill_requested column — without this flag, the automatic subtotal update
+-- would get blocked even for HONEST QR orders, not just forged ones.
 create or replace function public.recompute_order_subtotal()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare
@@ -78,7 +78,7 @@ create trigger trg_recompute_order_subtotal
 after insert or update or delete on public.order_items
 for each row execute function public.recompute_order_subtotal();
 
--- Update trigger anon supaya mengizinkan update trusted-recompute di atas.
+-- Update the anon trigger to allow the trusted-recompute update above.
 create or replace function public.enforce_anon_order_update_only_bill()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
@@ -98,15 +98,15 @@ begin
 end;
 $$;
 
--- ── 3. Sanity bound: total_amount tidak boleh < subtotal - diskon ───────────
--- Tidak mencoba mereplikasi formula pajak/service-charge persis (ada minimal
--- 2 formula berbeda antar jalur order — lihat qr_cart_provider.dart vs
--- customer/providers/cart_provider.dart — jadi trigger universal yang
--- menghitung ulang total_amount penuh berisiko salah formula untuk salah satu
--- jalur dan merusak order yang sah). Sebagai gantinya cukup pastikan
--- total_amount tidak pernah lebih kecil dari subtotal (yang sekarang sudah
--- pasti jujur) dikurangi diskon — pajak/service charge/biaya overtime semua
--- SIFATNYA NAMBAH, jadi invariant ini aman untuk semua jenis order.
+-- ── 3. Sanity bound: total_amount must not be < subtotal - discount ────────
+-- This doesn't try to replicate the exact tax/service-charge formula (there
+-- are at least 2 different formulas across order paths — see
+-- qr_cart_provider.dart vs customer/providers/cart_provider.dart — so a
+-- universal trigger that fully recomputes total_amount risks using the wrong
+-- formula for one of the paths and breaking legitimate orders). Instead, it's
+-- enough to ensure total_amount is never smaller than the subtotal (now
+-- guaranteed honest) minus the discount — tax/service charge/overtime fees
+-- are all ADDITIVE, so this invariant is safe for every order type.
 create or replace function public.enforce_order_total_sanity()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
@@ -125,35 +125,35 @@ create trigger trg_enforce_order_total_sanity
 before insert or update on public.orders
 for each row execute function public.enforce_order_total_sanity();
 
--- ── 4. Fix bug pra-existing (tidak berkaitan dengan audit ini): order_type ──
--- 'qr_order' tidak pernah ada di daftar order_type yang diizinkan RLS insert
--- untuk anon, jadi QR order sungguhan kemungkinan gagal di production
--- sebelum patch ini (ditemukan tidak sengaja saat menguji trigger di atas).
+-- ── 4. Fix a pre-existing bug (unrelated to this audit): order_type ────────
+-- 'qr_order' was never in the list of order_types RLS allowed anon to insert,
+-- so real QR orders were likely failing in production before this patch
+-- (found by accident while testing the trigger above).
 drop policy if exists anon_insert_app_orders on public.orders;
 create policy anon_insert_app_orders on public.orders
   for insert to anon
   with check (order_type = any (array['app_order', 'takeaway', 'walk_in', 'qr_order']));
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- Edge Functions yang ikut diperbaiki di patch yang sama (lihat file masing-
--- masing di supabase/functions/ — didownload dari project untuk pertama kali
--- karena sebelumnya tidak ada di repo sama sekali):
+-- Edge Functions also fixed in this same patch (see the respective files in
+-- supabase/functions/ — downloaded from the project for the first time here
+-- because they weren't previously in the repo at all):
 --
---   • midtrans-create-token/index.ts — sebelumnya fetch order.total_amount
---     dari DB tapi tidak pernah memakainya untuk validasi; sekarang menolak
---     (400) kalau gross_amount yang dikirim client tidak cocok dengan
---     total_amount asli di DB (toleransi Rp1 pembulatan). CORS juga dibatasi
---     lewat ALLOWED_ORIGINS (sebelumnya "*").
+--   • midtrans-create-token/index.ts — previously fetched order.total_amount
+--     from the DB but never used it for validation; now rejects (400) if the
+--     client-sent `gross_amount` doesn't match the real total_amount in the
+--     DB (Rp1 rounding tolerance). CORS is also restricted via
+--     ALLOWED_ORIGINS (previously "*").
 --
---   • create-staff-user/index.ts — sebelumnya SAMA SEKALI TIDAK memverifikasi
---     siapa pemanggilnya; role & branchId dari body dipercaya mentah-mentah,
---     jadi staff role apa pun bisa membuat akun superadmin baru. Sekarang:
---       - wajib ada Authorization header dengan sesi user yang valid
---         (diverifikasi via supabaseAdmin.auth.getUser)
---       - caller wajib staff aktif dengan role superadmin/manager
---       - manager tidak boleh membuat akun role superadmin
---       - manager cuma boleh membuat staff di branch_id miliknya sendiri
---     Sudah dites: request tanpa Authorization header → 401; request dengan
---     anon key sebagai Bearer token (bukan sesi user asli) → ditolak juga.
---     CORS dibatasi lewat ALLOWED_ORIGINS.
+--   • create-staff-user/index.ts — previously did NOT verify the caller AT
+--     ALL; role & branchId from the request body were trusted as-is, so any
+--     staff role could create a new superadmin account. Now:
+--       - a valid Authorization header with a real user session is required
+--         (verified via supabaseAdmin.auth.getUser)
+--       - the caller must be an active staff member with role superadmin/manager
+--       - a manager may not create a superadmin account
+--       - a manager may only create staff within their own branch_id
+--     Tested: a request with no Authorization header → 401; a request using
+--     the anon key as a Bearer token (not a real user session) → also rejected.
+--     CORS is restricted via ALLOWED_ORIGINS.
 -- ═══════════════════════════════════════════════════════════════════════════

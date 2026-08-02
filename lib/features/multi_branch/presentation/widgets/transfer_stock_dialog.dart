@@ -66,26 +66,26 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
   }
 
   Future<void> _submit() async {
-    // Validasi
+    // Validation
     if (_selectedItem == null) {
-      setState(() => _errorMsg = 'Pilih item yang akan ditransfer.');
+      setState(() => _errorMsg = 'Select the item to transfer.');
       return;
     }
     if (_selectedBranch == null) {
-      setState(() => _errorMsg = 'Pilih cabang tujuan.');
+      setState(() => _errorMsg = 'Select the destination branch.');
       return;
     }
     final qty = double.tryParse(_qtyCtrl.text.trim());
     if (qty == null || qty <= 0) {
-      setState(() => _errorMsg = 'Masukkan jumlah yang valid.');
+      setState(() => _errorMsg = 'Enter a valid quantity.');
       return;
     }
 
-    // Cek stok tersedia
+    // Check available stock
     final availableStock = (_selectedItem!['current_stock'] as num?)?.toDouble() ?? 0.0;
     if (qty > availableStock) {
       setState(() => _errorMsg =
-          'Jumlah melebihi stok tersedia (${availableStock.toStringAsFixed(1)} ${_selectedItem!['unit'] ?? ''}).');
+          'Quantity exceeds available stock (${availableStock.toStringAsFixed(1)} ${_selectedItem!['unit'] ?? ''}).');
       return;
     }
 
@@ -100,13 +100,13 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
         requestedBy:  widget.requestedBy,
       );
       if (mounted) {
-        Navigator.pop(context, true); // true = berhasil
+        Navigator.pop(context, true); // true = success
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isSubmitting = false;
-          _errorMsg = 'Gagal mengirim request: $e';
+          _errorMsg = 'Failed to send request: $e';
         });
       }
     }
@@ -129,7 +129,7 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
         ),
         const SizedBox(width: 10),
         const Expanded(
-          child: Text('Request Transfer Stok',
+          child: Text('Request Stock Transfer',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
         ),
       ]),
@@ -146,7 +146,7 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
-                    // ── Info cabang asal ──────────────────────────
+                    // ── Source branch info ─────────────────────────
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
@@ -157,7 +157,7 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
                       child: Row(children: [
                         const Icon(Icons.store, size: 16, color: AppColors.primary),
                         const SizedBox(width: 8),
-                        const Text('Dari: ',
+                        const Text('From: ',
                           style: TextStyle(
                             fontFamily: 'Poppins', fontSize: 12,
                             color: AppColors.textSecondary)),
@@ -169,18 +169,18 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Pilih Item ────────────────────────────────
-                    const Text('Item yang Ditransfer *',
+                    // ── Select Item ───────────────────────────────
+                    const Text('Item to Transfer *',
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 12,
                         fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     _items.isEmpty
-                        ? _emptyHint('Belum ada item inventory hari ini.')
+                        ? _emptyHint('No inventory items yet today.')
                         : DropdownButtonFormField<Map<String, dynamic>>(
                             initialValue: _selectedItem,
                             isExpanded: true,
-                            decoration: _inputDecoration('Pilih item...', Icons.inventory_2_outlined),
+                            decoration: _inputDecoration('Select item...', Icons.inventory_2_outlined),
                             items: _items.map((item) {
                               final stock = (item['current_stock'] as num?)?.toDouble() ?? 0.0;
                               return DropdownMenuItem(
@@ -207,18 +207,18 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
                           ),
                     const SizedBox(height: 14),
 
-                    // ── Pilih Branch Tujuan ───────────────────────
-                    const Text('Cabang Tujuan *',
+                    // ── Select Destination Branch ─────────────────
+                    const Text('Destination Branch *',
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 12,
                         fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     _branches.isEmpty
-                        ? _emptyHint('Tidak ada cabang lain yang aktif.')
+                        ? _emptyHint('No other active branches.')
                         : DropdownButtonFormField<Map<String, dynamic>>(
                             initialValue: _selectedBranch,
                             isExpanded: true,
-                            decoration: _inputDecoration('Pilih cabang tujuan...', Icons.store_outlined),
+                            decoration: _inputDecoration('Select destination branch...', Icons.store_outlined),
                             items: _branches.map((b) => DropdownMenuItem(
                               value: b,
                               child: Text(b['name'] ?? '',
@@ -232,8 +232,8 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
                           ),
                     const SizedBox(height: 14),
 
-                    // ── Jumlah ────────────────────────────────────
-                    const Text('Jumlah *',
+                    // ── Quantity ──────────────────────────────────
+                    const Text('Quantity *',
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 12,
                         fontWeight: FontWeight.w600)),
@@ -241,7 +241,7 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
                     TextField(
                       controller: _qtyCtrl,
                       decoration: _inputDecoration(
-                        'Masukkan jumlah...',
+                        'Enter quantity...',
                         Icons.numbers,
                         suffix: _selectedItem != null
                             ? Text(_selectedItem!['unit'] ?? '',
@@ -257,14 +257,14 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
                       onChanged: (_) => setState(() => _errorMsg = null),
                     ),
 
-                    // ── Info stok tersedia ────────────────────────
+                    // ── Available stock info ──────────────────────
                     if (_selectedItem != null) ...[
                       const SizedBox(height: 6),
                       Row(children: [
                         const Icon(Icons.info_outline, size: 13, color: AppColors.textHint),
                         const SizedBox(width: 4),
                         Text(
-                          'Stok tersedia: ${((_selectedItem!['current_stock'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)} ${_selectedItem!['unit'] ?? ''}',
+                          'Available stock: ${((_selectedItem!['current_stock'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)} ${_selectedItem!['unit'] ?? ''}',
                           style: const TextStyle(
                             fontFamily: 'Poppins', fontSize: 11,
                             color: AppColors.textHint)),
@@ -299,7 +299,7 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
       actions: [
         TextButton(
           onPressed: _isSubmitting ? null : () => Navigator.pop(context),
-          child: const Text('Batal',
+          child: const Text('Cancel',
             style: TextStyle(fontFamily: 'Poppins')),
         ),
         ElevatedButton.icon(
@@ -314,7 +314,7 @@ class _TransferStockDialogState extends State<TransferStockDialog> {
                   width: 14, height: 14,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : const Icon(Icons.send_rounded, size: 16),
-          label: Text(_isSubmitting ? 'Mengirim...' : 'Kirim Request',
+          label: Text(_isSubmitting ? 'Sending...' : 'Send Request',
             style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
         ),
       ],

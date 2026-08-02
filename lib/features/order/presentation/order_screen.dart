@@ -33,7 +33,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   // ── Branch filter (superadmin only) ──────────────────────────────────────
   List<Map<String, dynamic>> _branches = [];
-  String? _selectedBranchId; // null = semua cabang
+  String? _selectedBranchId; // null = all branches
 
   @override
   void initState() {
@@ -86,7 +86,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     _subscribeRealtime();
   }
 
-  // ── Load daftar branch (superadmin only) ─────────────────────────────────
+  // ── Load the branch list (superadmin only) ───────────────────────────────
   Future<void> _loadBranches() async {
     if (!_isSuperAdmin) return;
     try {
@@ -103,16 +103,16 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
   }
 
   Future<void> _load() async {
-    // Superadmin bisa lihat semua branch atau filter per branch
-    // Role lain harus punya branchId
+    // Superadmin can view all branches or filter by branch
+    // Other roles must have a branchId
     if (!_isSuperAdmin && _branchId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
     if (mounted) setState(() => _isLoading = true);
     try {
-      // effectiveBranchId: superadmin pakai _selectedBranchId (bisa null = semua),
-      // role lain pakai _branchId mereka sendiri
+      // effectiveBranchId: superadmin uses _selectedBranchId (can be null = all),
+      // other roles use their own _branchId
       final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
 
       final activeStatuses = ['new', 'created', 'paid', 'preparing', 'ready', 'served'];
@@ -253,8 +253,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     }
   }
 
-  // Order Screen hanya bisa update ready → served.
-  // Status sebelumnya (new/created/preparing) dihandle oleh KDS (Dapur).
+  // Order Screen can only update ready → served.
+  // Earlier statuses (new/created/preparing) are handled by the KDS (Kitchen).
   OrderStatus? _nextStatus(OrderStatus current) {
     switch (current) {
       case OrderStatus.ready: return OrderStatus.served;
@@ -264,7 +264,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   String _nextStatusLabel(OrderStatus current) {
     switch (current) {
-      case OrderStatus.ready: return '✓ Sudah Diantar';
+      case OrderStatus.ready: return '✓ Delivered';
       default:                return '';
     }
   }
@@ -296,14 +296,14 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           children: [
             const TextSpan(text: 'Update order '),
             TextSpan(text: '#${order.orderNumber}', style: const TextStyle(fontWeight: FontWeight.w700)),
-            const TextSpan(text: ' ke '),
+            const TextSpan(text: ' to '),
             TextSpan(text: next.label, style: TextStyle(fontWeight: FontWeight.w700, color: _statusColor(next))),
             const TextSpan(text: '?'),
           ],
         )),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary))),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: _statusColor(next), foregroundColor: Colors.white,
@@ -319,11 +319,11 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       final nowIso = DateTime.now().toIso8601String();
       await Supabase.instance.client.from('orders').update({
         'status': next.dbValue, 'staff_id': staff?.id, 'updated_at': nowIso,
-        // Mulai hitung batas waktu makan (kMaxDineInDuration) sejak disajikan.
+        // Start counting the dine-in time limit (kMaxDineInDuration) from when served.
         if (next == OrderStatus.served) 'served_at': nowIso,
       }).eq('id', order.id);
 
-      // Sync order_items status agar konsisten dengan orders
+      // Sync order_items status to stay consistent with orders
       await Supabase.instance.client.from('order_items').update({
         'status': next.dbValue,
       }).eq('order_id', order.id);
@@ -336,14 +336,14 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Gagal update status order.'), backgroundColor: AppColors.accent));
+        content: Text('Failed to update order status.'), backgroundColor: AppColors.accent));
     } finally {
       if (mounted) setState(() => _updatingOrderId = null);
     }
   }
 
-  /// Tandai 1 item sudah diantar ke meja (served), tanpa ubah status order keseluruhan.
-  /// Jika semua item sudah served → order otomatis jadi served.
+  /// Mark 1 item as delivered to the table (served), without changing the overall order status.
+  /// If all items are served → the order automatically becomes served.
   Future<void> _markItemServed(String itemId, String orderId) async {
     final now = DateTime.now().toIso8601String();
     try {
@@ -351,7 +351,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         'status': 'served',
       }).eq('id', itemId);
 
-      // Cek apakah semua item sudah served
+      // Check whether all items are served
       final remaining = await Supabase.instance.client
           .from('order_items')
           .select('id')
@@ -364,13 +364,13 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           'status':     'served',
           'staff_id':   staff?.id,
           'updated_at': now,
-          // Mulai hitung batas waktu makan (kMaxDineInDuration) sejak disajikan.
+          // Start counting the dine-in time limit (kMaxDineInDuration) from when served.
           'served_at':  now,
         }).eq('id', orderId);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Semua item sudah diantar! Order → Tersaji'),
+            content: Text('All items delivered! Order → Served'),
             backgroundColor: Color(0xFF1E88E5),
             duration: Duration(seconds: 2)));
         }
@@ -379,7 +379,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       debugPrint('[MarkItemServed] Error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Gagal update item.'),
+          content: Text('Failed to update item.'),
           backgroundColor: AppColors.accent));
       }
     }
@@ -387,36 +387,36 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   // ── Group definitions ──────────────────────────────────────────────────────
   static const _groupDefs = [
-    _GroupDef('Antri Masak',     Icons.restaurant_menu_outlined,   Color(0xFFFF9800)),
-    _GroupDef('Sedang Dimasak',  Icons.outdoor_grill_outlined,     Color(0xFFE53935)),
-    _GroupDef('Siap Disajikan',  Icons.dining_outlined,            Color(0xFF43A047)),
-    _GroupDef('Sudah Tersaji',   Icons.check_circle_outline,       Color(0xFF1E88E5)),
+    _GroupDef('Queued to Cook',  Icons.restaurant_menu_outlined,   Color(0xFFFF9800)),
+    _GroupDef('Cooking',         Icons.outdoor_grill_outlined,     Color(0xFFE53935)),
+    _GroupDef('Ready to Serve',  Icons.dining_outlined,            Color(0xFF43A047)),
+    _GroupDef('Served',          Icons.check_circle_outline,       Color(0xFF1E88E5)),
   ];
 
   Map<String, List<OrderModel>> _groupOrders(List<OrderModel> orders) {
     final groups = <String, List<OrderModel>>{for (final g in _groupDefs) g.name: []};
-    // Filter: hanya tampilkan order yang memiliki minimal 1 item
+    // Filter: only show orders that have at least 1 item
     final validOrders = orders.where((o) => o.items.isNotEmpty).toList();
     for (final o in validOrders) {
       switch (o.status) {
         case OrderStatus.new_:
         case OrderStatus.created:
-          groups['Antri Masak']!.add(o);
+          groups['Queued to Cook']!.add(o);
           break;
         case OrderStatus.preparing:
-          // Selalu masuk "Sedang Dimasak"
-          groups['Sedang Dimasak']!.add(o);
-          // Jika ada minimal 1 item yang sudah ready → tampil juga di "Siap Disajikan"
-          // supaya waiter bisa langsung antar item yang sudah siap tanpa nunggu semua selesai
+          // Always goes into "Cooking"
+          groups['Cooking']!.add(o);
+          // If at least 1 item is already ready → also show in "Ready to Serve"
+          // so the waiter can deliver ready items right away without waiting for all to finish
           final hasReadyItem = o.items.any(
               (item) => item.status == OrderItemStatus.ready);
-          if (hasReadyItem) groups['Siap Disajikan']!.add(o);
+          if (hasReadyItem) groups['Ready to Serve']!.add(o);
           break;
         case OrderStatus.ready:
-          groups['Siap Disajikan']!.add(o);
+          groups['Ready to Serve']!.add(o);
           break;
         case OrderStatus.served:
-          groups['Sudah Tersaji']!.add(o);
+          groups['Served']!.add(o);
           break;
         default:
           break;
@@ -436,9 +436,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   String _historyStatusLabel(String? s) {
     switch (s) {
-      case 'paid':      return 'Lunas';
-      case 'served':    return 'Tersaji';
-      case 'cancelled': return 'Dibatalkan';
+      case 'paid':      return 'Paid';
+      case 'served':    return 'Served';
+      case 'cancelled': return 'Cancelled';
       default:          return s ?? '-';
     }
   }
@@ -487,7 +487,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                         items: [
                           const DropdownMenuItem<String?>(
                             value: null,
-                            child: Text('Semua Cabang',
+                            child: Text('All Branches',
                               style: TextStyle(
                                 fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
                           ..._branches.map((b) => DropdownMenuItem<String?>(
@@ -523,9 +523,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                 labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13),
                 unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                 tabs: [
-                  Tab(text: 'Aktif (${_orders.where((o) => o.items.isNotEmpty).length})'),
-                  const Tab(text: 'Order Baru'),
-                  const Tab(text: 'Riwayat'),
+                  Tab(text: 'Active (${_orders.where((o) => o.items.isNotEmpty).length})'),
+                  const Tab(text: 'New Order'),
+                  const Tab(text: 'History'),
                 ],
               ),
             ]),
@@ -549,7 +549,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     );
   }
 
-  // ── TAB: AKTIF ────────────────────────────────────────────────────────────
+  // ── TAB: ACTIVE ───────────────────────────────────────────────────────────
   Widget _buildActiveOrders() {
     final grouped = _groupOrders(_orders);
     final activeGroups = _groupDefs.where((g) => (grouped[g.name] ?? []).isNotEmpty).toList();
@@ -559,7 +559,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       return const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textHint),
         SizedBox(height: 12),
-        Text('Tidak ada order aktif', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+        Text('No active orders', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
       ]));
     }
 
@@ -575,7 +575,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         orElse: () => _groupDefs.first);
 
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // ── Sidebar kiri ──────────────────────────────────────────────────────
+      // ── Left sidebar ──────────────────────────────────────────────────────
       Container(
         width: 120,
         height: double.infinity,
@@ -597,7 +597,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                 final count = (grouped[def.name] ?? []).length;
                 if (count == 0) return const SizedBox.shrink();
                 final isSelected = _selectedGroup == def.name;
-                // Hitung berapa order di grup ini yang minta bill
+                // Count how many orders in this group requested the bill
                 final billCount = (grouped[def.name] ?? [])
                     .where((o) => o.billRequested && o.status == OrderStatus.served)
                     .length;
@@ -618,7 +618,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                         Icon(def.icon, size: 14,
                           color: isSelected ? Colors.white : def.color),
                         const Spacer(),
-                        // Badge jumlah order
+                        // Order count badge
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
@@ -627,7 +627,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                           child: Text('$count', style: TextStyle(
                             fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700,
                             color: isSelected ? Colors.white : def.color))),
-                        // Badge 🔔 bill diminta
+                        // Badge 🔔 bill requested
                         if (billCount > 0) ...[
                           const SizedBox(width: 4),
                           Container(
@@ -655,7 +655,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         ]),
       ),
 
-      // ── Konten kanan ──────────────────────────────────────────────────────
+      // ── Right content ─────────────────────────────────────────────────────
       Expanded(
         child: Column(children: [
           // Header group
@@ -690,7 +690,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           // Order list
           Expanded(
             child: currentOrders.isEmpty
-                ? const Center(child: Text('Tidak ada order'))
+                ? const Center(child: Text('No orders'))
                 : ListView.builder(
                     padding: const EdgeInsets.all(10),
                     itemCount: currentOrders.length,
@@ -723,7 +723,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
           child: Text(o.orderNumber.split('-').last,
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: color, fontSize: 11))),
         title: Row(children: [
-          Text(o.tableNumber != null ? 'Meja ${o.tableNumber}' : 'Takeaway',
+          Text(o.tableNumber != null ? 'Table ${o.tableNumber}' : 'Takeaway',
             style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
           if (o.customerName != null) ...[
             const SizedBox(width: 6),
@@ -761,7 +761,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                 child: const Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.notifications_active, size: 9, color: Color(0xFFF59E0B)),
                   SizedBox(width: 3),
-                  Text('Minta Bill',
+                  Text('Bill Requested',
                     style: TextStyle(
                       fontFamily: 'Poppins', fontSize: 9,
                       fontWeight: FontWeight.w700,
@@ -777,19 +777,19 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         children: [
           // Items
           ...o.items.map((item) {
-            // Tampilkan tombol "Antar" kalau:
-            // - order sudah ready (semua item siap), ATAU
-            // - order masih preparing tapi item ini sudah ready (sebagian siap)
+            // Show the "Deliver" button if:
+            // - the order is already ready (all items ready), OR
+            // - the order is still preparing but this item is already ready (partially ready)
             final itemReady  = item.status == OrderItemStatus.ready;
             final itemServed = item.status == OrderItemStatus.served;
             final canServe   = (o.status == OrderStatus.ready || itemReady) && !itemServed;
 
             if (!canServe && !itemServed) {
-              // Item belum siap sama sekali: pakai tile biasa
+              // Item isn't ready at all yet: use the regular tile
               return OrderItemTile(item: item);
             }
 
-            // Item sudah ready atau served: render custom tile dengan tombol Antar
+            // Item is ready or served: render a custom tile with the Deliver button
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
@@ -805,11 +805,11 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Baris utama item ──────────────────────────────
+                  // ── Main item row ──────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
                     child: Row(children: [
-                      // Badge qty
+                      // Qty badge
                       Container(
                         width: 30, height: 30,
                         decoration: BoxDecoration(
@@ -857,7 +857,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                     ]),
                   ),
 
-                  // ── Tombol "Antar ke Meja" ───────────────────────
+                  // ── "Deliver to Table" button ────────────────────
                   if (canServe)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -873,7 +873,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(7))),
                           icon: const Icon(Icons.delivery_dining, size: 14),
-                          label: const Text('Antar ke Meja',
+                          label: const Text('Deliver to Table',
                             style: TextStyle(
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w600,
@@ -905,7 +905,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
           const Divider(height: 1),
 
-          // Action button — hanya ready → served yang bisa diupdate di sini
+          // Action button — only ready → served can be updated here
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             child: o.status == OrderStatus.ready
@@ -927,22 +927,22 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                                 strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.room_service_outlined, size: 18),
                       label: Text(
-                        isUpdating ? 'Memperbarui...' : '✓ Semua Sudah Diantar',
+                        isUpdating ? 'Updating...' : '✓ All Delivered',
                         style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w700,
                           fontSize: 14))))
                 : o.status == OrderStatus.new_ || o.status == OrderStatus.created
-                    ? _infoChip(Icons.soup_kitchen_outlined, 'Menunggu dimasak oleh dapur', const Color(0xFFFF9800))
+                    ? _infoChip(Icons.soup_kitchen_outlined, 'Waiting to be cooked by the kitchen', const Color(0xFFFF9800))
                     : o.status == OrderStatus.preparing
                         ? o.items.any((item) => item.status == OrderItemStatus.ready)
-                            ? _infoChip(Icons.outdoor_grill_outlined, 'Sebagian item siap — antar dulu via tombol di atas', const Color(0xFF43A047))
-                            : _infoChip(Icons.outdoor_grill_outlined, 'Sedang dimasak oleh dapur', const Color(0xFFE53935))
+                            ? _infoChip(Icons.outdoor_grill_outlined, 'Some items ready — deliver them using the button above', const Color(0xFF43A047))
+                            : _infoChip(Icons.outdoor_grill_outlined, 'Being cooked by the kitchen', const Color(0xFFE53935))
                         : o.status == OrderStatus.served
                             ? o.billRequested
-                                ? _infoChip(Icons.notifications_active, '🔔 Customer minta bill — arahkan ke kasir!', const Color(0xFFF59E0B))
-                                : _infoChip(Icons.point_of_sale_outlined, 'Menunggu pembayaran di kasir', Colors.orange)
-                            : _infoChip(Icons.check_circle_outline, 'Selesai', AppColors.available),
+                                ? _infoChip(Icons.notifications_active, '🔔 Customer requested the bill — send them to the cashier!', const Color(0xFFF59E0B))
+                                : _infoChip(Icons.point_of_sale_outlined, 'Waiting for payment at the cashier', Colors.orange)
+                            : _infoChip(Icons.check_circle_outline, 'Done', AppColors.available),
           ),
         ],
       ),
@@ -965,10 +965,10 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     );
   }
 
-  // ── TAB: ORDER BARU (Menu Selector) ──────────────────────────────────────
-  // Sidebar meja dihapus — pilihan Takeaway/Meja sudah ada di dalam
-  // MenuItemSelector (dropdown di header-nya). Sidebar lama tidak interaktif
-  // dan tidak sync dengan dropdown tersebut, sehingga membingungkan staff.
+  // ── TAB: NEW ORDER (Menu Selector) ───────────────────────────────────────
+  // The table sidebar was removed — the Takeaway/Table choice is already
+  // inside MenuItemSelector (a dropdown in its header). The old sidebar wasn't
+  // interactive and didn't sync with that dropdown, which confused staff.
   Widget _buildNewOrder() {
     final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
     if (effectiveBranchId == null || effectiveBranchId.isEmpty) {
@@ -976,7 +976,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.store_outlined, size: 48, color: AppColors.textHint),
           SizedBox(height: 12),
-          Text('Pilih cabang terlebih dahulu',
+          Text('Select a branch first',
             style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
         ]),
       );
@@ -988,10 +988,10 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     );
   }
 
-  // ── TAB: RIWAYAT ──────────────────────────────────────────────────────────
+  // ── TAB: HISTORY ──────────────────────────────────────────────────────────
   Widget _buildHistory() {
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Sidebar kiri: filter
+      // Left sidebar: filter
       Container(
         width: 120,
         height: double.infinity,
@@ -1007,9 +1007,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
               color: Colors.white38, letterSpacing: 1.5)),
           ),
           ...[
-            ('all', 'Semua', Icons.receipt_long_outlined, Colors.white),
-            ('paid', 'Lunas', Icons.check_circle_outline, const Color(0xFF43A047)),
-            ('cancelled', 'Dibatalkan', Icons.cancel_outlined, const Color(0xFFE53935)),
+            ('all', 'All', Icons.receipt_long_outlined, Colors.white),
+            ('paid', 'Paid', Icons.check_circle_outline, const Color(0xFF43A047)),
+            ('cancelled', 'Cancelled', Icons.cancel_outlined, const Color(0xFFE53935)),
           ].map((f) {
             final isSelected = _historyFilter == f.$1;
             final color = f.$4;
@@ -1039,7 +1039,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         ]),
       ),
 
-      // Content kanan
+      // Right content
       Expanded(
         child: _isHistoryLoading
             ? const Center(child: CircularProgressIndicator())
@@ -1047,7 +1047,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                 ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                     Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textHint),
                     SizedBox(height: 12),
-                    Text('Tidak ada riwayat', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+                    Text('No history', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
                   ]))
                 : ListView.separated(
                     padding: const EdgeInsets.all(12),
@@ -1061,8 +1061,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                       final dbTotal = (o['total_amount'] as num?)?.toDouble() ?? 0;
                       final itemsSubtotal = rawItems.fold<double>(
                           0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
-                      // Gunakan total_amount dari DB (sudah termasuk PPN).
-                      // Fallback: hitung ulang subtotal + PPN 11% - diskon
+                      // Use total_amount from the DB (already includes VAT).
+                      // Fallback: recalculate subtotal + 11% VAT - discount
                       final discountAmount = (o['discount_amount'] as num?)?.toDouble() ?? 0;
                       final total = dbTotal > 0
                           ? dbTotal

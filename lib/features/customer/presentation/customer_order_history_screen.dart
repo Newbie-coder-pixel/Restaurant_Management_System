@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/cart_provider.dart';
 
-// ── Provider riwayat order milik user ─────────────────────────────
+// ── User's order history provider ─────────────────────────────────
 final _orderHistoryProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final user = Supabase.instance.client.auth.currentUser;
@@ -52,7 +52,7 @@ class _CustomerOrderHistoryScreenState
 
     if (validItems.isEmpty) {
       messenger.showSnackBar(const SnackBar(
-        content: Text('Tidak ada item yang bisa dipesan ulang.'),
+        content: Text('No items available to reorder.'),
         backgroundColor: Colors.orange));
       return;
     }
@@ -73,13 +73,13 @@ class _CustomerOrderHistoryScreenState
               child: const Icon(Icons.replay_outlined, color: Color(0xFFE94560), size: 24),
             ),
             const SizedBox(width: 12),
-            const Text('Pesan Ulang?',
+            const Text('Reorder?',
                 style: TextStyle(
                     fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
           ],
         ),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('${validItems.length} item dari order ini akan ditambahkan ke cart.',
+          Text('${validItems.length} item(s) from this order will be added to the cart.',
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.4)),
           const SizedBox(height: 12),
           Container(
@@ -108,7 +108,7 @@ class _CustomerOrderHistoryScreenState
               if (validItems.length > 3)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text('+ ${validItems.length - 3} item lainnya',
+                  child: Text('+ ${validItems.length - 3} more item(s)',
                       style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 11,
@@ -123,7 +123,7 @@ class _CustomerOrderHistoryScreenState
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
-            child: const Text('Batal',
+            child: const Text('Cancel',
                 style: TextStyle(
                     fontFamily: 'Poppins', fontSize: 14, color: Colors.grey))),
           ElevatedButton(
@@ -134,7 +134,7 @@ class _CustomerOrderHistoryScreenState
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12))),
-            child: const Text('Pesan Lagi',
+            child: const Text('Reorder',
                 style: TextStyle(
                     fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14))),
         ]));
@@ -156,7 +156,7 @@ class _CustomerOrderHistoryScreenState
       content: const Row(children: [
         Icon(Icons.check_circle, color: Colors.white, size: 20),
         SizedBox(width: 12),
-        Expanded(child: Text('Item ditambahkan ke cart!')),
+        Expanded(child: Text('Item added to cart!')),
       ]),
       backgroundColor: const Color(0xFF1D9E75),
       behavior: SnackBarBehavior.floating,
@@ -178,7 +178,7 @@ class _CustomerOrderHistoryScreenState
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 18),
           onPressed: () => context.go('/customer')),
-        title: const Text('Riwayat Pesanan',
+        title: const Text('Order History',
             style: TextStyle(
                 fontFamily: 'Poppins', 
                 fontWeight: FontWeight.w700,
@@ -196,7 +196,7 @@ class _CustomerOrderHistoryScreenState
             children: [
               const CircularProgressIndicator(color: Color(0xFFE94560)),
               const SizedBox(height: 16),
-              Text('Memuat riwayat...',
+              Text('Loading history...',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       color: Colors.grey.shade600)),
@@ -214,7 +214,7 @@ class _CustomerOrderHistoryScreenState
               child: Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
             ),
             const SizedBox(height: 20),
-            Text('Gagal memuat riwayat',
+            Text('Failed to load history',
                 style: TextStyle(
                     fontFamily: 'Poppins', 
                     fontSize: 18,
@@ -232,7 +232,7 @@ class _CustomerOrderHistoryScreenState
             ElevatedButton.icon(
               onPressed: () => ref.invalidate(_orderHistoryProvider),
               icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Coba Lagi'),
+              label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE94560),
                 foregroundColor: Colors.white,
@@ -260,12 +260,12 @@ class _CustomerOrderHistoryScreenState
                 scrollDirection: Axis.horizontal,
                 child: Row(children: [
                   for (final f in [
-                    ('all', 'Semua'),
-                    ('paid', 'Lunas'),
-                    ('new', 'Baru'),
-                    ('preparing', 'Dimasak'),
-                    ('served', 'Tersaji'),
-                    ('cancelled', 'Dibatalkan'),
+                    ('all', 'All'),
+                    ('paid', 'Paid'),
+                    ('new', 'New'),
+                    ('preparing', 'Cooking'),
+                    ('served', 'Served'),
+                    ('cancelled', 'Cancelled'),
                   ])
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -302,8 +302,8 @@ class _CustomerOrderHistoryScreenState
                   ),
                   child: Text(
                     filtered.isEmpty
-                        ? 'Tidak ada pesanan'
-                        : '${filtered.length} pesanan',
+                        ? 'No orders'
+                        : '${filtered.length} order(s)',
                     style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 12,
@@ -326,7 +326,7 @@ class _CustomerOrderHistoryScreenState
                               size: 64, color: Colors.grey.shade400),
                           const SizedBox(height: 16),
                           Text(
-                            'Tidak ada pesanan dengan status "$_filter"',
+                            'No orders with status "$_filter"',
                             style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 14,
@@ -364,7 +364,7 @@ class _CustomerOrderHistoryScreenState
           child: const Icon(Icons.receipt_long_outlined,
               color: Color(0xFFE94560), size: 48)),
         const SizedBox(height: 24),
-        const Text('Belum Ada Pesanan',
+        const Text('No Orders Yet',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 20,
@@ -372,7 +372,7 @@ class _CustomerOrderHistoryScreenState
                 color: Color(0xFF1A1A2E))),
         const SizedBox(height: 12),
         const Text(
-          'Mulai pesan makanan favoritmu sekarang!',
+          'Start ordering your favorite food now!',
           textAlign: TextAlign.center,
           style: TextStyle(
               fontFamily: 'Poppins',
@@ -382,7 +382,7 @@ class _CustomerOrderHistoryScreenState
         ElevatedButton.icon(
           onPressed: () => context.go('/customer'),
           icon: const Icon(Icons.restaurant_menu_outlined, size: 20),
-          label: const Text('Lihat Menu',
+          label: const Text('View Menu',
               style: TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 15)),
           style: ElevatedButton.styleFrom(
@@ -416,12 +416,12 @@ class _OrderHistoryCard extends StatelessWidget {
     'cancelled': Color(0xFFEF4444),
   };
   static const _statusLabels = {
-    'new':       'Baru',
-    'preparing': 'Dimasak',
-    'ready':     'Siap',
-    'served':    'Tersaji',
-    'paid':      'Lunas',
-    'cancelled': 'Dibatalkan',
+    'new':       'New',
+    'preparing': 'Cooking',
+    'ready':     'Ready',
+    'served':    'Served',
+    'paid':      'Paid',
+    'cancelled': 'Cancelled',
   };
   static const _statusIcons = {
     'new':       Icons.fiber_new_outlined,
@@ -444,8 +444,8 @@ class _OrderHistoryCard extends StatelessWidget {
     final dt = DateTime.tryParse(iso)?.toLocal();
     if (dt == null) return '-';
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return '${dt.day} ${months[dt.month]} ${dt.year}, '
         '${dt.hour.toString().padLeft(2, '0')}:'
@@ -505,7 +505,7 @@ class _OrderHistoryCard extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     color: statusColor)),
             const Spacer(),
-            // Live badge untuk order aktif
+            // Live badge for active orders
             if (_isActive)
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -521,7 +521,7 @@ class _OrderHistoryCard extends StatelessWidget {
                         color: statusColor, shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 6),
-                  Text('Aktif',
+                  Text('Active',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 10,
@@ -566,7 +566,7 @@ class _OrderHistoryCard extends StatelessWidget {
                 Icon(Icons.shopping_bag_outlined, size: 12, color: Colors.grey.shade500),
                 const SizedBox(width: 4),
                 Text(
-                  '$itemCount item',
+                  '$itemCount item(s)',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 11,
@@ -611,14 +611,14 @@ class _OrderHistoryCard extends StatelessWidget {
             const SizedBox(height: 16),
             // Action buttons
             Row(children: [
-              // Track — untuk order aktif
+              // Track — for active orders
               if (_isActive)
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: onTrack,
                     icon: const Icon(Icons.location_on_outlined,
                         size: 16),
-                    label: const Text('Lacak',
+                    label: const Text('Track',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 13,
@@ -631,14 +631,14 @@ class _OrderHistoryCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12))),
                   )),
               if (_isActive) const SizedBox(width: 12),
-              // Reorder — untuk semua status kecuali cancelled
+              // Reorder — for all statuses except cancelled
               if (!(_isPaid == false && status == 'cancelled') ||
                   _isPaid)
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: onReorder,
                     icon: const Icon(Icons.replay_outlined, size: 16),
-                    label: const Text('Pesan Lagi',
+                    label: const Text('Reorder',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 13,

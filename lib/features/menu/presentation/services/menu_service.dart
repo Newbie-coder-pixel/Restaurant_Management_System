@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/models/menu_model.dart';
-// MenuIngredient & MenuIngredientDraft sudah ada di menu_model.dart
+// MenuIngredient & MenuIngredientDraft already exist in menu_model.dart
 
 class MenuService {
   final SupabaseClient _client;
@@ -17,7 +17,7 @@ class MenuService {
 
   // ─── FETCH ────────────────────────────────────────────────────────────────
 
-  /// Ambil semua menu items dari semua branch (untuk admin view global).
+  /// Fetch all menu items from all branches (for the global admin view).
   Future<List<MenuItem>> fetchMenus({String? branchId}) async {
     try {
       var query = _client
@@ -38,13 +38,13 @@ class MenuService {
           .map((item) => MenuItem.fromJson(item as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal memuat menu: ${e.message}');
+      throw MenuServiceException('Failed to load menu: ${e.message}');
     } catch (e) {
-      throw MenuServiceException('Terjadi kesalahan tidak terduga: $e');
+      throw MenuServiceException('An unexpected error occurred: $e');
     }
   }
 
-  /// Ambil semua kategori, opsional filter per branch.
+  /// Fetch all categories, optionally filtered by branch.
   Future<List<MenuCategory>> fetchCategories({String? branchId}) async {
     try {
       var query = _client
@@ -67,7 +67,7 @@ class MenuService {
           .map((item) => MenuCategory.fromJson(item as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal memuat kategori: ${e.message}');
+      throw MenuServiceException('Failed to load categories: ${e.message}');
     }
   }
 
@@ -102,7 +102,7 @@ class MenuService {
 
       return MenuCategory.fromJson(response);
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal menambahkan kategori: ${e.message}');
+      throw MenuServiceException('Failed to add category: ${e.message}');
     }
   }
 
@@ -112,7 +112,7 @@ class MenuService {
           .from(_categoriesTable)
           .update({'is_active': false}).eq('id', categoryId);
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal menghapus kategori: ${e.message}');
+      throw MenuServiceException('Failed to delete category: ${e.message}');
     }
   }
 
@@ -128,17 +128,18 @@ class MenuService {
 
       return MenuItem.fromJson(response);
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal menambahkan menu: ${e.message}');
+      throw MenuServiceException('Failed to add menu item: ${e.message}');
     }
   }
 
   // ─── INGREDIENTS ──────────────────────────────────────────────────────────
 
-  /// Simpan daftar ingredients untuk satu menu item ke tabel `menu_ingredients`.
-  /// Dipanggil setelah [addMenu] berhasil dan menuItemId sudah diketahui.
+  /// Save the list of ingredients for one menu item to the
+  /// `menu_ingredients` table. Called after [addMenu] succeeds and the
+  /// menuItemId is known.
   ///
-  /// Catatan: method ini melakukan insert batch. Jika ingredients kosong,
-  /// method langsung return tanpa melakukan apapun.
+  /// Note: this method performs a batch insert. If ingredients is empty,
+  /// the method returns immediately without doing anything.
   Future<void> saveIngredients({
     required String menuItemId,
     required List<MenuIngredientDraft> drafts,
@@ -152,12 +153,12 @@ class MenuService {
 
       await _client.from(_ingredientsTable).insert(rows);
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal menyimpan ingredients: ${e.message}');
+      throw MenuServiceException('Failed to save ingredients: ${e.message}');
     }
   }
 
-  /// Ambil semua ingredients untuk satu menu item berdasarkan [menuItemId].
-  /// Return list kosong jika tidak ada ingredient yang terdaftar.
+  /// Fetch all ingredients for one menu item by [menuItemId].
+  /// Returns an empty list if no ingredients are registered.
   Future<List<MenuIngredient>> fetchIngredients(String menuItemId) async {
     try {
       final response = await _client
@@ -170,13 +171,13 @@ class MenuService {
           .map((row) => MenuIngredient.fromJson(row as Map<String, dynamic>))
           .toList();
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal memuat ingredients: ${e.message}');
+      throw MenuServiceException('Failed to load ingredients: ${e.message}');
     }
   }
 
-  /// Ambil ingredients untuk BEBERAPA menu item sekaligus (batch), dikelompokkan
-  /// per menuItemId. Dipakai saat dapur mulai masak order (KDS) atau saat
-  /// menghitung ulang HPP, supaya tidak query satu-satu per item.
+  /// Fetch ingredients for MULTIPLE menu items at once (batch), grouped by
+  /// menuItemId. Used when the kitchen starts cooking an order (KDS) or
+  /// when recalculating COGS, so we don't query item-by-item.
   Future<Map<String, List<MenuIngredient>>> fetchIngredientsForMenuItems(
       List<String> menuItemIds) async {
     if (menuItemIds.isEmpty) return {};
@@ -193,14 +194,14 @@ class MenuService {
       }
       return result;
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal memuat resep menu: ${e.message}');
+      throw MenuServiceException('Failed to load menu recipe: ${e.message}');
     }
   }
 
-  /// Hapus semua ingredients untuk satu menu item.
-  /// Biasanya tidak perlu dipanggil manual karena tabel sudah pakai
-  /// ON DELETE CASCADE dari menu_items. Tapi tersedia jika dibutuhkan
-  /// (misalnya saat update ingredients: hapus lama, insert baru).
+  /// Delete all ingredients for one menu item.
+  /// Usually doesn't need to be called manually since the table already
+  /// uses ON DELETE CASCADE from menu_items. But it's available if needed
+  /// (e.g. when updating ingredients: delete old ones, insert new ones).
   Future<void> deleteIngredients(String menuItemId) async {
     try {
       await _client
@@ -208,13 +209,13 @@ class MenuService {
           .delete()
           .eq('menu_item_id', menuItemId);
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal menghapus ingredients: ${e.message}');
+      throw MenuServiceException('Failed to delete ingredients: ${e.message}');
     }
   }
 
-  /// Update ingredients untuk satu menu item:
-  /// hapus semua yang lama lalu insert yang baru.
-  /// Gunakan ini saat edit menu dan ingredient list berubah.
+  /// Update ingredients for one menu item:
+  /// delete all the old ones then insert the new ones.
+  /// Use this when editing a menu item and the ingredient list changes.
   Future<void> updateIngredients({
     required String menuItemId,
     required List<MenuIngredientDraft> drafts,
@@ -240,7 +241,7 @@ class MenuService {
 
       return MenuItem.fromJson(response);
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal mengupdate menu: ${e.message}');
+      throw MenuServiceException('Failed to update menu item: ${e.message}');
     }
   }
 
@@ -251,16 +252,16 @@ class MenuService {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', id);
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal mengubah status menu: ${e.message}');
+      throw MenuServiceException('Failed to change menu status: ${e.message}');
     }
   }
 
   // ─── Re-enable menus linked to an inventory item ──────────────────────────
-  // NOTE: Logika ini dipindahkan ke InventoryService karena membutuhkan
-  // akses ke inventory data. Panggil dari InventoryService saat stok bertambah.
+  // NOTE: This logic was moved to InventoryService because it needs access
+  // to inventory data. Called from InventoryService when stock increases.
 
-  /// Re-enable menu items yang terhubung ke [inventoryItemId] jika stok > 0.
-  /// Dipanggil dari InventoryService setelah purchase/restock.
+  /// Re-enable menu items linked to [inventoryItemId] if stock > 0.
+  /// Called from InventoryService after a purchase/restock.
   Future<void> reEnableLinkedMenus(
       List<String> menuIds, String branchId) async {
     try {
@@ -276,7 +277,7 @@ class MenuService {
       }
     } on PostgrestException catch (e) {
       throw MenuServiceException(
-          'Gagal mengaktifkan menu terkait: ${e.message}');
+          'Failed to re-enable linked menu items: ${e.message}');
     }
   }
 
@@ -287,12 +288,12 @@ class MenuService {
       if (imageUrl != null && imageUrl.isNotEmpty) {
         await _deleteImageByUrl(imageUrl);
       }
-      // Ingredients akan terhapus otomatis via ON DELETE CASCADE,
-      // tapi kita hapus eksplisit untuk memastikan tidak ada orphan data.
+      // Ingredients will be deleted automatically via ON DELETE CASCADE,
+      // but we delete them explicitly to make sure there's no orphan data.
       await deleteIngredients(id);
       await _client.from(_itemsTable).delete().eq('id', id);
     } on PostgrestException catch (e) {
-      throw MenuServiceException('Gagal menghapus menu: ${e.message}');
+      throw MenuServiceException('Failed to delete menu item: ${e.message}');
     }
   }
 
@@ -316,12 +317,12 @@ class MenuService {
               fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
             );
       } else {
-        throw const MenuServiceException('Tipe file tidak didukung');
+        throw const MenuServiceException('Unsupported file type');
       }
 
       return _client.storage.from(_bucketName).getPublicUrl(filePath);
     } on StorageException catch (e) {
-      throw MenuServiceException('Gagal mengunggah gambar: ${e.message}');
+      throw MenuServiceException('Failed to upload image: ${e.message}');
     }
   }
 

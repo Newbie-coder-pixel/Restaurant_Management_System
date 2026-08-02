@@ -28,10 +28,10 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   bool _showArchived = false;
   bool _initialized = false;
 
-  // Branch list untuk superadmin
+  // Branch list for superadmin
   List<Map<String, dynamic>> _allBranches = [];
 
-  // Branch filter untuk superadmin (null = semua branch)
+  // Branch filter for superadmin (null = all branches)
   String? _selectedFilterBranchId;
 
   final _searchCtrl = TextEditingController();
@@ -104,7 +104,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-    // Non-superadmin wajib punya branchId
+    // Non-superadmin must have a branchId
     if (_userRole != StaffRole.superadmin && _branchId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
@@ -113,7 +113,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
     List res;
     if (_userRole != StaffRole.superadmin) {
-      // Role biasa: hanya lihat branch sendiri
+      // Regular role: only see their own branch
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -121,7 +121,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           .eq('is_active', !_showArchived)
           .order('full_name');
     } else if (_selectedFilterBranchId != null) {
-      // Superadmin filter per branch tertentu
+      // Superadmin filtering by a specific branch
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -129,7 +129,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           .eq('is_active', !_showArchived)
           .order('full_name');
     } else {
-      // Superadmin semua cabang
+      // Superadmin viewing all branches
       res = await Supabase.instance.client
           .from('staff')
           .select()
@@ -160,8 +160,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   bool _isValidEmail(String email) =>
       RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$').hasMatch(email);
 
-  // Validasi format nomor HP Indonesia
-  // Format valid: 08xx-xxxx-xxxx, 08xxxxxxxxxx, +628xx-xxxx-xxxx, +628xxxxxxxxxx
+  // Validate Indonesian phone number format
+  // Valid formats: 08xx-xxxx-xxxx, 08xxxxxxxxxx, +628xx-xxxx-xxxx, +628xxxxxxxxxx
   bool _isValidPhone(String phone) {
     final cleaned = phone.replaceAll(RegExp(r'[\s\-]'), '');
     return RegExp(r'^(\+62|62|0)8[1-9][0-9]{6,10}$').hasMatch(cleaned);
@@ -176,7 +176,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   }
 
   String _branchName(String? branchId) {
-    if (branchId == null) return 'Semua Branch';
+    if (branchId == null) return 'All Branches';
     final branch = _allBranches.firstWhere(
       (b) => b['id'] == branchId,
       orElse: () => {'name': 'Unknown'},
@@ -186,28 +186,28 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 
   // ── archive / restore ──────────────────────────────────
   Future<void> _setActiveStatus(StaffMember s, bool active) async {
-    final action = active ? 'mengaktifkan' : 'mengarsipkan';
+    final action = active ? 'activate' : 'archive';
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(active ? 'Aktifkan Staff' : 'Arsipkan Staff',
+        title: Text(active ? 'Activate Staff' : 'Archive Staff',
             style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: Text(
-            'Yakin ingin $action ${s.fullName}?\n\n'
-            '${active ? 'Staff akan bisa login kembali.' : 'Staff tidak bisa login, tapi data tetap tersimpan dan bisa diaktifkan kembali kapan saja.'}',
+            'Are you sure you want to $action ${s.fullName}?\n\n'
+            '${active ? 'The staff member will be able to log in again.' : 'The staff member will not be able to log in, but their data stays saved and can be reactivated anytime.'}',
             style: const TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
+              child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins'))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: active ? AppColors.available : Colors.orange,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(active ? 'Aktifkan' : 'Arsipkan',
+              child: Text(active ? 'Activate' : 'Archive',
                   style: const TextStyle(fontFamily: 'Poppins'))),
         ],
       ),
@@ -220,8 +220,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(active
-              ? '✅ ${s.fullName} diaktifkan kembali'
-              : '📦 ${s.fullName} diarsipkan'),
+              ? '✅ ${s.fullName} reactivated'
+              : '📦 ${s.fullName} archived'),
           backgroundColor: active ? const Color(0xFF4CAF50) : Colors.orange,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
@@ -238,19 +238,19 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         title: const Text('Reset Password',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: Text(
-            'Email reset password akan dikirim ke:\n\n${s.email}\n\nStaff perlu mengecek emailnya.',
+            'A password reset email will be sent to:\n\n${s.email}\n\nThe staff member needs to check their email.',
             style: const TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
+              child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins'))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Kirim Email', style: TextStyle(fontFamily: 'Poppins'))),
+              child: const Text('Send Email', style: TextStyle(fontFamily: 'Poppins'))),
         ],
       ),
     );
@@ -262,7 +262,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('📧 Email reset password berhasil dikirim'),
+            content: const Text('📧 Password reset email sent successfully'),
             backgroundColor: const Color(0xFF2196F3),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
@@ -270,7 +270,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal kirim email: $e'),
+            content: Text('Failed to send email: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
@@ -325,7 +325,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Email (tidak bisa diubah)',
+                      const Text('Email (cannot be changed)',
                           style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
                       Text(s.email,
                           style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w500)),
@@ -336,7 +336,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                 controller: nameCtrl,
                 decoration: InputDecoration(
-                    labelText: 'Nama Lengkap *',
+                    labelText: 'Full Name *',
                     prefixIcon: const Icon(Icons.person_outline),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                 textCapitalization: TextCapitalization.words,
@@ -345,7 +345,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                 controller: phoneCtrl,
                 decoration: InputDecoration(
-                    labelText: 'No. HP',
+                    labelText: 'Phone Number',
                     prefixIcon: const Icon(Icons.phone_outlined),
                     hintText: '08xx-xxxx-xxxx',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
@@ -353,9 +353,9 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<StaffRole>(
-                // Manager tidak boleh menetapkan role staff lain jadi
-                // superadmin lewat edit — hanya superadmin yang boleh memilih
-                // superadmin di sini.
+                // A manager must not be able to assign another staff member the
+                // superadmin role via edit — only a superadmin may select
+                // superadmin here.
                 initialValue: (_userRole != StaffRole.superadmin &&
                         selectedRole == StaffRole.superadmin)
                     ? StaffRole.waiter
@@ -454,7 +454,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           actions: [
             TextButton(
                 onPressed: isLoading ? null : () => Navigator.pop(ctx),
-                child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
+                child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins'))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
@@ -465,7 +465,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   : () async {
                       final name = nameCtrl.text.trim();
                       if (name.isEmpty) {
-                        ss(() => errorMsg = 'Nama wajib diisi.');
+                        ss(() => errorMsg = 'Name is required.');
                         return;
                       }
                       ss(() { isLoading = true; errorMsg = null; });
@@ -484,7 +484,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                              content: Text('✅ Data $name berhasil diperbarui'),
+                              content: Text('✅ $name\'s data updated successfully'),
                               backgroundColor: const Color(0xFF4CAF50),
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
@@ -493,7 +493,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       } catch (e) {
                         ss(() {
                           isLoading = false;
-                          errorMsg = 'Gagal menyimpan: $e';
+                          errorMsg = 'Failed to save: $e';
                         });
                       }
                     },
@@ -502,7 +502,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       width: 20, height: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
-                  : const Text('Simpan',
+                  : const Text('Save',
                       style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
@@ -511,7 +511,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── ganti / hapus avatar ───────────────────────────────
+  // ── change / remove avatar ──────────────────────────────
   Future<void> _changeAvatar(StaffMember s) async {
     final newUrl = await StaffAvatarService.pickAndUpload(
       context: context,
@@ -520,7 +520,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
     if (newUrl != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('📸 Foto ${s.fullName} berhasil diperbarui'),
+          content: Text('📸 ${s.fullName}\'s photo updated successfully'),
           backgroundColor: const Color(0xFF4CAF50),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
@@ -534,21 +534,21 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Hapus Foto',
+        title: const Text('Remove Photo',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: const Text('Yakin ingin menghapus foto profil staff ini?',
+        content: const Text('Are you sure you want to remove this staff member\'s profile photo?',
             style: TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
+              child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins'))),
           ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Hapus', style: TextStyle(fontFamily: 'Poppins'))),
+              child: const Text('Remove', style: TextStyle(fontFamily: 'Poppins'))),
         ],
       ),
     );
@@ -560,7 +560,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
     if (ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('🗑️ Foto ${s.fullName} dihapus'),
+          content: Text('🗑️ ${s.fullName}\'s photo removed'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
@@ -652,8 +652,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                                 ? Icons.camera_alt_outlined
                                 : Icons.add_a_photo_outlined,
                             label: s.avatarUrl != null
-                                ? 'Ganti Foto'
-                                : 'Tambah Foto',
+                                ? 'Change Photo'
+                                : 'Add Photo',
                             color: _roleColor(s.role),
                             onTap: () {
                               Navigator.pop(ctx);
@@ -662,7 +662,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           ),
                           _MenuGridItem(
                             icon: Icons.edit_outlined,
-                            label: 'Edit Data',
+                            label: 'Edit Details',
                             color: const Color(0xFF2196F3),
                             onTap: () {
                               Navigator.pop(ctx);
@@ -671,7 +671,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           ),
                           _MenuGridItem(
                             icon: Icons.bar_chart_outlined,
-                            label: 'Performa',
+                            label: 'Performance',
                             color: const Color(0xFF5C6BC0),
                             onTap: () {
                               Navigator.pop(ctx);
@@ -687,7 +687,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           ),
                           _MenuGridItem(
                             icon: Icons.history_outlined,
-                            label: 'Riwayat Login',
+                            label: 'Login History',
                             color: const Color(0xFF00BCD4),
                             onTap: () {
                               Navigator.pop(ctx);
@@ -701,7 +701,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           ),
                           _MenuGridItem(
                             icon: Icons.calendar_month_outlined,
-                            label: 'Jadwal Shift',
+                            label: 'Shift Schedule',
                             color: const Color(0xFF9C27B0),
                             onTap: () {
                               Navigator.pop(ctx);
@@ -715,7 +715,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           ),
                           _MenuGridItem(
                             icon: Icons.fact_check_outlined,
-                            label: 'Absensi',
+                            label: 'Attendance',
                             color: const Color(0xFF4CAF50),
                             onTap: () {
                               Navigator.pop(ctx);
@@ -742,7 +742,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           if (s.avatarUrl != null)
                             _MenuGridItem(
                               icon: Icons.no_photography_outlined,
-                              label: 'Hapus Foto',
+                              label: 'Remove Photo',
                               color: Colors.red,
                               onTap: () {
                                 Navigator.pop(ctx);
@@ -756,8 +756,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   if (s.isActive)
                     _ActionTile(
                       icon: Icons.archive_outlined,
-                      label: 'Arsipkan Staff',
-                      subtitle: 'Data tetap tersimpan, bisa diaktifkan kembali',
+                      label: 'Archive Staff',
+                      subtitle: 'Data stays saved, can be reactivated anytime',
                       color: Colors.orange,
                       onTap: () {
                         Navigator.pop(ctx);
@@ -767,8 +767,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   else
                     _ActionTile(
                       icon: Icons.unarchive_outlined,
-                      label: 'Aktifkan Kembali',
-                      subtitle: 'Staff akan bisa login kembali',
+                      label: 'Reactivate',
+                      subtitle: 'The staff member will be able to log in again',
                       color: const Color(0xFF4CAF50),
                       onTap: () {
                         Navigator.pop(ctx);
@@ -808,7 +808,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       builder: (_) => StatefulBuilder(
         builder: (ctx, ss) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text('Tambah Staff',
+          title: const Text('Add Staff',
               style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -822,7 +822,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                        '💡 Email & password ini akan digunakan staff untuk login ke aplikasi.',
+                        '💡 This email & password will be used by the staff member to log in to the app.',
                         style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                   ),
                 ]),
@@ -831,7 +831,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                   controller: nameCtrl,
                   decoration: InputDecoration(
-                      labelText: 'Nama Lengkap *',
+                      labelText: 'Full Name *',
                       prefixIcon: const Icon(Icons.person_outline),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   textCapitalization: TextCapitalization.words),
@@ -839,8 +839,8 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                   controller: emailCtrl,
                   decoration: InputDecoration(
-                      labelText: 'Email Login *',
-                      hintText: 'contoh: budi@resto.com',
+                      labelText: 'Login Email *',
+                      hintText: 'e.g. budi@resto.com',
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   keyboardType: TextInputType.emailAddress),
@@ -850,7 +850,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 obscureText: obscure,
                 decoration: InputDecoration(
                     labelText: 'Password *',
-                    hintText: 'Min. 6 karakter',
+                    hintText: 'Min. 6 characters',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                         icon: Icon(obscure
@@ -863,19 +863,19 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               TextField(
                   controller: phoneCtrl,
                   decoration: InputDecoration(
-                      labelText: 'No. HP *',
+                      labelText: 'Phone Number *',
                       hintText: '08xx-xxxx-xxxx',
                       prefixIcon: const Icon(Icons.phone_outlined),
-                      helperText: 'Format: 08xx-xxxx-xxxx atau +628xx-xxxx-xxxx',
+                      helperText: 'Format: 08xx-xxxx-xxxx or +628xx-xxxx-xxxx',
                       helperStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 11),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                   keyboardType: TextInputType.phone),
               const SizedBox(height: 16),
               DropdownButtonFormField<StaffRole>(
-                // Manager (non-superadmin) tidak boleh membuat akun superadmin —
-                // sebelumnya dropdown ini menampilkan semua role tanpa batas,
-                // yang berpotensi jadi jalur eskalasi privilege lewat pembuatan
-                // staff baru ber-role superadmin.
+                // A manager (non-superadmin) must not be able to create a superadmin
+                // account — previously this dropdown showed every role without
+                // restriction, which was a potential privilege-escalation path via
+                // creating a new staff member with the superadmin role.
                 initialValue: (!isSuperadmin && selectedRole == StaffRole.superadmin)
                     ? StaffRole.waiter
                     : selectedRole,
@@ -917,7 +917,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
                   child: Text(
-                    'Staff ini hanya bisa mengakses data di branch yang dipilih.',
+                    'This staff member can only access data in the selected branch.',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
@@ -987,7 +987,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           actions: [
             TextButton(
                 onPressed: isLoading ? null : () => Navigator.pop(ctx),
-                child: const Text('Batal', style: TextStyle(fontFamily: 'Poppins'))),
+                child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins'))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
@@ -1001,30 +1001,30 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       final pass  = passwordCtrl.text;
 
                       if (name.isEmpty) {
-                        ss(() => errorMsg = 'Nama wajib diisi.');
+                        ss(() => errorMsg = 'Name is required.');
                         return;
                       }
                       if (email.isEmpty) {
-                        ss(() => errorMsg = 'Email wajib diisi.');
+                        ss(() => errorMsg = 'Email is required.');
                         return;
                       }
                       if (!_isValidEmail(email)) {
                         ss(() => errorMsg =
-                            'Format email tidak valid.\nContoh: nama@domain.com');
+                            'Invalid email format.\nExample: name@domain.com');
                         return;
                       }
                       if (pass.length < 6) {
-                        ss(() => errorMsg = 'Password minimal 6 karakter.');
+                        ss(() => errorMsg = 'Password must be at least 6 characters.');
                         return;
                       }
                       final phone = phoneCtrl.text.trim();
                       if (phone.isEmpty) {
-                        ss(() => errorMsg = 'No. HP wajib diisi.');
+                        ss(() => errorMsg = 'Phone number is required.');
                         return;
                       }
                       if (!_isValidPhone(phone)) {
                         ss(() => errorMsg =
-                            'Format No. HP tidak valid.\nContoh: 0812-3456-7890 atau +6281234567890');
+                            'Invalid phone number format.\nExample: 0812-3456-7890 or +6281234567890');
                         return;
                       }
 
@@ -1033,12 +1033,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       if (isSuperadmin && selectedBranchId == null) {
                         ss(() {
                           isLoading = false;
-                          errorMsg = 'Pilih branch untuk staff ini.';
+                          errorMsg = 'Select a branch for this staff member.';
                         });
                         return;
                       }
 
-                      // ── Cek duplikat email sebelum panggil Edge Function ──
+                      // ── Check for duplicate email before calling the Edge Function ──
                       try {
                         final existing = await Supabase.instance.client
                             .from('staff')
@@ -1048,12 +1048,12 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         if (existing != null) {
                           ss(() {
                             isLoading = false;
-                            errorMsg = 'Email "$email" sudah terdaftar.\nGunakan email lain.';
+                            errorMsg = 'Email "$email" is already registered.\nUse a different email.';
                           });
                           return;
                         }
                       } catch (_) {
-                        // Kalau cek gagal, lanjut saja — Edge Function akan handle
+                        // If the check fails, just continue — the Edge Function will handle it
                       }
 
                       try {
@@ -1070,22 +1070,22 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         );
 
                         if (res.status != 200) {
-                          // Terjemahkan pesan error teknis → pesan yang ramah
+                          // Translate the technical error message into a friendly one
                           final rawMsg = (res.data as Map?)?['error'] as String? ?? '';
                           final String friendlyMsg;
                           if (rawMsg.contains('already been registered') ||
                               rawMsg.contains('already registered') ||
                               rawMsg.contains('already exists')) {
-                            friendlyMsg = 'Email "$email" sudah terdaftar di sistem.\nGunakan email lain.';
+                            friendlyMsg = 'Email "$email" is already registered in the system.\nUse a different email.';
                           } else if (rawMsg.contains('invalid email')) {
-                            friendlyMsg = 'Format email tidak valid.';
+                            friendlyMsg = 'Invalid email format.';
                           } else if (rawMsg.contains('weak password') ||
                               rawMsg.contains('password')) {
-                            friendlyMsg = 'Password terlalu lemah. Gunakan minimal 6 karakter.';
+                            friendlyMsg = 'Password is too weak. Use at least 6 characters.';
                           } else if (rawMsg.isNotEmpty) {
                             friendlyMsg = rawMsg;
                           } else {
-                            friendlyMsg = 'Gagal menambahkan staff. Coba lagi.';
+                            friendlyMsg = 'Failed to add staff member. Please try again.';
                           }
                           ss(() { isLoading = false; errorMsg = friendlyMsg; });
                           return;
@@ -1094,7 +1094,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                              content: Text('✅ Staff $name berhasil ditambahkan!'),
+                              content: Text('✅ Staff member $name added successfully!'),
                               backgroundColor: const Color(0xFF4CAF50),
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
@@ -1112,7 +1112,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       width: 20, height: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
-                  : const Text('Simpan',
+                  : const Text('Save',
                       style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
@@ -1126,11 +1126,11 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
   Widget build(BuildContext context) {
     final isSuperadmin = _userRole == StaffRole.superadmin;
 
-    // Guard sisi layar — hanya manager & superadmin yang boleh melihat/mengubah
-    // data staff. Router sudah memblokir navigasi ke /staff untuk role lain,
-    // tapi ini dijaga ulang di sini (bukan cuma menyembunyikan menu drawer)
-    // supaya widget ini tidak pernah render/query data staff untuk role yang
-    // tidak berhak walau ter-mount lewat jalur lain.
+    // Screen-side guard — only manager & superadmin may view/modify staff
+    // data. The router already blocks navigation to /staff for other roles,
+    // but this is re-checked here (not just hiding the drawer menu item)
+    // so this widget never renders/queries staff data for an unauthorized
+    // role even if mounted through another path.
     if (_userRole != null &&
         _userRole != StaffRole.superadmin &&
         _userRole != StaffRole.manager) {
@@ -1138,7 +1138,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         drawer: const AppDrawer(),
         appBar: AppBar(title: const Text('Staff Management')),
         body: const Center(
-          child: Text('Anda tidak memiliki akses ke halaman ini.'),
+          child: Text('You do not have access to this page.'),
         ),
       );
     }
@@ -1147,7 +1147,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_showArchived ? 'Staff — Arsip' : 'Staff Management'),
+        title: Text(_showArchived ? 'Staff — Archive' : 'Staff Management'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -1157,7 +1157,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
             fontWeight: FontWeight.w600,
             color: Colors.white),
         actions: [
-          // ── Branch filter dropdown (superadmin only) — sejajar sebelum refresh ──
+          // ── Branch filter dropdown (superadmin only) — placed before refresh ──
           if (isSuperadmin && _allBranches.isNotEmpty)
             DropdownButtonHideUnderline(
               child: DropdownButton<String?>(
@@ -1171,7 +1171,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 11,
@@ -1195,13 +1195,13 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           const SizedBox(width: 4),
           IconButton(
               icon: const Icon(Icons.bar_chart_outlined),
-              tooltip: 'Performa Staff',
+              tooltip: 'Staff Performance',
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => StaffPerformanceScreen(
-                    // Superadmin: kirim null saat "Semua Cabang", atau id branch tertentu
-                    // Non-superadmin: selalu pakai branchId sendiri
+                    // Superadmin: send null for "All Branches", or a specific branch id
+                    // Non-superadmin: always use their own branchId
                     branchId: isSuperadmin ? _selectedFilterBranchId : (_branchId ?? ''),
                   ),
                 ),
@@ -1215,7 +1215,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                   _showArchived ? Icons.people : Icons.archive_outlined,
                   color: Colors.white,
                   size: 18),
-              label: Text(_showArchived ? 'Aktif' : 'Arsip',
+              label: Text(_showArchived ? 'Active' : 'Archive',
                   style: const TextStyle(
                       color: Colors.white,
                       fontFamily: 'Poppins',
@@ -1238,7 +1238,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
               tabs: const [
                 Tab(text: 'Staff', icon: Icon(Icons.people_outline, size: 18)),
-                Tab(text: 'Rekap Shift', icon: Icon(Icons.calendar_today_outlined, size: 18)),
+                Tab(text: 'Shift Summary', icon: Icon(Icons.calendar_today_outlined, size: 18)),
               ],
             ),
           ),
@@ -1251,7 +1251,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               backgroundColor: AppColors.accent,
               elevation: 2,
               icon: const Icon(Icons.person_add, color: Colors.white),
-              label: const Text('Tambah Staff',
+              label: const Text('Add Staff',
                   style: TextStyle(
                       color: Colors.white,
                       fontFamily: 'Poppins',
@@ -1267,7 +1267,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── TAB 1: daftar staff ───────────────────────────────────
+  // ── TAB 1: staff list ───────────────────────────────────
   Widget _buildStaffTab() {
     return Column(children: [
       if (_showArchived)
@@ -1279,7 +1279,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
             Icon(Icons.archive_outlined, color: Colors.orange, size: 18),
             SizedBox(width: 10),
             Expanded(
-                child: Text('Menampilkan staff yang diarsipkan',
+                child: Text('Showing archived staff',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 13,
@@ -1291,7 +1291,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
         child: TextField(
           controller: _searchCtrl,
           decoration: InputDecoration(
-            hintText: 'Cari nama, email, atau role...',
+            hintText: 'Search name, email, or role...',
             hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
             prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textHint),
             suffixIcon: _searchQuery.isNotEmpty
@@ -1328,10 +1328,10 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                         const SizedBox(height: 16),
                         Text(
                             _searchQuery.isNotEmpty
-                                ? 'Tidak ada staff dengan kata kunci "$_searchQuery"'
+                                ? 'No staff found matching "$_searchQuery"'
                                 : _showArchived
-                                    ? 'Tidak ada staff yang diarsipkan'
-                                    : 'Belum ada staff',
+                                    ? 'No archived staff'
+                                    : 'No staff yet',
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 14,
@@ -1342,7 +1342,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                           ElevatedButton.icon(
                             onPressed: _showAddStaffDialog,
                             icon: const Icon(Icons.person_add),
-                            label: const Text('Tambah Staff Sekarang'),
+                            label: const Text('Add Staff Now'),
                             style: ElevatedButton.styleFrom(
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
@@ -1368,7 +1368,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Chip(
-              label: Text('Semua (${_staff.length})',
+              label: Text('All (${_staff.length})',
                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w500)),
               backgroundColor: AppColors.primary.withValues(alpha: 0.1),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -1435,7 +1435,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                       child: ListTile(
                         onTap: () => _showStaffOptions(s),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        // ── Avatar: tampilkan foto jika ada, fallback ke inisial ──
+                        // ── Avatar: show photo if available, fallback to initial ──
                         leading: CircleAvatar(
                             radius: 24,
                             backgroundColor: color.withValues(alpha: 0.15),
@@ -1501,7 +1501,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
     );
   }
 
-  // ── TAB 2: rekap shift ─────────────────────────────────
+  // ── TAB 2: shift summary ───────────────────────────────
   Widget _buildShiftSummaryTab() {
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
@@ -1513,7 +1513,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     const Icon(Icons.calendar_month_outlined,
                         size: 72, color: AppColors.textHint),
                     const SizedBox(height: 16),
-                    const Text('Belum ada staff aktif',
+                    const Text('No active staff yet',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 14,
@@ -1522,7 +1522,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
                     ElevatedButton.icon(
                       onPressed: () => _tabController.animateTo(0),
                       icon: const Icon(Icons.person_add),
-                      label: const Text('Tambah Staff Dulu'),
+                      label: const Text('Add Staff First'),
                       style: ElevatedButton.styleFrom(
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -1538,7 +1538,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
 }
 
 // ─────────────────────────────────────────────────────────
-// Shift Summary Widget (Tab 2 — rekap semua staff)
+// Shift Summary Widget (Tab 2 — summary of all staff)
 // ─────────────────────────────────────────────────────────
 class _ShiftSummaryView extends StatefulWidget {
   final List<StaffMember> staff;
@@ -1556,7 +1556,7 @@ class _ShiftSummaryView extends StatefulWidget {
 }
 
 class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
-  static const _days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+  static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   Map<String, List<Map<String, dynamic>>> _shiftsByStaff = {};
   bool _isLoading = true;
@@ -1660,7 +1660,7 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
           const Icon(Icons.people_outline, size: 18, color: AppColors.textSecondary),
           const SizedBox(width: 8),
           Text(
-              '${_staffOnSelectedDay.length} dari ${widget.staff.length} staff bertugas hari ${_days[_selectedDay]}',
+              '${_staffOnSelectedDay.length} of ${widget.staff.length} staff working on ${_days[_selectedDay]}',
               style: const TextStyle(
                   fontFamily: 'Poppins', fontSize: 13,
                   color: AppColors.textSecondary)),
@@ -1678,7 +1678,7 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
                         const Icon(Icons.event_busy_outlined,
                             size: 64, color: AppColors.textHint),
                         const SizedBox(height: 12),
-                        Text('Tidak ada shift di hari ${_days[_selectedDay]}',
+                        Text('No shifts on ${_days[_selectedDay]}',
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 14,
@@ -1703,7 +1703,7 @@ class _ShiftSummaryViewState extends State<_ShiftSummaryView> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
                           child: Row(children: [
-                            // Avatar dengan foto jika ada
+                            // Avatar with photo if available
                             CircleAvatar(
                                 radius: 24,
                                 backgroundColor: color.withValues(alpha: 0.15),

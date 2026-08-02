@@ -26,7 +26,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (_emailCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
-      _showToast('Email dan password tidak boleh kosong', isError: true);
+      _showToast('Email and password cannot be empty', isError: true);
       return;
     }
     setState(() => _isSubmitting = true);
@@ -39,19 +39,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!success) {
       final error = ref.read(authStateProvider).error ?? '';
       final msg = error.contains('Invalid') || error.contains('credentials')
-          ? '❌ Email atau password salah. Coba lagi!'
+          ? '❌ Wrong email or password. Try again!'
           : error.contains('network') || error.contains('connect')
-              ? '🌐 Tidak ada koneksi internet'
-              : '❌ Login gagal. Periksa email & password kamu';
+              ? '🌐 No internet connection'
+              : '❌ Login failed. Check your email & password';
       _showToast(msg, isError: true);
     } else {
       // Show success briefly - router will redirect automatically
-      _showToast('✅ Login berhasil! Memuat dashboard...', isError: false);
+      _showToast('✅ Login successful! Loading dashboard...', isError: false);
     }
   }
 
-  // ── Lupa Password: kode OTP dikirim via WhatsApp (Fonnte), 2 langkah
-  // dalam 1 dialog — tanpa buka email/klik link/pindah halaman.
+  // ── Forgot Password: OTP code sent via WhatsApp (Fonnte), 2 steps
+  // in 1 dialog — without opening email/clicking a link/switching pages.
   Future<void> _forgotPassword() async {
     final emailCtrl = TextEditingController(text: _emailCtrl.text.trim());
     final otpCtrl = TextEditingController();
@@ -62,7 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        int step = 1; // 1 = minta kode, 2 = masukkan kode + password baru
+        int step = 1; // 1 = request code, 2 = enter code + new password
         bool sending = false;
         bool obscureNew = true;
         bool obscureConfirm = true;
@@ -72,7 +72,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Future<void> requestOtp() async {
               final email = emailCtrl.text.trim();
               if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
-                _showToast('Masukkan email yang valid.', isError: true);
+                _showToast('Enter a valid email.', isError: true);
                 return;
               }
               setS(() => sending = true);
@@ -84,15 +84,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 final data = response.data;
                 final msg = data is Map && data['message'] != null
                     ? data['message'].toString()
-                    : 'Kalau email terdaftar dan punya nomor WhatsApp, kode reset sudah dikirim.';
+                    : 'If the email is registered and has a WhatsApp number, the reset code has been sent.';
                 if (mounted) _showToast(msg, isError: false);
                 setS(() => step = 2);
               } on FunctionException catch (e) {
                 final msg = (e.details is Map ? e.details['error'] : null) ??
-                    'Gagal mengirim kode. Coba lagi.';
+                    'Failed to send code. Try again.';
                 if (mounted) _showToast(msg.toString(), isError: true);
               } catch (_) {
-                if (mounted) _showToast('Gagal mengirim kode. Coba lagi.', isError: true);
+                if (mounted) _showToast('Failed to send code. Try again.', isError: true);
               } finally {
                 if (ctx.mounted) setS(() => sending = false);
               }
@@ -104,15 +104,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               final confirmPass = confirmCtrl.text.trim();
 
               if (otp.length != 6) {
-                _showToast('Kode OTP harus 6 digit.', isError: true);
+                _showToast('OTP code must be 6 digits.', isError: true);
                 return;
               }
               if (newPass.length < 6) {
-                _showToast('Password minimal 6 karakter.', isError: true);
+                _showToast('Password must be at least 6 characters.', isError: true);
                 return;
               }
               if (newPass != confirmPass) {
-                _showToast('Konfirmasi password tidak cocok.', isError: true);
+                _showToast('Password confirmation does not match.', isError: true);
                 return;
               }
 
@@ -134,14 +134,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 }
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (mounted) {
-                  _showToast('Password berhasil diubah. Silakan login.', isError: false);
+                  _showToast('Password changed successfully. Please log in.', isError: false);
                 }
               } on FunctionException catch (e) {
                 final msg = (e.details is Map ? e.details['error'] : null) ??
-                    'Kode salah atau sudah kedaluwarsa.';
+                    'Incorrect or expired code.';
                 if (mounted) _showToast(msg.toString(), isError: true);
               } catch (_) {
-                if (mounted) _showToast('Gagal reset password. Coba lagi.', isError: true);
+                if (mounted) _showToast('Failed to reset password. Try again.', isError: true);
               } finally {
                 if (ctx.mounted) setS(() => sending = false);
               }
@@ -149,7 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text('Lupa Password',
+              title: const Text('Forgot Password',
                   style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
               content: SingleChildScrollView(
                 child: Column(
@@ -158,8 +158,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: step == 1
                       ? [
                           const Text(
-                            'Kode reset 6-digit akan dikirim ke WhatsApp yang '
-                            'terdaftar untuk akun staff ini.',
+                            'A 6-digit reset code will be sent to the WhatsApp number '
+                            'registered for this staff account.',
                             style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary),
                           ),
                           const SizedBox(height: 16),
@@ -175,7 +175,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ]
                       : [
                           Text(
-                            'Masukkan kode yang dikirim ke WhatsApp untuk ${emailCtrl.text.trim()}.',
+                            'Enter the code sent to WhatsApp for ${emailCtrl.text.trim()}.',
                             style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary),
                           ),
                           const SizedBox(height: 16),
@@ -185,7 +185,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             autofocus: true,
                             maxLength: 6,
                             decoration: const InputDecoration(
-                              labelText: 'Kode OTP',
+                              labelText: 'OTP Code',
                               counterText: '',
                               prefixIcon: Icon(Icons.sms_outlined),
                             ),
@@ -194,7 +194,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             controller: newPassCtrl,
                             obscureText: obscureNew,
                             decoration: InputDecoration(
-                              labelText: 'Password Baru',
+                              labelText: 'New Password',
                               prefixIcon: const Icon(Icons.lock_outline),
                               suffixIcon: IconButton(
                                 icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility),
@@ -207,7 +207,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             controller: confirmCtrl,
                             obscureText: obscureConfirm,
                             decoration: InputDecoration(
-                              labelText: 'Konfirmasi Password',
+                              labelText: 'Confirm Password',
                               prefixIcon: const Icon(Icons.lock_outline),
                               suffixIcon: IconButton(
                                 icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility),
@@ -220,7 +220,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             alignment: Alignment.centerLeft,
                             child: TextButton(
                               onPressed: sending ? null : () => setS(() => step = 1),
-                              child: const Text('Ganti email / kirim ulang kode',
+                              child: const Text('Change email / resend code',
                                   style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                             ),
                           ),
@@ -230,7 +230,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               actions: [
                 TextButton(
                   onPressed: sending ? null : () => Navigator.pop(ctx),
-                  child: const Text('Batal'),
+                  child: const Text('Cancel'),
                 ),
                 ElevatedButton(
                   onPressed: sending ? null : (step == 1 ? requestOtp : verifyAndReset),
@@ -238,7 +238,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ? const SizedBox(
                           width: 18, height: 18,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text(step == 1 ? 'Kirim Kode' : 'Reset Password'),
+                      : Text(step == 1 ? 'Send Code' : 'Reset Password'),
                 ),
               ],
             );
@@ -289,7 +289,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               SizedBox(height: 24),
               CircularProgressIndicator(color: Colors.white),
               SizedBox(height: 16),
-              Text('Memuat...', style: TextStyle(color: Colors.white70, fontFamily: 'Poppins')),
+              Text('Loading...', style: TextStyle(color: Colors.white70, fontFamily: 'Poppins')),
             ],
           ),
         ),
@@ -330,7 +330,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text('Masuk ke Akun Anda',
+                      const Text('Log In to Your Account',
                         style: TextStyle(
                           fontFamily: 'Poppins', fontSize: 18,
                           fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
@@ -360,7 +360,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: (_isSubmitting || authState.isLoading) ? null : _forgotPassword,
-                          child: const Text('Lupa Password?',
+                          child: const Text('Forgot Password?',
                               style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontSize: 12,
@@ -377,14 +377,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ? const SizedBox(width: 20, height: 20,
                                   child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2))
-                              : const Text('Masuk'),
+                              : const Text('Log In'),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text('Hanya untuk staff yang berwenang',
+                const Text('Authorized staff only',
                   style: TextStyle(
                     fontFamily: 'Poppins', fontSize: 12, color: Colors.white38)),
               ],

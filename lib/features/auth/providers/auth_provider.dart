@@ -49,7 +49,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     super.dispose();
   }
 
-  // Hanya satu definisi _fetchStaff — versi lengkap dengan login history
+  // Only one definition of _fetchStaff — the full version with login history
   Future<void> _fetchStaff(String userId) async {
     if (!mounted) return;
     state = state.copyWith(isLoading: true);
@@ -63,17 +63,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (res != null) {
         final staff = StaffMember.fromJson(res);
         state = AuthState(staff: staff);
-        // Catat login history — fire and forget, tidak boleh block auth
+        // Record login history — fire and forget, must not block auth
         _insertLoginHistory(staff);
       } else {
-        state = const AuthState(error: 'Staff tidak ditemukan');
+        state = const AuthState(error: 'Staff not found');
       }
     } catch (e) {
       if (mounted) state = AuthState(error: e.toString());
     }
   }
 
-  // Insert login history tanpa throw — gagal insert tidak ganggu login
+  // Insert login history without throwing — a failed insert shouldn't disrupt login
   Future<void> _insertLoginHistory(StaffMember staff) async {
     if (staff.branchId == null) return;
     try {
@@ -85,7 +85,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             'logged_in_at': DateTime.now().toUtc().toIso8601String(),
           });
     } catch (_) {
-      // Gagal insert history tidak perlu ditampilkan ke user
+      // A failed history insert doesn't need to be shown to the user
     }
   }
 

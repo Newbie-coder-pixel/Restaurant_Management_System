@@ -20,7 +20,7 @@ abstract class ICostingService {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// IMPLEMENTASI SUPABASE
+// SUPABASE IMPLEMENTATION
 // ─────────────────────────────────────────────────────────────────────────────
 class CostingService implements ICostingService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -66,7 +66,7 @@ class CostingService implements ICostingService {
 
   @override
   Future<CostingModel> createCosting(CostingModel costing) async {
-    // Hapus 'id' agar Supabase generate UUID sendiri
+    // Remove 'id' so Supabase generates its own UUID
     final data = costing.toJson()..remove('id');
     final res = await _supabase
         .from(_costingsTable)
@@ -128,7 +128,7 @@ class CostingService implements ICostingService {
   }
 
   // ─────────────────────────────────────────────────
-  // QUERY KHUSUS
+  // SPECIALIZED QUERIES
   // ─────────────────────────────────────────────────
 
   @override
@@ -155,7 +155,7 @@ class CostingService implements ICostingService {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MOCK SERVICE: Untuk testing / development tanpa Supabase
+// MOCK SERVICE: For testing / development without Supabase
 // ─────────────────────────────────────────────────────────────────────────────
 class MockCostingService implements ICostingService {
   final Map<String, Map<String, dynamic>> _costingsDb = {};
@@ -186,7 +186,7 @@ class MockCostingService implements ICostingService {
       _costingsDb[c.id] = c.toJson();
     }
     final exp = OperatingExpenseModel(
-      id: 'exp-001', periodLabel: 'Mei 2025', periodYear: 2025, periodMonth: 5,
+      id: 'exp-001', periodLabel: 'May 2025', periodYear: 2025, periodMonth: 5,
       totalLaborCost: 15000000, electricityCost: 2500000, waterCost: 500000,
       gasCost: 750000, internetCost: 350000, rentCost: 8000000,
       otherOverheadCost: 1000000, estimatedPortionsSoldMonthly: 3000,

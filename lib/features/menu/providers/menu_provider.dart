@@ -45,15 +45,15 @@ class MenuFilter {
   }
 }
 
-// ─── FIX UTAMA: menuFilterProvider auto-init dari staff branchId ──────────────
-// Saat refresh web, provider ini langsung punya branchId yang benar
-// tanpa perlu menunggu initState + addPostFrameCallback.
+// ─── MAIN FIX: menuFilterProvider auto-init from staff branchId ──────────────
+// On a web refresh, this provider immediately has the correct branchId
+// without needing to wait for initState + addPostFrameCallback.
 final menuFilterProvider = StateProvider<MenuFilter>((ref) {
   final staff = ref.watch(currentStaffProvider);
   final isSuperAdmin = staff?.role == StaffRole.superadmin;
 
-  // Superadmin: default tampil semua (branchId null)
-  // Staff biasa: langsung filter ke branch mereka
+  // Superadmin: default to showing everything (branchId null)
+  // Regular staff: filter directly to their branch
   final initialBranchId = isSuperAdmin ? null : staff?.branchId;
 
   return MenuFilter(branchId: initialBranchId);

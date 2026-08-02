@@ -22,7 +22,7 @@ final costingProvider =
   return CostingNotifier(service: service, ref: ref);
 });
 
-// ─── Notifier (wrapper tipis di atas CostingProvider lama) ────────────────
+// ─── Notifier (thin wrapper around the old CostingProvider) ────────────────
 class CostingNotifier extends ChangeNotifier {
   final ICostingService _service;
   final Ref _ref;
@@ -40,10 +40,10 @@ class CostingNotifier extends ChangeNotifier {
   CostingSummaryModel _summary = CostingSummaryModel.fromCostings([], 100);
   bool _isSaving = false;
 
-  // ── Branch filter state (sama seperti reports) ─────────────────────────
+  // ── Branch filter state (same as reports) ───────────────────────────────
   bool _isSuperAdmin = false;
-  String? _branchId;          // branch user yang login (non-superadmin)
-  String? _selectedBranchId; // branch yang dipilih superadmin di dropdown
+  String? _branchId;          // branch of the logged-in user (non-superadmin)
+  String? _selectedBranchId; // branch selected by superadmin in the dropdown
   List<Map<String, dynamic>> _branches = [];
   bool _initialized = false;
 
@@ -81,7 +81,7 @@ class CostingNotifier extends ChangeNotifier {
         updatedAt: DateTime.now(),
       );
 
-  // ── Init (sama seperti reports) ────────────────────────────────────────
+  // ── Init (same as reports) ──────────────────────────────────────────────
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
@@ -123,19 +123,19 @@ class CostingNotifier extends ChangeNotifier {
     }
   }
 
-  // ── Effective branch untuk query ───────────────────────────────────────
+  // ── Effective branch for queries ────────────────────────────────────────
   String? get _effectiveBranchId =>
       _isSuperAdmin ? _selectedBranchId : _branchId;
 
-  /// Branch aktif saat ini (dipakai UI untuk filter picker menu).
+  /// Currently active branch (used by the UI for the menu filter picker).
   String? get effectiveBranchId => _effectiveBranchId;
 
-  /// Hitung total biaya bahan baku (ingredient cost) per porsi untuk satu
-  /// menu item, berdasarkan resep (menu_ingredients) × harga bahan TERKINI
-  /// dari inventory (bukan harga yang tersimpan lama di resep), supaya HPP
-  /// selalu mengikuti harga bahan baku terbaru.
+  /// Compute the total ingredient cost per portion for a single
+  /// menu item, based on the recipe (menu_ingredients) × the CURRENT
+  /// ingredient price from inventory (not the stale price stored in the
+  /// recipe), so COGS always follows the latest ingredient prices.
   ///
-  /// Ini adalah titik koneksi utama Menu ↔ Inventory ↔ Costing.
+  /// This is the main connection point between Menu ↔ Inventory ↔ Costing.
   Future<double> computeIngredientCostForMenu(String menuItemId) async {
     final branchId = _effectiveBranchId;
     if (branchId == null || menuItemId.isEmpty) return 0;
@@ -156,8 +156,8 @@ class CostingNotifier extends ChangeNotifier {
     double total = 0;
     for (final ing in ingredients) {
       final liveCost = costByName[ing.inventoryItemName.trim().toLowerCase()];
-      // Prioritaskan harga inventory TERKINI; fallback ke harga tersimpan di
-      // resep kalau bahan itu belum/tidak ada di data inventory hari ini.
+      // Prioritize the CURRENT inventory price; fall back to the price
+      // stored in the recipe if the ingredient isn't in today's inventory data.
       final unitCost = liveCost ?? ing.costPerUnit;
       total += ing.quantity * unitCost;
     }
@@ -178,7 +178,7 @@ class CostingNotifier extends ChangeNotifier {
       _recalculateSummary();
       _setState(CostingViewState.success);
     } catch (e) {
-      _setError('Gagal memuat data: $e');
+      _setError('Failed to load data: $e');
     }
   }
 
@@ -187,7 +187,7 @@ class CostingNotifier extends ChangeNotifier {
       final costing = await _service.getCostingByMenuItemId(menuItemId);
       setActiveCosting(costing ?? CostingModel.empty());
     } catch (e) {
-      _setError('Gagal memuat costing: $e');
+      _setError('Failed to load costing: $e');
     }
   }
 
@@ -244,7 +244,7 @@ class CostingNotifier extends ChangeNotifier {
       return true;
     } catch (e) {
       _isSaving = false;
-      _setError('Gagal menyimpan: $e');
+      _setError('Failed to save: $e');
       return false;
     }
   }
@@ -257,7 +257,7 @@ class CostingNotifier extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _setError('Gagal menghapus: $e');
+      _setError('Failed to delete: $e');
       return false;
     }
   }
@@ -304,7 +304,7 @@ class CostingNotifier extends ChangeNotifier {
       return true;
     } catch (e) {
       _isSaving = false;
-      _setError('Gagal menyimpan biaya operasional: $e');
+      _setError('Failed to save operating expense: $e');
       return false;
     }
   }

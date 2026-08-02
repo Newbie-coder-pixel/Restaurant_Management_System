@@ -54,8 +54,8 @@ class ResponsiveGap extends StatelessWidget {
   final double widthFactor;
   final bool isHeight;
 
-  // FIX: Tambah {super.key} → fixes use_key_in_widget_constructors
-  // FIX: Gunakan this.heightFactor / this.widthFactor → fixes prefer_initializing_formals
+  // FIX: Add {super.key} → fixes use_key_in_widget_constructors
+  // FIX: Use this.heightFactor / this.widthFactor → fixes prefer_initializing_formals
   const ResponsiveGap.height(this.heightFactor, {super.key})
     : widthFactor = 0,
       isHeight = true;

@@ -30,25 +30,25 @@ class QrOrderTrackerScreen extends ConsumerWidget {
             children: [
               const CircularProgressIndicator(),
               const SizedBox(height: 16),
-              Text('Memuat status pesanan...',
+              Text('Loading order status...',
                   style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),
       ),
       error: (e, _) => Scaffold(
-        appBar: AppBar(title: const Text('Status Pesanan')),
+        appBar: AppBar(title: const Text('Order Status')),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.wifi_off_outlined, size: 64, color: Colors.grey),
               const SizedBox(height: 16),
-              const Text('Tidak dapat memuat status'),
+              const Text('Unable to load status'),
               const SizedBox(height: 8),
               if (queueNumber != null)
                 Text(
-                  'No. Antrian: $queueNumber',
+                  'Queue No.: $queueNumber',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 18),
                 ),
@@ -56,7 +56,7 @@ class QrOrderTrackerScreen extends ConsumerWidget {
               ElevatedButton.icon(
                 onPressed: () => ref.invalidate(qrOrderWatchProvider(orderId)),
                 icon: const Icon(Icons.refresh),
-                label: const Text('Coba Lagi'),
+                label: const Text('Try Again'),
               ),
             ],
           ),
@@ -77,32 +77,32 @@ class _TrackerBody extends StatelessWidget {
   static const _steps = [
     (
       status: QrOrderStatus.created,
-      label: 'Pesanan Masuk',
-      sublabel: 'Pesanan diterima, menunggu dapur',
+      label: 'Order Received',
+      sublabel: 'Order received, waiting for the kitchen',
       icon: Icons.hourglass_top_outlined,
     ),
     (
       status: QrOrderStatus.preparing,
-      label: 'Sedang Dimasak',
-      sublabel: 'Dapur sedang memproses pesanan',
+      label: 'Being Cooked',
+      sublabel: 'The kitchen is preparing your order',
       icon: Icons.outdoor_grill_outlined,
     ),
     (
       status: QrOrderStatus.ready,
-      label: 'Siap Disajikan',
-      sublabel: 'Pesanan sudah siap, segera diantar',
+      label: 'Ready to Serve',
+      sublabel: 'Your order is ready, will be served shortly',
       icon: Icons.dining_outlined,
     ),
     (
       status: QrOrderStatus.served,
-      label: 'Selamat Menikmati',
-      sublabel: 'Pesanan sudah ada di meja kamu',
+      label: 'Enjoy Your Meal',
+      sublabel: 'Your order is on your table',
       icon: Icons.sentiment_very_satisfied_outlined,
     ),
     (
       status: QrOrderStatus.paid,
-      label: 'Selesai & Lunas',
-      sublabel: 'Terima kasih sudah makan di sini!',
+      label: 'Completed & Paid',
+      sublabel: 'Thank you for dining with us!',
       icon: Icons.celebration_outlined,
     ),
   ];
@@ -122,8 +122,8 @@ class _TrackerBody extends StatelessWidget {
             child: _QueueHeader(order: order),
           ),
 
-          // ── ML Estimasi Waktu ──────────────────────────────────────────
-          // Hanya tampil saat order aktif (created / preparing)
+          // ── ML Time Estimate ──────────────────────────────────────────
+          // Only shown while the order is active (created / preparing)
           if (!isCancelled &&
               (order.status == QrOrderStatus.created ||
                   order.status == QrOrderStatus.preparing))
@@ -152,7 +152,7 @@ class _TrackerBody extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Pesanan dibatalkan. Silakan hubungi kasir.',
+                          'Order cancelled. Please contact the cashier.',
                           style: TextStyle(color: colorScheme.error),
                         ),
                       ),
@@ -218,12 +218,12 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
   late final Future<PrepTimeResult?> _future;
   List<PrepTimeRequestItem> _requestItems = [];
 
-  /// Konversi QrOrderItemModel → PrepTimeRequestItem untuk ML API.
-  /// Ambil preparation_time_minutes ASLI dari tabel menu_items — sebelumnya
-  /// di-hardcode 15 untuk semua item karena QrOrderItemModel tidak menyimpan
-  /// field ini, yang merusak weighted_prep_time (Es Teh dan Ayam Bakar sama
-  /// dianggap 15 menit). Fallback ke 15 hanya kalau menu item-nya sudah
-  /// dihapus dari tabel menu_items.
+  /// Converts QrOrderItemModel → PrepTimeRequestItem for the ML API.
+  /// Fetches the REAL preparation_time_minutes from the menu_items table —
+  /// previously hardcoded to 15 for all items because QrOrderItemModel didn't
+  /// store this field, which broke weighted_prep_time (Iced Tea and Grilled
+  /// Chicken were both treated as 15 minutes). Falls back to 15 only if the
+  /// menu item has already been deleted from the menu_items table.
   Future<List<PrepTimeRequestItem>> _buildRequestItems() async {
     final ids = widget.order.items.map((i) => i.menuItemId).toSet().toList();
     final prepTimes = <String, int>{};
@@ -240,7 +240,7 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
           if (id != null && prep != null) prepTimes[id] = prep;
         }
       } catch (e) {
-        debugPrint('Gagal ambil preparation_time_minutes: $e');
+        debugPrint('Failed to fetch preparation_time_minutes: $e');
       }
     }
 
@@ -303,7 +303,7 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'Menghitung estimasi waktu...',
+                  'Calculating time estimate...',
                   style: theme.textTheme.bodyMedium
                       ?.copyWith(color: cs.onPrimaryContainer),
                 ),
@@ -311,9 +311,9 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
             );
           }
 
-          // Server tidak terjangkau (mis. mati/timeout) → tampilkan estimasi
-          // kasar (jumlah menu prep time, tanpa ML/buffer) daripada
-          // menyembunyikan kartu ini sepenuhnya. Ditandai jelas beda dari hasil ML.
+          // Server unreachable (e.g. down/timeout) → show a rough estimate
+          // (sum of menu prep times, without ML/buffer) instead of
+          // hiding this card entirely. Clearly marked as different from the ML result.
           final result = snap.data;
           final isFallback = snap.hasError || result == null;
           final displayMinutes = isFallback
@@ -327,7 +327,7 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
                     color: cs.outline, size: 20),
                 const SizedBox(width: 10),
                 Text(
-                  'Estimasi waktu tidak tersedia',
+                  'Time estimate not available',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: cs.outline),
                 ),
@@ -353,15 +353,15 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
               ),
               const SizedBox(width: 14),
 
-              // Teks estimasi
+              // Estimate text
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       isFallback
-                          ? 'Estimasi Kasar (offline)'
-                          : 'Estimasi Waktu Masak',
+                          ? 'Rough Estimate (offline)'
+                          : 'Estimated Cooking Time',
                       style: theme.textTheme.labelMedium?.copyWith(
                         color: cs.onPrimaryContainer
                             .withValues(alpha: 0.75),
@@ -379,7 +379,7 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
                 ),
               ),
 
-              // Badge AI
+              // AI Badge
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 5),
@@ -448,7 +448,7 @@ class _QueueHeader extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    'Status Pesanan',
+                    'Order Status',
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: colorScheme.onPrimary,
                       fontWeight: FontWeight.bold,
@@ -496,7 +496,7 @@ class _QueueHeader extends StatelessWidget {
                 child: Column(
                   children: [
                     Text(
-                      'No. Antrian',
+                      'Queue No.',
                       style: theme.textTheme.labelLarge?.copyWith(
                           color: colorScheme.onPrimary.withValues(alpha: 0.8)),
                     ),
@@ -516,7 +516,7 @@ class _QueueHeader extends StatelessWidget {
                             ClipboardData(text: order.queueNumber));
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text('Nomor antrian disalin!'),
+                              content: Text('Queue number copied!'),
                               duration: Duration(seconds: 2)),
                         );
                       },
@@ -528,7 +528,7 @@ class _QueueHeader extends StatelessWidget {
                               color: colorScheme.onPrimary.withValues(alpha: 0.7)),
                           const SizedBox(width: 4),
                           Text(
-                            'Salin nomor',
+                            'Copy number',
                             style: theme.textTheme.labelSmall?.copyWith(
                                 color:
                                     colorScheme.onPrimary.withValues(alpha: 0.7)),
@@ -726,7 +726,7 @@ class _StatusStepper extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          'Sekarang',
+                          'Now',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.bold,
@@ -757,7 +757,7 @@ class _PaymentStatusCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final isPaid = order.paymentStatus == QrPaymentStatus.paid;
     final methodLabel =
-        order.paymentMethod == 'qris' ? 'QRIS' : 'Kasir';
+        order.paymentMethod == 'qris' ? 'QRIS' : 'Cashier';
 
     return Container(
       decoration: BoxDecoration(
@@ -791,7 +791,7 @@ class _PaymentStatusCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isPaid ? 'Sudah Dibayar' : 'Bayar Setelah Makan',
+                  isPaid ? 'Paid' : 'Pay After Dining',
                   style: theme.textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: isPaid
@@ -801,8 +801,8 @@ class _PaymentStatusCard extends StatelessWidget {
                 ),
                 Text(
                   isPaid
-                      ? 'Pembayaran via $methodLabel dikonfirmasi'
-                      : 'Silakan bayar ke kasir setelah selesai makan',
+                      ? 'Payment via $methodLabel confirmed'
+                      : 'Please pay at the cashier after you finish dining',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: colorScheme.outline),
                 ),
@@ -818,7 +818,7 @@ class _PaymentStatusCard extends StatelessWidget {
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
               Text(
-                'sudah termasuk PB1 & service charge',
+                'already includes PB1 & service charge',
                 style: theme.textTheme.labelSmall
                     ?.copyWith(color: colorScheme.outline, fontSize: 10),
               ),
@@ -877,7 +877,7 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
                       size: 18, color: colorScheme.primary),
                   const SizedBox(width: 8),
                   Text(
-                    'Detail Pesanan (${widget.order.items.length} item)',
+                    'Order Details (${widget.order.items.length} item)',
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
@@ -1071,14 +1071,14 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
   @override
   void initState() {
     super.initState();
-    // Init dari model supaya persistent setelah refresh
+    // Init from the model so it persists after a refresh
     _billRequested = widget.order.billRequested;
   }
 
   @override
   void didUpdateWidget(_TrackerActions oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Kalau Supabase realtime update order dan billRequested jadi true, ikut update
+    // If a Supabase realtime update sets billRequested to true, follow it
     if (widget.order.billRequested && !_billRequested) {
       setState(() => _billRequested = true);
     }
@@ -1086,7 +1086,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
 
   Future<void> _requestBill(BuildContext context) async {
     final order = widget.order;
-    // Simpan messenger sebelum async gap
+    // Save the messenger before the async gap
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _isRequestingBill = true);
     try {
@@ -1102,7 +1102,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
       });
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('✅ Kasir sedang menyiapkan bill kamu!'),
+          content: Text('✅ The cashier is preparing your bill!'),
           duration: Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
         ),
@@ -1112,7 +1112,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
       setState(() => _isRequestingBill = false);
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Gagal mengirim permintaan bill. Coba lagi.'),
+          content: Text('Failed to send the bill request. Try again.'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -1120,23 +1120,23 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
     }
   }
 
-  /// Navigasi ke menu screen dalam mode "tambah pesanan".
-  /// Set addOrderModeProvider → clear cart lama → push ke menu.
+  /// Navigates to the menu screen in "add order" mode.
+  /// Sets addOrderModeProvider → clears the old cart → pushes to the menu.
   void _goToAddOrder(BuildContext context) {
     final order = widget.order;
 
-    // Set mode tambah pesanan
+    // Set add-order mode
     ref.read(addOrderModeProvider.notifier).state = AddOrderModeState(
       orderId: order.id,
       queueNumber: order.queueNumber,
       tableId: order.tableId,
     );
 
-    // Clear cart agar tidak tercampur dengan item order lama
+    // Clear the cart so it doesn't mix with items from the old order
     final table = ref.read(activeQrTableProvider);
     ref.read(qrCartProvider(table).notifier).clearCart();
 
-    // Push ke menu screen (bukan go, agar bisa back ke tracker)
+    // Push to the menu screen (not go, so we can back out to the tracker)
     context.push('/qr/${order.tableId}');
   }
 
@@ -1152,12 +1152,12 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
     final isPaid = order.status == QrOrderStatus.paid;
     final isCancelled = order.status == QrOrderStatus.cancelled;
 
-    // Tambah pesanan boleh selama belum served/paid/cancelled
+    // Adding to the order is allowed until served/paid/cancelled
     final canAddOrder = (isCreated || isPreparing || isReady) && !isCancelled;
 
     return Column(
       children: [
-        // ── Tombol Tambah Pesanan (aktif sampai sebelum served) ───────
+        // ── Add Order button (active until served) ───────
         if (canAddOrder) ...[
           SizedBox(
             width: double.infinity,
@@ -1173,13 +1173,13 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
               ),
               icon: const Icon(Icons.add_shopping_cart_outlined),
               label: const Text(
-                'Tambah Pesanan',
+                'Add Order',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
           ),
           const SizedBox(height: 8),
-          // Info: item yang sudah dikirim tidak bisa diubah
+          // Info: items already sent cannot be changed
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -1195,7 +1195,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Item yang sudah dikirim ke dapur tidak dapat diubah atau dibatalkan.',
+                    'Items already sent to the kitchen cannot be changed or cancelled.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onTertiaryContainer,
                         fontSize: 11),
@@ -1207,7 +1207,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
           const SizedBox(height: 10),
         ],
 
-        // ── Tombol Minta Bill (hanya saat served) ──────────────────────────
+        // ── Request Bill button (only while served) ──────────────────────────
         if (isServed) ...[
           if (!_billRequested)
             SizedBox(
@@ -1228,7 +1228,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
                             color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.receipt_outlined),
                 label: Text(
-                  _isRequestingBill ? 'Mengirim...' : 'Minta Bill',
+                  _isRequestingBill ? 'Sending...' : 'Request Bill',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
@@ -1249,7 +1249,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
                       color: Colors.green.shade700, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    'Bill sudah diminta — kasir akan datang',
+                    'Bill requested — the cashier is on the way',
                     style: TextStyle(
                       color: Colors.green.shade700,
                       fontWeight: FontWeight.w600,
@@ -1261,14 +1261,14 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
           const SizedBox(height: 10),
         ],
 
-        // ── Pesan lagi setelah lunas ───────────────────────────────────────
+        // ── Order again after payment is complete ───────────────────────────────────────
         if (isPaid) ...[
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () => context.go('/qr/${order.tableId}'),
               icon: const Icon(Icons.add_shopping_cart_outlined),
-              label: const Text('Pesan Lagi'),
+              label: const Text('Order Again'),
             ),
           ),
           const SizedBox(height: 10),
@@ -1287,7 +1287,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Ada masalah? Tunjukkan layar ini ke staf kami.',
+                  'Having an issue? Show this screen to our staff.',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: colorScheme.outline),
                 ),

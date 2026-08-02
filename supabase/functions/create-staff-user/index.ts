@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Origin diizinkan lewat env var ALLOWED_ORIGINS (comma-separated).
+// Origin allowed via the ALLOWED_ORIGINS env var (comma-separated).
 function resolveAllowedOrigin(req: Request): string {
   const allowed = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
     .split(',').map((s) => s.trim()).filter(Boolean)
@@ -20,19 +20,19 @@ serve(async (req) => {
   }
 
   try {
-    // Pakai service role key — bisa create user tanpa logout session yang ada
+    // Use the service role key — can create a user without logging out the existing session
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    // ── Verifikasi pemanggil ────────────────────────────────────────────────
-    // SEBELUM fix ini, function ini TIDAK PERNAH mengecek siapa yang memanggil
-    // — role & branchId dari body dipercaya mentah-mentah, jadi staff role
-    // apa pun (bahkan kalau JWT-nya valid tapi rolenya waiter/kasir) bisa
-    // membuat akun baru ber-role superadmin. Sekarang caller WAJIB staff aktif
-    // dengan role superadmin/manager, dan manager tidak boleh membuat akun
-    // superadmin atau membuat staff di cabang lain.
+    // ── Verify the caller ────────────────────────────────────────────────
+    // BEFORE this fix, this function NEVER checked who was calling it
+    // — the role & branchId from the body were trusted as-is, so any staff
+    // role (even with a valid JWT but role waiter/cashier) could create a
+    // new account with the superadmin role. Now the caller MUST be an active
+    // staff member with role superadmin/manager, and a manager cannot create
+    // superadmin accounts or create staff in another branch.
     const authHeader = req.headers.get('authorization') ?? ''
     const callerJwt = authHeader.replace(/^Bearer\s+/i, '')
     if (!callerJwt) {
@@ -45,7 +45,7 @@ serve(async (req) => {
     const { data: callerAuth, error: callerAuthError } = await supabaseAdmin.auth.getUser(callerJwt)
     if (callerAuthError || !callerAuth?.user) {
       return new Response(
-        JSON.stringify({ error: 'Sesi tidak valid, silakan login ulang.' }),
+        JSON.stringify({ error: 'Invalid session, please log in again.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
@@ -58,49 +58,49 @@ serve(async (req) => {
 
     if (callerStaffError || !callerStaff || !callerStaff.is_active) {
       return new Response(
-        JSON.stringify({ error: 'Akun Anda tidak memiliki akses untuk membuat staff baru.' }),
+        JSON.stringify({ error: 'Your account does not have access to create new staff.' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
     if (callerStaff.role !== 'superadmin' && callerStaff.role !== 'manager') {
       return new Response(
-        JSON.stringify({ error: 'Hanya manager/superadmin yang boleh membuat staff baru.' }),
+        JSON.stringify({ error: 'Only managers/superadmins can create new staff.' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
     const { email, password, fullName, phone, role, branchId } = await req.json()
 
-    // Validasi input
+    // Validate input
     if (!email || !password || !fullName || !role || !branchId) {
       return new Response(
-        JSON.stringify({ error: 'Data tidak lengkap.' }),
+        JSON.stringify({ error: 'Incomplete data.' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
-    // Manager cuma boleh buat staff di cabang sendiri, dan tidak boleh grant superadmin.
+    // A manager can only create staff in their own branch, and cannot grant superadmin.
     if (callerStaff.role === 'manager') {
       if (role === 'superadmin') {
         return new Response(
-          JSON.stringify({ error: 'Manager tidak boleh membuat akun superadmin.' }),
+          JSON.stringify({ error: 'Managers cannot create superadmin accounts.' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         )
       }
       if (branchId !== callerStaff.branch_id) {
         return new Response(
-          JSON.stringify({ error: 'Manager hanya boleh membuat staff di cabang sendiri.' }),
+          JSON.stringify({ error: 'Managers can only create staff in their own branch.' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         )
       }
     }
 
-    // Step 1: Buat auth user pakai Admin API (tidak ganggu sesi yang login)
+    // Step 1: Create the auth user using the Admin API (doesn't disturb the logged-in session)
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true, // langsung confirmed, tidak perlu verifikasi email
+      email_confirm: true, // confirmed immediately, no email verification needed
     })
 
     if (authError) {
@@ -112,7 +112,7 @@ serve(async (req) => {
 
     const userId = authData.user.id
 
-    // Step 2: Insert ke tabel staff
+    // Step 2: Insert into the staff table
     const { error: staffError } = await supabaseAdmin.from('staff').insert({
       user_id: userId,
       branch_id: branchId,
@@ -124,10 +124,10 @@ serve(async (req) => {
     })
 
     if (staffError) {
-      // Kalau insert staff gagal, hapus auth user yang sudah terbuat
+      // If inserting staff fails, delete the auth user that was already created
       await supabaseAdmin.auth.admin.deleteUser(userId)
       return new Response(
-        JSON.stringify({ error: 'Gagal simpan data staff: ' + staffError.message }),
+        JSON.stringify({ error: 'Failed to save staff data: ' + staffError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }

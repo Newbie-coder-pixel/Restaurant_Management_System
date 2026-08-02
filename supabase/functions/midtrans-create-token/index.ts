@@ -1,41 +1,41 @@
 // supabase/functions/midtrans-create-token/index.ts
 // ─────────────────────────────────────────────────────────────────────────────
-// Edge Function: Buat Midtrans Snap Token
-// Dipanggil Flutter saat user akan bayar → return snap_token ke Flutter
-// Flutter pakai token itu untuk buka halaman pembayaran Midtrans
+// Edge Function: Create Midtrans Snap Token
+// Called by Flutter when the user is about to pay → returns snap_token to Flutter
+// Flutter uses that token to open the Midtrans payment page
 //
-// PERUBAHAN PENTING (fix "order_id has already been taken"):
-//   Midtrans MEWAJIBKAN order_id unik selamanya per akun, tidak boleh
-//   dipakai dua kali walau transaksi sebelumnya gagal/pending/expired.
-//   Karena itu, Flutter sekarang mengirim DUA id berbeda:
-//     - `order_id`          → id UNIK per percobaan bayar, dikirim ke
-//                             Midtrans sebagai transaction_details.order_id
-//     - `internal_order_id` → UUID asli row di tabel `orders`, dipakai
-//                             untuk lookup & update ke database
+// IMPORTANT CHANGE (fix for "order_id has already been taken"):
+//   Midtrans REQUIRES order_id to be unique forever per account, and it
+//   cannot be reused even if the previous transaction failed/is
+//   pending/expired. Because of this, Flutter now sends TWO different ids:
+//     - `order_id`          → a UNIQUE id per payment attempt, sent to
+//                             Midtrans as transaction_details.order_id
+//     - `internal_order_id` → the real UUID row in the `orders` table, used
+//                             for lookups & updates to the database
 //
-//   `order_id` (yang unik) juga disimpan ke kolom `midtrans_order_id` di
-//   tabel `orders`, supaya webhook/notification handler nanti bisa
-//   mencocokkan balik ke row yang benar saat Midtrans mengirim notifikasi
-//   pembayaran (notifikasi itu hanya berisi `order_id` versi unik, BUKAN
-//   internal_order_id).
+//   `order_id` (the unique one) is also saved to the `midtrans_order_id`
+//   column in the `orders` table, so the webhook/notification handler can
+//   later match it back to the correct row when Midtrans sends a payment
+//   notification (that notification only contains the unique `order_id`
+//   version, NOT internal_order_id).
 //
-//   WAJIB: tambahkan kolom baru di tabel `orders` kalau belum ada:
+//   REQUIRED: add the new column to the `orders` table if it doesn't exist yet:
 //     ALTER TABLE orders ADD COLUMN IF NOT EXISTS midtrans_order_id text;
 //     CREATE INDEX IF NOT EXISTS idx_orders_midtrans_order_id
 //       ON orders (midtrans_order_id);
 //
-//   Dan webhook handler kamu (function lain yang terima notifikasi dari
-//   Midtrans) juga WAJIB diupdate untuk lookup pakai:
+//   And your webhook handler (the other function that receives notifications
+//   from Midtrans) also MUST be updated to look up using:
 //     .eq("midtrans_order_id", notification.order_id)
-//   BUKAN lagi:
+//   NO LONGER:
 //     .eq("id", notification.order_id)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Origin diizinkan lewat env var ALLOWED_ORIGINS (comma-separated) — sebelumnya
-// "*" mengizinkan situs manapun memicu pembuatan Snap token dari browser.
+// Origin allowed via the ALLOWED_ORIGINS env var (comma-separated) — previously
+// "*" allowed any site to trigger Snap token creation from a browser.
 function resolveAllowedOrigin(req: Request): string {
   const allowed = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
     .split(",").map((s) => s.trim()).filter(Boolean);
@@ -56,7 +56,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    // ── 1. Ambil secrets dari environment ──────────────────────────────────
+    // ── 1. Read secrets from the environment ──────────────────────────────────
     const MIDTRANS_SERVER_KEY = Deno.env.get("MIDTRANS_SERVER_KEY");
     const MIDTRANS_IS_PRODUCTION = Deno.env.get("MIDTRANS_IS_PRODUCTION") === "true";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -69,7 +69,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 2. Verifikasi JWT user (pastikan request dari app sendiri) ──────────
+    // ── 2. Verify the user's JWT (make sure the request is from our own app) ──────────
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(
@@ -80,24 +80,24 @@ serve(async (req: Request) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // ── 3. Parse request body ───────────────────────────────────────────────
+    // ── 3. Parse the request body ───────────────────────────────────────────────
     const body = await req.json();
     const {
-      order_id,          // string: id UNIK per percobaan bayar (dikirim ke Midtrans)
-      internal_order_id, // string: UUID asli row di tabel `orders`
-      gross_amount,      // number: total dalam Rupiah (integer, tanpa desimal)
-      customer_name,     // string: nama pelanggan
-      customer_email,    // string: email (opsional, Midtrans tetap bisa jalan)
-      customer_phone,    // string: nomor HP (opsional)
+      order_id,          // string: UNIQUE id per payment attempt (sent to Midtrans)
+      internal_order_id, // string: the real UUID row in the `orders` table
+      gross_amount,      // number: total in Rupiah (integer, no decimals)
+      customer_name,     // string: customer name
+      customer_email,    // string: email (optional, Midtrans still works without it)
+      customer_phone,    // string: phone number (optional)
       items,             // array: [{id, name, price, quantity}]
-      enabled_payments,  // array opsional: filter metode bayar
+      enabled_payments,  // optional array: payment method filter
     } = body;
 
-    // Fallback untuk kompatibilitas kalau ada caller lama yang belum kirim
-    // internal_order_id (mis. versi app lama) — anggap order_id == internal id.
+    // Fallback for compatibility in case an older caller hasn't sent
+    // internal_order_id yet (e.g. an old app version) — assume order_id == internal id.
     const internalOrderId = internal_order_id || order_id;
 
-    // Validasi input minimal
+    // Minimal input validation
     if (!order_id || !internalOrderId || !gross_amount) {
       return new Response(
         JSON.stringify({
@@ -107,7 +107,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // Pastikan gross_amount integer (Midtrans tidak terima desimal)
+    // Make sure gross_amount is an integer (Midtrans doesn't accept decimals)
     const amount = Math.round(Number(gross_amount));
     if (amount <= 0) {
       return new Response(
@@ -116,9 +116,9 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 4. Cek order ada di DB dan statusnya valid ──────────────────────────
-    // PENTING: lookup pakai internalOrderId (UUID asli), BUKAN order_id
-    // (yang sekarang sudah unik per percobaan dan tidak match kolom `id`).
+    // ── 4. Check the order exists in the DB and its status is valid ──────────────────────────
+    // IMPORTANT: lookup uses internalOrderId (the real UUID), NOT order_id
+    // (which is now unique per attempt and won't match the `id` column).
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("id, status, payment_status, total_amount, branch_id")
@@ -139,12 +139,12 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 4b. Validasi gross_amount vs total_amount asli di DB ────────────────
-    // SEBELUM fix ini, `amount` (dari body request, dikirim client) dipakai
-    // langsung sebagai gross_amount ke Midtrans tanpa pernah dicocokkan ke
-    // `order.total_amount` yang sudah di-fetch di atas — client bisa minta
-    // Snap token untuk nominal berapa pun terlepas dari harga order
-    // sebenarnya. Toleransi Rp1 untuk pembulatan.
+    // ── 4b. Validate gross_amount against the real total_amount in the DB ────────────────
+    // BEFORE this fix, `amount` (from the request body, sent by the client) was used
+    // directly as the gross_amount sent to Midtrans without ever being checked
+    // against the `order.total_amount` fetched above — a client could request
+    // a Snap token for any amount regardless of the order's actual price.
+    // Rp1 tolerance for rounding.
     const expectedAmount = Math.round(Number(order.total_amount));
     if (Math.abs(expectedAmount - amount) > 1) {
       console.error(
@@ -156,7 +156,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 5. Build Snap request payload ──────────────────────────────────────
+    // ── 5. Build the Snap request payload ──────────────────────────────────────
     //
     // Midtrans Snap endpoint:
     //   Sandbox:    https://app.sandbox.midtrans.com/snap/v1/transactions
@@ -166,33 +166,33 @@ serve(async (req: Request) => {
       ? "https://app.midtrans.com/snap/v1/transactions"
       : "https://app.sandbox.midtrans.com/snap/v1/transactions";
 
-    // Encode server key ke Base64 untuk Basic Auth
-    // Format: Base64("SERVER_KEY:")  ← ada titik dua setelah server key
+    // Encode the server key to Base64 for Basic Auth
+    // Format: Base64("SERVER_KEY:")  ← note the colon after the server key
     const encodedKey = btoa(`${MIDTRANS_SERVER_KEY}:`);
     const snapPayload: Record<string, unknown> = {
       transaction_details: {
-        // order_id yang dikirim ke MIDTRANS harus yang versi UNIK ini,
-        // bukan internalOrderId — supaya tidak collision saat retry bayar.
+        // The order_id sent to MIDTRANS must be this UNIQUE version,
+        // not internalOrderId — to avoid collisions on payment retries.
         order_id: order_id,
         gross_amount: amount,
       },
       customer_details: {
-        first_name: customer_name || "Pelanggan",
+        first_name: customer_name || "Customer",
         email: customer_email || `order-${internalOrderId}@rms.local`,
         phone: customer_phone || "",
       },
     };
 
-    // Tampilkan nama toko di halaman Snap — HANYA dikirim kalau memang di-set.
-    // Midtrans sudah otomatis tahu merchant dari Server Key di Basic Auth,
-    // jadi field ini opsional. Mengirim string kosong "" berisiko ditolak
-    // sebagai merchant_id yang tidak valid oleh Midtrans.
+    // Show the store name on the Snap page — ONLY sent if it's actually set.
+    // Midtrans already knows the merchant automatically from the Server Key
+    // in Basic Auth, so this field is optional. Sending an empty string ""
+    // risks being rejected by Midtrans as an invalid merchant_id.
     const MIDTRANS_MERCHANT_ID = Deno.env.get("MIDTRANS_MERCHANT_ID");
     if (MIDTRANS_MERCHANT_ID) {
       snapPayload.merchant_id = MIDTRANS_MERCHANT_ID;
     }
 
-    // Tambah item detail jika ada
+    // Add item details if present
     if (items && Array.isArray(items) && items.length > 0) {
       snapPayload.item_details = items.map((item: Record<string, unknown>) => ({
         id: item.id || "ITEM",
@@ -202,7 +202,7 @@ serve(async (req: Request) => {
       }));
     }
 
-    // ── 6. Request Snap token ke Midtrans ──────────────────────────────────
+    // ── 6. Request the Snap token from Midtrans ──────────────────────────────────
     const midtransRes = await fetch(snapBaseUrl, {
       method: "POST",
       headers: {
@@ -228,11 +228,12 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 7. Simpan snap_token + order_id (unik) ke DB ───────────────────────
-    // PENTING: simpan order_id (versi unik) ke kolom `midtrans_order_id`.
-    // Ini dipakai webhook handler nanti untuk mencocokkan balik notifikasi
-    // dari Midtrans ke row order yang benar — karena notifikasi Midtrans
-    // hanya berisi order_id versi unik ini, bukan internalOrderId.
+    // ── 7. Save snap_token + order_id (unique) to the DB ───────────────────────
+    // IMPORTANT: save order_id (the unique version) to the `midtrans_order_id`
+    // column. This is used later by the webhook handler to match a
+    // notification from Midtrans back to the correct order row — because
+    // Midtrans' notification only contains this unique order_id version,
+    // not internalOrderId.
     const { error: updateError } = await supabase
       .from("orders")
       .update({
@@ -244,10 +245,10 @@ serve(async (req: Request) => {
       })
       .eq("id", internalOrderId);
 
-    // Jangan gagalkan response ke Flutter kalau update DB gagal — token Snap
-    // tetap valid dan bisa dipakai user untuk bayar. Tapi catat di log supaya
-    // ketahuan kalau ada masalah skema/RLS, karena kalau silent, retry/polling
-    // status pembayaran bisa jadi tidak akurat nantinya.
+    // Don't fail the response to Flutter if the DB update fails — the Snap
+    // token is still valid and the user can still use it to pay. But log it
+    // so schema/RLS issues can be caught, because staying silent here could
+    // make payment status retries/polling inaccurate later on.
     if (updateError) {
       console.error(
         `Failed to save snap_token for order ${internalOrderId}:`,
@@ -255,7 +256,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 8. Return token ke Flutter ─────────────────────────────────────────
+    // ── 8. Return the token to Flutter ─────────────────────────────────────────
     return new Response(
       JSON.stringify({
         snap_token: midtransData.token,

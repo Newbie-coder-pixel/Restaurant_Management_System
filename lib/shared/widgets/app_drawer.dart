@@ -31,34 +31,34 @@ const _allRoles = {
 
 const _navItems = [
   _NavItem(
-    label: 'Laporan & Analitik',
+    label: 'Reports & Analytics',
     icon: Icons.bar_chart_rounded,
     route: AppRoutes.reports,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
-    label: 'Manajemen Meja',
+    label: 'Table Management',
     icon: Icons.table_restaurant_rounded,
     route: AppRoutes.tables,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
   ),
   _NavItem(
-    label: 'Reservasi',
+    label: 'Reservations',
     icon: Icons.calendar_month_rounded,
     route: AppRoutes.booking,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
   ),
   _NavItem(
-    label: 'Statistik Reservasi',
+    label: 'Reservation Statistics',
     icon: Icons.insert_chart_outlined_rounded,
     route: AppRoutes.bookingStats,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
-  label: 'Hari Tutup',
+  label: 'Closed Days',
   icon: Icons.event_busy_rounded,
   route: AppRoutes.closures,
-  allowedRoles: {StaffRole.superadmin, StaffRole.manager},  
+  allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
     label: 'Order',
@@ -67,13 +67,13 @@ const _navItems = [
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier, StaffRole.waiter},
   ),
   _NavItem(
-    label: 'Kasir & Pembayaran',
+    label: 'Cashier & Payment',
     icon: Icons.point_of_sale_rounded,
     route: AppRoutes.cashier,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier},
   ),
   _NavItem(
-    label: 'Dapur (KDS)',
+    label: 'Kitchen (KDS)',
     icon: Icons.soup_kitchen_rounded,
     route: AppRoutes.kitchen,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.kitchen},
@@ -85,7 +85,7 @@ const _navItems = [
     allowedRoles: _allRoles,
   ),
   _NavItem(
-    label: 'Inventori',
+    label: 'Inventory',
     icon: Icons.inventory_2_rounded,
     route: AppRoutes.inventory,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
@@ -97,7 +97,7 @@ const _navItems = [
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
-    label: 'Multi Cabang',
+    label: 'Multi Branch',
     icon: Icons.store_rounded,
     route: AppRoutes.branches,
     allowedRoles: {StaffRole.superadmin},
@@ -109,15 +109,15 @@ const _navItems = [
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
     _NavItem(
-    // Biaya Operasional diisi lebih dulu karena Costing & HPP butuh nilai
-    // alokasi biaya operasional per porsi untuk menghitung HPP yang akurat.
-    label: 'Biaya Operasional',
+    // Operating Expense is filled in first because Costing & COGS needs the
+    // operating expense allocation per portion to calculate accurate COGS.
+    label: 'Operating Expense',
     icon: Icons.bar_chart_rounded,
     route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
-    label: 'Costing & HPP',
+    label: 'Costing & COGS',
     icon: Icons.receipt_long_rounded,
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
@@ -279,25 +279,25 @@ class AppDrawer extends ConsumerWidget {
   }
 
   void _showLogoutDialog(BuildContext context, WidgetRef ref) {
-    // Simpan notifier SEBELUM showDialog dipanggil, di luar closure
+    // Store the notifier BEFORE showDialog is called, outside the closure
     final authNotifier = ref.read(authStateProvider.notifier);
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Konfirmasi Logout',
+        title: const Text('Confirm Logout',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-        content: const Text('Yakin ingin keluar dari akun ini?',
+        content: const Text('Are you sure you want to log out of this account?',
           style: TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Batal')),
+            child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
               Navigator.pop(dialogContext);
-              // Gunakan authNotifier yang sudah disimpan, BUKAN ref.read
+              // Use the already-stored authNotifier, NOT ref.read
               await authNotifier.signOut();
             },
             child: const Text('Logout',

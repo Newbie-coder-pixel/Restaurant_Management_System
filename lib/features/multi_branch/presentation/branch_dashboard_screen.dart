@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart'; // ← TAMBAH IMPORT INI
+import 'package:go_router/go_router.dart'; // ← ADDED IMPORT
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/router/app_router.dart'; // ← TAMBAH IMPORT INI
+import '../../../core/router/app_router.dart'; // ← ADDED IMPORT
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
@@ -29,11 +29,11 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
       ref.read(currentStaffProvider)?.role == StaffRole.superadmin;
 
   Future<void> _load() async {
-    // "Multi Cabang" adalah fitur superadmin-only (lihat StaffRole.accessFeatures).
-    // Sebelumnya layar ini query & render data SEMUA cabang untuk role apa pun
-    // yang berhasil mencapainya (tidak ada guard sama sekali) — router sekarang
-    // memblokir navigasi non-superadmin ke /branches, dan ini adalah lapis
-    // pertahanan kedua di level widget.
+    // "Multi-Branch" is a superadmin-only feature (see StaffRole.accessFeatures).
+    // Previously this screen would query & render data for ALL branches for any
+    // role that managed to reach it (no guard at all) — the router now blocks
+    // non-superadmin navigation to /branches, and this is the second layer
+    // of defense at the widget level.
     if (!_isAuthorized) {
       setState(() => _isLoading = false);
       return;
@@ -86,33 +86,33 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
       barrierDismissible: false,
       builder: (_) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(isEdit ? 'Edit Cabang' : 'Tambah Cabang',
+        title: Text(isEdit ? 'Edit Branch' : 'Add Branch',
           style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
 
-            // ── Nama ──────────────────────────────────────────────
+            // ── Name ──────────────────────────────────────────────
             TextField(
               controller: nameCtrl,
               decoration: const InputDecoration(
-                labelText: 'Nama Cabang *',
+                labelText: 'Branch Name *',
                 prefixIcon: Icon(Icons.store_outlined))),
             const SizedBox(height: 12),
 
-            // ── Alamat ────────────────────────────────────────────
+            // ── Address ───────────────────────────────────────────
             TextField(
               controller: addressCtrl,
               decoration: const InputDecoration(
-                labelText: 'Alamat',
+                labelText: 'Address',
                 prefixIcon: Icon(Icons.location_on_outlined)),
               maxLines: 2),
             const SizedBox(height: 12),
 
-            // ── Telepon ───────────────────────────────────────────
+            // ── Phone ─────────────────────────────────────────────
             TextField(
               controller: phoneCtrl,
               decoration: const InputDecoration(
-                labelText: 'No. Telepon',
+                labelText: 'Phone Number',
                 prefixIcon: Icon(Icons.phone_outlined)),
               keyboardType: TextInputType.phone),
             const SizedBox(height: 12),
@@ -126,7 +126,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
               keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 16),
 
-            // ── Koordinat ─────────────────────────────────────────
+            // ── Coordinates ───────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -139,7 +139,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                   const Row(children: [
                     Icon(Icons.my_location, size: 15, color: Colors.blue),
                     SizedBox(width: 6),
-                    Text('Koordinat Lokasi',
+                    Text('Location Coordinates',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
@@ -148,7 +148,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                   ]),
                   const SizedBox(height: 4),
                   const Text(
-                    'Diperlukan untuk fitur "Cabang Terdekat" di app customer.',
+                    'Required for the "Nearest Branch" feature in the customer app.',
                     style: TextStyle(
                       fontFamily: 'Poppins', fontSize: 11, color: Colors.grey)),
                   const SizedBox(height: 10),
@@ -158,7 +158,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                         controller: latCtrl,
                         decoration: const InputDecoration(
                           labelText: 'Latitude',
-                          hintText: 'cth: -6.2088',
+                          hintText: 'e.g.: -6.2088',
                           prefixIcon: Icon(Icons.expand_less, size: 18),
                           isDense: true),
                         keyboardType: const TextInputType.numberWithOptions(
@@ -175,7 +175,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                         controller: lngCtrl,
                         decoration: const InputDecoration(
                           labelText: 'Longitude',
-                          hintText: 'cth: 106.8456',
+                          hintText: 'e.g.: 106.8456',
                           prefixIcon: Icon(Icons.expand_more, size: 18),
                           isDense: true),
                         keyboardType: const TextInputType.numberWithOptions(
@@ -192,7 +192,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── Jam Operasional ───────────────────────────────────
+            // ── Operating Hours ───────────────────────────────────
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -200,13 +200,13 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppColors.primary.withValues(alpha: 0.2))),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('🕐 Jam Operasional',
+                const Text('🕐 Operating Hours',
                   style: TextStyle(
                     fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13)),
                 const SizedBox(height: 10),
                 Row(children: [
                   Expanded(child: _TimePickerButton(
-                    label: 'Buka',
+                    label: 'Open',
                     time: openTime,
                     onTap: () async {
                       final t = await _pickTime(ctx, openTime);
@@ -218,7 +218,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(width: 10),
                   Expanded(child: _TimePickerButton(
-                    label: 'Tutup',
+                    label: 'Close',
                     time: closeTime,
                     onTap: () async {
                       final t = await _pickTime(ctx, closeTime);
@@ -230,7 +230,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ── Status Aktif (hanya saat edit) ────────────────────
+            // ── Active Status (edit mode only) ────────────────────
             if (isEdit)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -251,7 +251,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      isActive ? 'Cabang Aktif' : 'Cabang Non-Aktif',
+                      isActive ? 'Branch Active' : 'Branch Inactive',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 13,
@@ -283,22 +283,22 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
         actions: [
           TextButton(
             onPressed: isLoading ? null : () => Navigator.pop(ctx),
-            child: const Text('Batal')),
+            child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white),
             onPressed: isLoading ? null : () async {
               if (nameCtrl.text.trim().isEmpty) {
-                ss(() => errorMsg = 'Nama cabang wajib diisi.');
+                ss(() => errorMsg = 'Branch name is required.');
                 return;
               }
               final openMin  = openTime.hour * 60 + openTime.minute;
-              // Jika closeMin <= openMin, anggap tutup keesokan hari (misal buka 10:00, tutup 01:00)
+              // If closeMin <= openMin, assume it closes the next day (e.g. opens 10:00, closes 01:00)
               final closeMin = closeTime.hour * 60 + closeTime.minute;
               final effectiveCloseMin = closeMin <= openMin ? closeMin + 1440 : closeMin;
               if (effectiveCloseMin == openMin) {
-                ss(() => errorMsg = 'Jam tutup tidak boleh sama dengan jam buka.');
+                ss(() => errorMsg = 'Closing time cannot be the same as opening time.');
                 return;
               }
               final latStr = latCtrl.text.trim();
@@ -307,7 +307,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
               final lngFilled = lngStr.isNotEmpty;
               if (latFilled != lngFilled) {
                 ss(() => errorMsg =
-                    'Latitude dan Longitude harus diisi keduanya atau dikosongkan keduanya.');
+                    'Latitude and Longitude must both be filled in or both left empty.');
                 return;
               }
               double? lat, lng;
@@ -315,15 +315,15 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                 lat = double.tryParse(latStr);
                 lng = double.tryParse(lngStr);
                 if (lat == null || lng == null) {
-                  ss(() => errorMsg = 'Format koordinat tidak valid.');
+                  ss(() => errorMsg = 'Invalid coordinate format.');
                   return;
                 }
                 if (lat < -90 || lat > 90) {
-                  ss(() => errorMsg = 'Latitude harus antara -90 dan 90.');
+                  ss(() => errorMsg = 'Latitude must be between -90 and 90.');
                   return;
                 }
                 if (lng < -180 || lng > 180) {
-                  ss(() => errorMsg = 'Longitude harus antara -180 dan 180.');
+                  ss(() => errorMsg = 'Longitude must be between -180 and 180.');
                   return;
                 }
               }
@@ -350,13 +350,13 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _load();
               } catch (e) {
-                ss(() { isLoading = false; errorMsg = 'Gagal menyimpan: $e'; });
+                ss(() { isLoading = false; errorMsg = 'Failed to save: $e'; });
               }
             },
             child: isLoading
                 ? const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(isEdit ? 'Simpan' : 'Tambah',
+                : Text(isEdit ? 'Save' : 'Add',
                     style: const TextStyle(fontFamily: 'Poppins')),
           ),
         ],
@@ -364,7 +364,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     );
   }
 
-  // FIX: Ganti Navigator.push dengan context.go agar kompatibel dengan GoRouter
+  // FIX: Replaced Navigator.push with context.go for GoRouter compatibility
   void _navigateToTransferStock() {
     context.go(AppRoutes.transferStock);
   }
@@ -385,7 +385,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
         drawer: const AppDrawer(),
         appBar: AppBar(title: const Text('Multi-Branch Dashboard')),
         body: const Center(
-          child: Text('Anda tidak memiliki akses ke halaman ini.'),
+          child: Text('You do not have access to this page.'),
         ),
       );
     }
@@ -406,7 +406,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
         onPressed: () => _showBranchDialog(),
         backgroundColor: AppColors.accent,
         icon: const Icon(Icons.add_business, color: Colors.white),
-        label: const Text('Tambah Cabang',
+        label: const Text('Add Branch',
           style: TextStyle(
             color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
       ),
@@ -418,7 +418,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                   children: [
                     Icon(Icons.store_outlined, size: 64, color: AppColors.textHint),
                     SizedBox(height: 12),
-                    Text('Belum ada cabang',
+                    Text('No branches yet',
                       style: TextStyle(
                         fontFamily: 'Poppins', color: AppColors.textSecondary)),
                   ]))
@@ -487,8 +487,8 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                               const SizedBox(width: 3),
                               Text(
                                 hasCoords
-                                    ? 'Koordinat tersedia'
-                                    : 'Tanpa koordinat',
+                                    ? 'Coordinates available'
+                                    : 'No coordinates',
                                 style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontSize: 10,
@@ -499,7 +499,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                           ],
                         ),
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                          // Transfer Stok button — FIX: gunakan context.go
+                          // Transfer Stock button — FIX: uses context.go
                           Container(
                             margin: const EdgeInsets.only(right: 4),
                             decoration: BoxDecoration(
@@ -511,7 +511,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                             child: IconButton(
                               icon: const Icon(Icons.swap_horiz, size: 20),
                               color: AppColors.accent,
-                              tooltip: 'Transfer Stok',
+                              tooltip: 'Transfer Stock',
                               onPressed: _navigateToTransferStock, // ← FIX
                             ),
                           ),
@@ -535,7 +535,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                                 color: isActive
                                     ? AppColors.available
                                     : AppColors.textHint)),
-                            child: Text(isActive ? 'Aktif' : 'Non-Aktif',
+                            child: Text(isActive ? 'Active' : 'Inactive',
                               style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 11,

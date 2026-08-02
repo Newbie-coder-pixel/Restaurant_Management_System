@@ -5,50 +5,50 @@ import '../../../core/models/staff_role.dart';
 import '../../../core/theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────
-// Enum status absensi (sesuai kolom DB: status varchar(20))
+// Attendance status enum (matches DB column: status varchar(20))
 // ─────────────────────────────────────────────────────────
 enum AttendanceStatus {
-  hadir,
-  izin,
-  sakit,
-  alpha,
-  cuti;
+  present,
+  permission,
+  sick,
+  absent,
+  leave;
 
   String get label {
     switch (this) {
-      case AttendanceStatus.hadir:  return 'Hadir';
-      case AttendanceStatus.izin:   return 'Izin';
-      case AttendanceStatus.sakit:  return 'Sakit';
-      case AttendanceStatus.alpha:  return 'Alpha';
-      case AttendanceStatus.cuti:   return 'Cuti';
+      case AttendanceStatus.present:    return 'Present';
+      case AttendanceStatus.permission: return 'Permission';
+      case AttendanceStatus.sick:       return 'Sick';
+      case AttendanceStatus.absent:     return 'Absent';
+      case AttendanceStatus.leave:      return 'Leave';
     }
   }
 
-  String get value => name; // 'hadir', 'izin', dst — cocok dengan DB
+  String get value => name; // 'present', 'permission', etc — matches DB
 
   Color get color {
     switch (this) {
-      case AttendanceStatus.hadir:  return const Color(0xFF4CAF50);
-      case AttendanceStatus.izin:   return const Color(0xFF2196F3);
-      case AttendanceStatus.sakit:  return const Color(0xFFFF9800);
-      case AttendanceStatus.alpha:  return const Color(0xFFF44336);
-      case AttendanceStatus.cuti:   return const Color(0xFF9C27B0);
+      case AttendanceStatus.present:    return const Color(0xFF4CAF50);
+      case AttendanceStatus.permission: return const Color(0xFF2196F3);
+      case AttendanceStatus.sick:       return const Color(0xFFFF9800);
+      case AttendanceStatus.absent:     return const Color(0xFFF44336);
+      case AttendanceStatus.leave:      return const Color(0xFF9C27B0);
     }
   }
 
   static AttendanceStatus fromString(String? s) {
     switch (s) {
-      case 'izin':   return AttendanceStatus.izin;
-      case 'sakit':  return AttendanceStatus.sakit;
-      case 'alpha':  return AttendanceStatus.alpha;
-      case 'cuti':   return AttendanceStatus.cuti;
-      default:       return AttendanceStatus.hadir;
+      case 'permission': return AttendanceStatus.permission;
+      case 'sick':        return AttendanceStatus.sick;
+      case 'absent':       return AttendanceStatus.absent;
+      case 'leave':        return AttendanceStatus.leave;
+      default:             return AttendanceStatus.present;
     }
   }
 }
 
 // ─────────────────────────────────────────────────────────
-// Model lokal untuk attendance
+// Local model for attendance
 // ─────────────────────────────────────────────────────────
 class AttendanceRecord {
   final String id;
@@ -86,7 +86,7 @@ class AttendanceRecord {
         notes: j['notes'] as String?,
       );
 
-  // Durasi kerja dalam menit (null jika belum clock out)
+  // Work duration in minutes (null if not yet clocked out)
   int? get durationMinutes {
     if (clockIn == null || clockOut == null) return null;
     return clockOut!.difference(clockIn!).inMinutes;
@@ -98,16 +98,16 @@ class AttendanceRecord {
     final h = mins ~/ 60;
     final m = mins % 60;
     if (h == 0) return '${m}m';
-    if (m == 0) return '${h}j';
-    return '${h}j ${m}m';
+    if (m == 0) return '${h}h';
+    return '${h}h ${m}m';
   }
 
   bool get isComplete => clockIn != null && clockOut != null;
-  bool get needsClock => status == AttendanceStatus.hadir;
+  bool get needsClock => status == AttendanceStatus.present;
 }
 
 // ─────────────────────────────────────────────────────────
-// Screen utama
+// Main screen
 // ─────────────────────────────────────────────────────────
 class StaffAttendanceScreen extends StatefulWidget {
   final StaffMember staff;
@@ -136,7 +136,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
     _load();
   }
 
-  // ── load data attendance ────────────────────────────────
+  // ── load attendance data ────────────────────────────────
   Future<void> _load() async {
     setState(() => _isLoading = true);
     try {
@@ -164,18 +164,18 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal memuat data absensi: $e'),
+            content: Text('Failed to load attendance data: $e'),
             backgroundColor: Colors.red));
       }
     }
   }
 
-  // ── dialog tambah attendance ───────────────────────────
+  // ── add attendance dialog ──────────────────────────────
   Future<void> _showAddAttendanceDialog() async {
     DateTime selectedDate = DateTime.now();
     TimeOfDay? clockInTime;
     TimeOfDay? clockOutTime;
-    AttendanceStatus selectedStatus = AttendanceStatus.hadir;
+    AttendanceStatus selectedStatus = AttendanceStatus.present;
     final notesController = TextEditingController();
     String? errorMsg;
 
@@ -185,7 +185,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
         builder: (ctx, ss) => AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Tambah Catatan Absensi',
+          title: const Text('Add Attendance Record',
               style: TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
           content: SingleChildScrollView(
@@ -197,12 +197,12 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                     color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8)),
                 child: const Text(
-                    '📋 Input manual oleh manager. Gunakan untuk koreksi atau lupa absen.',
+                    '📋 Manual entry by manager. Use this for corrections or missed check-ins.',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
               ),
               const SizedBox(height: 16),
 
-              // Pilih tanggal
+              // Date picker
               InkWell(
                 onTap: () async {
                   final picked = await showDatePicker(
@@ -227,7 +227,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                     Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Tanggal',
+                          const Text('Date',
                               style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontSize: 11,
@@ -246,7 +246,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
               DropdownButtonFormField<AttendanceStatus>(
                 initialValue: selectedStatus,
                 decoration: InputDecoration(
-                  labelText: 'Status Kehadiran',
+                  labelText: 'Attendance Status',
                   labelStyle: const TextStyle(
                       fontFamily: 'Poppins', fontSize: 13),
                   border: OutlineInputBorder(
@@ -276,12 +276,12 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Jam masuk & keluar (hanya tampil kalau status = hadir)
-              if (selectedStatus == AttendanceStatus.hadir) ...[
+              // Clock in/out (only shown if status = present)
+              if (selectedStatus == AttendanceStatus.present) ...[
                 Row(children: [
                   Expanded(
                       child: _TimePickerButton(
-                    label: 'Jam Masuk',
+                    label: 'Clock In',
                     icon: Icons.login_outlined,
                     value: clockInTime,
                     onTap: () async {
@@ -295,7 +295,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                       child: _TimePickerButton(
-                    label: 'Jam Keluar',
+                    label: 'Clock Out',
                     icon: Icons.logout_outlined,
                     value: clockOutTime,
                     onTap: () async {
@@ -316,10 +316,10 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                 maxLines: 2,
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                 decoration: InputDecoration(
-                  labelText: 'Catatan (opsional)',
+                  labelText: 'Notes (optional)',
                   labelStyle: const TextStyle(
                       fontFamily: 'Poppins', fontSize: 13),
-                  hintText: 'Misal: izin acara keluarga, sakit demam...',
+                  hintText: 'e.g. family event, fever...',
                   hintStyle: const TextStyle(
                       fontFamily: 'Poppins', fontSize: 12, color: Colors.grey),
                   border: OutlineInputBorder(
@@ -342,16 +342,16 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal')),
+                child: const Text('Cancel')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white),
               onPressed: () async {
-                // Validasi jam jika status hadir
-                if (selectedStatus == AttendanceStatus.hadir) {
+                // Validate clock time if status is present
+                if (selectedStatus == AttendanceStatus.present) {
                   if (clockInTime == null) {
-                    ss(() => errorMsg = 'Jam masuk wajib diisi untuk status Hadir.');
+                    ss(() => errorMsg = 'Clock-in time is required for Present status.');
                     return;
                   }
                   if (clockOutTime != null) {
@@ -361,28 +361,28 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                         clockOutTime!.hour * 60 + clockOutTime!.minute;
                     if (outMins <= inMins) {
                       ss(() => errorMsg =
-                          'Jam keluar harus setelah jam masuk.');
+                          'Clock-out time must be after clock-in time.');
                       return;
                     }
                   }
                 }
-                // Cek duplikat
+                // Check for duplicates
                 final dateStr = _formatDate(selectedDate);
                 final existing =
                     _records.any((r) => _formatDate(r.date) == dateStr);
                 if (existing) {
                   ss(() =>
-                      errorMsg = 'Sudah ada catatan absensi di tanggal ini.');
+                      errorMsg = 'An attendance record already exists for this date.');
                   return;
                 }
 
                 Navigator.pop(ctx);
                 await _insertAttendance(
                   date: selectedDate,
-                  clockIn: selectedStatus == AttendanceStatus.hadir
+                  clockIn: selectedStatus == AttendanceStatus.present
                       ? clockInTime
                       : null,
-                  clockOut: selectedStatus == AttendanceStatus.hadir
+                  clockOut: selectedStatus == AttendanceStatus.present
                       ? clockOutTime
                       : null,
                   status: selectedStatus,
@@ -392,7 +392,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                 );
               },
               child:
-                  const Text('Simpan', style: TextStyle(fontFamily: 'Poppins')),
+                  const Text('Save', style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
         ),
@@ -435,20 +435,20 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✅ Catatan absensi berhasil disimpan'),
+            content: Text('✅ Attendance record saved successfully'),
             backgroundColor: Color(0xFF4CAF50)));
       }
       await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal menyimpan: $e'),
+            content: Text('Failed to save: $e'),
             backgroundColor: Colors.red));
       }
     }
   }
 
-  // ── dialog edit attendance ─────────────────────────────
+  // ── edit attendance dialog ─────────────────────────────
   Future<void> _showEditDialog(AttendanceRecord record) async {
     TimeOfDay? clockInTime = record.clockIn != null
         ? TimeOfDay.fromDateTime(record.clockIn!)
@@ -468,7 +468,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
-              'Edit Absensi — ${_formatDateDisplay(record.date)}',
+              'Edit Attendance — ${_formatDateDisplay(record.date)}',
               style: const TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
           content: SingleChildScrollView(
@@ -477,7 +477,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
               DropdownButtonFormField<AttendanceStatus>(
                 initialValue: selectedStatus,
                 decoration: InputDecoration(
-                  labelText: 'Status Kehadiran',
+                  labelText: 'Attendance Status',
                   labelStyle: const TextStyle(
                       fontFamily: 'Poppins', fontSize: 13),
                   border: OutlineInputBorder(
@@ -505,8 +505,8 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                   if (v != null) {
                     ss(() {
                       selectedStatus = v;
-                      // Reset jam kalau ganti ke non-hadir
-                      if (v != AttendanceStatus.hadir) {
+                      // Reset clock times if switched to non-present
+                      if (v != AttendanceStatus.present) {
                         clockInTime = null;
                         clockOutTime = null;
                       }
@@ -516,12 +516,12 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Jam (hanya kalau status hadir)
-              if (selectedStatus == AttendanceStatus.hadir) ...[
+              // Clock times (only if status is present)
+              if (selectedStatus == AttendanceStatus.present) ...[
                 Row(children: [
                   Expanded(
                       child: _TimePickerButton(
-                    label: 'Jam Masuk',
+                    label: 'Clock In',
                     icon: Icons.login_outlined,
                     value: clockInTime,
                     onTap: () async {
@@ -535,7 +535,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                       child: _TimePickerButton(
-                    label: 'Jam Keluar',
+                    label: 'Clock Out',
                     icon: Icons.logout_outlined,
                     value: clockOutTime,
                     onTap: () async {
@@ -556,10 +556,10 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                 maxLines: 2,
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                 decoration: InputDecoration(
-                  labelText: 'Catatan (opsional)',
+                  labelText: 'Notes (optional)',
                   labelStyle: const TextStyle(
                       fontFamily: 'Poppins', fontSize: 13),
-                  hintText: 'Misal: izin acara keluarga, sakit demam...',
+                  hintText: 'e.g. family event, fever...',
                   hintStyle: const TextStyle(
                       fontFamily: 'Poppins', fontSize: 12, color: Colors.grey),
                   border: OutlineInputBorder(
@@ -580,27 +580,27 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
             ]),
           ),
           actions: [
-            // Hapus
+            // Delete
             TextButton(
               onPressed: () async {
                 Navigator.pop(ctx);
                 await _deleteAttendance(record);
               },
               child:
-                  const Text('Hapus', style: TextStyle(color: Colors.red)),
+                  const Text('Delete', style: TextStyle(color: Colors.red)),
             ),
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal')),
+                child: const Text('Cancel')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white),
               onPressed: () async {
-                if (selectedStatus == AttendanceStatus.hadir &&
+                if (selectedStatus == AttendanceStatus.present &&
                     clockInTime == null) {
                   ss(() => errorMsg =
-                      'Jam masuk wajib diisi untuk status Hadir.');
+                      'Clock-in time is required for Present status.');
                   return;
                 }
                 if (clockInTime != null && clockOutTime != null) {
@@ -610,17 +610,17 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                       clockOutTime!.hour * 60 + clockOutTime!.minute;
                   if (outMins <= inMins) {
                     ss(() =>
-                        errorMsg = 'Jam keluar harus setelah jam masuk.');
+                        errorMsg = 'Clock-out time must be after clock-in time.');
                     return;
                   }
                 }
                 Navigator.pop(ctx);
                 await _updateAttendance(
                   record: record,
-                  clockIn: selectedStatus == AttendanceStatus.hadir
+                  clockIn: selectedStatus == AttendanceStatus.present
                       ? clockInTime
                       : null,
-                  clockOut: selectedStatus == AttendanceStatus.hadir
+                  clockOut: selectedStatus == AttendanceStatus.present
                       ? clockOutTime
                       : null,
                   status: selectedStatus,
@@ -630,7 +630,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                 );
               },
               child:
-                  const Text('Simpan', style: TextStyle(fontFamily: 'Poppins')),
+                  const Text('Save', style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
         ),
@@ -664,21 +664,21 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
 
       await Supabase.instance.client.from('attendance').update({
         'status': status.value,
-        'clock_in': clockInDt,   // null akan clear kolom
-        'clock_out': clockOutDt, // null akan clear kolom
+        'clock_in': clockInDt,   // null will clear the column
+        'clock_out': clockOutDt, // null will clear the column
         'notes': notes,
       }).eq('id', record.id);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✅ Absensi berhasil diperbarui'),
+            content: Text('✅ Attendance updated successfully'),
             backgroundColor: Color(0xFF4CAF50)));
       }
       await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal memperbarui: $e'),
+            content: Text('Failed to update: $e'),
             backgroundColor: Colors.red));
       }
     }
@@ -690,21 +690,21 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
       builder: (ctx) => AlertDialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Hapus Catatan',
+        title: const Text('Delete Record',
             style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: Text(
-            'Yakin ingin menghapus catatan absensi ${_formatDateDisplay(record.date)}?',
+            'Are you sure you want to delete the attendance record for ${_formatDateDisplay(record.date)}?',
             style: const TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
+              child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus', style: TextStyle(fontFamily: 'Poppins')),
+            child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins')),
           ),
         ],
       ),
@@ -717,14 +717,14 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
           .eq('id', record.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('🗑️ Catatan absensi dihapus'),
+            content: Text('🗑️ Attendance record deleted'),
             backgroundColor: Colors.orange));
       }
       await _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal menghapus: $e'),
+            content: Text('Failed to delete: $e'),
             backgroundColor: Colors.red));
       }
     }
@@ -736,10 +736,10 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
 
   String _formatDateDisplay(DateTime d) {
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return '${days[d.weekday % 7]}, ${d.day} ${months[d.month]} ${d.year}';
   }
 
@@ -752,26 +752,26 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
 
   String _monthLabel(DateTime d) {
     const months = [
-      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      '', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ];
     return '${months[d.month]} ${d.year}';
   }
 
   // ── summary stats ──────────────────────────────────────
   _AttendanceStats get _stats {
-    final hadirRecords =
-        _records.where((r) => r.status == AttendanceStatus.hadir).toList();
-    final complete = hadirRecords.where((r) => r.isComplete).toList();
+    final presentRecords =
+        _records.where((r) => r.status == AttendanceStatus.present).toList();
+    final complete = presentRecords.where((r) => r.isComplete).toList();
     final totalMins =
         complete.fold<int>(0, (s, r) => s + (r.durationMinutes ?? 0));
     final avgMins =
         complete.isEmpty ? 0 : totalMins ~/ complete.length;
     return _AttendanceStats(
       totalDays: _records.length,
-      hadirDays: hadirRecords.length,
-      notHadirDays: _records
-          .where((r) => r.status != AttendanceStatus.hadir)
+      presentDays: presentRecords.length,
+      notPresentDays: _records
+          .where((r) => r.status != AttendanceStatus.present)
           .length,
       totalMinutes: totalMins,
       avgMinutes: avgMins,
@@ -798,7 +798,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Absensi — ${widget.staff.fullName}',
+        title: Text('Attendance — ${widget.staff.fullName}',
             style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 16,
@@ -813,7 +813,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
         onPressed: _showAddAttendanceDialog,
         backgroundColor: AppColors.accent,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Tambah Catatan',
+        label: const Text('Add Record',
             style: TextStyle(color: Colors.white, fontFamily: 'Poppins')),
       ),
       body: Column(children: [
@@ -906,20 +906,20 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                   color: AppColors.primary),
               const SizedBox(width: 8),
               _StatChip(
-                  label: 'Hadir',
-                  value: '${stats.hadirDays}x',
+                  label: 'Present',
+                  value: '${stats.presentDays}x',
                   color: const Color(0xFF4CAF50)),
               const SizedBox(width: 8),
               _StatChip(
-                  label: 'Total Jam',
+                  label: 'Total Hours',
                   value:
-                      '${(stats.totalMinutes / 60).toStringAsFixed(1)}j',
+                      '${(stats.totalMinutes / 60).toStringAsFixed(1)}h',
                   color: const Color(0xFF9C27B0)),
               const SizedBox(width: 8),
               _StatChip(
-                  label: 'Rata-rata',
+                  label: 'Average',
                   value:
-                      '${(stats.avgMinutes / 60).toStringAsFixed(1)}j',
+                      '${(stats.avgMinutes / 60).toStringAsFixed(1)}h',
                   color: const Color(0xFFFF9800)),
             ]),
           ),
@@ -937,7 +937,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                               size: 56, color: AppColors.textHint),
                           const SizedBox(height: 8),
                           Text(
-                              'Belum ada catatan absensi di ${_monthLabel(_selectedMonth)}',
+                              'No attendance records for ${_monthLabel(_selectedMonth)} yet',
                               style: const TextStyle(
                                   fontFamily: 'Poppins',
                                   color: AppColors.textSecondary),
@@ -946,7 +946,7 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
                           ElevatedButton.icon(
                             onPressed: _showAddAttendanceDialog,
                             icon: const Icon(Icons.add),
-                            label: const Text('Tambah Catatan'),
+                            label: const Text('Add Record'),
                           ),
                         ],
                       ))
@@ -988,7 +988,7 @@ class _AttendanceCard extends StatelessWidget {
     final status = record.status;
     final statusColor = status.color;
     final statusLabel = status.label;
-    final showClock = status == AttendanceStatus.hadir;
+    final showClock = status == AttendanceStatus.present;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1010,7 +1010,7 @@ class _AttendanceCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(width: 12),
-            // Date + jam
+            // Date + time
             Expanded(
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1186,19 +1186,19 @@ class _TimePickerButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────
-// Data class untuk stats
+// Data class for stats
 // ─────────────────────────────────────────────────────────
 class _AttendanceStats {
   final int totalDays;
-  final int hadirDays;
-  final int notHadirDays;
+  final int presentDays;
+  final int notPresentDays;
   final int totalMinutes;
   final int avgMinutes;
 
   const _AttendanceStats({
     required this.totalDays,
-    required this.hadirDays,
-    required this.notHadirDays,
+    required this.presentDays,
+    required this.notPresentDays,
     required this.totalMinutes,
     required this.avgMinutes,
   });

@@ -112,7 +112,7 @@ class AppTheme {
     );
   }
 
-  // Dark theme untuk KDS
+  // Dark theme for KDS
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,

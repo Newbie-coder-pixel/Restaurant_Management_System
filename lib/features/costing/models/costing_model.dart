@@ -3,13 +3,13 @@
 
 import 'dart:math';
 
-/// Model untuk Direct Costs (Biaya Langsung per menu item)
+/// Model for Direct Costs (direct cost per menu item)
 class DirectCostModel {
   final String id;
   final String menuItemId;
   final String menuItemName;
-  final double ingredientCost;    // Biaya bahan baku (dari inventory)
-  final double packagingCost;     // Biaya kemasan (takeaway, dll.)
+  final double ingredientCost;    // Raw ingredient cost (from inventory)
+  final double packagingCost;     // Packaging cost (takeaway, etc.)
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -23,7 +23,7 @@ class DirectCostModel {
     required this.updatedAt,
   });
 
-  /// Total biaya langsung per porsi
+  /// Total direct cost per portion
   double get totalDirectCost => ingredientCost + packagingCost;
 
   DirectCostModel copyWith({
@@ -69,15 +69,15 @@ class DirectCostModel {
   }
 }
 
-/// Model untuk Operating Expenses (Biaya Operasional Bulanan)
+/// Model for Operating Expenses (monthly operating costs)
 class OperatingExpenseModel {
   final String id;
-  final String periodLabel;      // e.g., "Mei 2025"
+  final String periodLabel;      // e.g., "May 2025"
   final int periodYear;
   final int periodMonth;
 
   // Labor
-  final double totalLaborCost;   // Total gaji semua staf
+  final double totalLaborCost;   // Total wages for all staff
 
   // Utilities
   final double electricityCost;
@@ -89,8 +89,8 @@ class OperatingExpenseModel {
   final double rentCost;
   final double otherOverheadCost;
 
-  // Estimasi output bulanan
-  final int estimatedPortionsSoldMonthly; // Estimasi total porsi terjual/bulan
+  // Monthly output estimate
+  final int estimatedPortionsSoldMonthly; // Estimated total portions sold/month
 
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -112,18 +112,18 @@ class OperatingExpenseModel {
     required this.updatedAt,
   });
 
-  /// Total biaya utilitas
+  /// Total utility cost
   double get totalUtilityCost =>
       electricityCost + waterCost + gasCost + internetCost;
 
-  /// Total biaya overhead (sewa + lain-lain)
+  /// Total overhead cost (rent + other)
   double get totalOverheadCost => rentCost + otherOverheadCost;
 
-  /// Total semua biaya operasional bulanan
+  /// Total of all monthly operating costs
   double get totalOperatingExpense =>
       totalLaborCost + totalUtilityCost + totalOverheadCost;
 
-  /// Biaya operasional per porsi (dialokasikan)
+  /// Operating cost per portion (allocated)
   double get operatingCostPerPortion {
     if (estimatedPortionsSoldMonthly <= 0) return 0;
     return totalOperatingExpense / estimatedPortionsSoldMonthly;
@@ -223,21 +223,21 @@ class OperatingExpenseModel {
 }
 
 /// ─────────────────────────────────────────────────────────────────────────────
-/// CORE MODEL: CostingModel — Agregat utama yang menggabungkan semua kalkulasi
+/// CORE MODEL: CostingModel — Main aggregate that combines all calculations
 /// ─────────────────────────────────────────────────────────────────────────────
 class CostingModel {
   final String id;
   final String menuItemId;
   final String menuItemName;
 
-  // === INPUT BIAYA ===
-  final double ingredientCost;          // Biaya bahan baku per porsi
-  final double packagingCost;           // Biaya kemasan per porsi
-  final double allocatedOperatingCost;  // Biaya operasional dialokasikan per porsi
+  // === COST INPUTS ===
+  final double ingredientCost;          // Raw ingredient cost per portion
+  final double packagingCost;           // Packaging cost per portion
+  final double allocatedOperatingCost;  // Allocated operating cost per portion
 
-  // === INPUT TARGET ===
-  final double targetProfitMarginPercent; // e.g., 30.0 → berarti 30%
-  final double currentSellingPrice;       // Harga jual yang sedang dipakai (opsional)
+  // === TARGET INPUTS ===
+  final double targetProfitMarginPercent; // e.g., 30.0 → means 30%
+  final double currentSellingPrice;       // Currently used selling price (optional)
 
   // === BRANCH ===
   final String? branchId;
@@ -260,50 +260,50 @@ class CostingModel {
   });
 
   // ═══════════════════════════════════════
-  //  GETTER KALKULASI KEUANGAN
+  //  FINANCIAL CALCULATION GETTERS
   // ═══════════════════════════════════════
 
-  /// Biaya Langsung total (bahan baku + kemasan)
+  /// Total direct cost (ingredients + packaging)
   double get totalDirectCost => ingredientCost + packagingCost;
 
-  /// HPP (Harga Pokok Penjualan) = Biaya Langsung + Biaya Operasional Dialokasikan
-  /// Ini adalah COGS (Cost of Goods Sold) yang sesungguhnya
+  /// COGS (Cost of Goods Sold) = Direct Cost + Allocated Operating Cost
+  /// This is the actual COGS (Cost of Goods Sold)
   double get hpp => totalDirectCost + allocatedOperatingCost;
 
-  /// Food Cost Percentage = (Biaya Bahan Baku / Harga Jual) × 100
-  /// Standar industri restoran: idealnya 28–35%
+  /// Food Cost Percentage = (Ingredient Cost / Selling Price) × 100
+  /// Restaurant industry standard: ideally 28–35%
   double get foodCostPercentage {
     if (currentSellingPrice <= 0) return 0;
     return (ingredientCost / currentSellingPrice) * 100;
   }
 
-  /// Rekomendasi Harga Jual menggunakan rumus markup dari HPP
-  /// Formula: Harga Jual = HPP / (1 - Target Margin)
+  /// Recommended Selling Price using the markup formula from COGS
+  /// Formula: Selling Price = COGS / (1 - Target Margin)
   double get recommendedSellingPrice {
     final marginDecimal = targetProfitMarginPercent / 100;
-    if (marginDecimal >= 1.0) return hpp * 2; // safeguard jika margin ≥ 100%
+    if (marginDecimal >= 1.0) return hpp * 2; // safeguard if margin ≥ 100%
     return hpp / (1 - marginDecimal);
   }
 
-  /// Rekomendasi harga jual yang sudah dibulatkan ke kelipatan 500 (IDR-friendly)
+  /// Recommended selling price rounded to the nearest 500 (IDR-friendly)
   double get recommendedSellingPriceRounded {
     final raw = recommendedSellingPrice;
     return (raw / 500).ceil() * 500.0;
   }
 
-  /// Keuntungan bersih per porsi berdasarkan harga jual saat ini
+  /// Net profit per portion based on the current selling price
   double get profitPerPortion => currentSellingPrice - hpp;
 
-  /// Margin profit aktual berdasarkan harga jual saat ini (%)
+  /// Actual profit margin based on the current selling price (%)
   double get actualProfitMarginPercent {
     if (currentSellingPrice <= 0) return 0;
     return (profitPerPortion / currentSellingPrice) * 100;
   }
 
-  /// Selisih: apakah harga saat ini sudah cukup? (positif = sudah baik)
+  /// Gap: is the current price already sufficient? (positive = already good)
   double get priceGap => currentSellingPrice - recommendedSellingPrice;
 
-  /// Status penilaian harga
+  /// Price assessment status
   CostingStatus get pricingStatus {
     if (currentSellingPrice <= 0) return CostingStatus.notSet;
     if (priceGap >= 0) return CostingStatus.healthy;
@@ -311,33 +311,33 @@ class CostingModel {
     return CostingStatus.underpriced;
   }
 
-  /// Break-even point: berapa porsi yang harus terjual untuk balik modal operasional
-  /// Gunakan ini untuk item yang berkontribusi pada fixed cost
+  /// Break-even point: how many portions must be sold to cover operating costs
+  /// Use this for items that contribute to fixed cost
   double breakEvenPortions(double totalFixedCostMonthly) {
     if (profitPerPortion <= 0) return double.infinity;
     return totalFixedCostMonthly / profitPerPortion;
   }
 
-  /// Markup percentage dari HPP ke harga jual
+  /// Markup percentage from COGS to selling price
   double get markupPercent {
     if (hpp <= 0) return 0;
     return ((currentSellingPrice - hpp) / hpp) * 100;
   }
 
-  /// Skor kesehatan finansial (0–100), formula composite
+  /// Financial health score (0–100), composite formula
   int get financialHealthScore {
     double score = 0;
 
-    // 1. Food cost ideal: 28–35% → skor 40
+    // 1. Ideal food cost: 28–35% → score 40
     if (foodCostPercentage >= 20 && foodCostPercentage <= 35) {
       score += 40;
     } else if (foodCostPercentage < 20) {
-      score += 30; // terlalu rendah, mungkin kualitas?
+      score += 30; // too low, possibly a quality concern?
     } else if (foodCostPercentage <= 40) {
       score += 20;
     }
 
-    // 2. Margin ≥ target → skor 40
+    // 2. Margin ≥ target → score 40
     if (actualProfitMarginPercent >= targetProfitMarginPercent) {
       score += 40;
     } else {
@@ -345,7 +345,7 @@ class CostingModel {
           0, 40 * (actualProfitMarginPercent / targetProfitMarginPercent));
     }
 
-    // 3. Harga sudah diset → skor 20
+    // 3. Price already set → score 20
     if (currentSellingPrice > 0) score += 20;
 
     return score.round().clamp(0, 100);
@@ -431,25 +431,25 @@ class CostingModel {
   }
 }
 
-/// Status kesehatan harga menu
+/// Menu pricing health status
 enum CostingStatus {
-  notSet,      // Harga belum diisi
-  healthy,     // Harga sudah di atas rekomendasi
-  warning,     // Harga sedikit di bawah rekomendasi (<500 IDR)
-  underpriced, // Harga jauh di bawah rekomendasi (rugi)
+  notSet,      // Price not yet set
+  healthy,     // Price is already above the recommendation
+  warning,     // Price is slightly below the recommendation (<500 IDR)
+  underpriced, // Price is far below the recommendation (a loss)
 }
 
 extension CostingStatusExtension on CostingStatus {
   String get label {
     switch (this) {
       case CostingStatus.notSet:
-        return 'Belum Diset';
+        return 'Not Set';
       case CostingStatus.healthy:
-        return 'Harga Sehat';
+        return 'Healthy Price';
       case CostingStatus.warning:
-        return 'Perlu Review';
+        return 'Needs Review';
       case CostingStatus.underpriced:
-        return 'Harga Terlalu Rendah';
+        return 'Price Too Low';
     }
   }
 
@@ -467,7 +467,7 @@ extension CostingStatusExtension on CostingStatus {
   }
 }
 
-/// Model ringkasan untuk ditampilkan di dashboard / laporan
+/// Summary model for display on the dashboard / reports
 class CostingSummaryModel {
   final int totalMenuItems;
   final double averageFoodCostPercent;

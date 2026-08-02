@@ -41,7 +41,7 @@ void main() async {
   );
 
   // 3. Midtrans SDK
-  // Hanya diinisialisasi di Android/iOS — midtrans_sdk tidak support Flutter Web
+  // Only initialized on Android/iOS — midtrans_sdk doesn't support Flutter Web
   if (!kIsWeb) {
     await MidtransService.initialize(
       clientKey: AppConfig.midtransClientKey,
@@ -49,10 +49,10 @@ void main() async {
     );
   }
 
-  // 4. Listener notif setelah Supabase siap
-  // Dedupe per user_id supaya initialize() tidak dipanggil ulang di setiap
-  // auth event (initialSession, tokenRefreshed, dst) — tapi tetap retry
-  // kalau percobaan simpan token sebelumnya gagal (mis. token masih stale).
+  // 4. Notification listener after Supabase is ready
+  // Dedupe per user_id so initialize() isn't called again on every auth
+  // event (initialSession, tokenRefreshed, etc.) — but still retry if the
+  // previous attempt to save the token failed (e.g. the token was still stale).
   String? notifReadyForUserId;
   Supabase.instance.client.auth.onAuthStateChange.listen((event) async {
     final user = event.session?.user;
@@ -78,9 +78,9 @@ void main() async {
         } catch (_) {}
       }
 
-      // Tentukan fallback fragment sesuai APP_MODE
-      // - customer/qr  → kembali ke /customer
-      // - staff        → kembali ke /login (router akan handle redirect ke role masing-masing)
+      // Determine the fallback fragment based on APP_MODE
+      // - customer/qr  → back to /customer
+      // - staff        → back to /login (router will handle the per-role redirect)
       const fallbackFragment = appMode == 'staff' ? '#/login' : '#/customer';
       final fragment = uri.fragment.isNotEmpty ? '#${uri.fragment}' : fallbackFragment;
       _replaceState(null, '', '/$fragment');

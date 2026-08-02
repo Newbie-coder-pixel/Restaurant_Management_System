@@ -12,7 +12,7 @@ enum ReportPeriod { daily, weekly, monthly }
 enum ReportFormat { pdf, csv }
 
 class ReportExportService {
-  // ── Fetch data sesuai periode ─────────────────────────────────────
+  // ── Fetch data for the given period ─────────────────────────────────
   static Future<Map<String, dynamic>> fetchReportData({
     required String? branchId,
     required ReportPeriod period,
@@ -20,13 +20,13 @@ class ReportExportService {
     final sb = Supabase.instance.client;
     final now = DateTime.now().toLocal();
 
-    // PENTING: batas tanggal dibangun dari waktu LOKAL (WIB) lalu wajib
-    // dikonversi .toUtc() sebelum dikirim sebagai filter ke Postgres —
-    // string tanpa offset dibaca Postgres sebagai UTC, bukan WIB, jadi
-    // window "hari ini/minggu ini/bulan ini" bisa bergeser ±7 jam dari batas
-    // lokal yang sebenarnya. Batas atas selalu "besok jam 00:00 lokal" dan
-    // dipakai sebagai exclusive upper bound (`.lt`), bukan `23:59:59` yang
-    // bisa kehilangan data di detik terakhir hari itu.
+    // IMPORTANT: date bounds are built from LOCAL time (WIB) and must be
+    // converted with .toUtc() before being sent as a filter to Postgres —
+    // a string without an offset is read by Postgres as UTC, not WIB, so
+    // the "today/this week/this month" window could shift by ±7 hours from
+    // the actual local bound. The upper bound is always "tomorrow at 00:00
+    // local" and is used as an exclusive upper bound (`.lt`), not
+    // `23:59:59` which could miss data in the last second of the day.
     DateTime localMidnight(DateTime d) => DateTime(d.year, d.month, d.day);
     String isoUtc(DateTime local) => local.toUtc().toIso8601String();
     String dateOnly(DateTime d) =>
@@ -39,18 +39,18 @@ class ReportExportService {
     switch (period) {
       case ReportPeriod.daily:
         startLocal = localMidnight(now);
-        periodLabel = 'Harian — ${_formatDate(now)}';
+        periodLabel = 'Daily — ${_formatDate(now)}';
         break;
       case ReportPeriod.weekly:
         final weekStartLocal =
             localMidnight(now.subtract(Duration(days: now.weekday - 1)));
         startLocal = weekStartLocal;
         periodLabel =
-            'Mingguan — ${_formatDate(weekStartLocal)} s/d ${_formatDate(now)}';
+            'Weekly — ${_formatDate(weekStartLocal)} to ${_formatDate(now)}';
         break;
       case ReportPeriod.monthly:
         startLocal = DateTime(now.year, now.month, 1);
-        periodLabel = 'Bulanan — ${_bulanIndo(now.month)} ${now.year}';
+        periodLabel = 'Monthly — ${_bulanIndo(now.month)} ${now.year}';
         break;
     }
 
@@ -68,11 +68,11 @@ class ReportExportService {
     if (branchId != null) qOrders = qOrders.eq('branch_id', branchId);
     final orders = (await qOrders as List).cast<Map<String, dynamic>>();
 
-    // Order yang lunas statusnya 'paid' (lihat OrderStatus enum di
-    // order_model.dart) — 'completed' adalah status BOOKING, bukan order.
-    // Sebelumnya filter ini salah pakai 'completed', jadi revenue/rata-rata
-    // order/breakdown pembayaran/top menu di laporan selalu 0 walau transaksi
-    // jalan terus.
+    // Orders that are paid have status 'paid' (see the OrderStatus enum in
+    // order_model.dart) — 'completed' is a BOOKING status, not an order one.
+    // This filter used to incorrectly use 'completed', so revenue/average
+    // order value/payment breakdown/top menu in the report were always 0
+    // even though transactions kept coming in.
     final completed = orders.where((o) => o['status'] == 'paid').toList();
     final cancelled = orders.where((o) => o['status'] == 'cancelled').length;
     final totalRevenue = completed.fold<double>(
@@ -83,7 +83,7 @@ class ReportExportService {
     // Payment breakdown
     final Map<String, double> paymentMap = {};
     for (final o in completed) {
-      final method = (o['payment_method'] as String?) ?? 'Lainnya';
+      final method = (o['payment_method'] as String?) ?? 'Other';
       paymentMap[method] =
           (paymentMap[method] ?? 0) + ((o['total_amount'] as num?)?.toDouble() ?? 0);
     }
@@ -119,9 +119,9 @@ class ReportExportService {
             })
         .toList();
 
-    // Bookings — booking_date kolom DATE (tanpa timezone), jadi pakai
-    // startDateOnly/endDateOnly (tanggal kalender LOKAL), bukan substring dari
-    // startDate/endDate yang sekarang sudah dikonversi ke UTC di atas.
+    // Bookings — booking_date is a DATE column (no timezone), so use
+    // startDateOnly/endDateOnly (LOCAL calendar date), not a substring of
+    // startDate/endDate which are now already converted to UTC above.
     var qBooking = sb
         .from('bookings')
         .select('status, guest_count')
@@ -182,7 +182,7 @@ class ReportExportService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      'LAPORAN ANALYTICS',
+                      'ANALYTICS REPORT',
                       style: pw.TextStyle(
                         fontSize: 20,
                         fontWeight: pw.FontWeight.bold,
@@ -209,7 +209,7 @@ class ReportExportService {
                       ),
                     ),
                     pw.Text(
-                      'Dibuat: ${data['generated_at']}',
+                      'Generated: ${data['generated_at']}',
                       style: const pw.TextStyle(
                         fontSize: 10,
                         color: PdfColors.grey600,
@@ -226,7 +226,7 @@ class ReportExportService {
         build: (ctx) => [
           // ── KPI Summary ──────────────────────────────────────────
           pw.Text(
-            'Ringkasan Order',
+            'Order Summary',
             style: pw.TextStyle(
               fontSize: 14,
               fontWeight: pw.FontWeight.bold,
@@ -235,11 +235,11 @@ class ReportExportService {
           pw.SizedBox(height: 8),
           pw.Row(
             children: [
-              _pdfKpiBox('Total Order', '${orders['total']}'),
+              _pdfKpiBox('Total Orders', '${orders['total']}'),
               pw.SizedBox(width: 8),
-              _pdfKpiBox('Selesai', '${orders['completed']}'),
+              _pdfKpiBox('Completed', '${orders['completed']}'),
               pw.SizedBox(width: 8),
-              _pdfKpiBox('Dibatalkan', '${orders['cancelled']}'),
+              _pdfKpiBox('Cancelled', '${orders['cancelled']}'),
               pw.SizedBox(width: 8),
               _pdfKpiBox(
                 'Revenue',
@@ -247,7 +247,7 @@ class ReportExportService {
               ),
               pw.SizedBox(width: 8),
               _pdfKpiBox(
-                'Rata-rata Order',
+                'Average Order',
                 'Rp ${_fmtNum(orders['avg_order'] as double)}',
               ),
             ],
@@ -257,7 +257,7 @@ class ReportExportService {
           // ── Payment Breakdown ────────────────────────────────────
           if (paymentBreakdown.isNotEmpty) ...[
             pw.Text(
-              'Breakdown Pembayaran',
+              'Payment Breakdown',
               style: pw.TextStyle(
                 fontSize: 14,
                 fontWeight: pw.FontWeight.bold,
@@ -275,7 +275,7 @@ class ReportExportService {
                   decoration:
                       const pw.BoxDecoration(color: PdfColors.grey200),
                   children: [
-                    _pdfCell('Metode Pembayaran', isHeader: true),
+                    _pdfCell('Payment Method', isHeader: true),
                     _pdfCell('Total Revenue', isHeader: true),
                   ],
                 ),
@@ -292,7 +292,7 @@ class ReportExportService {
 
           // ── Top Menu ─────────────────────────────────────────────
           pw.Text(
-            'Menu Terlaris (Top 10)',
+            'Best-Selling Menu Items (Top 10)',
             style: pw.TextStyle(
               fontSize: 14,
               fontWeight: pw.FontWeight.bold,
@@ -313,8 +313,8 @@ class ReportExportService {
                     const pw.BoxDecoration(color: PdfColors.grey200),
                 children: [
                   _pdfCell('#', isHeader: true),
-                  _pdfCell('Nama Menu', isHeader: true),
-                  _pdfCell('Terjual', isHeader: true),
+                  _pdfCell('Menu Item', isHeader: true),
+                  _pdfCell('Sold', isHeader: true),
                   _pdfCell('Revenue', isHeader: true),
                 ],
               ),
@@ -337,7 +337,7 @@ class ReportExportService {
 
           // ── Bookings ─────────────────────────────────────────────
           pw.Text(
-            'Ringkasan Reservasi',
+            'Booking Summary',
             style: pw.TextStyle(
               fontSize: 14,
               fontWeight: pw.FontWeight.bold,
@@ -346,21 +346,21 @@ class ReportExportService {
           pw.SizedBox(height: 8),
           pw.Row(
             children: [
-              _pdfKpiBox('Total Booking', '${bookings['total']}'),
+              _pdfKpiBox('Total Bookings', '${bookings['total']}'),
               pw.SizedBox(width: 8),
               _pdfKpiBox('Confirmed', '${bookings['confirmed']}'),
               pw.SizedBox(width: 8),
-              _pdfKpiBox('Dibatalkan', '${bookings['cancelled']}'),
+              _pdfKpiBox('Cancelled', '${bookings['cancelled']}'),
               pw.SizedBox(width: 8),
               _pdfKpiBox('No Show', '${bookings['no_show']}'),
               pw.SizedBox(width: 8),
-              _pdfKpiBox('Total Tamu', '${bookings['total_guests']}'),
+              _pdfKpiBox('Total Guests', '${bookings['total_guests']}'),
             ],
           ),
           pw.SizedBox(height: 24),
           pw.Center(
             child: pw.Text(
-              'Laporan ini dibuat otomatis oleh Resto Analytics AI',
+              'This report was generated automatically by Resto Analytics AI',
               style: const pw.TextStyle(
                 fontSize: 9,
                 color: PdfColors.grey500,
@@ -388,34 +388,34 @@ class ReportExportService {
     final buf = StringBuffer();
 
     // Header info
-    buf.writeln('LAPORAN ANALYTICS RESTORAN');
-    buf.writeln('Cabang,$branchName');
-    buf.writeln('Periode,${data['period']}');
-    buf.writeln('Dibuat,${data['generated_at']}');
+    buf.writeln('RESTAURANT ANALYTICS REPORT');
+    buf.writeln('Branch,$branchName');
+    buf.writeln('Period,${data['period']}');
+    buf.writeln('Generated,${data['generated_at']}');
     buf.writeln();
 
     // Order summary
-    buf.writeln('=== RINGKASAN ORDER ===');
-    buf.writeln('Metrik,Nilai');
-    buf.writeln('Total Order,${orders['total']}');
-    buf.writeln('Order Selesai,${orders['completed']}');
-    buf.writeln('Order Dibatalkan,${orders['cancelled']}');
+    buf.writeln('=== ORDER SUMMARY ===');
+    buf.writeln('Metric,Value');
+    buf.writeln('Total Orders,${orders['total']}');
+    buf.writeln('Completed Orders,${orders['completed']}');
+    buf.writeln('Cancelled Orders,${orders['cancelled']}');
     buf.writeln('Total Revenue,Rp ${_fmtNum(orders['revenue'] as double)}');
     buf.writeln(
-        'Rata-rata Nilai Order,Rp ${_fmtNum(orders['avg_order'] as double)}');
+        'Average Order Value,Rp ${_fmtNum(orders['avg_order'] as double)}');
     buf.writeln();
 
     // Payment breakdown
-    buf.writeln('=== BREAKDOWN PEMBAYARAN ===');
-    buf.writeln('Metode,Revenue');
+    buf.writeln('=== PAYMENT BREAKDOWN ===');
+    buf.writeln('Method,Revenue');
     for (final e in paymentBreakdown.entries) {
       buf.writeln('${e.key},Rp ${_fmtNum(e.value)}');
     }
     buf.writeln();
 
     // Top menu
-    buf.writeln('=== MENU TERLARIS ===');
-    buf.writeln('Ranking,Nama Menu,Terjual,Revenue');
+    buf.writeln('=== BEST-SELLING MENU ITEMS ===');
+    buf.writeln('Ranking,Menu Item,Sold,Revenue');
     for (int i = 0; i < topMenu.length; i++) {
       final m = topMenu[i];
       buf.writeln(
@@ -424,13 +424,13 @@ class ReportExportService {
     buf.writeln();
 
     // Bookings
-    buf.writeln('=== RINGKASAN RESERVASI ===');
-    buf.writeln('Metrik,Nilai');
-    buf.writeln('Total Booking,${bookings['total']}');
+    buf.writeln('=== BOOKING SUMMARY ===');
+    buf.writeln('Metric,Value');
+    buf.writeln('Total Bookings,${bookings['total']}');
     buf.writeln('Confirmed,${bookings['confirmed']}');
-    buf.writeln('Dibatalkan,${bookings['cancelled']}');
+    buf.writeln('Cancelled,${bookings['cancelled']}');
     buf.writeln('No Show,${bookings['no_show']}');
-    buf.writeln('Total Tamu,${bookings['total_guests']}');
+    buf.writeln('Total Guests,${bookings['total_guests']}');
 
     return buf.toString();
   }
@@ -497,8 +497,8 @@ class ReportExportService {
 
   static String _bulanIndo(int bulan) {
     const list = [
-      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      '', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ];
     return list[bulan];
   }
@@ -545,10 +545,10 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
         await Printing.sharePdf(
           bytes: pdfBytes,
           filename:
-              'laporan_${_periodFileName()}_${widget.branchName.replaceAll(' ', '_')}.pdf',
+              'report_${_periodFileName()}_${widget.branchName.replaceAll(' ', '_')}.pdf',
         );
       } else {
-        // CSV — share sebagai text file via printing share sheet
+        // CSV — share as a text file via the printing share sheet
         final csv = ReportExportService.generateCsv(
           data: data,
           branchName: widget.branchName,
@@ -557,13 +557,13 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
         await Printing.sharePdf(
           bytes: csvBytes,
           filename:
-              'laporan_${_periodFileName()}_${widget.branchName.replaceAll(' ', '_')}.csv',
+              'report_${_periodFileName()}_${widget.branchName.replaceAll(' ', '_')}.csv',
         );
       }
 
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      setState(() => _errorMsg = 'Gagal export: $e');
+      setState(() => _errorMsg = 'Export failed: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -572,11 +572,11 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
   String _periodFileName() {
     switch (_period) {
       case ReportPeriod.daily:
-        return 'harian';
+        return 'daily';
       case ReportPeriod.weekly:
-        return 'mingguan';
+        return 'weekly';
       case ReportPeriod.monthly:
-        return 'bulanan';
+        return 'monthly';
     }
   }
 
@@ -607,7 +607,7 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
 
           // Title
           const Text(
-            '📊 Export Laporan',
+            '📊 Export Report',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 16,
@@ -625,9 +625,9 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
           ),
           const SizedBox(height: 20),
 
-          // Periode
+          // Period
           const Text(
-            'Periode',
+            'Period',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 13,
@@ -637,11 +637,11 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _periodChip(ReportPeriod.daily, '📅 Harian'),
+              _periodChip(ReportPeriod.daily, '📅 Daily'),
               const SizedBox(width: 8),
-              _periodChip(ReportPeriod.weekly, '📆 Mingguan'),
+              _periodChip(ReportPeriod.weekly, '📆 Weekly'),
               const SizedBox(width: 8),
-              _periodChip(ReportPeriod.monthly, '🗓️ Bulanan'),
+              _periodChip(ReportPeriod.monthly, '🗓️ Monthly'),
             ],
           ),
           const SizedBox(height: 20),
@@ -662,7 +662,7 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
                 ReportFormat.pdf,
                 Icons.picture_as_pdf_rounded,
                 'PDF',
-                'Siap cetak & share',
+                'Ready to print & share',
                 Colors.red,
               ),
               const SizedBox(width: 12),
@@ -670,7 +670,7 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
                 ReportFormat.csv,
                 Icons.table_chart_rounded,
                 'CSV',
-                'Buka di Excel / Sheets',
+                'Open in Excel / Sheets',
                 Colors.green,
               ),
             ],
@@ -707,7 +707,7 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
                     )
                   : const Icon(Icons.download_rounded, size: 18),
               label: Text(
-                _isLoading ? 'Membuat laporan...' : 'Export Sekarang',
+                _isLoading ? 'Generating report...' : 'Export Now',
                 style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w600,

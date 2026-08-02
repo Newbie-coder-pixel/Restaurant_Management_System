@@ -36,9 +36,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   bool _isSubmitting = false;
 
   // ── ML state ────────────────────────────────────────────────────────────────
-  int?  _estimatedMinutes;   // hasil prediksi ML, ATAU estimasi kasar fallback
+  int?  _estimatedMinutes;   // ML prediction result, OR a rough fallback estimate
   bool  _isFetchingEstimate  = false;
-  bool  _isFallbackEstimate  = false; // true kalau _estimatedMinutes bukan dari ML
+  bool  _isFallbackEstimate  = false; // true if _estimatedMinutes isn't from ML
 
   // ── Load data ──────────────────────────────────────────────────────────────
   @override
@@ -96,7 +96,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       if (_cart.containsKey(item.id)) { _cart[item.id]!.qty++; }
       else { _cart[item.id] = _CartEntry(qty: 1, notes: ''); }
     });
-    _fetchEstimate(); // ← update estimasi setiap cart berubah
+    _fetchEstimate(); // ← update the estimate every time the cart changes
   }
 
   void _removeFromCart(MenuItem item) {
@@ -105,10 +105,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       if (_cart[item.id]!.qty <= 1) { _cart.remove(item.id); }
       else { _cart[item.id]!.qty--; }
     });
-    _fetchEstimate(); // ← update estimasi setiap cart berubah
+    _fetchEstimate(); // ← update the estimate every time the cart changes
   }
 
-  // ── ML: Fetch estimasi waktu ───────────────────────────────────────────────
+  // ── ML: Fetch the time estimate ──────────────────────────────────────────
   Future<void> _fetchEstimate() async {
     if (_cart.isEmpty) {
       setState(() {
@@ -137,8 +137,8 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
 
     if (mounted) {
       setState(() {
-        // Server tidak terjangkau → estimasi kasar (jumlah menu prep time,
-        // tanpa ML/buffer) daripada kartu estimasi hilang tanpa keterangan.
+        // Server unreachable → use a rough estimate (sum of menu prep times,
+        // without ML/buffer) rather than the estimate card disappearing with no explanation.
         _estimatedMinutes = result?.estimatedMinutes ??
             PrepTimeService.rawFallbackEstimate(items);
         _isFallbackEstimate = result == null;
@@ -166,7 +166,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             Text(item.name,
               style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
               overflow: TextOverflow.ellipsis),
-            const Text('Catatan khusus untuk item ini',
+            const Text('Special notes for this item',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
           ])),
         ]),
@@ -174,7 +174,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
           controller: ctrl, maxLines: 3, autofocus: true,
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
           decoration: InputDecoration(
-            hintText: 'Contoh: tidak pedas, tanpa bawang, extra saus...',
+            hintText: 'Example: not spicy, no onions, extra sauce...',
             hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textHint),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             focusedBorder: OutlineInputBorder(
@@ -187,18 +187,18 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
               setState(() { if (_cart.containsKey(item.id)) _cart[item.id]!.notes = ''; });
               Navigator.pop(ctx);
             },
-            child: const Text('Hapus Catatan',
+            child: const Text('Remove Note',
               style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 12))),
           ElevatedButton(
             onPressed: () {
               setState(() { if (_cart.containsKey(item.id)) _cart[item.id]!.notes = ctrl.text.trim(); });
               Navigator.pop(ctx);
-              _fetchEstimate(); // ← update estimasi setelah notes berubah
+              _fetchEstimate(); // ← update the estimate after notes change
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary, foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: const Text('Simpan', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
+            child: const Text('Save', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -209,7 +209,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     if (_cart.isEmpty) return;
     if (_nameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nama pelanggan wajib diisi.'),
+        content: Text('Customer name is required.'),
         backgroundColor: AppColors.accent));
       return;
     }
@@ -230,8 +230,8 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         'customer_name':  _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : null,
         'customer_phone': _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
         'discount_amount': 0,
-        'payment_status': 'unpaid', // wajib agar order muncul di cashier screen
-        // Simpan estimasi ML ke DB agar KDS bisa tampilkan tanpa re-predict
+        'payment_status': 'unpaid', // required so the order shows up on the cashier screen
+        // Store the ML estimate in the DB so the KDS can show it without re-predicting
         if (_estimatedMinutes != null)
           'estimated_prep_minutes': _estimatedMinutes,
       }).select().single();
@@ -247,7 +247,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             'menu_item_name': m.name,
             'quantity':       e.value.qty,
             'unit_price':     m.price,
-            // subtotal tidak di-insert karena generated column di Supabase
+            // subtotal isn't inserted since it's a generated column in Supabase
             'status':         'pending',
             if (e.value.notes.isNotEmpty) 'special_requests': e.value.notes,
           };
@@ -262,9 +262,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       }
 
       if (mounted) {
-        // Tampilkan snackbar dengan estimasi waktu jika tersedia
-        final estimasiText = _estimatedMinutes != null
-            ? ' Estimasi siap: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
+        // Show a snackbar with the time estimate if available
+        final estimateText = _estimatedMinutes != null
+            ? ' Estimated ready: ${PrepTimeService.formatEstimate(_estimatedMinutes!)}'
             : '';
         setState(() {
           _cart.clear();
@@ -274,7 +274,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
           _isSubmitting = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('✅ Order berhasil dikirim ke dapur!$estimasiText'),
+          content: Text('✅ Order successfully sent to the kitchen!$estimateText'),
           backgroundColor: const Color(0xFF43A047),
           duration: const Duration(seconds: 4),
         ));
@@ -314,7 +314,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         DropdownButtonFormField<String?>(
           initialValue: _selectedTableId,
           decoration: const InputDecoration(
-            labelText: 'Pilih Meja',
+            labelText: 'Select Table',
             labelStyle: TextStyle(fontFamily: 'Poppins'),
             prefixIcon: Icon(Icons.table_restaurant_outlined, size: 18),
             isDense: true,
@@ -326,16 +326,16 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
               child: Text('Takeaway', style: TextStyle(fontFamily: 'Poppins'))),
             ...widget.tables.where((t) => t.status == TableStatus.available).map((t) =>
               DropdownMenuItem(value: t.id,
-                child: Text('Meja ${t.tableNumber} (${t.capacity} org)',
+                child: Text('Table ${t.tableNumber} (${t.capacity} guests)',
                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)))),
           ],
           onChanged: (v) => setState(() => _selectedTableId = v),
         ),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(flex: 3, child: _field(_nameCtrl, 'Nama Pelanggan *', Icons.person_outline)),
+          Expanded(flex: 3, child: _field(_nameCtrl, 'Customer Name *', Icons.person_outline)),
           const SizedBox(width: 8),
-          Expanded(flex: 2, child: _field(_phoneCtrl, 'No. HP (opsional)', Icons.phone_outlined,
+          Expanded(flex: 2, child: _field(_phoneCtrl, 'Phone (optional)', Icons.phone_outlined,
             keyboardType: TextInputType.phone)),
         ]),
       ]),
@@ -370,7 +370,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
-          _catItem(null, 'Semua', Icons.apps_rounded, _allItems.length),
+          _catItem(null, 'All', Icons.apps_rounded, _allItems.length),
           ...(_categories.map((c) => _catItem(
             c.id, c.name, Icons.restaurant_outlined,
             _allItems.where((m) => m.categoryId == c.id).length))),
@@ -418,7 +418,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   Widget _buildMenuList() {
     final items = _filtered;
     if (items.isEmpty) {
-      return const Center(child: Text('Tidak ada menu tersedia',
+      return const Center(child: Text('No menu items available',
         style: TextStyle(fontFamily: 'Poppins', color: AppColors.textHint)));
     }
     return ListView.builder(
@@ -468,7 +468,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.timer_outlined, size: 11, color: Colors.orange.shade700),
                     const SizedBox(width: 3),
-                    Text('${item.preparationTimeMinutes} mnt', style: TextStyle(
+                    Text('${item.preparationTimeMinutes} min', style: TextStyle(
                       fontFamily: 'Poppins', fontSize: 10,
                       color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
                   ])),
@@ -496,7 +496,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                 icon: const Icon(Icons.add, size: 14),
-                label: const Text('Tambah',
+                label: const Text('Add',
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600)))
             else
               Container(
@@ -530,7 +530,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                     size: 15, color: hasNotes ? Colors.amber.shade700 : AppColors.textHint),
                   const SizedBox(width: 8),
                   Expanded(child: Text(
-                    hasNotes ? entry!.notes : 'Tambah catatan (tidak pedas, tanpa bawang...)',
+                    hasNotes ? entry!.notes : 'Add a note (not spicy, no onions...)',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
                       color: hasNotes ? Colors.amber.shade800 : AppColors.textHint,
                       fontStyle: hasNotes ? FontStyle.normal : FontStyle.italic),
@@ -562,7 +562,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     );
   }
 
-  // ── Cart bar (dengan estimasi ML) ──────────────────────────────────────────
+  // ── Cart bar (with ML estimate) ──────────────────────────────────────────
   Widget _buildCartBar() {
     return Container(
       decoration: BoxDecoration(
@@ -574,7 +574,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
 
-        // ── Baris estimasi ML ──────────────────────────────────────────────
+        // ── ML estimate row ──────────────────────────────────────────────
         if (_isFetchingEstimate || _estimatedMinutes != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -589,7 +589,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                 const Icon(Icons.schedule_rounded, size: 16, color: Colors.white),
                 const SizedBox(width: 8),
                 Text(
-                  _isFallbackEstimate ? 'Estimasi kasar (offline):' : 'Estimasi siap masak:',
+                  _isFallbackEstimate ? 'Rough estimate (offline):' : 'Estimated ready to cook:',
                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70)),
                 const SizedBox(width: 6),
                 if (_isFetchingEstimate)
@@ -605,7 +605,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
             ),
           ),
 
-        // ── Baris cart utama ───────────────────────────────────────────────
+        // ── Main cart row ─────────────────────────────────────────────────
         Row(children: [
           Container(
             width: 36, height: 36,
@@ -614,7 +614,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
               fontFamily: 'Poppins', fontWeight: FontWeight.w800, color: Colors.white, fontSize: 14)))),
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('item dipilih', style: TextStyle(
+            const Text('items selected', style: TextStyle(
               fontFamily: 'Poppins', color: Colors.white60, fontSize: 11)),
             Text('Rp ${_cartPrice.toStringAsFixed(0)}', style: const TextStyle(
               fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 15)),
@@ -631,7 +631,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
                 ? const SizedBox(width: 14, height: 14,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.send_rounded, size: 16),
-            label: Text(_isSubmitting ? 'Mengirim...' : 'Kirim ke Dapur',
+            label: Text(_isSubmitting ? 'Sending...' : 'Send to Kitchen',
               style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13))),
         ]),
       ]),

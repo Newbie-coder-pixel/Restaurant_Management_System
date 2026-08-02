@@ -40,7 +40,7 @@ class _TransferStockListScreenState
       _branchId   = staff.branchId;
       _staffId    = staff.id;
       _userRole   = staff.role;
-      _branchName = staff.fullName; // fallback, akan di-fetch proper
+      _branchName = staff.fullName; // fallback, will be fetched properly
       _loadBranchName();
       _load();
     }
@@ -75,36 +75,36 @@ class _TransferStockListScreenState
   bool get _canManage =>
       _userRole == StaffRole.manager || _userRole == StaffRole.superadmin;
 
-  // ── Request transfer (hanya manager/superadmin) ────────────────
+  // ── Request transfer (manager/superadmin only) ──────────────────
   Future<void> _openRequestDialog() async {
     if (_branchId == null || _staffId == null) return;
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => TransferStockDialog(
         fromBranchId:   _branchId!,
-        fromBranchName: _branchName ?? 'Cabang Saya',
+        fromBranchName: _branchName ?? 'My Branch',
         requestedBy:    _staffId!,
       ),
     );
     if (result == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('✅ Request transfer berhasil dikirim!'),
+        content: Text('✅ Transfer request sent successfully!'),
         backgroundColor: Color(0xFF4CAF50),
       ));
       _load();
     }
   }
 
-  // ── Approve/konfirmasi terima (manager branch tujuan) ──────────
+  // ── Approve/confirm receipt (destination branch manager) ────────
   Future<void> _approveTransfer(TransferStockModel transfer) async {
-    // Konfirmasi dulu
+    // Confirm first
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => _ConfirmReceiveDialog(transfer: transfer),
     );
     if (confirm != true || !mounted) return;
 
-    // Cari item_id di branch tujuan (item dengan nama yang sama)
+    // Find item_id in the destination branch (item with the same name)
     try {
       final today = DateTime.now().toIso8601String().split('T').first;
       final res = await Supabase.instance.client
@@ -119,7 +119,7 @@ class _TransferStockListScreenState
       if (toItemId == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('❌ Item tidak ditemukan di inventory cabang ini. Pastikan nama item sama.'),
+          content: Text('❌ Item not found in this branch\'s inventory. Make sure the item name matches.'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 5),
         ));
@@ -135,7 +135,7 @@ class _TransferStockListScreenState
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('✅ Transfer berhasil dikonfirmasi & stok diperbarui!'),
+          content: Text('✅ Transfer confirmed successfully & stock updated!'),
           backgroundColor: Color(0xFF4CAF50),
         ));
         _load();
@@ -143,7 +143,7 @@ class _TransferStockListScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('❌ Gagal konfirmasi: $e'),
+          content: Text('❌ Failed to confirm: $e'),
           backgroundColor: Colors.red,
         ));
       }
@@ -156,23 +156,23 @@ class _TransferStockListScreenState
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Batalkan Transfer?',
+        title: const Text('Cancel Transfer?',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: Text(
-          'Transfer ${transfer.itemName ?? ''} sebanyak '
+          'The transfer of ${transfer.itemName ?? ''} — '
           '${transfer.quantity.toStringAsFixed(1)} ${transfer.itemUnit ?? ''} '
-          'ke ${transfer.toBranchName ?? ''} akan dibatalkan.',
+          'to ${transfer.toBranchName ?? ''} will be cancelled.',
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Tidak')),
+            child: const Text('No')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Ya, Batalkan',
+            child: const Text('Yes, Cancel',
               style: TextStyle(fontFamily: 'Poppins'))),
         ],
       ),
@@ -184,7 +184,7 @@ class _TransferStockListScreenState
       await _service.cancelTransfer(transfer.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Transfer dibatalkan.'),
+          content: Text('Transfer cancelled.'),
           backgroundColor: Colors.orange,
         ));
         _load();
@@ -192,7 +192,7 @@ class _TransferStockListScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('❌ Gagal membatalkan: $e'),
+          content: Text('❌ Failed to cancel: $e'),
           backgroundColor: Colors.red,
         ));
       }
@@ -205,7 +205,7 @@ class _TransferStockListScreenState
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Transfer Stok'),
+        title: const Text('Stock Transfer'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         titleTextStyle: const TextStyle(
@@ -252,10 +252,10 @@ class _TransferStockListScreenState
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(children: [
-          _chip(null, 'Semua'),
-          _chip(TransferStatus.pending,  'Menunggu'),
-          _chip(TransferStatus.received, 'Diterima'),
-          _chip(TransferStatus.cancelled, 'Dibatalkan'),
+          _chip(null, 'All'),
+          _chip(TransferStatus.pending,  'Pending'),
+          _chip(TransferStatus.received, 'Received'),
+          _chip(TransferStatus.cancelled, 'Cancelled'),
         ]),
       ),
     );
@@ -364,14 +364,14 @@ class _TransferStockListScreenState
             ]),
             const Divider(height: 20),
 
-            // ── Detail: dari → ke ──────────────────────────────
-            _detailRow(Icons.store_outlined, 'Dari',  t.fromBranchName ?? '-'),
-            _detailRow(Icons.store,          'Ke',    t.toBranchName   ?? '-'),
-            _detailRow(Icons.person_outline, 'Diminta oleh', t.requestedByName ?? '-'),
-            _detailRow(Icons.calendar_today_rounded, 'Tanggal request',
+            // ── Detail: from → to ──────────────────────────────
+            _detailRow(Icons.store_outlined, 'From',  t.fromBranchName ?? '-'),
+            _detailRow(Icons.store,          'To',    t.toBranchName   ?? '-'),
+            _detailRow(Icons.person_outline, 'Requested by', t.requestedByName ?? '-'),
+            _detailRow(Icons.calendar_today_rounded, 'Request date',
                 _formatDt(t.createdAt)),
 
-            // ── Detail penerimaan (jika sudah received) ────────
+            // ── Receipt details (if already received) ───────────
             if (isReceived) ...[
               const Divider(height: 16),
               Container(
@@ -389,20 +389,20 @@ class _TransferStockListScreenState
                       Icon(Icons.verified_rounded,
                         size: 14, color: Color(0xFF4CAF50)),
                       SizedBox(width: 6),
-                      Text('Bukti Penerimaan',
+                      Text('Proof of Receipt',
                         style: TextStyle(
                           fontFamily: 'Poppins', fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF4CAF50))),
                     ]),
                     const SizedBox(height: 8),
-                    _detailRow(Icons.person_rounded, 'Diterima oleh',
+                    _detailRow(Icons.person_rounded, 'Received by',
                         t.approvedByName ?? '-'),
-                    _detailRow(Icons.access_time_rounded, 'Waktu terima',
+                    _detailRow(Icons.access_time_rounded, 'Time received',
                         t.receivedAt != null ? _formatDt(t.receivedAt!) : '-'),
                     _detailRow(Icons.inventory_2_rounded, 'Item',
                         '${t.itemName ?? '-'} — ${t.quantity.toStringAsFixed(1)} ${t.itemUnit ?? ''}'),
-                    _detailRow(Icons.swap_horiz, 'Dari → Ke',
+                    _detailRow(Icons.swap_horiz, 'From → To',
                         '${t.fromBranchName ?? '-'} → ${t.toBranchName ?? '-'}'),
                   ],
                 ),
@@ -413,7 +413,7 @@ class _TransferStockListScreenState
             if (isPending && _canManage) ...[
               const SizedBox(height: 12),
               Row(children: [
-                // Tombol approve hanya muncul untuk branch TUJUAN
+                // Approve button only appears for the DESTINATION branch
                 if (isIncoming)
                   Expanded(
                     child: ElevatedButton.icon(
@@ -425,13 +425,13 @@ class _TransferStockListScreenState
                       ),
                       onPressed: () => _approveTransfer(t),
                       icon: const Icon(Icons.check_circle_outline, size: 16),
-                      label: const Text('Konfirmasi Terima',
+                      label: const Text('Confirm Receipt',
                         style: TextStyle(
                           fontFamily: 'Poppins', fontWeight: FontWeight.w600,
                           fontSize: 13)),
                     ),
                   ),
-                // Tombol cancel hanya untuk branch PENGIRIM
+                // Cancel button only for the SENDING branch
                 if (!isIncoming) ...[
                   const SizedBox(width: 8),
                   Expanded(
@@ -444,7 +444,7 @@ class _TransferStockListScreenState
                       ),
                       onPressed: () => _cancelTransfer(t),
                       icon: const Icon(Icons.cancel_outlined, size: 16),
-                      label: const Text('Batalkan',
+                      label: const Text('Cancel',
                         style: TextStyle(
                           fontFamily: 'Poppins', fontWeight: FontWeight.w600,
                           fontSize: 13)),
@@ -489,8 +489,8 @@ class _TransferStockListScreenState
 
   String _formatDt(DateTime dt) {
     const months = [
-      'Jan','Feb','Mar','Apr','Mei','Jun',
-      'Jul','Agu','Sep','Okt','Nov','Des'
+      'Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'
     ];
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
@@ -501,19 +501,19 @@ class _TransferStockListScreenState
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Icon(Icons.swap_horiz, size: 64, color: AppColors.textHint),
       SizedBox(height: 12),
-      Text('Belum ada transfer stok',
+      Text('No stock transfers yet',
         style: TextStyle(
           fontFamily: 'Poppins', fontWeight: FontWeight.w700,
           fontSize: 18, color: AppColors.textSecondary)),
       SizedBox(height: 6),
-      Text('Gunakan tombol "Request Transfer" untuk\nmengirim stok ke cabang lain.',
+      Text('Use the "Request Transfer" button to\nsend stock to another branch.',
         textAlign: TextAlign.center,
         style: TextStyle(fontFamily: 'Poppins', color: AppColors.textHint)),
     ]),
   );
 }
 
-// ── Dialog konfirmasi terima ───────────────────────────────────────────────
+// ── Confirm receipt dialog ───────────────────────────────────────────────
 class _ConfirmReceiveDialog extends StatelessWidget {
   final TransferStockModel transfer;
   const _ConfirmReceiveDialog({required this.transfer});
@@ -531,7 +531,7 @@ class _ConfirmReceiveDialog extends StatelessWidget {
           child: const Icon(Icons.verified_rounded,
             color: Color(0xFF4CAF50), size: 20)),
         const SizedBox(width: 10),
-        const Text('Konfirmasi Penerimaan',
+        const Text('Confirm Receipt',
           style: TextStyle(
             fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
       ]),
@@ -540,7 +540,7 @@ class _ConfirmReceiveDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Pastikan barang berikut sudah diterima secara fisik:',
+            'Confirm that the following items have been physically received:',
             style: TextStyle(fontFamily: 'Poppins', fontSize: 13)),
           const SizedBox(height: 12),
           Container(
@@ -555,16 +555,16 @@ class _ConfirmReceiveDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _row('Item',    transfer.itemName ?? '-'),
-                _row('Jumlah',
+                _row('Quantity',
                   '${transfer.quantity.toStringAsFixed(1)} ${transfer.itemUnit ?? ''}'),
-                _row('Dari',   transfer.fromBranchName ?? '-'),
-                _row('Waktu',  _now()),
+                _row('From',   transfer.fromBranchName ?? '-'),
+                _row('Time',  _now()),
               ],
             ),
           ),
           const SizedBox(height: 10),
           const Text(
-            'Stok cabang ini akan otomatis bertambah setelah konfirmasi.',
+            'This branch\'s stock will automatically increase after confirmation.',
             style: TextStyle(
               fontFamily: 'Poppins', fontSize: 11,
               color: AppColors.textSecondary)),
@@ -573,7 +573,7 @@ class _ConfirmReceiveDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Batal',
+          child: const Text('Cancel',
             style: TextStyle(fontFamily: 'Poppins'))),
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
@@ -583,7 +583,7 @@ class _ConfirmReceiveDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(10))),
           onPressed: () => Navigator.pop(context, true),
           icon: const Icon(Icons.check_rounded, size: 16),
-          label: const Text('Ya, Sudah Diterima',
+          label: const Text('Yes, Received',
             style: TextStyle(
               fontFamily: 'Poppins', fontWeight: FontWeight.w700))),
       ],
@@ -615,8 +615,8 @@ class _ConfirmReceiveDialog extends StatelessWidget {
   String _now() {
     final dt = DateTime.now();
     const months = [
-      'Jan','Feb','Mar','Apr','Mei','Jun',
-      'Jul','Agu','Sep','Okt','Nov','Des'
+      'Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'
     ];
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');

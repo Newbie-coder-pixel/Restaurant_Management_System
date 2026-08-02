@@ -5,11 +5,11 @@ import '../../../../shared/models/table_model.dart';
 import '../../../../shared/models/order_model.dart' show kMaxDineInDuration, calculateOvertimeCharge;
 import '../../../../core/theme/app_theme.dart';
 
-class TableCard extends StatefulWidget {          // ← GANTI jadi StatefulWidget
+class TableCard extends StatefulWidget {          // ← CHANGED to StatefulWidget
   final TableModel table;
   final void Function(TableStatus) onStatusChange;
-  // Waktu makanan disajikan untuk order aktif di meja ini (null kalau belum
-  // disajikan / tidak ada order aktif) — batas 2 jam makan dihitung dari sini.
+  // Time the food was served for the active order at this table (null if not
+  // served yet / no active order) — the 2-hour dine-in limit is computed from this.
   final DateTime? servedAt;
 
   const TableCard({
@@ -114,7 +114,7 @@ class _TableCardState extends State<TableCard> {
                 const SizedBox(height: 8),
                 _buildTableIcon(table),
                 const SizedBox(height: 8),
-                Text('Meja ${table.tableNumber}',
+                Text('Table ${table.tableNumber}',
                   style: TextStyle(
                     fontFamily: 'Poppins', fontWeight: FontWeight.w700,
                     fontSize: 15, color: color)),
@@ -123,7 +123,7 @@ class _TableCardState extends State<TableCard> {
                   const Icon(Icons.person_outline,
                       size: 12, color: AppColors.textSecondary),
                   const SizedBox(width: 3),
-                  Text('${table.capacity} orang',
+                  Text('${table.capacity} guests',
                     style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 11,
@@ -165,7 +165,7 @@ class _TableCardState extends State<TableCard> {
                           Icon(Icons.check_circle_rounded,
                               size: 12, color: Colors.white),
                           SizedBox(width: 4),
-                          Text('Siap Dipakai',
+                          Text('Ready to Use',
                             style: TextStyle(
                               fontFamily: 'Poppins', fontSize: 10,
                               fontWeight: FontWeight.w700, color: Colors.white)),
@@ -206,9 +206,9 @@ class _TableCardState extends State<TableCard> {
                       const SizedBox(width: 2),
                       Text(
                         _overtimeCharge > 0
-                            ? 'Lewat +Rp${_overtimeCharge ~/ 1000}rb'
+                            ? 'Overtime +Rp${_overtimeCharge ~/ 1000}k'
                             : (_minutesSinceServed >= 60
-                                ? '${(_minutesSinceServed / 60).toStringAsFixed(0)}j ${_minutesSinceServed % 60}m'
+                                ? '${(_minutesSinceServed / 60).toStringAsFixed(0)}h ${_minutesSinceServed % 60}m'
                                 : '${_minutesSinceServed}m'),
                         style: const TextStyle(
                           fontFamily: 'Poppins',
@@ -239,7 +239,7 @@ class _TableCardState extends State<TableCard> {
             child: const Icon(Icons.cleaning_services_rounded,
               color: Color(0xFF4CAF50), size: 20)),
           const SizedBox(width: 10),
-          const Text('Meja Siap?',
+          const Text('Table Ready?',
             style: TextStyle(
               fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
         ]),
@@ -249,24 +249,24 @@ class _TableCardState extends State<TableCard> {
               fontFamily: 'Poppins', fontSize: 13,
               color: AppColors.textPrimary, height: 1.5),
             children: [
-              const TextSpan(text: 'Tandai '),
+              const TextSpan(text: 'Mark '),
               TextSpan(
-                text: 'Meja ${widget.table.tableNumber}',
+                text: 'Table ${widget.table.tableNumber}',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
-              const TextSpan(text: ' sebagai '),
+              const TextSpan(text: ' as '),
               const TextSpan(
-                text: 'Tersedia',
+                text: 'Available',
                 style: TextStyle(
                     fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
               const TextSpan(
-                  text: '?\n\nPastikan meja sudah bersih dan siap untuk tamu berikutnya.'),
+                  text: '?\n\nMake sure the table is clean and ready for the next guest.'),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Belum',
+            child: const Text('Not Yet',
               style: TextStyle(
                   fontFamily: 'Poppins', color: AppColors.textSecondary))),
           ElevatedButton.icon(
@@ -281,7 +281,7 @@ class _TableCardState extends State<TableCard> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10))),
             icon: const Icon(Icons.check_rounded, size: 16),
-            label: const Text('Ya, Siap!',
+            label: const Text('Yes, Ready!',
               style: TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w700))),
         ],
@@ -424,7 +424,7 @@ class _OrderDetail {
     items: j['items'] ?? [],
   );
 
-  // ── Selalu hitung ulang dari subtotal, tidak bergantung nilai DB ──
+  // ── Always recalculated from subtotal, not dependent on the DB value ──
   double get computedServiceCharge => subtotal * 0.03;
   double get computedPb1 => (subtotal + computedServiceCharge) * 0.10;
   int get computedOvertimeCharge => calculateOvertimeCharge(servedAt);
@@ -547,7 +547,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Text('Meja ${table.tableNumber}', style: AppTextStyles.heading3),
+            Text('Table ${table.tableNumber}', style: AppTextStyles.heading3),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -560,7 +560,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             ),
           ]),
           const SizedBox(height: 4),
-          Text('Kapasitas: ${table.capacity} orang',
+          Text('Capacity: ${table.capacity} guests',
               style: AppTextStyles.bodySecondary),
 
           if (table.status == TableStatus.reserved) ...[
@@ -574,7 +574,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           ],
 
           const SizedBox(height: 20),
-          const Text('Ubah Status:',
+          const Text('Change Status:',
             style: TextStyle(
               fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
           const SizedBox(height: 12),
@@ -597,14 +597,14 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
 
   Widget _buildOrderSection(Color color) {
     if (_loadingOrder) return _loadingBox(color);
-    if (_order == null) return _emptyBox(color, 'Tidak ada data order aktif');
+    if (_order == null) return _emptyBox(color, 'No active order data');
 
     final o = _order!;
     final payColor = o.paymentStatus == 'paid'
         ? const Color(0xFF4CAF50)
         : const Color(0xFFE94560);
-    final payLabel = o.paymentStatus == 'paid' ? 'Lunas' : 'Belum Bayar';
-    final jamMasuk =
+    final payLabel = o.paymentStatus == 'paid' ? 'Paid' : 'Unpaid';
+    final orderTime =
         '${o.createdAt.hour.toString().padLeft(2, '0')}:${o.createdAt.minute.toString().padLeft(2, '0')} WIB';
 
     return Container(
@@ -620,7 +620,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           Row(children: [
             Icon(Icons.receipt_long_rounded, color: color, size: 16),
             const SizedBox(width: 6),
-            Text('Detail Order',
+            Text('Order Details',
               style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w700,
                 fontSize: 13, color: color)),
@@ -640,10 +640,10 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           const SizedBox(height: 12),
 
           if (o.customerName != null && o.customerName!.isNotEmpty)
-            _detailRow(Icons.person_rounded, 'Pemesan', o.customerName!),
+            _detailRow(Icons.person_rounded, 'Ordered by', o.customerName!),
           if (o.customerPhone != null && o.customerPhone!.isNotEmpty)
-            _detailRow(Icons.phone_rounded, 'No. HP', o.customerPhone!),
-          _detailRow(Icons.access_time_rounded, 'Mulai Pesan', jamMasuk),
+            _detailRow(Icons.phone_rounded, 'Phone', o.customerPhone!),
+          _detailRow(Icons.access_time_rounded, 'Order Started', orderTime),
 
           const Divider(height: 16),
 
@@ -652,7 +652,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
               const Icon(Icons.fastfood_rounded,
                   size: 14, color: AppColors.textSecondary),
               const SizedBox(width: 8),
-              Text('Item (${o.items.length})',
+              Text('Items (${o.items.length})',
                 style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 12,
@@ -686,7 +686,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             if (o.items.length > 3)
               Padding(
                 padding: const EdgeInsets.only(left: 22),
-                child: Text('+ ${o.items.length - 3} item lainnya',
+                child: Text('+ ${o.items.length - 3} more items',
                   style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
@@ -695,7 +695,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
             const Divider(height: 16),
           ],
 
-          // ── Breakdown harga (selalu hitung ulang dari subtotal) ────
+          // ── Price breakdown (always recalculated from subtotal) ────
           _detailRow(Icons.receipt_outlined, 'Subtotal',
               _formatCurrency(o.subtotal)),
           _detailRow(Icons.room_service_outlined, 'Service (3%)',
@@ -703,10 +703,10 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           _detailRow(Icons.percent_rounded, 'PB1 (10%)',
               _formatCurrency(o.computedPb1)),
           if (o.discountAmount > 0)
-            _detailRow(Icons.discount_rounded, 'Diskon',
+            _detailRow(Icons.discount_rounded, 'Discount',
               '- ${_formatCurrency(o.discountAmount)}'),
           if (o.computedOvertimeCharge > 0)
-            _detailRow(Icons.warning_amber_rounded, 'Kelebihan Waktu (>2j)',
+            _detailRow(Icons.warning_amber_rounded, 'Overtime (>2h)',
               _formatCurrency(o.computedOvertimeCharge.toDouble())),
           _detailRow(Icons.payments_rounded, 'Total',
               _formatCurrency(o.computedTotal)),
@@ -745,7 +745,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
 
           if (o.notes != null && o.notes!.isNotEmpty) ...[
             const Divider(height: 16),
-            _detailRow(Icons.note_rounded, 'Catatan', o.notes!),
+            _detailRow(Icons.note_rounded, 'Notes', o.notes!),
           ],
         ],
       ),
@@ -755,7 +755,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
   Widget _buildReservationSection(Color color) {
     if (_loadingBooking) return _loadingBox(color);
     if (_booking == null) {
-      return _emptyBox(color, 'Tidak ada data reservasi aktif');
+      return _emptyBox(color, 'No active reservation data');
     }
 
     final b = _booking!;
@@ -772,7 +772,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           Row(children: [
             Icon(Icons.event_seat_rounded, color: color, size: 16),
             const SizedBox(width: 6),
-            Text('Detail Reservasi',
+            Text('Reservation Details',
               style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w700,
                 fontSize: 13, color: color)),
@@ -794,24 +794,24 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           ]),
           const SizedBox(height: 12),
 
-          _detailRow(Icons.person_rounded, 'Nama', b.customerName),
+          _detailRow(Icons.person_rounded, 'Name', b.customerName),
           if (b.customerPhone != null)
-            _detailRow(Icons.phone_rounded, 'No. HP', b.customerPhone!),
+            _detailRow(Icons.phone_rounded, 'Phone', b.customerPhone!),
           if (b.customerEmail != null)
             _detailRow(Icons.email_rounded, 'Email', b.customerEmail!),
 
           const Divider(height: 16),
 
-          _detailRow(Icons.calendar_today_rounded, 'Tanggal',
+          _detailRow(Icons.calendar_today_rounded, 'Date',
               _formatDate(b.bookingDate)),
-          _detailRow(Icons.access_time_rounded, 'Jam',
-              '${b.bookingTime} (${b.durationMinutes} menit)'),
+          _detailRow(Icons.access_time_rounded, 'Time',
+              '${b.bookingTime} (${b.durationMinutes} minutes)'),
           _detailRow(
-              Icons.people_rounded, 'Jumlah Tamu', '${b.guestCount} orang'),
+              Icons.people_rounded, 'Guests', '${b.guestCount} guests'),
 
           if (b.specialRequests != null && b.specialRequests!.isNotEmpty) ...[
             const Divider(height: 16),
-            _detailRow(Icons.note_rounded, 'Catatan', b.specialRequests!),
+            _detailRow(Icons.note_rounded, 'Notes', b.specialRequests!),
           ],
         ],
       ),
@@ -897,10 +897,10 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
   String _formatDate(String raw) {
     try {
       final dt = DateTime.parse(raw);
-      const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       const months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-        'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
       ];
       return '${days[dt.weekday - 1]}, ${dt.day} ${months[dt.month - 1]} ${dt.year}';
     } catch (_) {

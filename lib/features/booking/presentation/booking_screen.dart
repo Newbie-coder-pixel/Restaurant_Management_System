@@ -29,11 +29,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   Set<String> _datesWithBooking = {};
 
-  String? _branchId; // branch milik staff yang login
+  String? _branchId; // branch belonging to the logged-in staff
 
-  // ── Branch filter (hanya untuk superadmin) ──
+  // ── Branch filter (superadmin only) ──
   List<Map<String, dynamic>> _branches = [];
-  String? _selectedBranchId; // null = "Semua" (hanya superadmin)
+  String? _selectedBranchId; // null = "All" (superadmin only)
 
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
@@ -72,7 +72,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       _branchId = staff.branchId;
       final isSuperadmin = staff.role == StaffRole.superadmin;
       if (isSuperadmin) {
-        _selectedBranchId = null; // default "Semua"
+        _selectedBranchId = null; // default "All"
         _loadBranches();
       } else {
         _selectedBranchId = _branchId;
@@ -91,7 +91,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     super.dispose();
   }
 
-  // ── Setup realtime listener untuk branch ini ──────────────
+  // ── Setup realtime listener for this branch ───────────────
   void _setupRealtime(String branchId) {
     _realtimeChannel?.unsubscribe();
 
@@ -112,7 +112,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
             _loadDatesWithBooking();
             _showRealtimeNotif(
               icon: Icons.event_available,
-              message: '📅 Booking baru dari ${payload.newRecord['customer_name'] ?? 'pelanggan'}',
+              message: '📅 New booking from ${payload.newRecord['customer_name'] ?? 'a customer'}',
               color: const Color(0xFF4CAF50),
             );
           },
@@ -136,7 +136,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         .subscribe();
   }
 
-  // ── Load semua branch (untuk superadmin only) ────────
+  // ── Load all branches (superadmin only) ───────────────
   Future<void> _loadBranches() async {
     try {
       final res = await Supabase.instance.client
@@ -196,7 +196,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       if (_selectedBranchId != null) {
         q = q.eq('branch_id', _selectedBranchId!);
       }
-      // jika _selectedBranchId null (Semua) → tidak filter branch
+      // if _selectedBranchId is null (All) → don't filter by branch
 
       final res = await q
           .eq('booking_date', dateStr)
@@ -302,8 +302,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   Future<void> _updateStatus(String id, BookingStatus status) async {
     try {
-      // Jika staff manual promote dari waitlisted → gunakan flow khusus
-      // yang cari meja dulu sebelum update status
+      // If staff manually promotes from waitlisted → use the special flow
+      // that finds a table first before updating the status
       final raw = _bookingsRaw.firstWhere(
         (r) => r['id'] == id,
         orElse: () => {},
@@ -320,11 +320,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', id);
 
-      // Jika booking selesai/batal/no-show → bebaskan meja + cek waitlist
+      // If the booking is completed/cancelled/no-show → free the table + check the waitlist
       if (status == BookingStatus.completed ||
           status == BookingStatus.cancelled ||
           status == BookingStatus.noShow) {
-        // Bebaskan meja: kembalikan ke available & clear current_booking_id
+        // Free the table: set it back to available & clear current_booking_id
         final tableId = raw.isNotEmpty ? raw['table_id'] as String? : null;
         if (tableId != null) {
           await Supabase.instance.client
@@ -344,13 +344,13 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal update status: $e'),
+            content: Text('Failed to update status: $e'),
             backgroundColor: Colors.red));
       }
     }
   }
 
-  // ── Pembatalan dengan catatan wajib ──────────────────────
+  // ── Cancellation with a mandatory note ───────────────────
   Future<void> _cancelBooking(String id, String notes) async {
     try {
       final raw = _bookingsRaw.firstWhere(
@@ -364,7 +364,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', id);
 
-      // Bebaskan meja jika ada
+      // Free the table if there is one
       final tableId = raw.isNotEmpty ? raw['table_id'] as String? : null;
       if (tableId != null) {
         await Supabase.instance.client
@@ -383,20 +383,20 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('✅ Reservasi berhasil dibatalkan'),
+            content: Text('✅ Reservation cancelled successfully'),
             backgroundColor: Color(0xFF4CAF50)));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal membatalkan booking: $e'),
+            content: Text('Failed to cancel booking: $e'),
             backgroundColor: Colors.red));
       }
     }
   }
 
-  // ── Promote manual: staff tap "Promote ke Pending" di card waitlist ──
-  // Cari meja yang benar-benar tersedia untuk slot booking ini, lalu assign
+  // ── Manual promote: staff taps "Promote to Pending" on the waitlist card ──
+  // Find a table that's genuinely available for this booking slot, then assign it
   Future<void> _promoteWaitlistManual(
       String bookingId, Map<String, dynamic> raw) async {
     if (_branchId == null) return;
@@ -411,7 +411,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       final newStart = int.parse(tParts[0]) * 60 + int.parse(tParts[1]);
       final newEnd   = newStart + duration;
 
-      // Ambil semua meja yang kapasitasnya cukup
+      // Get all tables with sufficient capacity
       final tables = await Supabase.instance.client
           .from('restaurant_tables')
           .select('id, capacity, table_number')
@@ -422,20 +422,20 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       if ((tables as List).isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Tidak ada meja dengan kapasitas yang cukup'),
+              content: Text('No table with sufficient capacity'),
               backgroundColor: Colors.orange));
         }
         return;
       }
 
-      // Ambil booking aktif di tanggal yang sama untuk cek overlap
+      // Get active bookings on the same date to check for overlaps
       final existing = await Supabase.instance.client
           .from('bookings')
           .select('table_id, booking_time, duration_minutes')
           .eq('branch_id', _branchId!)
           .eq('booking_date', bookingDate)
           .inFilter('status', ['pending', 'confirmed', 'seated'])
-          .neq('id', bookingId); // exclude booking ini sendiri
+          .neq('id', bookingId); // exclude this booking itself
 
       final bookedIds = (existing as List).where((b) {
         final rawT  = b['booking_time'] as String? ?? '00:00:00';
@@ -451,13 +451,13 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       if (available.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Semua meja penuh di slot ini, belum bisa dipromote'),
+              content: Text('All tables are full for this slot, can\'t promote yet'),
               backgroundColor: Colors.orange));
         }
         return;
       }
 
-      // Assign meja terkecil yang cukup + promote ke pending
+      // Assign the smallest sufficient table + promote to pending
       final chosenTable = available.first;
       await Supabase.instance.client.from('bookings').update({
         'table_id':   chosenTable['id'],
@@ -469,7 +469,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         _showRealtimeNotif(
           icon: Icons.arrow_upward_outlined,
           message:
-              '✅ Dipromote ke pending — Meja ${chosenTable['table_number']}',
+              '✅ Promoted to pending — Table ${chosenTable['table_number']}',
           color: const Color(0xFF7B1FA2),
         );
       }
@@ -479,13 +479,13 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Gagal promote waitlist: $e'),
+            content: Text('Failed to promote waitlist: $e'),
             backgroundColor: Colors.red));
       }
     }
   }
 
-  // ── Promote waitlist: cari tamu waitlisted yang overlap slot booking yg baru bebas ──
+  // ── Promote waitlist: find a waitlisted guest whose slot overlaps the newly freed booking ──
   Future<void> _promoteWaitlist(Map<String, dynamic> freedBooking) async {
     if (_branchId == null) return;
 
@@ -496,23 +496,23 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       final freedDur     = (freedBooking['duration_minutes'] as int?) ?? 120;
       if (freedTableId == null || freedDate == null) return;
 
-      // Hitung slot yang baru bebas dalam menit
+      // Compute the newly freed slot in minutes
       final tParts     = freedTimeRaw.split(':');
       final freedStart = int.parse(tParts[0]) * 60 + int.parse(tParts[1]);
       final freedEnd   = freedStart + freedDur;
 
-      // Ambil semua booking waitlisted di branch + tanggal yang sama, urut paling lama nunggu
+      // Get all waitlisted bookings in the branch + same date, ordered by longest wait
       final waitlistRes = await Supabase.instance.client
           .from('bookings')
           .select('id, booking_time, duration_minutes, guest_count')
           .eq('branch_id', _branchId!)
           .eq('booking_date', freedDate)
           .eq('status', 'waitlisted')
-          .order('created_at'); // FIFO — yang pertama masuk, pertama dipromote
+          .order('created_at'); // FIFO — first in, first promoted
 
       if ((waitlistRes as List).isEmpty) return;
 
-      // Cek kapasitas meja yang baru bebas
+      // Check the capacity of the newly freed table
       final tableRes = await Supabase.instance.client
           .from('restaurant_tables')
           .select('capacity')
@@ -521,9 +521,9 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       if (tableRes == null) return;
       final tableCapacity = (tableRes['capacity'] as int?) ?? 0;
 
-      // Cari kandidat waitlist pertama yang:
-      // 1. Slot-nya overlap dengan slot yang baru bebas
-      // 2. Jumlah tamu ≤ kapasitas meja
+      // Find the first waitlist candidate whose:
+      // 1. Slot overlaps with the newly freed slot
+      // 2. Guest count ≤ table capacity
       Map<String, dynamic>? candidate;
       for (final w in waitlistRes) {
         final wTimeRaw = w['booking_time'] as String? ?? '00:00:00';
@@ -542,39 +542,39 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
       if (candidate == null) return;
 
-      // Promote: assign meja + ubah status ke pending
+      // Promote: assign the table + change the status to pending
       await Supabase.instance.client.from('bookings').update({
         'table_id':   freedTableId,
         'status':     'pending',
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', candidate['id'] as String);
 
-      debugPrint('✅ Waitlist promoted: ${candidate['id']} → meja $freedTableId');
+      debugPrint('✅ Waitlist promoted: ${candidate['id']} → table $freedTableId');
 
       if (mounted) {
         _showRealtimeNotif(
           icon: Icons.queue_outlined,
-          message: '🎉 Tamu dari waitlist berhasil dipromote ke pending!',
+          message: '🎉 Guest from the waitlist was successfully promoted to pending!',
           color: const Color(0xFF7B1FA2),
           duration: const Duration(seconds: 5),
         );
       }
     } catch (e) {
-      debugPrint('⚠️ Promote waitlist gagal: $e');
+      debugPrint('⚠️ Promote waitlist failed: $e');
     }
   }
 
-  // ── Notif WA ke staff via Edge Function ──────────────────
+  // ── WhatsApp notification to staff via Edge Function ─────
   Future<void> _notifyStaff(String bookingId) async {
     try {
       await Supabase.instance.client.functions.invoke(
         'notify-staff',
         body: {'booking_id': bookingId},
       );
-      debugPrint('✅ Notif staff terkirim untuk booking $bookingId');
+      debugPrint('✅ Staff notification sent for booking $bookingId');
     } catch (e) {
-      // Jangan crash app kalau notif gagal — cukup log
-      debugPrint('⚠️ Notif staff gagal: $e');
+      // Don't crash the app if the notification fails — just log it
+      debugPrint('⚠️ Staff notification failed: $e');
     }
   }
 
@@ -607,12 +607,12 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   String _historyStatusLabel(String? s) {
     switch (s) {
-      case 'completed':  return 'Selesai';
-      case 'cancelled':  return 'Dibatalkan';
-      case 'no_show':    return 'Tidak Hadir';
-      case 'confirmed':  return 'Konfirmasi';
-      case 'pending':    return 'Menunggu';
-      case 'seated':     return 'Duduk';
+      case 'completed':  return 'Completed';
+      case 'cancelled':  return 'Cancelled';
+      case 'no_show':    return 'No Show';
+      case 'confirmed':  return 'Confirmed';
+      case 'pending':    return 'Pending';
+      case 'seated':     return 'Seated';
       case 'waitlisted': return 'Waitlist';
       default:           return s ?? '-';
     }
@@ -670,7 +670,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 11,
@@ -718,8 +718,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           labelStyle: const TextStyle(
               fontFamily: 'Poppins', fontWeight: FontWeight.w600),
           tabs: const [
-            Tab(text: 'Reservasi'),
-            Tab(text: 'Riwayat'),
+            Tab(text: 'Reservations'),
+            Tab(text: 'History'),
           ],
         ),
       ),
@@ -728,7 +728,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
               onPressed: _showAddBooking,
               backgroundColor: AppColors.accent,
               icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Reservasi Baru',
+              label: const Text('New Reservation',
                   style: TextStyle(
                       color: Colors.white,
                       fontFamily: 'Poppins',
@@ -746,7 +746,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
 
   Future<void> _showAddBooking() async {
-    // Untuk "Semua" cabang, gunakan branchId staff sendiri
+    // For "All" branches, use the staff's own branchId
     final targetBranch = _selectedBranchId ?? _branchId ?? '';
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -755,29 +755,29 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
     if (result != null && _branchId != null) {
       try {
-        // Insert booking ke Supabase
+        // Insert the booking into Supabase
         final inserted = await Supabase.instance.client
             .from('bookings')
             .insert({...result, 'branch_id': targetBranch})
             .select()
             .single();
 
-        // ── BARU: Kirim notif WA ke staff setelah booking berhasil disimpan ──
+        // ── NEW: Send a WhatsApp notification to staff after the booking is saved ──
         await _notifyStaff(inserted['id'] as String);
 
         await _load();
         await _loadDatesWithBooking();
 
-        // Tampilkan konfirmasi
+        // Show confirmation
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('✅ Booking berhasil disimpan'),
+              content: Text('✅ Booking saved successfully'),
               backgroundColor: Color(0xFF4CAF50)));
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Gagal simpan booking: $e'),
+              content: Text('Failed to save booking: $e'),
               backgroundColor: Colors.red));
         }
       }
@@ -794,7 +794,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         child: TextField(
           controller: _searchCtrl,
           decoration: InputDecoration(
-            hintText: 'Cari nama, HP, atau kode konfirmasi...',
+            hintText: 'Search name, phone, or confirmation code...',
             hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
             prefixIcon: const Icon(Icons.search, size: 20),
             suffixIcon: _searchQuery.isNotEmpty
@@ -815,8 +815,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         child: Row(children: [
           Text(
               _searchQuery.isNotEmpty
-                  ? '${_filteredBookings.length} dari ${_bookings.length} reservasi'
-                  : '${_bookings.length} reservasi',
+                  ? '${_filteredBookings.length} of ${_bookings.length} reservations'
+                  : '${_bookings.length} reservations',
               style: AppTextStyles.heading3),
         ])),
       Expanded(
@@ -836,8 +836,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                         const SizedBox(height: 12),
                         Text(
                             _searchQuery.isNotEmpty
-                                ? 'Tidak ditemukan'
-                                : 'Tidak ada reservasi',
+                                ? 'No results found'
+                                : 'No reservations yet',
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
                                 color: AppColors.textSecondary)),
@@ -871,11 +871,11 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
-        _statChip('Menunggu',   _pendingCount,    AppColors.reserved),
+        _statChip('Pending',   _pendingCount,    AppColors.reserved),
         const SizedBox(width: 8),
-        _statChip('Konfirmasi', _confirmedCount,  AppColors.available),
+        _statChip('Confirmed', _confirmedCount,  AppColors.available),
         const SizedBox(width: 8),
-        _statChip('Duduk',      _seatedCount,     AppColors.occupied),
+        _statChip('Seated',    _seatedCount,     AppColors.occupied),
         if (_waitlistedCount > 0) ...[
           const SizedBox(width: 8),
           _statChip('Waitlist', _waitlistedCount, const Color(0xFF7B1FA2)),
@@ -923,7 +923,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
             .eq('id', booking.id);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('✅ Booking berhasil diperbarui'),
+              content: Text('✅ Booking updated successfully'),
               backgroundColor: Color(0xFF4CAF50)));
         }
         await _load();
@@ -931,7 +931,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Gagal update booking: $e'),
+              content: Text('Failed to update booking: $e'),
               backgroundColor: Colors.red));
         }
       }
@@ -940,16 +940,16 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
   Widget _buildHistory() {
     return Row(children: [
-      // ── Sidebar kiri ────────────────────────────────
+      // ── Left sidebar ──────────────────────────────────
       Container(
         width: 110,
         color: const Color(0xFF1A1A2E),
         child: Column(children: [
           const SizedBox(height: 16),
           for (final f in [
-            ('all', 'Semua', Icons.list_alt_rounded),
-            ('completed', 'Lunas', Icons.check_circle_outline),
-            ('cancelled', 'Dibatalkan', Icons.cancel_outlined),
+            ('all', 'All', Icons.list_alt_rounded),
+            ('completed', 'Completed', Icons.check_circle_outline),
+            ('cancelled', 'Cancelled', Icons.cancel_outlined),
           ])
             GestureDetector(
               onTap: () {
@@ -999,7 +999,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
         ]),
       ),
 
-      // ── List history ─────────────────────────────────
+      // ── History list ──────────────────────────────────
       Expanded(
         child: _isHistoryLoading
             ? const Center(child: CircularProgressIndicator())
@@ -1011,7 +1011,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                         Icon(Icons.event_busy_outlined,
                             size: 64, color: AppColors.textHint),
                         SizedBox(height: 12),
-                        Text('Tidak ada riwayat reservasi',
+                        Text('No reservation history yet',
                             style: TextStyle(
                                 fontFamily: 'Poppins',
                                 color: AppColors.textSecondary)),
@@ -1057,7 +1057,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                  '$date • $time • ${b['guest_count'] ?? 1} org'
+                                  '$date • $time • ${b['guest_count'] ?? 1} guests'
                                   '${tableNum != null ? ' • $tableNum' : ''}',
                                   style: AppTextStyles.caption),
                               if (b['confirmation_code'] != null)

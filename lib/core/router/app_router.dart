@@ -24,8 +24,8 @@ import '../../features/auth/presentation/staff_reset_password_screen.dart';
 import '../models/staff_role.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// APP MODE — di-set saat build via --dart-define=APP_MODE=staff|customer|qr
-// Default: 'staff' supaya kalau build tanpa define, yang muncul adalah staff app
+// APP MODE — set at build time via --dart-define=APP_MODE=staff|customer|qr
+// Default: 'staff' so that a build without the define shows the staff app
 // ─────────────────────────────────────────────────────────────────────────────
 const String appMode = String.fromEnvironment('APP_MODE', defaultValue: 'staff');
 
@@ -104,12 +104,12 @@ class _AuthChangeNotifier extends ChangeNotifier {
 }
 
 // ── Guard: role-based route access (staff app) ───────────────────────────────
-// Sebelumnya redirect() cuma cek "sudah login atau belum" — role staff apa pun
-// bisa deep-link ke route manapun (mis. waiter mengetik /reports langsung di
-// address bar) dan layarnya tetap render + query data asli. Fungsi ini
-// mencocokkan route yang diminta dengan StaffRole.accessFeatures supaya
-// navigasi ke fitur di luar hak role tsb diblokir di level router, bukan cuma
-// disembunyikan dari drawer/menu.
+// Previously redirect() only checked "logged in or not" — any staff role
+// could deep-link to any route (e.g. a waiter typing /reports directly in
+// the address bar) and the screen would still render + query real data.
+// This function matches the requested route against StaffRole.accessFeatures
+// so navigation to features outside that role's rights is blocked at the
+// router level, not just hidden from the drawer/menu.
 bool _roleCanAccessRoute(StaffRole role, String path) {
   if (role == StaffRole.superadmin) return true;
   final features = role.accessFeatures;
@@ -117,37 +117,37 @@ bool _roleCanAccessRoute(StaffRole role, String path) {
 
   switch (path) {
     case AppRoutes.tables:
-      return has('Manajemen Meja');
+      return has('Table Management');
     case AppRoutes.booking:
     case AppRoutes.bookingStats:
-      return has('Reservasi');
+      return has('Reservations');
     case AppRoutes.order:
       return has('Order');
     case AppRoutes.cashier:
-      return has('Kasir & Pembayaran');
+      return has('Cashier & Payment');
     case AppRoutes.kitchen:
-      return has('Dapur (KDS)');
+      return has('Kitchen (KDS)');
     case AppRoutes.menu:
       return has('Menu');
     case AppRoutes.inventory:
-      return has('Inventori');
+      return has('Inventory');
     case AppRoutes.staff:
       return has('Staff');
     case AppRoutes.reports:
-      return has('Laporan & Analitik');
+      return has('Reports & Analytics');
     case AppRoutes.chatbot:
       return has('AI Chatbot');
     case AppRoutes.branches:
     case AppRoutes.transferStock:
-      return has('Multi Cabang');
-    // Fitur finansial/administratif sensitif — manager & superadmin saja,
-    // meski belum ada entri khusus di StaffRole.accessFeatures.
+      return has('Multi Branch');
+    // Sensitive financial/administrative features — manager & superadmin only,
+    // even though there's no dedicated entry in StaffRole.accessFeatures.
     case AppRoutes.closures:
     case AppRoutes.costing:
     case AppRoutes.operatingExpense:
       return role == StaffRole.manager;
     default:
-      return true; // route non-staff (login, reset password, dsb) tidak digate di sini
+      return true; // non-staff routes (login, reset password, etc.) aren't gated here
   }
 }
 
@@ -160,10 +160,10 @@ String _getInitialLocation() {
     if (path.isNotEmpty && path != '/') return path;
   }
 
-  // Initial location sesuai mode
+  // Initial location depends on mode
   if (appMode == 'customer') return AppRoutes.customer;
-  if (appMode == 'qr') return '/'; // QR butuh tableId dari URL, biarkan dari URL
-  return AppRoutes.customer; // staff default ke customer dulu, redirect handle sisanya
+  if (appMode == 'qr') return '/'; // QR needs tableId from the URL, let it come from the URL
+  return AppRoutes.customer; // staff defaults to customer first, redirect handles the rest
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -186,13 +186,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           path.startsWith('/customer') || path == '/customer';
 
       // ─── GUARD: Customer App ───────────────────────────────────────────────
-      // Kalau build dengan APP_MODE=customer, hanya boleh akses /customer/...
-      // Semua route lain (staff, qr) di-redirect balik ke /customer
+      // If built with APP_MODE=customer, only /customer/... is accessible
+      // All other routes (staff, qr) are redirected back to /customer
       if (appMode == 'customer') {
         if (!isCustomerRoute(loc) && !isCustomerRoute(fullPath)) {
           return AppRoutes.customer;
         }
-        // Tetap handle reset password via email link
+        // Still handle password reset via email link
         if (kIsWeb) {
           final uri = Uri.base;
           final type = uri.queryParameters['type'];
@@ -202,23 +202,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       // ─── GUARD: QR App ────────────────────────────────────────────────────
-      // Kalau build dengan APP_MODE=qr, hanya boleh akses /qr/...
-      // Tidak perlu redirect karena QR URL sudah pasti mengandung tableId
+      // If built with APP_MODE=qr, only /qr/... is accessible
+      // No redirect needed since the QR URL always contains the tableId
       if (appMode == 'qr') {
         if (!isQrRoute(loc) && !isQrRoute(fullPath)) {
-          // Tidak ada halaman fallback untuk QR, tampilkan error
+          // No fallback page for QR, show an error
           return null;
         }
         return null;
       }
 
       // ─── GUARD: Staff App ─────────────────────────────────────────────────
-      // Kalau build dengan APP_MODE=staff (default), blok akses ke /customer dan /qr
-      // Staff tidak boleh akses halaman customer atau QR
+      // If built with APP_MODE=staff (default), block access to /customer and /qr
+      // Staff must not access customer or QR pages
       if (appMode == 'staff') {
         if (isCustomerRoute(loc) || isCustomerRoute(fullPath) ||
             isQrRoute(loc) || isQrRoute(fullPath)) {
-          // Redirect ke login kalau belum login, atau ke default role
+          // Redirect to login if not logged in, otherwise to the role's default route
           if (!isLoggedIn) return AppRoutes.login;
           final s = authState.staff;
           if (s != null) return _defaultRouteForRole(s.role);
@@ -226,7 +226,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // ─── Logic staff lama (tidak berubah) ─────────────────────────────────
+      // ─── Legacy staff logic (unchanged) ────────────────────────────────────
       if (loc == AppRoutes.staffGateway) return null;
 
       if (kIsWeb) {
@@ -387,7 +387,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               onPressed: () => GoRouter.of(context).go(
                 appMode == 'staff' ? AppRoutes.login : AppRoutes.customer,
               ),
-              child: const Text('Kembali'),
+              child: const Text('Go Back'),
             ),
           ],
         ),

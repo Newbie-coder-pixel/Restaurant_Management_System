@@ -74,7 +74,7 @@ class _CustomerCheckoutScreenState
                   child: const Icon(Icons.shopping_cart_outlined,
                       color: Colors.white, size: 18)),
                 const SizedBox(width: 10),
-                const Text('Konfirmasi Pesanan',
+                const Text('Confirm Order',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700,
@@ -84,12 +84,12 @@ class _CustomerCheckoutScreenState
               const SizedBox(height: 16),
 
               // ── Info rows ───────────────────────────────────────────
-              _dialogRow('Nama', _nameCtrl.text.trim()),
+              _dialogRow('Name', _nameCtrl.text.trim()),
               if (_phoneCtrl.text.trim().isNotEmpty)
-                _dialogRow('No. HP', _phoneCtrl.text.trim()),
-              _dialogRow('Tipe', 'Bawa Pulang'),
+                _dialogRow('Phone', _phoneCtrl.text.trim()),
+              _dialogRow('Type', 'Takeaway'),
               _dialogRow('Total', 'Rp ${_fmt(cart.total)}'),
-              _dialogRow('Item', '${cart.itemCount} item'),
+              _dialogRow('Items', '${cart.itemCount} item(s)'),
               const SizedBox(height: 14),
 
               // ── Warning box ─────────────────────────────────────────
@@ -109,7 +109,7 @@ class _CustomerCheckoutScreenState
                       SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Pesanan yang telah dikirim ke dapur tidak dapat dibatalkan.',
+                          'Orders that have been sent to the kitchen cannot be canceled.',
                           style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 11,
@@ -125,7 +125,7 @@ class _CustomerCheckoutScreenState
                       SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Pastikan pesanan sudah benar sebelum melanjutkan.',
+                          'Make sure your order is correct before continuing.',
                           style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 11,
@@ -149,7 +149,7 @@ class _CustomerCheckoutScreenState
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                       minimumSize: const Size(0, 44)),
-                    child: const Text('Cek Lagi',
+                    child: const Text('Check Again',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.w600,
@@ -167,7 +167,7 @@ class _CustomerCheckoutScreenState
                           borderRadius: BorderRadius.circular(10)),
                       minimumSize: const Size(0, 44),
                       elevation: 0),
-                    child: const Text('Pesan Sekarang',
+                    child: const Text('Order Now',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.w600,
@@ -210,14 +210,14 @@ class _CustomerCheckoutScreenState
 
     if (cart.isEmpty || cart.branchId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Cart kosong, tambahkan menu terlebih dahulu.'),
+        content: Text('Cart is empty, please add a menu item first.'),
         backgroundColor: Colors.orange));
       return;
     }
 
     if (_nameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nama wajib diisi'),
+        content: Text('Name is required'),
         backgroundColor: Colors.red));
       return;
     }
@@ -227,7 +227,7 @@ class _CustomerCheckoutScreenState
       final phoneRegex = RegExp(r'^08[0-9]{8,11}$');
       if (!phoneRegex.hasMatch(phone)) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Format nomor HP tidak valid. Contoh: 08123456789'),
+          content: Text('Invalid phone number format. Example: 08123456789'),
           backgroundColor: Colors.red));
         return;
       }
@@ -246,8 +246,8 @@ class _CustomerCheckoutScreenState
     try {
       final user = Supabase.instance.client.auth.currentUser;
 
-      // Generate id & order_number di client — hindari .select() setelah insert
-      // agar tidak kena RLS 403 saat anon SELECT
+      // Generate id & order_number client-side — avoid .select() after insert
+      // to avoid an RLS 403 on anon SELECT
       final orderId      = const Uuid().v4();
       final orderNumber  = _generateOrderNumber();
 
@@ -282,13 +282,13 @@ class _CustomerCheckoutScreenState
         'menu_item_name':  item.name,
         'quantity':        item.quantity,
         'unit_price':      item.price,
-        // subtotal tidak di-insert karena generated column di Supabase
+        // subtotal is not inserted because it's a generated column in Supabase
         'status':          'pending',
         if (item.notes != null && item.notes!.isNotEmpty)
           'special_requests': item.notes,
       }).where((i) => (i['menu_item_id'] as String).isNotEmpty).toList();
 
-      if (orderItems.isEmpty) throw Exception('Tidak ada item valid di cart.');
+      if (orderItems.isEmpty) throw Exception('No valid items in cart.');
 
       await Supabase.instance.client.from('order_items').insert(orderItems);
 
@@ -300,7 +300,7 @@ class _CustomerCheckoutScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal memesan: $e'),
+          content: Text('Failed to place order: $e'),
           backgroundColor: Colors.red));
         setState(() => _submitting = false);
       }
@@ -329,14 +329,14 @@ class _CustomerCheckoutScreenState
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             const Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
-            const Text('Cart kamu kosong',
+            const Text('Your cart is empty',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF1A1A2E))),
             const SizedBox(height: 8),
-            const Text('Tambahkan menu terlebih dahulu',
+            const Text('Add a menu item first',
                 style: TextStyle(
                     fontFamily: 'Poppins', fontSize: 13, color: Colors.grey)),
             const SizedBox(height: 24),
@@ -347,7 +347,7 @@ class _CustomerCheckoutScreenState
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12))),
-              child: const Text('Lihat Menu',
+              child: const Text('View Menu',
                   style: TextStyle(
                       fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
           ])),
@@ -387,7 +387,7 @@ class _CustomerCheckoutScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _section('Tipe Pesanan', [
+          _section('Order Type', [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
@@ -407,14 +407,14 @@ class _CustomerCheckoutScreenState
                 const Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Bawa Pulang (Takeaway)',
+                    Text('Takeaway',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                         color: Color(0xFF1A1A2E))),
                     SizedBox(height: 2),
-                    Text('Ambil pesanan di restoran',
+                    Text('Pick up your order at the restaurant',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
@@ -425,17 +425,17 @@ class _CustomerCheckoutScreenState
           ]),
           const SizedBox(height: 16),
 
-          _section('Informasi Pemesan', [
-            _field('Nama kamu *', _nameCtrl, Icons.person_outline),
+          _section('Customer Information', [
+            _field('Your name *', _nameCtrl, Icons.person_outline),
             const SizedBox(height: 10),
             _phoneField(),
             const SizedBox(height: 10),
-            _field('Catatan umum pesanan', _notesCtrl,
+            _field('General order notes', _notesCtrl,
                 Icons.notes_outlined, maxLines: 2),
           ]),
           const SizedBox(height: 16),
 
-          _section('Ringkasan Pesanan', [
+          _section('Order Summary', [
             ...cart.items.map((item) => _buildItemRow(item)),
             const Divider(height: 20),
             _row('Subtotal', _fmt(cart.subtotal)),
@@ -466,7 +466,7 @@ class _CustomerCheckoutScreenState
               ]),
             ),
             const SizedBox(height: 8),
-            const Text('💡 Pembayaran dilakukan di kasir',
+            const Text('💡 Payment is made at the cashier',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
@@ -490,7 +490,7 @@ class _CustomerCheckoutScreenState
                       width: 20, height: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
-                  : const Text('Pesan Sekarang 🛒',
+                  : const Text('Order Now 🛒',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w700,
@@ -542,7 +542,7 @@ class _CustomerCheckoutScreenState
             controller: notesCtrl,
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 11),
             decoration: InputDecoration(
-              hintText: 'Catatan untuk item ini (contoh: tidak pedas...)',
+              hintText: 'Notes for this item (e.g. not spicy...)',
               hintStyle: const TextStyle(
                   fontFamily: 'Poppins', fontSize: 11, color: Colors.grey),
               prefixIcon: const Icon(Icons.edit_note, size: 16, color: Colors.grey),
@@ -588,7 +588,7 @@ class _CustomerCheckoutScreenState
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
-            hintText: 'Contoh: 08123456789',
+            hintText: 'Example: 08123456789',
             hintStyle: const TextStyle(
                 fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
             prefixIcon: const Icon(Icons.phone_outlined, size: 18, color: Colors.grey),
@@ -623,7 +623,7 @@ class _CustomerCheckoutScreenState
           const Padding(
             padding: EdgeInsets.only(left: 4),
             child: Text(
-              'Format: 08xxxxxxxxxx (10–13 digit)',
+              'Format: 08xxxxxxxxxx (10–13 digits)',
               style: TextStyle(
                   fontFamily: 'Poppins', fontSize: 11, color: Colors.red),
             ),

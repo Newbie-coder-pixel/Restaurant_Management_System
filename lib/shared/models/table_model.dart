@@ -6,9 +6,9 @@ enum TableShape { round, square, rectangle }
 extension TableStatusExt on TableStatus {
   String get label {
     switch (this) {
-      case TableStatus.available: return 'Tersedia';
-      case TableStatus.occupied:  return 'Terisi';
-      case TableStatus.reserved:  return 'Reservasi';
+      case TableStatus.available: return 'Available';
+      case TableStatus.occupied:  return 'Occupied';
+      case TableStatus.reserved:  return 'Reserved';
       case TableStatus.cleaning:  return 'Cleaning';
     }
   }
@@ -36,7 +36,7 @@ class TableModel {
   final int floorLevel;
   final bool isMergeable;
   final String? notes;
-  // ── IMPROVEMENT: tambah updatedAt untuk occupied timer ──
+  // ── IMPROVEMENT: add updatedAt for the occupied timer ──
   final DateTime? updatedAt;
 
   const TableModel({
@@ -44,7 +44,7 @@ class TableModel {
     required this.capacity, required this.status, required this.shape,
     required this.positionX, required this.positionY, required this.floorLevel,
     required this.isMergeable, this.notes,
-    this.updatedAt, // ← BARU
+    this.updatedAt, // ← NEW
   });
 
   factory TableModel.fromJson(Map<String, dynamic> j) => TableModel(
@@ -58,7 +58,7 @@ class TableModel {
     floorLevel: j['floor_level'] ?? 1,
     isMergeable: j['is_mergeable'] ?? true,
     notes: j['notes'],
-    // ── IMPROVEMENT: baca updated_at dari database ──
+    // ── IMPROVEMENT: read updated_at from the database ──
     updatedAt: j['updated_at'] != null
         ? DateTime.tryParse(j['updated_at'])?.toLocal()
         : null,

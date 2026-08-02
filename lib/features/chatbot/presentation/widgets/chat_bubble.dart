@@ -46,15 +46,19 @@ class ChatBubble extends StatelessWidget {
   );
 
   Widget _bubble(BuildContext context) {
+    // These are matched against the AI's own free-form reply text (not a
+    // fixed app string), so this is inherently a heuristic match. The system
+    // prompt in chatbot_api.dart now instructs the AI to reply in English,
+    // so the match strings must be English too or this will never fire.
     final isBookingConfirmed = !isUser &&
-        message.content.contains('Reservasi berhasil') ||
-        message.content.contains('Kode konfirmasi:');
+        message.content.contains('Reservation successful') ||
+        message.content.contains('Confirmation code:');
 
     return GestureDetector(
       onLongPress: () {
         Clipboard.setData(ClipboardData(text: message.content));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pesan disalin'),
+          const SnackBar(content: Text('Message copied'),
             duration: Duration(seconds: 1)));
       },
       child: Container(

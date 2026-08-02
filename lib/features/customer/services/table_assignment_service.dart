@@ -32,7 +32,7 @@ class TableAssignmentResult {
 class TableAssignmentService {
   final _supabase = Supabase.instance.client;
 
-  /// Buat booking baru lalu auto-assign meja dalam satu flow
+  /// Create a new booking then auto-assign a table in a single flow
   Future<TableAssignmentResult> createAndAssign({
     required String branchId,
     required String customerName,
@@ -43,14 +43,14 @@ class TableAssignmentService {
     required DateTime bookingDateTime,
     String specialRequests = '',
   }) async {
-    // Format date dan time sesuai tipe kolom Postgres
+    // Format date and time to match the Postgres column types
     final bookingDate = '${bookingDateTime.year}-'
         '${bookingDateTime.month.toString().padLeft(2, '0')}-'
         '${bookingDateTime.day.toString().padLeft(2, '0')}';
     final bookingTime = '${bookingDateTime.hour.toString().padLeft(2, '0')}:'
         '${bookingDateTime.minute.toString().padLeft(2, '0')}:00';
 
-    // 1. Insert booking dengan status pending
+    // 1. Insert booking with pending status
     final booking = await _supabase
         .from('bookings')
         .insert({
@@ -71,7 +71,7 @@ class TableAssignmentService {
 
     final bookingId = booking['id'] as String;
 
-    // 2. Panggil RPC untuk auto-assign meja
+    // 2. Call the RPC to auto-assign a table
     final response = await _supabase.rpc(
       'assign_table_to_booking',
       params: {
@@ -88,7 +88,7 @@ class TableAssignmentService {
     );
   }
 
-  /// Cancel booking dan bebaskan meja
+  /// Cancel a booking and release the table
   Future<void> cancelBooking({
     required String bookingId,
     required String tableId,
@@ -100,7 +100,7 @@ class TableAssignmentService {
     });
   }
 
-  /// Stream real-time status semua meja di satu branch
+  /// Real-time stream of the status of all tables in a branch
   Stream<List<Map<String, dynamic>>> watchTables(String branchId) {
     return _supabase
         .from('restaurant_tables')
@@ -109,7 +109,7 @@ class TableAssignmentService {
         .order('table_number');
   }
 
-  /// Stream real-time booking milik customer
+  /// Real-time stream of a customer's bookings
   Stream<List<Map<String, dynamic>>> watchMyBookings(String customerUserId) {
     return _supabase
         .from('bookings')

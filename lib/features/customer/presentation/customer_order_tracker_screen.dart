@@ -45,7 +45,7 @@ class CustomerOrderSuccessScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             const Text(
-              'Pesanan Berhasil! 🎉',
+              'Order Successful! 🎉',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 26,
@@ -57,7 +57,7 @@ class CustomerOrderSuccessScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Pesananmu sudah masuk ke dapur.\nSilakan tunjukkan kode ini ke kasir.',
+              'Your order has been sent to the kitchen.\nPlease show this code to the cashier.',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 15,
@@ -81,7 +81,7 @@ class CustomerOrderSuccessScreen extends StatelessWidget {
               child: Column(
                 children: [
                   const Text(
-                    'No. Pesanan',
+                    'Order No.',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       color: Colors.white70,
@@ -115,7 +115,7 @@ class CustomerOrderSuccessScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                 textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700),
               ),
-              child: const Text('Cek Status Pesanan'),
+              child: const Text('Check Order Status'),
             ),
             const SizedBox(height: 16),
             TextButton(
@@ -125,7 +125,7 @@ class CustomerOrderSuccessScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
               ),
               child: const Text(
-                'Kembali ke Beranda',
+                'Back to Home',
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.grey),
               ),
             ),
@@ -174,7 +174,7 @@ class CustomerBookingSuccessScreen extends StatelessWidget {
             ),
             const SizedBox(height: 28),
             const Text(
-              'Reservasi Dikonfirmasi! 📅',
+              'Reservation Confirmed! 📅',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 26,
@@ -186,7 +186,7 @@ class CustomerBookingSuccessScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Reservasi kamu sudah tercatat.\nKami menantikan kedatanganmu!',
+              'Your reservation has been recorded.\nWe look forward to your visit!',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 15,
@@ -206,7 +206,7 @@ class CustomerBookingSuccessScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                 textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700),
               ),
-              child: const Text('Kembali ke Beranda'),
+              child: const Text('Back to Home'),
             ),
           ],
         ),
@@ -281,13 +281,13 @@ class _CustomerOrderTrackerScreenState
       final user = Supabase.instance.client.auth.currentUser;
 
       if (user != null) {
-        // Coba cari order milik user ini dulu
+        // First try to find an order belonging to this user
         final ownOrders = await Supabase.instance.client
             .from('orders')
-            // Kolom dibatasi eksplisit (bukan select semua) — order_number bisa
-            // ditebak/di-enumerasi (format pendek A001..Z999) dan endpoint ini
-            // bisa diakses tanpa login, jadi data sensitif seperti nomor
-            // telepon & email pelanggan sengaja TIDAK ikut diambil di sini.
+            // Columns explicitly restricted (not select all) — order_number can
+            // be guessed/enumerated (short format A001..Z999) and this endpoint
+            // is accessible without login, so sensitive data such as customer
+            // phone number & email is deliberately NOT fetched here.
             .select('id, order_number, queue_number, table_id, table_name, '
                 'branch_id, customer_name, status, payment_status, '
                 'payment_method, order_type, source, subtotal, tax_amount, '
@@ -303,13 +303,13 @@ class _CustomerOrderTrackerScreenState
           return;
         }
 
-        // Fallback: cari order apapun dengan nomor ini
+        // Fallback: find any order with this number
         final anyOrder = await Supabase.instance.client
             .from('orders')
-            // Kolom dibatasi eksplisit (bukan select semua) — order_number bisa
-            // ditebak/di-enumerasi (format pendek A001..Z999) dan endpoint ini
-            // bisa diakses tanpa login, jadi data sensitif seperti nomor
-            // telepon & email pelanggan sengaja TIDAK ikut diambil di sini.
+            // Columns explicitly restricted (not select all) — order_number can
+            // be guessed/enumerated (short format A001..Z999) and this endpoint
+            // is accessible without login, so sensitive data such as customer
+            // phone number & email is deliberately NOT fetched here.
             .select('id, order_number, queue_number, table_id, table_name, '
                 'branch_id, customer_name, status, payment_status, '
                 'payment_method, order_type, source, subtotal, tax_amount, '
@@ -324,13 +324,13 @@ class _CustomerOrderTrackerScreenState
           return;
         }
       } else {
-        // Anon user: buat query baru (tidak reuse query object lama)
+        // Anon user: build a new query (do not reuse the old query object)
         final res = await Supabase.instance.client
             .from('orders')
-            // Kolom dibatasi eksplisit (bukan select semua) — order_number bisa
-            // ditebak/di-enumerasi (format pendek A001..Z999) dan endpoint ini
-            // bisa diakses tanpa login, jadi data sensitif seperti nomor
-            // telepon & email pelanggan sengaja TIDAK ikut diambil di sini.
+            // Columns explicitly restricted (not select all) — order_number can
+            // be guessed/enumerated (short format A001..Z999) and this endpoint
+            // is accessible without login, so sensitive data such as customer
+            // phone number & email is deliberately NOT fetched here.
             .select('id, order_number, queue_number, table_id, table_name, '
                 'branch_id, customer_name, status, payment_status, '
                 'payment_method, order_type, source, subtotal, tax_amount, '
@@ -348,18 +348,18 @@ class _CustomerOrderTrackerScreenState
 
       if (mounted) {
         setState(() {
-          _error = 'Pesanan "$code" tidak ditemukan.\nPastikan nomor pesanan sudah benar.';
+          _error = 'Order "$code" not found.\nMake sure the order number is correct.';
           _loading = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _error = 'Terjadi kesalahan. Coba lagi.'; _loading = false; });
+        setState(() { _error = 'An error occurred. Please try again.'; _loading = false; });
       }
     }
   }
 
-  // ── FIX 1: Tambah preparation_time_minutes di select ──────────────
+  // ── FIX 1: Add preparation_time_minutes to the select ──────────────
   Future<void> _processOrderResult(Map<String, dynamic> order) async {
     try {
       final items = await Supabase.instance.client
@@ -378,7 +378,7 @@ class _CustomerOrderTrackerScreenState
       }
     } catch (e) {
       if (mounted) {
-        setState(() { _error = 'Gagal memuat detail pesanan.'; _loading = false; });
+        setState(() { _error = 'Failed to load order details.'; _loading = false; });
       }
     }
   }
@@ -395,7 +395,7 @@ class _CustomerOrderTrackerScreenState
 
     if (validItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Tidak ada item yang bisa dipesan ulang.'),
+        content: Text('No items available to reorder.'),
         backgroundColor: Colors.orange));
       return;
     }
@@ -404,15 +404,15 @@ class _CustomerOrderTrackerScreenState
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Pesan Ulang?',
+        title: const Text('Reorder?',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: Text(
-            'Semua item dari order #${_order!['order_number']} akan ditambahkan ke cart.',
+            'All items from order #${_order!['order_number']} will be added to the cart.',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal',
+            child: const Text('Cancel',
                 style: TextStyle(fontFamily: 'Poppins', color: Colors.grey))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -421,7 +421,7 @@ class _CustomerOrderTrackerScreenState
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12))),
-            child: const Text('Ya, Pesan Lagi',
+            child: const Text('Yes, Reorder',
                 style: TextStyle(
                     fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
         ]));
@@ -440,7 +440,7 @@ class _CustomerOrderTrackerScreenState
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('✅ Item ditambahkan ke cart!'),
+        content: Text('✅ Item added to cart!'),
         backgroundColor: Color(0xFF1D9E75)));
       context.go('/customer/checkout');
     }
@@ -456,7 +456,7 @@ class _CustomerOrderTrackerScreenState
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new, size: 18),
         onPressed: () => context.go('/customer')),
-      title: const Text('Cek Pesanan',
+      title: const Text('Track Order',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
       centerTitle: false,
       actions: [
@@ -505,7 +505,7 @@ class _CustomerOrderTrackerScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Masukkan Nomor Pesanan',
+                'Enter Order Number',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w700,
@@ -515,7 +515,7 @@ class _CustomerOrderTrackerScreenState
               ),
               const SizedBox(height: 4),
               Text(
-                'Nomor pesanan ada di struk atau layar konfirmasi.',
+                'The order number is on your receipt or confirmation screen.',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 12,
@@ -537,7 +537,7 @@ class _CustomerOrderTrackerScreenState
                         fontSize: 14,
                       ),
                       decoration: InputDecoration(
-                        hintText: 'Contoh: WEB-20260327-1234',
+                        hintText: 'Example: WEB-20260327-1234',
                         hintStyle: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 13,
@@ -628,7 +628,7 @@ class _CustomerOrderTrackerScreenState
                 onPressed: _reorder,
                 icon: const Icon(Icons.replay_outlined, size: 20, color: Color(0xFFE94560)),
                 label: const Text(
-                  'Pesan Lagi',
+                  'Reorder',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w600,
@@ -654,7 +654,7 @@ class _CustomerOrderTrackerScreenState
               Icon(Icons.receipt_long_outlined, size: 72, color: Colors.grey.shade300),
               const SizedBox(height: 16),
               Text(
-                'Masukkan nomor pesanan di atas\nuntuk melihat status.',
+                'Enter your order number above\nto see its status.',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 14,
@@ -678,12 +678,12 @@ class _OrderStatusCard extends StatelessWidget {
   const _OrderStatusCard({required this.order, required this.items});
 
   static const _statusLabels = {
-    'new':       '🆕 Pesanan Baru',
-    'preparing': '👨‍🍳 Sedang Dimasak',
-    'ready':     '✅ Siap Disajikan',
-    'served':    '🍽️ Sudah Disajikan',
-    'paid':      '💳 Lunas',
-    'cancelled': '❌ Dibatalkan',
+    'new':       '🆕 New Order',
+    'preparing': '👨‍🍳 Preparing',
+    'ready':     '✅ Ready to Serve',
+    'served':    '🍽️ Served',
+    'paid':      '💳 Paid',
+    'cancelled': '❌ Cancelled',
   };
   static const _statusColors = {
     'new':       Color(0xFF6B7280),
@@ -694,12 +694,12 @@ class _OrderStatusCard extends StatelessWidget {
     'cancelled': Color(0xFFE94560),
   };
   static const _statusMessages = {
-    'new':       '⏳ Pesananmu sedang menunggu konfirmasi dapur.',
-    'preparing': '🔥 Dapur sedang memasak pesananmu, sebentar lagi!',
-    'ready':     '🎉 Pesananmu siap! Pelayan akan segera mengantarkan.',
-    'served':    '😊 Pesananmu sudah disajikan. Selamat menikmati!',
-    'paid':      '✅ Pembayaran selesai. Terima kasih sudah berkunjung!',
-    'cancelled': '❌ Pesanan ini dibatalkan.',
+    'new':       '⏳ Your order is waiting for kitchen confirmation.',
+    'preparing': '🔥 The kitchen is preparing your order, almost there!',
+    'ready':     '🎉 Your order is ready! A server will bring it to you shortly.',
+    'served':    '😊 Your order has been served. Enjoy your meal!',
+    'paid':      '✅ Payment complete. Thank you for visiting!',
+    'cancelled': '❌ This order was cancelled.',
   };
 
   @override
@@ -708,7 +708,7 @@ class _OrderStatusCard extends StatelessWidget {
     final statusLabel = _statusLabels[status] ?? status;
     final statusColor = _statusColors[status] ?? Colors.grey;
     final statusMsg   = _statusMessages[status] ?? '';
-    // Hitung subtotal dari items (bukan dari order['total_amount'] yg bisa 0/null)
+    // Calculate subtotal from items (not from order['total_amount'] which can be 0/null)
     final subtotal     = items.fold<double>(0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
     final discount     = (order['discount_amount'] as num?)?.toDouble() ?? 0;
     final serviceCharge = subtotal * 0.03;
@@ -751,7 +751,7 @@ class _OrderStatusCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          'Atas nama: $customerName',
+                          'Under the name: $customerName',
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 13,
@@ -815,7 +815,7 @@ class _OrderStatusCard extends StatelessWidget {
           // Progress indicator
           _StatusProgress(status: status),
 
-          // ── ML Estimasi Waktu (hanya saat new / preparing) ────────────
+          // ── ML Time Estimate (only when new / preparing) ────────────
           if (status == 'new' || status == 'preparing') ...[
             const SizedBox(height: 16),
             _CustomerPrepTimeCard(order: order, items: items),
@@ -825,7 +825,7 @@ class _OrderStatusCard extends StatelessWidget {
 
           // Items list
           const Text(
-            'Item Pesanan',
+            'Order Items',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w700,
@@ -836,7 +836,7 @@ class _OrderStatusCard extends StatelessWidget {
           const SizedBox(height: 12),
           ...items.map((item) {
             final name    = (item['menu_items'] as Map?)?['name'] as String?
-                          ?? item['menu_item_name'] as String? // fallback ke kolom order_items
+                          ?? item['menu_item_name'] as String? // fallback to the order_items column
                           ?? '-';
             final qty     = item['quantity'] as int? ?? 1;
             final sub     = (item['subtotal'] as num?)?.toDouble() ?? 0;
@@ -1007,14 +1007,14 @@ class _OrderStatusCard extends StatelessWidget {
             ],
           ),
 
-          // Diskon (hanya tampil jika ada)
+          // Discount (only shown if present)
           if (discount > 0) ...[
             const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Diskon',
+                  'Discount',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 13,
@@ -1076,7 +1076,7 @@ class _OrderStatusCard extends StatelessWidget {
                   Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFB45309)),
                   SizedBox(width: 8),
                   Text(
-                    '💡 Pembayaran di kasir saat pesanan siap.',
+                    '💡 Pay at the cashier when the order is ready.',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 11,
@@ -1118,24 +1118,24 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
   late final Future<PrepTimeResult?> _future;
   late final List<PrepTimeRequestItem> _requestItems;
 
-  // ── FIX 2: Pakai preparation_time_minutes dari join, bukan hardcoded 15 ──
+  // ── FIX 2: Use preparation_time_minutes from the join, not hardcoded 15 ──
   List<PrepTimeRequestItem> _buildRequestItems() {
     return widget.items.map((item) {
-      // Nama: dari join menu_items, fallback ke kolom menu_item_name di order_items
+      // Name: from the menu_items join, fallback to the menu_item_name column in order_items
       final name = (item['menu_items'] as Map?)?['name'] as String?
                  ?? item['menu_item_name'] as String?
                  ?? '-';
       final qty  = item['quantity'] as int? ?? 1;
       final special = item['special_requests'] as String?;
 
-      // Prep time: dari join menu_items, fallback ke 15 menit jika item sudah dihapus
+      // Prep time: from the menu_items join, fallback to 15 minutes if the item was deleted
       final prepTime = (item['menu_items'] as Map?)?['preparation_time_minutes'] as int?
                      ?? 15;
 
       return PrepTimeRequestItem(
         menuItemName:           name,
         quantity:               qty,
-        preparationTimeMinutes: prepTime, // <-- FIXED: pakai nilai asli dari DB
+        preparationTimeMinutes: prepTime, // <-- FIXED: use the real value from the DB
         specialRequests:        special,
       );
     }).toList();
@@ -1175,7 +1175,7 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
                 ),
                 SizedBox(width: 12),
                 Text(
-                  'Menghitung estimasi waktu masak...',
+                  'Calculating cooking time estimate...',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 13,
@@ -1188,9 +1188,9 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
         }
 
         final result = snap.data;
-        // Server tidak terjangkau (mis. mati/timeout) → tampilkan estimasi
-        // kasar (jumlah menu prep time, tanpa ML/buffer) daripada kartu ini
-        // hilang sepenuhnya tanpa keterangan sama sekali.
+        // Server unreachable (e.g. down/timeout) → show a rough estimate
+        // (sum of menu prep times, without ML/buffer) rather than have this
+        // card disappear entirely with no information at all.
         final isFallback = snap.hasError || result == null;
         final displayMinutes = isFallback
             ? PrepTimeService.rawFallbackEstimate(_requestItems)
@@ -1229,7 +1229,7 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isFallback ? 'Estimasi Kasar (offline)' : 'Estimasi Waktu Masak',
+                      isFallback ? 'Rough Estimate (offline)' : 'Cooking Time Estimate',
                       style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 12,
@@ -1291,7 +1291,7 @@ class _StatusProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const steps  = ['new', 'preparing', 'ready', 'served', 'paid'];
-    const labels = ['Baru', 'Masak', 'Siap', 'Saji', 'Lunas'];
+    const labels = ['New', 'Cooking', 'Ready', 'Served', 'Paid'];
     final currentIdx  = steps.indexOf(status);
     final isCancelled = status == 'cancelled';
 
@@ -1308,7 +1308,7 @@ class _StatusProgress extends StatelessWidget {
             Icon(Icons.cancel_outlined, color: Color(0xFFE94560), size: 20),
             SizedBox(width: 8),
             Text(
-              'Pesanan dibatalkan',
+              'Order cancelled',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 13,

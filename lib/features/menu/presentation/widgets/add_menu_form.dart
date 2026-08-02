@@ -46,12 +46,12 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
   static const _allergenOptions = [
     ('gluten', 'Gluten', '🌾'),
     ('dairy', 'Dairy', '🥛'),
-    ('eggs', 'Telur', '🥚'),
-    ('nuts', 'Kacang', '🥜'),
+    ('eggs', 'Eggs', '🥚'),
+    ('nuts', 'Nuts', '🥜'),
     ('seafood', 'Seafood', '🦐'),
-    ('soy', 'Kedelai', '🫘'),
-    ('wheat', 'Gandum', '🌿'),
-    ('sesame', 'Wijen', '⚪'),
+    ('soy', 'Soy', '🫘'),
+    ('wheat', 'Wheat', '🌿'),
+    ('sesame', 'Sesame', '⚪'),
   ];
 
   static const _dietaryOptions = [
@@ -60,8 +60,8 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
     ('halal', 'Halal', '✅'),
     ('gluten_free', 'Gluten-Free', '🚫'),
     ('dairy_free', 'Dairy-Free', '🥛'),
-    ('spicy', 'Pedas', '🌶️'),
-    ('low_calorie', 'Low Kalori', '⚡'),
+    ('spicy', 'Spicy', '🌶️'),
+    ('low_calorie', 'Low Calorie', '⚡'),
   ];
 
   bool get _isEdit => widget.existingMenu != null;
@@ -150,7 +150,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
         }
       }
     } catch (e) {
-      setState(() => _imageError = 'Gagal memilih gambar');
+      setState(() => _imageError = 'Failed to pick image');
     }
   }
 
@@ -166,17 +166,17 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Pilih Sumber Gambar',
+              const Text('Choose Image Source',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 12),
               ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.camera_alt)),
-                title: const Text('Kamera'),
+                title: const Text('Camera'),
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
               ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.photo_library)),
-                title: const Text('Galeri Foto'),
+                title: const Text('Photo Gallery'),
                 onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
             ],
@@ -194,7 +194,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
       context: context,
       builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Tambah Kategori',
+        title: const Text('Add Category',
             style: TextStyle(fontWeight: FontWeight.w700)),
         content: Form(
           key: formKey,
@@ -202,7 +202,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
             controller: ctrl,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Contoh: Minuman, Makanan Berat...',
+              hintText: 'Example: Drinks, Main Course...',
               filled: true,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -211,14 +211,14 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
             validator: (v) => (v == null || v.trim().isEmpty)
-                ? 'Nama kategori tidak boleh kosong'
+                ? 'Category name cannot be empty'
                 : null,
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Batal'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
@@ -231,13 +231,13 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
               if (mounted) {
                 messenger.showSnackBar(SnackBar(
                   content: Text(success
-                      ? 'Kategori berhasil ditambahkan!'
-                      : 'Gagal menambahkan kategori.'),
+                      ? 'Category added successfully!'
+                      : 'Failed to add category.'),
                   backgroundColor: success ? Colors.green : Colors.red,
                 ));
               }
             },
-            child: const Text('Simpan'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -252,20 +252,20 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Hapus Kategori?',
+        title: const Text('Delete Category?',
             style: TextStyle(fontWeight: FontWeight.w700)),
         content: Text(
-            'Kategori "${cat.name}" akan dihapus. Menu yang sudah pakai kategori ini tidak terpengaruh.'),
+            'Category "${cat.name}" will be deleted. Menu items already using this category will not be affected.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             style:
                 FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Hapus'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -281,8 +281,8 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
       if (mounted) {
         messenger.showSnackBar(SnackBar(
           content: Text(success
-              ? 'Kategori berhasil dihapus!'
-              : 'Gagal menghapus kategori.'),
+              ? 'Category deleted successfully!'
+              : 'Failed to delete category.'),
           backgroundColor: success ? Colors.green : Colors.red,
         ));
       }
@@ -339,15 +339,15 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_isEdit
-                ? 'Menu berhasil diperbarui!'
-                : 'Menu berhasil ditambahkan!'),
+                ? 'Menu item updated successfully!'
+                : 'Menu item added successfully!'),
             backgroundColor: Colors.green,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Terjadi kesalahan, coba lagi.'),
+            content: Text('Something went wrong, please try again.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -387,7 +387,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _isEdit ? 'Edit Menu' : 'Tambah Menu Baru',
+                  _isEdit ? 'Edit Menu Item' : 'Add New Menu Item',
                   style: theme.textTheme.headlineSmall
                       ?.copyWith(fontWeight: FontWeight.w800),
                 ),
@@ -418,39 +418,39 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     ),
                     const SizedBox(height: 20),
 
-                    const _FormLabel('Nama Menu'),
+                    const _FormLabel('Menu Name'),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _nameCtrl,
-                      decoration: _inputDecoration('Contoh: Nasi Goreng Spesial'),
+                      decoration: _inputDecoration('Example: Special Fried Rice'),
                       validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Nama menu tidak boleh kosong'
+                          ? 'Menu name cannot be empty'
                           : null,
                     ),
                     const SizedBox(height: 16),
 
-                    const _FormLabel('Deskripsi'),
+                    const _FormLabel('Description'),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _descCtrl,
-                      decoration: _inputDecoration('Deskripsi singkat menu...'),
+                      decoration: _inputDecoration('Short menu description...'),
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
 
-                    const _FormLabel('Harga (Rp)'),
+                    const _FormLabel('Price (Rp)'),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _priceCtrl,
-                      decoration: _inputDecoration('Contoh: 25000'),
+                      decoration: _inputDecoration('Example: 25000'),
                       keyboardType: TextInputType.number,
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) {
-                          return 'Harga tidak boleh kosong';
+                          return 'Price cannot be empty';
                         }
                         final num = double.tryParse(
                             v.replaceAll(RegExp(r'[^0-9]'), ''));
-                        if (num == null || num <= 0) return 'Harga tidak valid';
+                        if (num == null || num <= 0) return 'Invalid price';
                         return null;
                       },
                     ),
@@ -459,11 +459,11 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const _FormLabel('Kategori'),
+                        const _FormLabel('Category'),
                         TextButton.icon(
                           onPressed: () => _showAddCategoryDialog(context),
                           icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Tambah',
+                          label: const Text('Add',
                               style: TextStyle(fontSize: 13)),
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
@@ -477,7 +477,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     categoriesAsync.when(
                       loading: () =>
                           const Center(child: CircularProgressIndicator()),
-                      error: (e, _) => Text('Gagal memuat kategori: $e',
+                      error: (e, _) => Text('Failed to load categories: $e',
                           style: const TextStyle(color: Colors.red)),
                       data: (categories) => _CategorySelector(
                         categories: categories,
@@ -490,7 +490,7 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     ),
                     const SizedBox(height: 20),
 
-                    const _FormLabel('Status Seasonal'),
+                    const _FormLabel('Seasonal Status'),
                     const SizedBox(height: 8),
                     _SeasonalToggle(
                       value: _isSeasonal,
@@ -498,29 +498,29 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     ),
                     const SizedBox(height: 16),
 
-                    const _FormLabel('Estimasi Waktu Persiapan (menit)'),
+                    const _FormLabel('Estimated Prep Time (minutes)'),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _prepTimeCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: _inputDecoration('Contoh: 15').copyWith(
-                        suffixText: 'menit',
+                      decoration: _inputDecoration('Example: 15').copyWith(
+                        suffixText: 'min',
                         helperText:
-                            'Waktu rata-rata yang dibutuhkan untuk menyiapkan menu ini',
+                            'Average time needed to prepare this menu item',
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                        if (v == null || v.trim().isEmpty) return 'Required';
                         final n = int.tryParse(v.trim());
                         if (n == null || n <= 0) {
-                          return 'Masukkan angka yang valid';
+                          return 'Enter a valid number';
                         }
-                        if (n > 180) return 'Maksimal 180 menit';
+                        if (n > 180) return 'Maximum 180 minutes';
                         return null;
                       },
                     ),
                     const SizedBox(height: 20),
 
-                    // ── Ingredients / Resep ──────────────────────────────
+                    // ── Ingredients / Recipe ──────────────────────────────
                     _IngredientsSection(
                       branchId: widget.branchId,
                       drafts: _ingredientDrafts,
@@ -539,10 +539,10 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     ),
                     const SizedBox(height: 20),
 
-                    const _FormLabel('Alergen'),
+                    const _FormLabel('Allergens'),
                     const SizedBox(height: 4),
                     Text(
-                      'Tandai bahan yang dapat memicu alergi',
+                      'Mark ingredients that may trigger allergies',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
@@ -565,10 +565,10 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                     ),
                     const SizedBox(height: 20),
 
-                    const _FormLabel('Label Dietary'),
+                    const _FormLabel('Dietary Labels'),
                     const SizedBox(height: 4),
                     Text(
-                      'Tandai informasi diet yang sesuai',
+                      'Mark applicable dietary information',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
@@ -612,8 +612,8 @@ class _AddMenuFormState extends ConsumerState<AddMenuForm> {
                               )
                             : Text(
                                 _isEdit
-                                    ? 'Simpan Perubahan'
-                                    : 'Tambahkan Menu',
+                                    ? 'Save Changes'
+                                    : 'Add Menu Item',
                                 style: const TextStyle(
                                     fontSize: 16, fontWeight: FontWeight.w700),
                               ),
@@ -666,7 +666,7 @@ class _IngredientsSection extends ConsumerStatefulWidget {
   final ValueChanged<MenuIngredientDraft> onAdd;
   final ValueChanged<int> onRemove;
   final void Function(int index, double qty) onUpdateQty;
-  final void Function(int index, bool useSecondary) onToggleUnit; // ← BARU
+  final void Function(int index, bool useSecondary) onToggleUnit; // ← NEW
 
   const _IngredientsSection({
     required this.branchId,
@@ -674,7 +674,7 @@ class _IngredientsSection extends ConsumerStatefulWidget {
     required this.onAdd,
     required this.onRemove,
     required this.onUpdateQty,
-    required this.onToggleUnit, // ← BARU
+    required this.onToggleUnit, // ← NEW
   });
 
   @override
@@ -701,15 +701,15 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
   Future<void> _showPickIngredientSheet(
       BuildContext context, List<InventoryItem> items) async {
     // ── FIX BUG 2 ────────────────────────────────────────────────────────────
-    // Guard: jika inventory provider belum selesai load, items bisa kosong
-    // meskipun sebenarnya ada data. Cek dulu state provider-nya.
-    // FIX BUG 3: pakai todayInventoryStreamProvider (bukan inventoryStreamProvider)
-    // supaya tidak ikut kena tanggal yang sedang di-browse user di layar
-    // Inventory (inventorySelectedDateProvider bersifat global/shared).
+    // Guard: if the inventory provider hasn't finished loading yet, items can
+    // be empty even though data actually exists. Check the provider state first.
+    // FIX BUG 3: use todayInventoryStreamProvider (not inventoryStreamProvider)
+    // so this doesn't get affected by the date the user is currently browsing
+    // on the Inventory screen (inventorySelectedDateProvider is global/shared).
     final inventoryState = ref.read(todayInventoryStreamProvider(widget.branchId));
     if (inventoryState is AsyncLoading) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Memuat data inventory, coba lagi sebentar...')),
+        const SnackBar(content: Text('Loading inventory data, please try again shortly...')),
       );
       return;
     }
@@ -721,22 +721,22 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
         items.where((i) => !alreadyPicked.contains(i.id)).toList();
 
     if (items.isEmpty) {
-      // Inventory branch ini memang benar-benar kosong
+      // Inventory for this branch really is empty
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Belum ada item inventory di cabang ini.')),
+            content: Text('No inventory items in this branch yet.')),
       );
       return;
     }
 
     if (available.isEmpty) {
-      // Semua item sudah dipilih
+      // All items have already been picked
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             items.isEmpty
-                ? 'Belum ada item inventory di cabang ini.'
-                : 'Semua item inventory sudah ditambahkan.',
+                ? 'No inventory items in this branch yet.'
+                : 'All inventory items have already been added.',
       ),
     ),
   );
@@ -770,7 +770,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Pilih Bahan',
+                  'Select Ingredient',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
               ),
@@ -783,10 +783,10 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                 itemCount: available.length,
                 itemBuilder: (_, i) {
                   final item = available[i];
-                  // Tampilkan info satuan sekunder jika ada
+                  // Show secondary unit info if available
                   final unitInfo = item.hasSecondaryUnit
-                      ? 'Stok: ${item.availableStock.toStringAsFixed(1)} ${item.unit}  ≈  ${item.availableStockSecondary.toStringAsFixed(0)} ${item.unitSecondary}'
-                      : 'Stok: ${item.availableStock.toStringAsFixed(1)} ${item.unit}';
+                      ? 'Stock: ${item.availableStock.toStringAsFixed(1)} ${item.unit}  ≈  ${item.availableStockSecondary.toStringAsFixed(0)} ${item.unitSecondary}'
+                      : 'Stock: ${item.availableStock.toStringAsFixed(1)} ${item.unit}';
 
                   return ListTile(
                     leading: CircleAvatar(
@@ -805,7 +805,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                     subtitle: Text(unitInfo,
                         style: TextStyle(
                             fontSize: 12, color: Colors.grey.shade600)),
-                    // Badge satuan sekunder
+                    // Secondary unit badge
                     trailing: item.hasSecondaryUnit
                         ? Container(
                             padding: const EdgeInsets.symmetric(
@@ -835,9 +835,9 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
     );
 
     if (picked != null) {
-      // Default: gunakan satuan sekunder jika ada (lebih intuitif untuk resep)
+      // Default: use secondary unit if available (more intuitive for recipes)
       final useSecondary = picked.hasSecondaryUnit;
-      // Qty default: 1 butir (jika secondary) atau 1 kg (jika primary)
+      // Default qty: 1 piece (if secondary) or 1 kg (if primary)
       final defaultQtyInPrimary =
           useSecondary ? (1.0 / picked.unitConversion) : 1.0;
 
@@ -847,7 +847,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
         unit: picked.unit,
         unitSecondary: picked.unitSecondary,
         unitConversion: picked.unitConversion,
-        quantity: defaultQtyInPrimary, // selalu simpan dalam satuan utama
+        quantity: defaultQtyInPrimary, // always store in the primary unit
         useSecondaryUnit: useSecondary,
         costPerUnit: picked.costPerUnit,
       ));
@@ -858,8 +858,8 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    // FIX BUG 3: gunakan todayInventoryStreamProvider — lihat catatan di
-    // _showPickIngredientSheet di atas.
+    // FIX BUG 3: use todayInventoryStreamProvider — see the note in
+    // _showPickIngredientSheet above.
     final inventoryAsync =
         ref.watch(todayInventoryStreamProvider(widget.branchId));
 
@@ -869,43 +869,43 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const _FormLabel('Bahan / Resep'),
-            // ── FIX BUG 2: tombol Tambah Bahan yang benar ────────────────
+            const _FormLabel('Ingredients / Recipe'),
+            // ── FIX BUG 2: correct Add Ingredient button ────────────────
             inventoryAsync.when(
-              // Loading: tampilkan spinner, tombol disable
+              // Loading: show spinner, disable the button
               loading: () => TextButton.icon(
-                onPressed: null, // disabled saat loading
+                onPressed: null, // disabled while loading
                 icon: const SizedBox(
                   width: 14,
                   height: 14,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                label: const Text('Memuat...', style: TextStyle(fontSize: 13)),
+                label: const Text('Loading...', style: TextStyle(fontSize: 13)),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
-              // Error: tampilkan ikon error, jangan hide
+              // Error: show error icon, don't hide it
               error: (_, __) => TextButton.icon(
                 onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Gagal memuat inventory. Coba tutup & buka form kembali.'),
+                    content: Text('Failed to load inventory. Try closing and reopening the form.'),
                     backgroundColor: Colors.red,
                   ),
                 ),
                 icon: const Icon(Icons.error_outline, size: 16, color: Colors.red),
-                label: const Text('Gagal memuat', style: TextStyle(fontSize: 13, color: Colors.red)),
+                label: const Text('Failed to load', style: TextStyle(fontSize: 13, color: Colors.red)),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
-              // Data sudah ada: tombol aktif
+              // Data is ready: active button
               data: (items) => TextButton.icon(
                 onPressed: () => _showPickIngredientSheet(context, items),
                 icon: const Icon(Icons.add, size: 16),
-                label: const Text('Tambah Bahan', style: TextStyle(fontSize: 13)),
+                label: const Text('Add Ingredient', style: TextStyle(fontSize: 13)),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   visualDensity: VisualDensity.compact,
@@ -917,7 +917,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Bahan yang digunakan akan otomatis dikurangi saat ada pesanan',
+          'Ingredients used will be automatically deducted when an order comes in',
           style: theme.textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurface.withValues(alpha: 0.5),
           ),
@@ -941,7 +941,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                     color: colorScheme.onSurface.withValues(alpha: 0.3)),
                 const SizedBox(height: 6),
                 Text(
-                  'Belum ada bahan ditambahkan',
+                  'No ingredients added yet',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurface.withValues(alpha: 0.45),
                   ),
@@ -950,12 +950,12 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
             ),
           ),
 
-        // List bahan
+        // Ingredients list
         ...widget.drafts.asMap().entries.map((entry) {
           final index = entry.key;
           final draft = entry.value;
 
-          // Controller selalu menampilkan displayQty (dalam satuan aktif)
+          // Controller always shows displayQty (in the active unit)
           final ctrl = _qtyControllers[index] ??= TextEditingController(
             text: _formatQty(draft.displayQty),
           );
@@ -988,7 +988,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                 ),
                 const SizedBox(width: 12),
 
-                // Nama + toggle satuan
+                // Name + unit toggle
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1000,12 +1000,12 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                       ),
                       const SizedBox(height: 2),
 
-                      // Jika ada satuan sekunder → tampilkan tombol toggle
+                      // If a secondary unit exists → show the toggle button
                       if (draft.hasSecondaryUnit)
                         GestureDetector(
                           onTap: () {
                             final newUseSecondary = !draft.useSecondaryUnit;
-                            // Update controller text ke satuan baru
+                            // Update the controller text to the new unit
                             final newDisplayQty = newUseSecondary
                                 ? draft.quantity * draft.unitConversion
                                 : draft.quantity;
@@ -1038,8 +1038,8 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                                 const SizedBox(width: 3),
                                 Text(
                                   draft.useSecondaryUnit
-                                      ? '${draft.unitSecondary}  →  ketuk ganti ${draft.unit}'
-                                      : '${draft.unit}  →  ketuk ganti ${draft.unitSecondary}',
+                                      ? '${draft.unitSecondary}  →  tap to switch to ${draft.unit}'
+                                      : '${draft.unit}  →  tap to switch to ${draft.unitSecondary}',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
@@ -1054,7 +1054,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                           ),
                         )
                       else
-                        // Tidak ada satuan sekunder — tampilkan satuan biasa
+                        // No secondary unit — show the plain unit
                         Text(
                           draft.unit,
                           style: TextStyle(
@@ -1095,7 +1095,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                     onChanged: (v) {
                       final inputQty = double.tryParse(v);
                       if (inputQty != null && inputQty > 0) {
-                        // Konversi ke satuan utama sebelum disimpan
+                        // Convert to the primary unit before saving
                         final qtyInPrimary = MenuIngredientDraft.toStorageQty(
                           inputQty: inputQty,
                           useSecondary: draft.useSecondaryUnit,
@@ -1113,7 +1113,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
                 ),
                 const SizedBox(width: 4),
 
-                // Hapus
+                // Delete
                 IconButton(
                   onPressed: () {
                     _qtyControllers.remove(index)?.dispose();
@@ -1133,7 +1133,7 @@ class _IngredientsSectionState extends ConsumerState<_IngredientsSection> {
   }
 }
 
-// ─── SUB-WIDGETS (tidak berubah) ──────────────────────────────────────────────
+// ─── SUB-WIDGETS (unchanged) ──────────────────────────────────────────────────
 
 class _FormLabel extends StatelessWidget {
   final String text;
@@ -1168,7 +1168,7 @@ class _CategorySelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     if (categories.isEmpty) {
-      return const Text('Belum ada kategori. Tambahkan kategori baru.',
+      return const Text('No categories yet. Add a new category.',
           style: TextStyle(color: Colors.grey));
     }
     return Wrap(
@@ -1306,14 +1306,14 @@ class _EmptyImagePlaceholder extends StatelessWidget {
                 .primary
                 .withValues(alpha: 0.7)),
         const SizedBox(height: 8),
-        Text('Tambah Foto Menu',
+        Text('Add Menu Photo',
             style: TextStyle(
               color: Theme.of(context).colorScheme.primary,
               fontWeight: FontWeight.w600,
             )),
         const SizedBox(height: 4),
         Text(
-          kIsWeb ? 'Ketuk untuk memilih file' : 'Ketuk untuk memilih',
+          kIsWeb ? 'Tap to choose a file' : 'Tap to choose',
           style: TextStyle(
             fontSize: 12,
             color: Theme.of(context)
@@ -1343,7 +1343,7 @@ class _EditBadge extends StatelessWidget {
         children: [
           Icon(Icons.edit, color: Colors.white, size: 12),
           SizedBox(width: 4),
-          Text('Ganti', style: TextStyle(color: Colors.white, fontSize: 11)),
+          Text('Change', style: TextStyle(color: Colors.white, fontSize: 11)),
         ],
       ),
     );
@@ -1393,7 +1393,7 @@ class _SeasonalToggle extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Menu Seasonal',
+                    'Seasonal Menu',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: value
@@ -1404,8 +1404,8 @@ class _SeasonalToggle extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     value
-                        ? 'Menu ini hanya tersedia di waktu tertentu'
-                        : 'Menu ini tersedia sepanjang waktu',
+                        ? 'This item is only available at certain times'
+                        : 'This item is available all the time',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurface.withValues(alpha: 0.55),
                     ),

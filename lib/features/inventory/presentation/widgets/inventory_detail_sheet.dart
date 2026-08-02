@@ -183,7 +183,7 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
                   IconButton(
                     onPressed: () => _showDeleteDialog(context, ref),
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    tooltip: 'Hapus',
+                    tooltip: 'Delete',
                   ),
                 ],
               ),
@@ -195,7 +195,7 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
               child: Row(
                 children: [
                   _StockSummaryCard(
-                    label: 'Stok Awal',
+                    label: 'Opening Stock',
                     value: item.openingStock,
                     secondaryValue: item.hasSecondaryUnit
                         ? item.openingStockSecondary : null,
@@ -206,7 +206,7 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
                   ),
                   const SizedBox(width: 8),
                   _StockSummaryCard(
-                    label: 'Terpakai',
+                    label: 'Used',
                     value: item.usedStock,
                     secondaryValue: item.hasSecondaryUnit
                         ? item.usedStockSecondary : null,
@@ -218,7 +218,7 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
                   ),
                   const SizedBox(width: 8),
                   _StockSummaryCard(
-                    label: 'Stok Akhir',
+                    label: 'Closing Stock',
                     value: item.closingStock,
                     secondaryValue: item.hasSecondaryUnit
                         ? item.availableStockSecondary : null,
@@ -243,36 +243,36 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
                 ),
                 child: Column(
                   children: [
-                    _DetailRow(label: '📦 Pembelian',
+                    _DetailRow(label: '📦 Purchases',
                         value: '+${_fmt(item.purchasedStock)} ${item.unit}',
                         color: Colors.green.shade500),
-                    _DetailRow(label: '↩️ Transfer Masuk',
+                    _DetailRow(label: '↩️ Transfer In',
                         value: '+${_fmt(item.transferIn)} ${item.unit}',
                         color: Colors.teal.shade500),
-                    _DetailRow(label: '🗑️ Terbuang',
+                    _DetailRow(label: '🗑️ Wasted',
                         value: '-${_fmt(item.wasteStock)} ${item.unit}',
                         color: Colors.red.shade400),
-                    _DetailRow(label: '↪️ Transfer Keluar',
+                    _DetailRow(label: '↪️ Transfer Out',
                         value: '-${_fmt(item.transferOut)} ${item.unit}',
                         color: Colors.purple.shade400),
-                    _DetailRow(label: '⚙️ Penyesuaian',
+                    _DetailRow(label: '⚙️ Adjustment',
                         value: '${item.adjustmentStock >= 0 ? '+' : ''}${_fmt(item.adjustmentStock)} ${item.unit}',
                         color: Colors.blueGrey.shade400),
                     const Divider(height: 16),
                     _DetailRow(
-                        label: '💰 Nilai Stok Tersedia',
+                        label: '💰 Available Stock Value',
                         value: 'Rp ${_fmtCurrency(item.availableStock * item.costPerUnit)}',
                         color: colorScheme.primary,
                         isBold: true),
                     _DetailRow(
-                        label: '📊 HPP Terpakai',
+                        label: '📊 COGS Used',
                         value: 'Rp ${_fmtCurrency(item.usedStock * item.costPerUnit)}',
                         color: Colors.orange.shade600,
                         isBold: true),
-                    // Harga per satuan kecil
+                    // Price per small unit
                     if (item.hasSecondaryUnit)
                       _DetailRow(
-                          label: '🏷️ Harga per ${item.unitSecondary}',
+                          label: '🏷️ Price per ${item.unitSecondary}',
                           value: 'Rp ${_fmtCurrency(item.costPerUnitSecondary)}',
                           color: Colors.teal.shade600,
                           isBold: true),
@@ -281,12 +281,12 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
               ),
             ),
 
-            // Tabs: Aksi | Histori Terpakai | Summary
+            // Tabs: Actions | Usage History | Summary
             TabBar(
               controller: _tabController,
               tabs: const [
-                Tab(text: 'Aksi'),
-                Tab(text: 'Histori Terpakai'),
+                Tab(text: 'Actions'),
+                Tab(text: 'Usage History'),
                 Tab(text: 'Summary'),
               ],
               labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
@@ -315,9 +315,9 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('Tidak Bisa Dihapus'),
+          title: const Text('Cannot Be Deleted'),
           content: Text(
-            'Item "${widget.item.name}" masih memiliki stok ${widget.item.availableStock} ${widget.item.unit}. Kosongkan stok terlebih dahulu.',
+            'Item "${widget.item.name}" still has ${widget.item.availableStock} ${widget.item.unit} in stock. Clear the stock first.',
           ),
           actions: [
             FilledButton(
@@ -333,12 +333,12 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Hapus Item'),
-        content: Text('Yakin ingin menghapus "${widget.item.name}"?'),
+        title: const Text('Delete Item'),
+        content: Text('Are you sure you want to delete "${widget.item.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
@@ -351,7 +351,7 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
               ref.invalidate(inventoryStreamProvider(widget.item.branchId));
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Hapus'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -359,7 +359,7 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
   }
 }
 
-// ─── TAB 1: AKSI ─────────────────────────────────────────────────────────────
+// ─── TAB 1: ACTIONS ──────────────────────────────────────────────────────────
 
 class _ActionsTab extends ConsumerStatefulWidget {
   final InventoryItem item;
@@ -393,7 +393,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
     _selectedToItemId = null;
   }
 
-  // Konversi qty ke satuan utama jika pakai satuan sekunder
+  // Convert qty to the primary unit if using the secondary unit
   double _convertQty(double inputQty) {
     if (_useSecondaryUnit && widget.item.hasSecondaryUnit) {
       return inputQty / widget.item.unitConversion;
@@ -405,7 +405,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
     final rawQty = double.tryParse(_qtyCtrl.text);
     if (rawQty == null || rawQty <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Masukkan jumlah yang valid')),
+        const SnackBar(content: Text('Enter a valid quantity')),
       );
       return;
     }
@@ -438,7 +438,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Pilih cabang dan item tujuan'),
+                  content: Text('Select the destination branch and item'),
                   backgroundColor: Colors.orange,
                 ),
               );
@@ -460,7 +460,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Berhasil disimpan'),
+            content: Text('✅ Saved successfully'),
             backgroundColor: Colors.green,
           ),
         );
@@ -468,7 +468,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -490,7 +490,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Action selector
-          Text('Jenis Transaksi',
+          Text('Transaction Type',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -500,13 +500,13 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
           Wrap(
             spacing: 8,
             children: [
-              _ActionChip(label: '📦 Beli', isSelected: _selectedAction == 'purchase',
+              _ActionChip(label: '📦 Purchase', isSelected: _selectedAction == 'purchase',
                   color: Colors.green.shade500,
                   onTap: () => setState(() { _selectedAction = 'purchase'; _resetTransferState(); })),
-              _ActionChip(label: '🗑️ Buang', isSelected: _selectedAction == 'waste',
+              _ActionChip(label: '🗑️ Waste', isSelected: _selectedAction == 'waste',
                   color: Colors.red.shade500,
                   onTap: () => setState(() { _selectedAction = 'waste'; _resetTransferState(); })),
-              _ActionChip(label: '⚙️ Sesuaikan', isSelected: _selectedAction == 'adjustment',
+              _ActionChip(label: '⚙️ Adjust', isSelected: _selectedAction == 'adjustment',
                   color: Colors.blue.shade500,
                   onTap: () => setState(() { _selectedAction = 'adjustment'; _resetTransferState(); })),
               _ActionChip(label: '🔄 Transfer', isSelected: _selectedAction == 'transfer_out',
@@ -532,7 +532,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
             ),
           if (_selectedAction == 'transfer_out') const SizedBox(height: 12),
 
-          // Toggle satuan sekunder
+          // Secondary unit toggle
           if (item.hasSecondaryUnit) ...[
             GestureDetector(
               onTap: () => setState(() {
@@ -561,7 +561,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Input dalam ${item.unitSecondary} (1 ${item.unit} = ${item.unitConversion.toInt()} ${item.unitSecondary})',
+                      'Input in ${item.unitSecondary} (1 ${item.unit} = ${item.unitConversion.toInt()} ${item.unitSecondary})',
                       style: TextStyle(
                         fontSize: 12,
                         color: _useSecondaryUnit
@@ -584,7 +584,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
               FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
             ],
             decoration: InputDecoration(
-              labelText: 'Jumlah ($activeUnit)',
+              labelText: 'Quantity ($activeUnit)',
               filled: true,
               fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
               border: OutlineInputBorder(
@@ -599,7 +599,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
           TextField(
             controller: _noteCtrl,
             decoration: InputDecoration(
-              labelText: 'Catatan (opsional)',
+              labelText: 'Note (optional)',
               filled: true,
               fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
               border: OutlineInputBorder(
@@ -622,7 +622,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
               child: _isLoading
                   ? const SizedBox(width: 18, height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Simpan Transaksi',
+                  : const Text('Save Transaction',
                       style: TextStyle(fontWeight: FontWeight.w700)),
             ),
           ),
@@ -632,7 +632,7 @@ class _ActionsTabState extends ConsumerState<_ActionsTab> {
   }
 }
 
-// ─── TAB 2: HISTORI TERPAKAI ──────────────────────────────────────────────────
+// ─── TAB 2: USAGE HISTORY ──────────────────────────────────────────────────────
 
 class _UsageHistoryTab extends ConsumerWidget {
   final InventoryItem item;
@@ -646,7 +646,7 @@ class _UsageHistoryTab extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
       data: (transactions) {
-        // Filter hanya yang terpakai (order_deduct)
+        // Filter to only what was used (order_deduct)
         final usageList = transactions
             .where((t) => t.type == 'order_deduct')
             .toList();
@@ -659,11 +659,11 @@ class _UsageHistoryTab extends ConsumerWidget {
                 Icon(Icons.restaurant_outlined, size: 48,
                     color: Colors.grey.withValues(alpha: 0.5)),
                 const SizedBox(height: 12),
-                const Text('Belum ada riwayat pemakaian',
+                const Text('No usage history yet',
                     style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 4),
                 Text(
-                  'Bahan ini akan tercatat saat dipakai dalam order',
+                  'This ingredient will be logged when used in an order',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.withValues(alpha: 0.7),
@@ -675,14 +675,14 @@ class _UsageHistoryTab extends ConsumerWidget {
           );
         }
 
-        // Hitung total terpakai
+        // Compute total used
         final totalUsed = usageList.fold(0.0, (sum, t) => sum + t.quantity);
         final totalUsedSecondary = item.hasSecondaryUnit
             ? totalUsed * item.unitConversion : null;
 
         return Column(
           children: [
-            // Summary terpakai
+            // Usage summary
             Container(
               margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               padding: const EdgeInsets.all(12),
@@ -700,7 +700,7 @@ class _UsageHistoryTab extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Total Terpakai Hari Ini',
+                        const Text('Total Used Today',
                             style: TextStyle(
                                 fontSize: 11, fontWeight: FontWeight.w600)),
                         Text(
@@ -713,7 +713,7 @@ class _UsageHistoryTab extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          'Nilai: Rp ${_fmtCurrency(totalUsed * item.costPerUnit)}',
+                          'Value: Rp ${_fmtCurrency(totalUsed * item.costPerUnit)}',
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.orange.shade600,
@@ -726,7 +726,7 @@ class _UsageHistoryTab extends ConsumerWidget {
               ),
             ),
 
-            // List histori
+            // History list
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -806,7 +806,7 @@ class _UsageHistoryTab extends ConsumerWidget {
   }
 }
 
-// ─── TAB 3: SUMMARY ───────────────────────────────────────────────────────────
+// ─── TAB 3: SUMMARY ──────────────────────────────────────────────────────────
 
 class _SummaryTab extends StatelessWidget {
   final InventoryItem item;
@@ -831,8 +831,8 @@ class _SummaryTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Rumus inventory
-          const _SectionTitle('📐 Rumus Perhitungan Stok'),
+          // Inventory formula
+          const _SectionTitle('📐 Stock Calculation Formula'),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
@@ -845,7 +845,7 @@ class _SummaryTab extends StatelessWidget {
             child: Column(
               children: [
                 _FormulaRow(
-                  label: 'Stok Awal',
+                  label: 'Opening Stock',
                   value: '${_fmtQty(item.openingStock)} ${item.unit}',
                   secondaryValue: item.hasSecondaryUnit
                       ? '≈ ${_fmtQty(item.openingStockSecondary)} ${item.unitSecondary}'
@@ -854,19 +854,19 @@ class _SummaryTab extends StatelessWidget {
                   prefix: '',
                 ),
                 _FormulaRow(
-                  label: 'Pembelian',
+                  label: 'Purchases',
                   value: '${_fmtQty(item.purchasedStock)} ${item.unit}',
                   color: Colors.green.shade500,
                   prefix: '+',
                 ),
                 _FormulaRow(
-                  label: 'Transfer Masuk',
+                  label: 'Transfer In',
                   value: '${_fmtQty(item.transferIn)} ${item.unit}',
                   color: Colors.teal.shade500,
                   prefix: '+',
                 ),
                 _FormulaRow(
-                  label: 'Terpakai (Order)',
+                  label: 'Used (Orders)',
                   value: '${_fmtQty(item.usedStock)} ${item.unit}',
                   secondaryValue: item.hasSecondaryUnit
                       ? '≈ ${_fmtQty(item.usedStockSecondary)} ${item.unitSecondary}'
@@ -875,26 +875,26 @@ class _SummaryTab extends StatelessWidget {
                   prefix: '-',
                 ),
                 _FormulaRow(
-                  label: 'Terbuang',
+                  label: 'Wasted',
                   value: '${_fmtQty(item.wasteStock)} ${item.unit}',
                   color: Colors.red.shade400,
                   prefix: '-',
                 ),
                 _FormulaRow(
-                  label: 'Transfer Keluar',
+                  label: 'Transfer Out',
                   value: '${_fmtQty(item.transferOut)} ${item.unit}',
                   color: Colors.purple.shade400,
                   prefix: '-',
                 ),
                 _FormulaRow(
-                  label: 'Penyesuaian',
+                  label: 'Adjustment',
                   value: '${item.adjustmentStock >= 0 ? '+' : ''}${_fmtQty(item.adjustmentStock)} ${item.unit}',
                   color: Colors.blueGrey.shade400,
                   prefix: '±',
                 ),
                 const Divider(height: 20),
                 _FormulaRow(
-                  label: '= Stok Akhir',
+                  label: '= Closing Stock',
                   value: '${_fmtQty(item.closingStock)} ${item.unit}',
                   secondaryValue: item.hasSecondaryUnit
                       ? '≈ ${_fmtQty(item.availableStockSecondary)} ${item.unitSecondary}'
@@ -909,8 +909,8 @@ class _SummaryTab extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Kalkulasi harga
-          const _SectionTitle('💰 Kalkulasi Harga'),
+          // Price calculation
+          const _SectionTitle('💰 Price Calculation'),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
@@ -922,33 +922,33 @@ class _SummaryTab extends StatelessWidget {
             child: Column(
               children: [
                 _CalcRow(
-                  label: 'Harga per ${item.unit}',
+                  label: 'Price per ${item.unit}',
                   value: _fmtCurrency(item.costPerUnit),
                 ),
                 if (item.hasSecondaryUnit) ...[
                   _CalcRow(
-                    label: 'Konversi',
+                    label: 'Conversion',
                     value: '1 ${item.unit} = ${_fmtQty(item.unitConversion)} ${item.unitSecondary}',
                   ),
                   _CalcRow(
-                    label: 'Harga per ${item.unitSecondary}',
+                    label: 'Price per ${item.unitSecondary}',
                     value: _fmtCurrency(item.costPerUnitSecondary),
                     highlight: true,
                   ),
                 ],
                 const Divider(height: 16),
                 _CalcRow(
-                  label: 'Nilai Stok Tersedia',
+                  label: 'Available Stock Value',
                   value: _fmtCurrency(item.availableStock * item.costPerUnit),
                   highlight: true,
                 ),
                 _CalcRow(
-                  label: 'HPP Terpakai',
+                  label: 'COGS Used',
                   value: _fmtCurrency(item.usedStock * item.costPerUnit),
                   color: Colors.orange.shade600,
                 ),
                 _CalcRow(
-                  label: 'Nilai Terbuang',
+                  label: 'Wasted Value',
                   value: _fmtCurrency(item.wasteStock * item.costPerUnit),
                   color: Colors.red.shade400,
                 ),
@@ -958,9 +958,9 @@ class _SummaryTab extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Info satuan
+          // Unit info
           if (item.hasSecondaryUnit) ...[
-            const _SectionTitle('📏 Info Satuan'),
+            const _SectionTitle('📏 Unit Info'),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(16),
@@ -971,20 +971,20 @@ class _SummaryTab extends StatelessWidget {
               child: Column(
                 children: [
                   _CalcRow(
-                    label: 'Satuan Utama',
+                    label: 'Primary Unit',
                     value: item.unit,
                   ),
                   _CalcRow(
-                    label: 'Satuan Kecil',
+                    label: 'Small Unit',
                     value: item.unitSecondary ?? '-',
                   ),
                   _CalcRow(
-                    label: 'Konversi',
+                    label: 'Conversion',
                     value: '1 ${item.unit} = ${_fmtQty(item.unitConversion)} ${item.unitSecondary}',
                     highlight: true,
                   ),
                   _CalcRow(
-                    label: 'Stok dalam ${item.unitSecondary}',
+                    label: 'Stock in ${item.unitSecondary}',
                     value: '${_fmtQty(item.availableStockSecondary)} ${item.unitSecondary}',
                     highlight: true,
                   ),
@@ -1333,7 +1333,7 @@ class _TransferTargetPanel extends ConsumerWidget {
             children: [
               Icon(Icons.swap_horiz, size: 14, color: Colors.purple.shade400),
               const SizedBox(width: 6),
-              Text('Tujuan Transfer',
+              Text('Transfer Destination',
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -1345,17 +1345,17 @@ class _TransferTargetPanel extends ConsumerWidget {
             loading: () => const Center(
                 child: SizedBox(width: 20, height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2))),
-            error: (e, _) => Text('Gagal memuat cabang: $e',
+            error: (e, _) => Text('Failed to load branches: $e',
                 style: const TextStyle(color: Colors.red, fontSize: 12)),
             data: (branches) {
               if (branches.isEmpty) {
-                return const Text('Tidak ada cabang lain',
+                return const Text('No other branches available',
                     style: TextStyle(fontSize: 12));
               }
               return DropdownButtonFormField<String>(
                 initialValue: selectedBranchId,
                 decoration: InputDecoration(
-                  labelText: 'Cabang Tujuan',
+                  labelText: 'Destination Branch',
                   filled: true,
                   fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                   border: OutlineInputBorder(
@@ -1387,19 +1387,19 @@ class _TransferTargetPanel extends ConsumerWidget {
                   loading: () => const Center(
                       child: SizedBox(width: 20, height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2))),
-                  error: (e, _) => Text('Gagal: $e',
+                  error: (e, _) => Text('Failed: $e',
                       style: const TextStyle(color: Colors.red, fontSize: 12)),
                   data: (items) {
                     if (items.isEmpty) {
                       return Text(
-                        'Item "$itemName" tidak ditemukan di $selectedBranchName',
+                        'Item "$itemName" not found in $selectedBranchName',
                         style: const TextStyle(fontSize: 12, color: Colors.orange),
                       );
                     }
                     return DropdownButtonFormField<String>(
                       initialValue: selectedItemId,
                       decoration: InputDecoration(
-                        labelText: 'Item Tujuan',
+                        labelText: 'Destination Item',
                         filled: true,
                         fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                         border: OutlineInputBorder(

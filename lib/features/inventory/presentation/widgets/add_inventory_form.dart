@@ -26,14 +26,17 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
   final _openingStockCtrl = TextEditingController();
   final _minimumStockCtrl = TextEditingController();
   final _costCtrl = TextEditingController();
-  // ── BARU: satuan sekunder ──
+  // ── NEW: secondary unit ──
   final _unitSecondaryCtrl = TextEditingController();
   final _unitConversionCtrl = TextEditingController();
 
   String _selectedUnit = 'kg';
+  // NOTE: category values below are stored verbatim as the `category` column
+  // in Supabase (inventory_items). Left in Indonesian intentionally — see
+  // translation report (logic-coupled data values, not just display labels).
   String _selectedCategory = 'Bahan Baku';
   bool _isLoading = false;
-  bool _hasSecondaryUnit = false; // toggle tampil field satuan sekunder
+  bool _hasSecondaryUnit = false; // toggles whether the secondary unit field is shown
 
   final _units = ['kg', 'gram', 'liter', 'ml', 'pcs', 'botol', 'bungkus', 'dus', 'buah'];
   final _categories = [
@@ -57,7 +60,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
       _costCtrl.text = item.costPerUnit.toString();
       _selectedUnit = item.unit;
       _selectedCategory = item.category;
-      // ── load satuan sekunder jika ada ──
+      // ── load secondary unit if present ──
       if (item.hasSecondaryUnit) {
         _hasSecondaryUnit = true;
         _unitSecondaryCtrl.text = item.unitSecondary ?? '';
@@ -84,7 +87,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
     try {
       final now = DateTime.now();
 
-      // Hitung satuan sekunder
+      // Compute the secondary unit
       final unitSecondary = _hasSecondaryUnit && _unitSecondaryCtrl.text.trim().isNotEmpty
           ? _unitSecondaryCtrl.text.trim()
           : null;
@@ -110,8 +113,8 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
         date: now,
         createdAt: widget.editItem?.createdAt ?? now,
         updatedAt: now,
-        unitSecondary: unitSecondary,       // ← BARU
-        unitConversion: unitConversion,     // ← BARU
+        unitSecondary: unitSecondary,       // ← NEW
+        unitConversion: unitConversion,     // ← NEW
       );
 
       final notifier = ref.read(inventoryNotifierProvider.notifier);
@@ -126,7 +129,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal menyimpan: $e'),
+            content: Text('Failed to save: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -173,21 +176,21 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
               const SizedBox(height: 20),
 
               Text(
-                isEdit ? 'Edit Item Inventory' : 'Tambah Item Inventory',
+                isEdit ? 'Edit Inventory Item' : 'Add Inventory Item',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
               ),
               const SizedBox(height: 20),
 
-              // Nama item
+              // Item name
               _buildTextField(
                 controller: _nameCtrl,
-                label: 'Nama Bahan / Item',
-                hint: 'cth. Tepung Terigu, Minyak Goreng...',
+                label: 'Ingredient / Item Name',
+                hint: 'e.g. Flour, Cooking Oil...',
                 isRequired: true,
                 validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
+                    v == null || v.trim().isEmpty ? 'Name is required' : null,
               ),
               const SizedBox(height: 12),
 
@@ -196,7 +199,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                 children: [
                   Expanded(
                     child: _buildDropdown(
-                      label: 'Satuan Utama',
+                      label: 'Primary Unit',
                       value: _selectedUnit,
                       items: _units,
                       onChanged: (v) => setState(() => _selectedUnit = v!),
@@ -205,7 +208,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildDropdown(
-                      label: 'Kategori',
+                      label: 'Category',
                       value: _selectedCategory,
                       items: _categories,
                       onChanged: (v) => setState(() => _selectedCategory = v!),
@@ -215,7 +218,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
               ),
               const SizedBox(height: 12),
 
-              // ── BARU: Toggle satuan sekunder ──────────────────────────────
+              // ── NEW: secondary unit toggle ──────────────────────────────
               GestureDetector(
                 onTap: () => setState(() {
                   _hasSecondaryUnit = !_hasSecondaryUnit;
@@ -250,7 +253,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Punya satuan kecil? (cth: 1 kg = 6 butir)',
+                          'Has a smaller unit? (e.g. 1 kg = 6 pieces)',
                           style: TextStyle(
                             fontSize: 13,
                             color: _hasSecondaryUnit
@@ -264,7 +267,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                 ),
               ),
 
-              // Field satuan sekunder — muncul jika toggle aktif
+              // Secondary unit fields — shown when the toggle is active
               if (_hasSecondaryUnit) ...[
                 const SizedBox(height: 10),
                 Row(
@@ -272,10 +275,10 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                     Expanded(
                       child: _buildTextField(
                         controller: _unitSecondaryCtrl,
-                        label: 'Satuan Kecil',
-                        hint: 'cth. butir, slice, lembar...',
+                        label: 'Small Unit',
+                        hint: 'e.g. piece, slice, sheet...',
                         validator: (v) => _hasSecondaryUnit && (v == null || v.trim().isEmpty)
-                            ? 'Wajib diisi'
+                            ? 'Required'
                             : null,
                       ),
                     ),
@@ -284,16 +287,16 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                       child: _buildTextField(
                         controller: _unitConversionCtrl,
                         label: '1 $_selectedUnit = ? ${_unitSecondaryCtrl.text.isEmpty ? '...' : _unitSecondaryCtrl.text}',
-                        hint: 'cth. 6',
+                        hint: 'e.g. 6',
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                         ],
                         validator: (v) {
                           if (!_hasSecondaryUnit) return null;
-                          if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                          if (v == null || v.trim().isEmpty) return 'Required';
                           final n = double.tryParse(v);
-                          if (n == null || n <= 0) return 'Harus > 0';
+                          if (n == null || n <= 0) return 'Must be > 0';
                           return null;
                         },
                       ),
@@ -301,7 +304,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                   ],
                 ),
                 const SizedBox(height: 2),
-                // Preview konversi
+                // Conversion preview
                 if (_unitConversionCtrl.text.isNotEmpty &&
                     _unitSecondaryCtrl.text.isNotEmpty)
                   Padding(
@@ -326,7 +329,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                   Expanded(
                     child: _buildTextField(
                       controller: _openingStockCtrl,
-                      label: 'Stok Awal ($_selectedUnit)',
+                      label: 'Opening Stock ($_selectedUnit)',
                       hint: '0',
                       isRequired: true,
                       keyboardType:
@@ -336,8 +339,8 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                             RegExp(r'^\d+\.?\d{0,2}')),
                       ],
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Wajib diisi';
-                        if (double.tryParse(v) == null) return 'Tidak valid';
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (double.tryParse(v) == null) return 'Invalid';
                         return null;
                       },
                     ),
@@ -346,8 +349,8 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                   Expanded(
                     child: _buildTextField(
                       controller: _minimumStockCtrl,
-                      label: 'Stok Minimum',
-                      hint: '0 (opsional)',
+                      label: 'Minimum Stock',
+                      hint: '0 (optional)',
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [
@@ -363,7 +366,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
               // Cost per unit
               _buildTextField(
                 controller: _costCtrl,
-                label: 'Harga per $_selectedUnit (Rp)',
+                label: 'Price per $_selectedUnit (Rp)',
                 hint: '0',
                 isRequired: true,
                 keyboardType:
@@ -372,10 +375,10 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                 ],
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Wajib diisi';
+                  if (v == null || v.trim().isEmpty) return 'Required';
                   final n = double.tryParse(v);
-                  if (n == null) return 'Tidak valid';
-                  if (n <= 0) return 'Harga harus lebih dari 0';
+                  if (n == null) return 'Invalid';
+                  if (n <= 0) return 'Price must be greater than 0';
                   return null;
                 },
               ),
@@ -402,7 +405,7 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
                           ),
                         )
                       : Text(
-                          isEdit ? 'Simpan Perubahan' : 'Tambah Item',
+                          isEdit ? 'Save Changes' : 'Add Item',
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
@@ -432,9 +435,9 @@ class _AddInventoryFormState extends ConsumerState<AddInventoryForm> {
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       validator: validator,
-      // Warning merah langsung terlihat begitu layar dibuka.
+      // Red warning is visible immediately as soon as the screen opens.
       autovalidateMode: AutovalidateMode.always,
-      onChanged: (_) => setState(() {}), // rebuild untuk preview konversi
+      onChanged: (_) => setState(() {}), // rebuild for the conversion preview
       decoration: InputDecoration(
         labelText: isRequired ? '$label *' : label,
         labelStyle: TextStyle(

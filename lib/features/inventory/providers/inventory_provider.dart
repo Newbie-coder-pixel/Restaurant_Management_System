@@ -12,7 +12,7 @@ final inventoryServiceProvider = Provider<InventoryService>((ref) {
   return InventoryService(supabase);
 });
 
-// ─── DATE PROVIDER (untuk filter tanggal) ────────────────────────────────────
+// ─── DATE PROVIDER (for date filtering) ───────────────────────────────────────
 
 final inventorySelectedDateProvider = StateProvider<DateTime>((ref) {
   return DateTime.now();
@@ -61,11 +61,12 @@ final inventoryStreamProvider =
   return service.streamInventoryItems(branchId: branchId, date: date);
 });
 
-// ─── FIX BUG: stream inventory HARI INI, independen dari tanggal yang ────────
-// sedang di-browse user di layar Inventory (inventorySelectedDateProvider).
-// Dipakai oleh fitur lain (mis. "Tambah Bahan" di form menu) yang selalu
-// butuh stok hari ini, supaya tidak ikut kosong saat user sedang melihat
-// tanggal lain di layar Inventory.
+// ─── FIX BUG: stream TODAY's inventory, independent of the date the ─────────
+// user is currently browsing on the Inventory screen
+// (inventorySelectedDateProvider). Used by other features (e.g. "Add
+// Ingredient" in the menu form) that always need today's stock, so it
+// doesn't end up empty while the user is looking at another date on the
+// Inventory screen.
 final todayInventoryStreamProvider =
     StreamProvider.family<List<InventoryItem>, String>((ref, branchId) {
   final service = ref.watch(inventoryServiceProvider);
@@ -109,7 +110,7 @@ final filteredInventoryProvider =
   );
 });
 
-// ─── CATEGORIES PROVIDER ──────────────────────────────────────────────────────
+// ─── CATEGORIES PROVIDER ───────────────────────────────────────────────────────
 
 final inventoryCategoriesProvider =
     Provider.family<List<String>, String>((ref, branchId) {
@@ -156,14 +157,14 @@ final inventorySummaryProvider =
   );
 });
 
-// ─── LOW STOCK ALERT COUNT (untuk badge notifikasi) ───────────────────────────
+// ─── LOW STOCK ALERT COUNT (for notification badge) ───────────────────────────
 
 final lowStockCountProvider = Provider.family<int, String>((ref, branchId) {
   final summary = ref.watch(inventorySummaryProvider(branchId));
   return (summary?.lowStockItems ?? 0) + (summary?.outOfStockItems ?? 0);
 });
 
-// ─── INVENTORY NOTIFIER (untuk operasi CRUD) ──────────────────────────────────
+// ─── INVENTORY NOTIFIER (for CRUD operations) ─────────────────────────────────
 
 class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
   late InventoryService _service;
@@ -242,10 +243,10 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
   }
 
 
-  /// Transfer stok ke cabang lain.
-  /// [fromItemId] = ID item di cabang ini (sumber).
-  /// [toItemId]   = ID item di cabang tujuan (item yang sama, beda branch).
-  /// [toBranchId] = branch ID tujuan.
+  /// Transfer stock to another branch.
+  /// [fromItemId] = item ID in this branch (source).
+  /// [toItemId]   = item ID in the destination branch (same item, different branch).
+  /// [toBranchId] = destination branch ID.
   Future<void> recordTransfer({
     required String fromItemId,
     required String toItemId,

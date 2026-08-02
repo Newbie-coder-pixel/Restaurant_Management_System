@@ -98,13 +98,13 @@ class QrOrderSession {
 
   double get subtotal => items.fold(0, (sum, item) => sum + item.subtotal);
 
-  // Service charge 3% dari subtotal
+  // Service charge 3% of subtotal
   double get serviceCharge => subtotal * 0.03;
 
-  // PB1 10% dari subtotal + service charge
+  // PB1 10% of subtotal + service charge
   double get pb1Amount => (subtotal + serviceCharge) * 0.10;
 
-  // taxAmount di-set 0 (PPN dihapus), tetap ada agar tidak breaking change
+  // taxAmount is set to 0 (VAT removed), kept to avoid a breaking change
   double get taxAmount => 0;
 
   double get totalAmount => subtotal + serviceCharge + pb1Amount;
@@ -217,9 +217,9 @@ final activeQrCartNotifierProvider = Provider<QrCartNotifier>((ref) {
   return ref.read(qrCartProvider(table).notifier);
 });
 // ─── Add Order Mode ───────────────────────────────────────────────────────────
-/// Menyimpan state saat customer sedang menambah pesanan ke order yang sudah ada.
-/// null  = mode normal (order baru).
-/// non-null = mode tambah pesanan, berisi orderId & queueNumber order aktif.
+/// Stores state while the customer is adding items to an existing order.
+/// null  = normal mode (new order).
+/// non-null = add-order mode, holds the orderId & queueNumber of the active order.
 class AddOrderModeState {
   final String orderId;
   final String queueNumber;
@@ -232,7 +232,7 @@ class AddOrderModeState {
   });
 }
 
-/// Provider global untuk mode "tambah pesanan".
-/// Di-set oleh tracker screen saat customer tap "Tambah Pesanan".
-/// Di-clear oleh cart screen setelah berhasil submit.
+/// Global provider for "add order" mode.
+/// Set by the tracker screen when the customer taps "Add Order".
+/// Cleared by the cart screen after a successful submit.
 final addOrderModeProvider = StateProvider<AddOrderModeState?>((ref) => null);

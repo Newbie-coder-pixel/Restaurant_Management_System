@@ -18,11 +18,11 @@ class OrderItemTile extends StatelessWidget {
 
   String _statusLabel(OrderItemStatus s) {
     switch (s) {
-      case OrderItemStatus.pending:   return 'Antri';
-      case OrderItemStatus.preparing: return 'Dimasak';
-      case OrderItemStatus.ready:     return 'Siap';
-      case OrderItemStatus.served:    return 'Tersaji';
-      case OrderItemStatus.cancelled: return 'Batal';
+      case OrderItemStatus.pending:   return 'Queued';
+      case OrderItemStatus.preparing: return 'Cooking';
+      case OrderItemStatus.ready:     return 'Ready';
+      case OrderItemStatus.served:    return 'Served';
+      case OrderItemStatus.cancelled: return 'Cancelled';
     }
   }
 

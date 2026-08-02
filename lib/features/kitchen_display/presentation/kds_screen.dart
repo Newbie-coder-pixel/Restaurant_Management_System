@@ -19,17 +19,17 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   int _readyCount = 0;
   List<Map<String, dynamic>> _lowStockItems = [];
   bool _isLoading = true;
-  String? _branchId;       // branch milik staff yang login
+  String? _branchId;       // branch belonging to the logged-in staff
   StaffRole? _userRole;
   RealtimeChannel? _channel;
   bool _initialized = false;
   final _kitchenInventoryService =
       KitchenInventoryService(Supabase.instance.client);
-  final Set<String> _preparingInProgress = {}; // guard: cegah tap ganda
+  final Set<String> _preparingInProgress = {}; // guard: prevent double-tap
 
   // Multi-branch (superadmin only)
   List<_BranchItem> _branches = [];
-  String? _selectedBranchId; // null = semua branch
+  String? _selectedBranchId; // null = all branches
 
   bool get _isMultiBranchRole => _userRole == StaffRole.superadmin;
 
@@ -82,8 +82,8 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   }
 
   Future<void> _load() async {
-    // superadmin: pakai _selectedBranchId (null = semua branch)
-    // role lain: wajib pakai _branchId sendiri
+    // superadmin: uses _selectedBranchId (null = all branches)
+    // other roles: must use their own _branchId
     final targetBranch = _isMultiBranchRole ? _selectedBranchId : _branchId;
 
     if (!_isMultiBranchRole && targetBranch == null) {
@@ -91,8 +91,8 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       return;
     }
     try {
-      // FIX: Explicit select kolom agar order_type pasti ikut ter-fetch
-      // (menggunakan * bersamaan dengan relasi kadang tidak meng-include semua kolom)
+      // FIX: Explicitly select columns so order_type is guaranteed to be fetched
+      // (using * together with a relation sometimes doesn't include all columns)
       var query = Supabase.instance.client
           .from('orders')
           .select('''
@@ -107,7 +107,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             )
           ''')
           .inFilter('status', ['new', 'created', 'preparing'])
-          .gt('total_amount', 0); // exclude order kosong (0 item / Rp 0)
+          .gt('total_amount', 0); // exclude empty orders (0 items / Rp 0)
 
       if (targetBranch != null) {
         query = query.eq('branch_id', targetBranch);
@@ -145,7 +145,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           if (closing <= minimum) lowStock.add(item);
         }
       } catch (e) {
-        debugPrint('⚠️ Gagal fetch low stock: $e');
+        debugPrint('⚠️ Failed to fetch low stock: $e');
       }
       // ──────────────────────────────────────────────────────────
 
@@ -153,10 +153,10 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
         setState(() {
           _orders = (res as List)
               .map((e) => OrderModel.fromJson(e))
-              .where((o) => o.items.isNotEmpty) // double-check: skip order tanpa item
+              .where((o) => o.items.isNotEmpty) // double-check: skip orders with no items
               .toList();
           _readyCount = (readyRes as List).length;
-          _lowStockItems = lowStock; // FIX Bug 1: assign ke state agar banner muncul
+          _lowStockItems = lowStock; // FIX Bug 1: assign to state so the banner shows
           _isLoading = false;
         });
       }
@@ -169,9 +169,9 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   void _subscribeRealtime() {
     _channel?.unsubscribe();
 
-    // Tentukan branch yang dipakai untuk filter realtime.
-    // Superadmin tanpa filter branch → subscribe semua (null = no filter).
-    // Role lain → filter ke branch mereka sendiri.
+    // Determine the branch used for the realtime filter.
+    // Superadmin with no branch filter → subscribe to all (null = no filter).
+    // Other roles → filter to their own branch.
     final targetBranch = _isMultiBranchRole ? _selectedBranchId : _branchId;
 
     var channelBuilder = Supabase.instance.client
@@ -180,7 +180,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          // filter per branch kalau bukan superadmin "semua cabang"
+          // filter per branch unless it's a superadmin "all branches" view
           filter: targetBranch != null
               ? PostgresChangeFilter(
                   type: PostgresChangeFilterType.eq,
@@ -205,30 +205,31 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     super.dispose();
   }
 
-  // ── FIX: Tambah sent_to_kitchen_at saat dapur mulai masak ─────────────────
-  // ── BARU: Potong stok inventory sesuai resep menu saat mulai masak ────────
+  // ── FIX: Add sent_to_kitchen_at when the kitchen starts cooking ───────────
+  // ── NEW: Deduct inventory stock per the menu recipe when cooking starts ───
   Future<void> _markPreparing(String orderId) async {
-    if (_preparingInProgress.contains(orderId)) return; // cegah tap ganda
+    if (_preparingInProgress.contains(orderId)) return; // prevent double-tap
     _preparingInProgress.add(orderId);
 
     final now = DateTime.now().toIso8601String();
 
     try {
-      // Update status order + catat waktu mulai masak
+      // Update order status + record the time cooking started
       await Supabase.instance.client.from('orders').update({
         'status':     'preparing',
         'updated_at': now,
       }).eq('id', orderId);
 
-      // Catat sent_to_kitchen_at di semua order_items milik order ini
-      // Ini adalah titik awal pengukuran actual_prep_time untuk training data ML
+      // Record sent_to_kitchen_at on all order_items belonging to this order
+      // This is the starting point for measuring actual_prep_time for ML training data
       await Supabase.instance.client.from('order_items').update({
         'sent_to_kitchen_at': now,
       }).eq('order_id', orderId);
 
-      // ── Potong stok inventory sesuai resep (menu_ingredients) ────────────
-      // Dilakukan tepat saat order mulai dimasak (bukan saat order dibuat),
-      // sesuai alur: dapur mulai masak → bahan baku otomatis terpakai.
+      // ── Deduct inventory stock per the recipe (menu_ingredients) ────────
+      // Done right when the order starts cooking (not when the order is
+      // created), matching the flow: kitchen starts cooking → ingredients
+      // are automatically consumed.
       final order = _orders.firstWhere(
         (o) => o.id == orderId,
         orElse: () => OrderModel(
@@ -250,9 +251,9 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
         if (mounted && result.hasWarnings) {
           final warnings = <String>[
             if (result.menusWithoutRecipe.isNotEmpty)
-              'Belum ada resep: ${result.menusWithoutRecipe.join(', ')}',
+              'No recipe yet: ${result.menusWithoutRecipe.join(', ')}',
             if (result.notFoundInInventory.isNotEmpty)
-              'Bahan tidak ditemukan di inventory: ${result.notFoundInInventory.join(', ')}',
+              'Ingredients not found in inventory: ${result.notFoundInInventory.join(', ')}',
           ];
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -279,14 +280,14 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       'updated_at': now,
     }).eq('id', orderId);
 
-    // prepared_at sudah ada sebelumnya, tetap diisi
+    // prepared_at already existed before, still populated here
     await Supabase.instance.client.from('order_items').update({
       'status':      'ready',
       'prepared_at': now,
     }).eq('order_id', orderId);
   }
 
-  /// Tandai 1 item sebagai siap saji (tanpa ubah status order keseluruhan)
+  /// Mark 1 item as ready to serve (without changing the overall order status)
   Future<void> _markItemReady(String itemId, String orderId) async {
     final now = DateTime.now().toIso8601String();
     await Supabase.instance.client.from('order_items').update({
@@ -294,7 +295,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       'prepared_at': now,
     }).eq('id', itemId);
 
-    // Cek apakah semua item di order ini sudah ready → auto-update order juga
+    // Check whether all items in this order are ready → auto-update the order too
     final remaining = await Supabase.instance.client
         .from('order_items')
         .select('id')
@@ -319,7 +320,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   String _orderSourceLabel(OrderModel order) {
     if (_isQrOrder(order)) return 'QR Order';
     if (order.orderType == 'app_order') return 'App Order';
-    if (order.orderType == 'takeaway') return 'App Order (Bawa Pulang)';
+    if (order.orderType == 'takeaway') return 'App Order (Takeaway)';
     return 'Staff Order';
   }
 
@@ -344,7 +345,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Text('Dapur (KDS)',
+          Text('Kitchen (KDS)',
             style: theme.textTheme.titleLarge?.copyWith(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w700,
@@ -369,7 +370,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
                 items: [
                   DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 11,
@@ -403,7 +404,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.room_service_outlined, size: 13, color: Colors.white),
                 const SizedBox(width: 4),
-                Text('$_readyCount Siap Antar',
+                Text('$_readyCount Ready to Deliver',
                   style: const TextStyle(
                     fontFamily: 'Poppins', fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -418,7 +419,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               color: _orders.isEmpty ? colorScheme.surfaceContainerHighest : AppColors.accent,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Text('${_orders.length} Aktif',
+            child: Text('${_orders.length} Active',
               style: TextStyle(
                 fontFamily: 'Poppins', fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -467,7 +468,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
         const SizedBox(width: 10),
         Expanded(
           child: Text(
-            '$_readyCount order siap diantar — waiter, cek Order Screen!',
+            '$_readyCount orders ready to deliver — waiter, check the Order Screen!',
             style: const TextStyle(
               fontFamily: 'Poppins', color: Colors.white,
               fontWeight: FontWeight.w600, fontSize: 13),
@@ -490,7 +491,7 @@ Widget _buildLowStockBanner() {
         const SizedBox(width: 10),
         Expanded(
           child: Text(
-            'Stok hampir habis: $names',
+            'Stock running low: $names',
             style: const TextStyle(
               fontFamily: 'Poppins', color: Colors.white,
               fontWeight: FontWeight.w600, fontSize: 12),
@@ -515,12 +516,12 @@ Widget _buildLowStockBanner() {
               size: 60, color: Colors.green.shade400),
           ),
           const SizedBox(height: 20),
-          Text('Semua order selesai! 🎉',
+          Text('All orders done! 🎉',
             style: TextStyle(
               fontFamily: 'Poppins', fontSize: 20,
               fontWeight: FontWeight.w700, color: colorScheme.onSurface)),
           const SizedBox(height: 8),
-          Text('Menunggu order baru...',
+          Text('Waiting for new orders...',
             style: TextStyle(fontFamily: 'Poppins', color: colorScheme.outline)),
         ],
       ),
@@ -533,7 +534,7 @@ Widget _buildLowStockBanner() {
     final isApp     = _isAppOrder(order);
     final label     = _orderSourceLabel(order);
 
-    // Warna per tipe: QR=ungu, App=hijau teal, Staff=biru
+    // Color per type: QR=purple, App=teal green, Staff=blue
     final Color badgeColor = isQr
         ? const Color(0xFF7C3AED)
         : isApp
@@ -584,7 +585,7 @@ Widget _buildLowStockBanner() {
                 decoration: BoxDecoration(
                   color: colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(8)),
-                child: Text('Meja ${order.tableNumber}',
+                child: Text('Table ${order.tableNumber}',
                   style: TextStyle(
                     fontFamily: 'Poppins', fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -619,7 +620,7 @@ Widget _buildLowStockBanner() {
                     color: badgeColor)),
               ]),
             ),
-            // Badge estimasi ML — tampil kalau tersedia
+            // ML estimate badge — shown if available
             if (order.estimatedPrepMinutes != null) ...[
               const SizedBox(width: 6),
               Container(
@@ -632,7 +633,7 @@ Widget _buildLowStockBanner() {
                   Icon(Icons.schedule_rounded, size: 11, color: Colors.orange.shade700),
                   const SizedBox(width: 3),
                   Text(
-                    '~${order.estimatedPrepMinutes} mnt',
+                    '~${order.estimatedPrepMinutes} min',
                     style: TextStyle(
                       fontFamily: 'Poppins', fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -648,7 +649,7 @@ Widget _buildLowStockBanner() {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: statusColor.withValues(alpha: 0.35))),
               child: Text(
-                isNew ? 'Menunggu Masak' : 'Dimasak',
+                isNew ? 'Waiting to Cook' : 'Cooking',
                 style: TextStyle(
                   fontFamily: 'Poppins', fontSize: 10,
                   fontWeight: FontWeight.w700, color: statusColor)),
@@ -663,7 +664,7 @@ Widget _buildLowStockBanner() {
             children: order.items.map((item) {
               final notes       = item.specialRequests;
               final itemReady   = item.status == OrderItemStatus.ready;
-              // Tombol per-item hanya muncul saat order sedang dimasak (preparing)
+              // Per-item button only shows while the order is being cooked (preparing)
               final showItemBtn = !isNew && !itemReady;
 
               return Container(
@@ -682,7 +683,7 @@ Widget _buildLowStockBanner() {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Row utama item ──────────────────────────────────
+                    // ── Main item row ────────────────────────────────────
                     Padding(
                       padding: const EdgeInsets.all(10),
                       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -748,7 +749,7 @@ Widget _buildLowStockBanner() {
                       ]),
                     ),
 
-                    // ── Tombol "Siap Saji" per item ─────────────────────
+                    // ── Per-item "Ready to Serve" button ────────────────
                     if (showItemBtn)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
@@ -764,7 +765,7 @@ Widget _buildLowStockBanner() {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(7))),
                             icon: const Icon(Icons.check_rounded, size: 13),
-                            label: const Text('Siap Saji',
+                            label: const Text('Ready to Serve',
                               style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontWeight: FontWeight.w600,
@@ -793,7 +794,7 @@ Widget _buildLowStockBanner() {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10))),
                     icon: const Icon(Icons.local_fire_department_outlined, size: 16),
-                    label: const Text('Mulai Masak',
+                    label: const Text('Start Cooking',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600, fontSize: 13)))
@@ -805,7 +806,7 @@ Widget _buildLowStockBanner() {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10))),
                     icon: const Icon(Icons.check_circle_outline, size: 16),
-                    label: const Text('✓ Siap Saji',
+                    label: const Text('✓ Ready to Serve',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700, fontSize: 13))),

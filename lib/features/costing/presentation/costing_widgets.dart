@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/costing_model.dart';
 
-// ─── Formatter IDR ──────────────────────────────────────────────────────────
+// ─── IDR Formatter ──────────────────────────────────────────────────────────
 final _idrFormat = NumberFormat('#,##0', 'id_ID');
 final _pctFormat = NumberFormat('0.0', 'id_ID');
 
@@ -13,7 +13,7 @@ String formatIdr(double value) => 'Rp ${_idrFormat.format(value)}';
 String formatPct(double value) => '${_pctFormat.format(value)}%';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Widget: Label + TextField untuk input angka
+// Widget: Label + TextField for numeric input
 // ─────────────────────────────────────────────────────────────────────────────
 class CurrencyInputField extends StatelessWidget {
   final String label;
@@ -73,8 +73,8 @@ class CurrencyInputField extends StatelessWidget {
           ],
           onChanged: (v) => onChanged(double.tryParse(v) ?? 0),
           validator: validator,
-          // Warning merah langsung terlihat begitu layar dibuka, tidak perlu
-          // menunggu user mengetik dulu.
+          // The red warning is visible immediately when the screen opens, no
+          // need to wait for the user to start typing.
           autovalidateMode: AutovalidateMode.always,
           style: theme.textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w600,
@@ -128,7 +128,7 @@ class CurrencyInputField extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Widget: Kartu Hasil Kalkulasi (HPP, Margin, Rekomendasi)
+// Widget: Calculation Result Card (COGS, Margin, Recommendation)
 // ─────────────────────────────────────────────────────────────────────────────
 class CostingResultCard extends StatelessWidget {
   final CostingModel costing;
@@ -176,7 +176,7 @@ class CostingResultCard extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                'Hasil Kalkulasi',
+                'Calculation Result',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: theme.colorScheme.onPrimaryContainer,
@@ -190,21 +190,21 @@ class CostingResultCard extends StatelessWidget {
           const Divider(height: 1),
           const SizedBox(height: 16),
 
-          // Grid hasil
+          // Result grid
           Row(
             children: [
               _ResultTile(
-                label: 'HPP',
+                label: 'COGS',
                 value: formatIdr(costing.hpp),
-                sublabel: 'Harga Pokok Penjualan',
+                sublabel: 'Cost of Goods Sold',
                 icon: Icons.receipt_long_rounded,
                 color: theme.colorScheme.error,
               ),
               const SizedBox(width: 12),
               _ResultTile(
-                label: 'Rekomendasi Harga',
+                label: 'Recommended Price',
                 value: formatIdr(costing.recommendedSellingPriceRounded),
-                sublabel: 'Dengan margin ${costing.targetProfitMarginPercent.toStringAsFixed(0)}%',
+                sublabel: 'With ${costing.targetProfitMarginPercent.toStringAsFixed(0)}% margin',
                 icon: Icons.price_check_rounded,
                 color: const Color(0xFF2E7D32),
               ),
@@ -222,9 +222,9 @@ class CostingResultCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               _ResultTile(
-                label: 'Margin Aktual',
+                label: 'Actual Margin',
                 value: formatPct(costing.actualProfitMarginPercent),
-                sublabel: 'Profit per porsi: ${formatIdr(costing.profitPerPortion)}',
+                sublabel: 'Profit per portion: ${formatIdr(costing.profitPerPortion)}',
                 icon: Icons.trending_up_rounded,
                 color: costing.actualProfitMarginPercent >=
                         costing.targetProfitMarginPercent
@@ -403,7 +403,7 @@ class _HealthScoreBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Widget: Kartu Menu di Daftar
+// Widget: Menu Card in the List
 // ─────────────────────────────────────────────────────────────────────────────
 class CostingListTile extends StatelessWidget {
   final CostingModel costing;
@@ -478,7 +478,7 @@ class CostingListTile extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          'HPP: ${formatIdr(costing.hpp)}',
+                          'COGS: ${formatIdr(costing.hpp)}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.outline,
                           ),
@@ -560,7 +560,7 @@ class CostingSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Ringkasan Profitabilitas',
+            'Profitability Summary',
             style: theme.textTheme.titleSmall?.copyWith(
               color: theme.colorScheme.onInverseSurface,
               fontWeight: FontWeight.w700,
@@ -570,13 +570,13 @@ class CostingSummaryCard extends StatelessWidget {
           Row(
             children: [
               _SummaryMetric(
-                label: 'Est. Pendapatan/bln',
+                label: 'Est. Revenue/mo',
                 value: formatIdr(summary.totalEstimatedMonthlyRevenue),
                 color: theme.colorScheme.onInverseSurface,
               ),
               const SizedBox(width: 16),
               _SummaryMetric(
-                label: 'Est. Profit/bln',
+                label: 'Est. Profit/mo',
                 value: formatIdr(summary.totalEstimatedMonthlyProfit),
                 color: summary.totalEstimatedMonthlyProfit >= 0
                     ? const Color(0xFF81C784)
@@ -605,7 +605,7 @@ class CostingSummaryCard extends StatelessWidget {
           Row(
             children: [
               _StatusBadge(
-                  label: '${summary.healthyItems} Sehat',
+                  label: '${summary.healthyItems} Healthy',
                   color: const Color(0xFF81C784)),
               const SizedBox(width: 8),
               _StatusBadge(
@@ -613,7 +613,7 @@ class CostingSummaryCard extends StatelessWidget {
                   color: const Color(0xFFFFD54F)),
               const SizedBox(width: 8),
               _StatusBadge(
-                  label: '${summary.underpricedItems} Rugi',
+                  label: '${summary.underpricedItems} Loss',
                   color: const Color(0xFFEF9A9A)),
             ],
           ),

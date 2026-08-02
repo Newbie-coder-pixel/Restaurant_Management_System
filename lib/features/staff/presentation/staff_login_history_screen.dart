@@ -43,7 +43,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
   bool _isLoading = true;
   String? _error;
 
-  // Tampilkan max 3 bulan terakhir — cukup untuk audit
+  // Show max last 3 months — enough for audit purposes
   static const _limitMonths = 3;
 
   @override
@@ -92,10 +92,10 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
   // ── helpers ────────────────────────────────
   String _formatDate(DateTime dt) {
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return '${days[dt.weekday % 7]}, ${dt.day} ${months[dt.month]} ${dt.year}';
   }
 
@@ -107,10 +107,10 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
 
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Baru saja';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
-    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
-    if (diff.inDays < 7) return '${diff.inDays} hari lalu';
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
     return _formatDate(dt);
   }
 
@@ -145,7 +145,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Text('Riwayat Login',
+        title: const Text('Login History',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
         actions: [
           IconButton(
@@ -224,7 +224,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.grey.shade50,
             child: const Text(
-              'Menampilkan $_limitMonths bulan terakhir',
+              'Showing the last $_limitMonths months',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 12,
@@ -342,7 +342,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
               color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: const Text('Terbaru',
+            child: const Text('Latest',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 10,
@@ -362,13 +362,13 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
           Icon(Icons.history_toggle_off_outlined,
               size: 64, color: AppColors.textHint),
           SizedBox(height: 16),
-          Text('Belum ada riwayat login',
+          Text('No login history yet',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 14,
                   color: AppColors.textSecondary)),
           SizedBox(height: 8),
-          Text('Riwayat login akan muncul\nsetelah staff login berikutnya',
+          Text('Login history will appear\nafter the staff member\'s next login',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontFamily: 'Poppins',
@@ -388,7 +388,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
           children: [
             const Icon(Icons.error_outline, color: Color(0xFFE94560), size: 48),
             const SizedBox(height: 12),
-            Text('Gagal memuat data:\n$_error',
+            Text('Failed to load data:\n$_error',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontFamily: 'Poppins',
@@ -397,7 +397,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
                 onPressed: _load,
-                child: const Text('Coba Lagi',
+                child: const Text('Try Again',
                     style: TextStyle(fontFamily: 'Poppins'))),
           ],
         ),

@@ -2,48 +2,48 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Edge Function: Midtrans Payment Notification Webhook
 //
-// Midtrans POST ke URL ini setiap kali status transaksi berubah:
-//   settlement → bayar berhasil
-//   pending    → menunggu
-//   deny/expire/cancel → gagal
+// Midtrans POSTs to this URL every time a transaction status changes:
+//   settlement → payment succeeded
+//   pending    → awaiting payment
+//   deny/expire/cancel → failed
 //
-// URL ini didaftarkan di:
+// This URL is registered at:
 //   Midtrans Dashboard → Settings → Configuration → Payment Notification URL
-//   Isi: https://pppxzbddfoeajwngbwdo.supabase.co/functions/v1/midtrans-webhook
+//   Value: https://pppxzbddfoeajwngbwdo.supabase.co/functions/v1/midtrans-webhook
 //
-// PERUBAHAN PENTING (mengikuti fix "order_id has already been taken"):
-//   `order_id` yang dikirim Midtrans di notifikasi ini SEKARANG adalah id
-//   UNIK per percobaan bayar (format "<uuid-order>-<timestamp>"), BUKAN lagi
-//   UUID asli row di tabel `orders`. Jadi:
-//     - LOOKUP order harus pakai kolom `midtrans_order_id` (bukan `id`)
-//     - Semua UPDATE/INSERT selanjutnya (orders, payments, order_items,
-//       restaurant_tables) harus pakai `order.id` (UUID asli hasil lookup),
-//       BUKAN `order_id` mentah dari notifikasi.
-//   Signature verification TETAP pakai `order_id` mentah dari notifikasi
-//   (jangan diubah) — karena itu memang nilai yang dipakai Midtrans saat
-//   menghitung signature di sisi mereka.
+// IMPORTANT CHANGE (following the "order_id has already been taken" fix):
+//   The `order_id` that Midtrans sends in this notification is NOW a
+//   UNIQUE id per payment attempt (format "<uuid-order>-<timestamp>"), no
+//   longer the actual UUID row in the `orders` table. So:
+//     - Order LOOKUP must use the `midtrans_order_id` column (not `id`)
+//     - All subsequent UPDATEs/INSERTs (orders, payments, order_items,
+//       restaurant_tables) must use `order.id` (the real UUID from the
+//       lookup), NOT the raw `order_id` from the notification.
+//   Signature verification STILL uses the raw `order_id` from the
+//   notification (do not change this) — because that is the value Midtrans
+//   actually uses when computing the signature on their end.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ✅ TIDAK ada import crypto — verifySignature pakai Web Crypto API built-in Deno
+// ✅ NO crypto import — verifySignature uses Deno's built-in Web Crypto API
 
-// Midtrans memanggil endpoint ini server-to-server (bukan dari browser), jadi
-// header CORS di sini sebenarnya tidak dipakai Midtrans — tapi tetap dibatasi
-// (bukan "*") sebagai defense-in-depth agar tidak bisa dipicu fetch() dari
-// sembarang origin browser.
+// Midtrans calls this endpoint server-to-server (not from a browser), so the
+// CORS headers here are not actually used by Midtrans — but they're still
+// restricted (not "*") as defense-in-depth, so it can't be triggered via
+// fetch() from an arbitrary browser origin.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://api.midtrans.com",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
 
-// ── Helper: verifikasi signature Midtrans ─────────────────────────────────────
-// Formula resmi Midtrans: SHA512(order_id + status_code + gross_amount + server_key)
-// BUKAN HMAC — plain SHA512 hash biasa.
-// PENTING: order_id di sini WAJIB nilai mentah dari notifikasi (yang versi
-// unik), karena itu yang dipakai Midtrans saat menghitung signature mereka.
+// ── Helper: verify the Midtrans signature ─────────────────────────────────────
+// Midtrans' official formula: SHA512(order_id + status_code + gross_amount + server_key)
+// NOT HMAC — a plain, regular SHA512 hash.
+// IMPORTANT: order_id here MUST be the raw value from the notification (the
+// unique version), because that is what Midtrans uses when computing their signature.
 async function verifySignature(
   orderId: string,
   statusCode: string,
@@ -59,7 +59,7 @@ async function verifySignature(
   return computed === receivedSignature;
 }
 
-// ── Helper: map Midtrans payment_type → metode kita ──────────────────────────
+// ── Helper: map Midtrans payment_type → our method ──────────────────────────
 function mapPaymentMethod(paymentType: string, vaBank?: string): string {
   switch (paymentType) {
     case "credit_card":         return "credit_card";
@@ -87,7 +87,7 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Midtrans kirim POST, tolak method lain
+  // Midtrans sends POST, reject other methods
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });
   }
@@ -97,14 +97,14 @@ serve(async (req: Request) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // ── 1. Parse notification body dari Midtrans ────────────────────────────
+    // ── 1. Parse the notification body from Midtrans ────────────────────────────
     const notification = await req.json();
     console.log("Midtrans webhook received:", JSON.stringify(notification));
 
     const {
-      order_id, // PENTING: ini id UNIK per percobaan ("<uuid>-<timestamp>"),
-                // BUKAN UUID asli orders.id. Dipakai untuk: (a) verifikasi
-                // signature, (b) lookup ke kolom `midtrans_order_id`.
+      order_id, // IMPORTANT: this is a UNIQUE id per attempt ("<uuid>-<timestamp>"),
+                // NOT the real orders.id UUID. Used for: (a) signature
+                // verification, (b) lookup against the `midtrans_order_id` column.
       transaction_id,
       transaction_status,
       fraud_status,
@@ -112,8 +112,8 @@ serve(async (req: Request) => {
       gross_amount,
       status_code,
       signature_key,
-      va_numbers,        // untuk bank transfer VA
-      acquirer,          // untuk QRIS
+      va_numbers,        // for bank transfer VA
+      acquirer,          // for QRIS
       settlement_time,
     } = notification;
 
@@ -124,12 +124,13 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 2. Verifikasi signature (keamanan — pastikan dari Midtrans beneran) ──
-    // Tetap pakai `order_id` MENTAH dari notifikasi (bukan order.id internal),
-    // karena itu yang dipakai Midtrans saat menghitung signature di sisi mereka.
-    // WAJIB ada & valid — tanpa signature_key, request DITOLAK (sebelumnya
-    // request tanpa signature_key lolos begitu saja, membuka celah pemalsuan
-    // notifikasi "settlement" langsung ke webhook ini).
+    // ── 2. Verify the signature (security — confirm it's really from Midtrans) ──
+    // Still uses the RAW `order_id` from the notification (not the internal
+    // order.id), because that's what Midtrans uses when computing their signature.
+    // MUST be present & valid — without signature_key, the request is REJECTED
+    // (previously a request without signature_key was let through as-is,
+    // opening a hole for forged "settlement" notifications sent directly
+    // to this webhook).
     if (!signature_key || !MIDTRANS_SERVER_KEY) {
       console.error("Missing signature_key or server key for order:", order_id);
       return new Response(
@@ -152,19 +153,19 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 3. Tentukan status final ────────────────────────────────────────────
+    // ── 3. Determine the final status ────────────────────────────────────────────
     //
     // Midtrans transaction_status:
-    //   capture   → kartu kredit, fraud_status harus "accept"
-    //   settlement→ semua metode lain yang sudah settled (LUNAS)
-    //   pending   → belum bayar, masih tunggu
-    //   deny      → kartu ditolak / fraud
-    //   expire    → waktu bayar habis
-    //   cancel    → dibatalkan
-    //   refund    → dikembalikan
+    //   capture   → credit card, fraud_status must be "accept"
+    //   settlement→ all other methods that have settled (PAID IN FULL)
+    //   pending   → not yet paid, still waiting
+    //   deny      → card declined / fraud
+    //   expire    → payment window expired
+    //   cancel    → cancelled
+    //   refund    → refunded
     //
     let isPaid = false;
-    let orderStatus: string | undefined; // undefined = jangan ubah status order
+    let orderStatus: string | undefined; // undefined = don't change the order status
     let paymentStatus = "pending";
 
     if (transaction_status === "capture" && fraud_status === "accept") {
@@ -180,21 +181,21 @@ serve(async (req: Request) => {
       transaction_status === "expire" ||
       transaction_status === "cancel"
     ) {
-      orderStatus = "served"; // kembalikan ke served supaya kasir bisa coba lagi
+      orderStatus = "served"; // revert to served so the cashier can retry
       paymentStatus = "failed";
     } else if (transaction_status === "refund") {
       orderStatus = "cancelled";
       paymentStatus = "refunded";
     }
-    // "pending" → orderStatus tetap undefined, jangan ubah status order
+    // "pending" → orderStatus stays undefined, don't change the order status
 
-    // ── 4. Inisialisasi Supabase client ────────────────────────────────────
+    // ── 4. Initialize the Supabase client ────────────────────────────────────
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // ── 5. Ambil data order dari DB ────────────────────────────────────────
-    // PENTING: lookup pakai kolom `midtrans_order_id` (id unik per percobaan
-    // yang disimpan saat createSnapToken), BUKAN `id` — karena `order_id`
-    // dari notifikasi ini bukan UUID asli orders.id lagi.
+    // ── 5. Fetch order data from the DB ────────────────────────────────────
+    // IMPORTANT: lookup uses the `midtrans_order_id` column (the unique id
+    // per attempt saved during createSnapToken), NOT `id` — because the
+    // `order_id` from this notification is no longer the real orders.id UUID.
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("id, status, table_id, branch_id, subtotal, tax_amount, discount_amount, total_amount")
@@ -203,29 +204,30 @@ serve(async (req: Request) => {
 
     if (orderError || !order) {
       console.error("Order not found for midtrans_order_id:", order_id, orderError);
-      // Return 200 tetap (agar Midtrans tidak retry terus)
+      // Still return 200 (so Midtrans doesn't keep retrying)
       return new Response(
         JSON.stringify({ message: "Order not found, acknowledged" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Mulai dari sini, SELALU pakai `order.id` (UUID asli) untuk
-    // update/insert ke tabel lain — bukan `order_id` dari notifikasi.
+    // From this point on, ALWAYS use `order.id` (the real UUID) for
+    // updates/inserts to other tables — not the `order_id` from the notification.
     const internalOrderId = order.id;
 
-    // ── 5b. Validasi gross_amount vs total order asli di DB ─────────────────
-    // Signature yang valid cuma membuktikan notifikasi datang dari Midtrans,
-    // BUKAN bahwa nominalnya benar. Tanpa ini, order bisa "dilunasi" dengan
-    // gross_amount berapa pun (mis. dimanipulasi sebelum sampai Midtrans, atau
-    // salah order_id) tanpa pernah dicocokkan ke total_amount order tsb.
+    // ── 5b. Validate gross_amount against the order's real total in the DB ─────────────────
+    // A valid signature only proves the notification came from Midtrans,
+    // NOT that the amount is correct. Without this check, an order could be
+    // "marked paid" with any gross_amount (e.g. tampered with before reaching
+    // Midtrans, or a mismatched order_id) without ever being checked against
+    // that order's total_amount.
     if (isPaid) {
       const expected = Number(order.total_amount);
       const received = Number(gross_amount);
       if (
         !Number.isFinite(expected) ||
         !Number.isFinite(received) ||
-        Math.abs(expected - received) > 1 // toleransi pembulatan Rp1
+        Math.abs(expected - received) > 1 // Rp1 rounding tolerance
       ) {
         console.error(
           `Amount mismatch for order ${internalOrderId}: expected=${expected} received=${received}`
@@ -237,7 +239,7 @@ serve(async (req: Request) => {
       }
     }
 
-    // Skip jika sudah paid (Midtrans kadang kirim duplicate notification)
+    // Skip if already paid (Midtrans sometimes sends duplicate notifications)
     if (order.status === "paid" && isPaid) {
       console.log("Order already paid, skipping:", internalOrderId);
       return new Response(
@@ -246,7 +248,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── 6. Update order di DB ──────────────────────────────────────────────
+    // ── 6. Update the order in the DB ──────────────────────────────────────────────
     const vaBank = va_numbers && va_numbers.length > 0 ? va_numbers[0].bank : undefined;
     const mappedMethod = mapPaymentMethod(payment_type, vaBank);
 
@@ -257,20 +259,20 @@ serve(async (req: Request) => {
       updated_at: new Date().toISOString(),
     };
 
-    // Status order ikut field `orderStatus` yang sudah ditentukan di step 3
-    // (paid / served / cancelled). Kalau masih "pending", orderStatus
-    // undefined → kolom `status` tidak ikut diupdate.
+    // Order status follows the `orderStatus` field determined in step 3
+    // (paid / served / cancelled). If still "pending", orderStatus is
+    // undefined → the `status` column is not updated.
     if (orderStatus) {
       orderUpdate.status = orderStatus;
     }
 
     await supabase.from("orders").update(orderUpdate).eq("id", internalOrderId);
 
-    // ── 6b. Refund: tandai payment asli jadi refunded ──────────────────────
-    // Sebelumnya notifikasi "refund" cuma mengubah orders.status/payment_status
-    // — baris di tabel `payments` yang sudah tercatat "paid" saat pembayaran
-    // awal TIDAK PERNAH diupdate, jadi revenue yang sudah di-refund tetap
-    // kehitung selamanya di semua query Reports yang filter payments.status='paid'.
+    // ── 6b. Refund: mark the original payment as refunded ──────────────────────
+    // Previously, a "refund" notification only changed orders.status/payment_status
+    // — the row in the `payments` table already recorded as "paid" from the
+    // original payment was NEVER updated, so refunded revenue kept being
+    // counted forever in every Reports query that filters payments.status='paid'.
     if (transaction_status === "refund") {
       await supabase
         .from("payments")
@@ -279,7 +281,7 @@ serve(async (req: Request) => {
         .eq("status", "paid");
     }
 
-    // ── 7. Insert payment record (hanya kalau paid) ────────────────────────
+    // ── 7. Insert payment record (only if paid) ────────────────────────
     if (isPaid) {
       const { data: existingPayment } = await supabase
         .from("payments")
@@ -312,7 +314,7 @@ serve(async (req: Request) => {
           .update({ status: "served" })
           .eq("order_id", internalOrderId);
 
-        // Bebaskan meja → cleaning
+        // Free up the table → cleaning
         if (order.table_id) {
           await supabase
             .from("restaurant_tables")
@@ -322,8 +324,8 @@ serve(async (req: Request) => {
       }
     }
 
-    // ── 8. Return 200 ke Midtrans ──────────────────────────────────────────
-    // Midtrans akan retry jika tidak dapat response 200
+    // ── 8. Return 200 to Midtrans ──────────────────────────────────────────
+    // Midtrans will retry if it doesn't get a 200 response
     console.log(
       `Webhook processed: order=${internalOrderId} midtrans_order_id=${order_id} status=${paymentStatus}`
     );
@@ -340,7 +342,7 @@ serve(async (req: Request) => {
     );
   } catch (err) {
     console.error("Webhook error:", err);
-    // Tetap return 200 agar Midtrans tidak spam retry
+    // Still return 200 so Midtrans doesn't spam retries
     return new Response(
       JSON.stringify({ message: "Error processed", error: String(err) }),
       {

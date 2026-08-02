@@ -1,10 +1,10 @@
 // lib/features/customer/services/sentiment_escalation_service.dart
 //
-// Alur:
-// 1. CustomerChatbotScreen panggil SentimentEscalationService.analyze(text)
-// 2. Jika sentiment == negative/urgent → escalate()
-// 3. escalate() → query manager tokens → kirim FCM via Vercel proxy → log ke Supabase
-// 4. notifyCustomerBooking() → query customer token → kirim FCM konfirmasi booking
+// Flow:
+// 1. CustomerChatbotScreen calls SentimentEscalationService.analyze(text)
+// 2. If sentiment == negative/urgent → escalate()
+// 3. escalate() → query manager tokens → send FCM via Vercel proxy → log to Supabase
+// 4. notifyCustomerBooking() → query customer token → send FCM booking confirmation
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -12,7 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/config/app_config.dart';
 
-// ── Hasil analisis sentiment ───────────────────────────────────────────
+// ── Sentiment analysis result ──────────────────────────────────────────
 enum SentimentLevel { neutral, negative, urgent }
 
 class SentimentResult {
@@ -41,7 +41,7 @@ class SentimentEscalationService {
     'tidak akan kembali', 'ga akan balik', 'lapor', 'review jelek',
   ];
 
-  /// Analisis sentiment dari teks customer.
+  /// Analyze sentiment from customer text.
   static SentimentResult analyze(String text) {
     final lower = text.toLowerCase();
 
@@ -49,7 +49,7 @@ class SentimentEscalationService {
       if (lower.contains(kw)) {
         return SentimentResult(
           level: SentimentLevel.urgent,
-          reason: 'Keyword urgent: "$kw"',
+          reason: 'Urgent keyword: "$kw"',
         );
       }
     }
@@ -66,16 +66,16 @@ class SentimentEscalationService {
     if (negativeHits >= 1) {
       return SentimentResult(
         level: SentimentLevel.negative,
-        reason: 'Keyword negatif: "$matchedKw" (+${negativeHits - 1} lainnya)',
+        reason: 'Negative keyword: "$matchedKw" (+${negativeHits - 1} more)',
       );
     }
 
     return const SentimentResult(level: SentimentLevel.neutral, reason: 'OK');
   }
 
-  // ── Notifikasi konfirmasi booking ke customer ──────────────────────
-  /// Dipanggil setelah booking berhasil dibuat & meja ter-assign.
-  /// Mengirim push notification ke device customer sebagai konfirmasi.
+  // ── Booking confirmation notification to customer ──────────────────
+  /// Called after a booking is successfully created & the table is assigned.
+  /// Sends a push notification to the customer's device as confirmation.
   static Future<void> notifyCustomerBooking({
     required String customerUserId,
     required String customerName,
@@ -86,30 +86,30 @@ class SentimentEscalationService {
     bool isWaitlisted = false,
   }) async {
     try {
-      // 1. Ambil FCM token customer
+      // 1. Get the customer's FCM token
       final tokens = await _getCustomerTokens(customerUserId);
       if (tokens.isEmpty) {
-        debugPrint('[Notify] Tidak ada token untuk customer $customerUserId');
+        debugPrint('[Notify] No token for customer $customerUserId');
         return;
       }
 
-      // 2. Susun pesan sesuai status booking
+      // 2. Compose the message based on booking status
       final String title;
       final String body;
 
       if (isWaitlisted) {
-        title = '📋 Reservasi Masuk Daftar Tunggu';
-        body = 'Hi $customerName! Reservasi $bookingDate pukul $bookingTime '
-            'untuk $guestCount orang masuk daftar tunggu. '
-            'Kami akan hubungi Anda jika ada meja tersedia.';
+        title = '📋 Reservation Added to Waitlist';
+        body = 'Hi $customerName! Your reservation for $bookingDate at $bookingTime '
+            'for $guestCount guest(s) has been added to the waitlist. '
+            'We will contact you if a table becomes available.';
       } else {
-        title = '✅ Reservasi Dikonfirmasi!';
-        body = 'Hi $customerName! Meja $tableNumber sudah disiapkan untuk '
-            '$guestCount orang pada $bookingDate pukul $bookingTime. '
-            'Sampai jumpa! 😊';
+        title = '✅ Reservation Confirmed!';
+        body = 'Hi $customerName! Table $tableNumber is ready for '
+            '$guestCount guest(s) on $bookingDate at $bookingTime. '
+            'See you soon! 😊';
       }
 
-      // 3. Kirim push notification
+      // 3. Send the push notification
       await _sendPushNotifications(
         tokens: tokens,
         title: title,
@@ -120,19 +120,19 @@ class SentimentEscalationService {
           'booking_time': bookingTime,
           'table_number': tableNumber,
           'is_waitlisted': isWaitlisted.toString(),
-          'screen': 'my_bookings', // Deep link ke halaman booking customer
+          'screen': 'my_bookings', // Deep link to the customer's bookings page
         },
       );
 
       debugPrint('[Notify] Booking confirmation sent to customer $customerUserId');
     } catch (e) {
       debugPrint('[Notify] notifyCustomerBooking error: $e');
-      // Jangan throw — gagal notif tidak boleh crash alur booking
+      // Don't throw — a failed notification must not crash the booking flow
     }
   }
 
-  // ── Eskalasi ke manager ────────────────────────────────────────────
-  /// Dipanggil hanya jika [result.shouldEscalate] == true.
+  // ── Escalation to manager ────────────────────────────────────────────
+  /// Called only if [result.shouldEscalate] == true.
   static Future<void> escalate({
     required String branchId,
     required String customerMessage,
@@ -143,7 +143,7 @@ class SentimentEscalationService {
     try {
       final tokens = await _getManagerTokens(branchId);
       if (tokens.isEmpty) {
-        debugPrint('[Sentiment] Tidak ada manager token untuk branch $branchId');
+        debugPrint('[Sentiment] No manager token for branch $branchId');
         return;
       }
 
@@ -151,8 +151,8 @@ class SentimentEscalationService {
       await _sendPushNotifications(
         tokens: tokens,
         title: isUrgent
-            ? '🚨 URGENT — Customer Butuh Bantuan!'
-            : '⚠️ Keluhan Customer',
+            ? '🚨 URGENT — Customer Needs Help!'
+            : '⚠️ Customer Complaint',
         body: _truncate(customerMessage, 100),
         data: {
           'type': isUrgent ? 'urgent_escalation' : 'sentiment_escalation',
@@ -171,13 +171,13 @@ class SentimentEscalationService {
         managersNotified: tokens.length,
       );
 
-      debugPrint('[Sentiment] Eskalasi selesai — ${tokens.length} manager dinotifikasi');
+      debugPrint('[Sentiment] Escalation complete — ${tokens.length} manager(s) notified');
     } catch (e) {
       debugPrint('[Sentiment] Escalation error: $e');
     }
   }
 
-  // ── Query FCM tokens customer ──────────────────────────────────────
+  // ── Query customer FCM tokens ────────────────────────────────────────
   static Future<List<String>> _getCustomerTokens(String userId) async {
     try {
       final tokenRes = await Supabase.instance.client
@@ -195,7 +195,7 @@ class SentimentEscalationService {
     }
   }
 
-  // ── Query FCM tokens manager ───────────────────────────────────────
+  // ── Query manager FCM tokens ─────────────────────────────────────────
   static Future<List<String>> _getManagerTokens(String branchId) async {
     try {
       final sb = Supabase.instance.client;
@@ -226,19 +226,20 @@ class SentimentEscalationService {
     }
   }
 
-  // ── Kirim push via FCM proxy di Vercel ────────────────────────────
+  // ── Send push via the FCM proxy on Vercel ──────────────────────────
   static Future<void> _sendPushNotifications({
     required List<String> tokens,
     required String title,
     required String body,
     required Map<String, String> data,
   }) async {
-    // Sama seperti ChatbotApi/customer_chatbot_screen — di build native tidak
-    // ada origin untuk path relatif '/api/notify', jadi harus nembak domain
-    // Vercel customer app eksplisit. Sebelumnya hardcode ke localhost:3000
-    // yang di HP asli selalu gagal, jadi push notif (eskalasi & konfirmasi
-    // booking) tidak pernah terkirim di luar dev lokal.
-    // Override dev lokal: `--dart-define=NOTIFY_API_BASE_URL=http://localhost:3000`
+    // Same as ChatbotApi/customer_chatbot_screen — native builds have no
+    // origin for the relative path '/api/notify', so we must hit the
+    // customer app's Vercel domain explicitly. It used to be hardcoded to
+    // localhost:3000, which always failed on real phones, so push
+    // notifications (escalation & booking confirmation) never got sent
+    // outside of local dev.
+    // Local dev override: `--dart-define=NOTIFY_API_BASE_URL=http://localhost:3000`
     final String proxyUrl;
     if (kIsWeb) {
       proxyUrl = '/api/notify';
@@ -266,7 +267,7 @@ class SentimentEscalationService {
     }
   }
 
-  // ── Log ke Supabase ────────────────────────────────────────────────
+  // ── Log to Supabase ──────────────────────────────────────────────────
   static Future<void> _logEscalation({
     required String branchId,
     required String customerMessage,

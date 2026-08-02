@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_drawer.dart';
-import '../../../shared/models/order_model.dart'; // ← tambah ini
+import '../../../shared/models/order_model.dart'; // ← added this
 import '../providers/reports_provider.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
@@ -16,7 +16,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   @override
   void initState() {
     super.initState();
-    // Init provider setelah frame pertama selesai render
+    // Init the provider after the first frame finishes rendering
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(reportsProvider).init();
     });
@@ -55,7 +55,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 11,
@@ -87,39 +87,38 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // KPI row
-                  // Catatan penting: "Order Masuk" dihitung dari waktu ORDER
-                  // DIBUAT, sedangkan "Pendapatan" dihitung dari waktu
-                  // PEMBAYARAN SETTLE (tabel berbeda) — dua populasi yang
-                  // legitimately berbeda (order VA/QRIS bisa settle beberapa
-                  // menit-jam setelah dibuat), bukan bug — makanya diberi
-                  // subtitle eksplisit di sini supaya tidak disangka dua
-                  // angka yang seharusnya sama.
+                  // Important note: "Orders Received" is calculated from the time the
+                  // ORDER WAS CREATED, while "Revenue" is calculated from the time the
+                  // PAYMENT SETTLED (a different table) — two legitimately different
+                  // populations (VA/QRIS orders can settle several minutes to hours after
+                  // being created), not a bug — hence the explicit subtitle here so it's
+                  // not mistaken for two numbers that should match.
                   Row(children: [
-                    _kpiCard('Order Masuk', '${s.todayOrders}',
+                    _kpiCard('Orders Received', '${s.todayOrders}',
                         Icons.receipt_long, AppColors.primary,
-                        subtitle: 'order dibuat hari ini'),
+                        subtitle: 'orders created today'),
                     const SizedBox(width: 12),
                     _kpiCard(
-                        'Pendapatan',
+                        'Revenue',
                         _formatRupiahCompact(s.todayRevenue),
                         Icons.monetization_on_outlined,
                         _StatusColors.good,
-                        subtitle: 'pembayaran settle hari ini'),
+                        subtitle: 'payments settled today'),
                   ]),
                   const SizedBox(height: 12),
                   Row(children: [
-                    _kpiCard('Booking Hari Ini', '${s.todayBookings}',
+                    _kpiCard('Bookings Today', '${s.todayBookings}',
                         Icons.event_available, const Color(0xFF4A3AA7)),
                     const SizedBox(width: 12),
                     _kpiCard(
-                        'COGS Hari Ini',
+                        'COGS Today',
                         _formatRupiahCompact(s.todayCogs),
                         Icons.calculate_outlined,
                         const Color(0xFFEB6834)),
                   ]),
                   const SizedBox(height: 24),
 
-                  // Revenue chart — header + toggle periode
+                  // Revenue chart — header + period toggle
                   Row(
                     children: [
                       Expanded(
@@ -154,7 +153,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                         color: AppColors.textHint),
                                     const SizedBox(height: 8),
                                     Text(
-                                        'Belum ada transaksi\n${s.period.label.toLowerCase()}',
+                                        'No transactions yet\n${s.period.label.toLowerCase()}',
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
                                             fontFamily: 'Poppins',
@@ -185,7 +184,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   if (s.isSuperAdmin) const SizedBox(height: 24),
 
                   // Recent orders
-                  const Text('Order Terbaru',
+                  const Text('Recent Orders',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w700,
@@ -215,7 +214,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           ),
                           title: Text(
                             o.tableNumber != null
-                                ? 'Meja ${o.tableNumber}'
+                                ? 'Table ${o.tableNumber}'
                                 : 'Takeaway',
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
@@ -233,12 +232,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                             style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontWeight: FontWeight.w700,
-                                // Order yang belum/tidak lunas ditampilkan
-                                // dengan tinta netral (bukan warna accent
-                                // yang sama seperti order lunas) — sebelumnya
-                                // semua order di daftar ini (termasuk yang
-                                // dibatalkan/belum bayar) diberi bobot visual
-                                // sama seperti order yang benar-benar lunas.
+                                // Orders that are unpaid/not settled are shown
+                                // in a neutral ink color (not the same accent
+                                // color as paid orders) — previously all orders
+                                // in this list (including cancelled/unpaid ones)
+                                // were given the same visual weight as orders
+                                // that were actually paid.
                                 color: o.status == OrderStatus.paid
                                     ? AppColors.accent
                                     : AppColors.textHint),
@@ -317,15 +316,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 }
 
-// ── Helper: cek apakah semua nilai revenue 7 hari = 0 ──────────────────────
+// ── Helper: check whether all 7-day revenue values are 0 ──────────────────
 //
-// Dipakai untuk empty-state chart. revenueSpots dari provider SELALU
-// berisi 7 entri (hari tanpa transaksi diisi 0), jadi tidak bisa pakai
-// .isEmpty untuk deteksi "tidak ada data" — harus cek total/jumlahnya.
+// Used for the chart's empty state. revenueSpots from the provider ALWAYS
+// contains 7 entries (days without transactions are filled with 0), so
+// .isEmpty can't be used to detect "no data" — the total/sum must be checked.
 bool _allZero(List<FlSpot> spots) =>
     spots.isEmpty || spots.every((s) => s.y == 0);
 
-// ── Helper: format Rupiah dengan pemisah ribuan, tanpa perlu intl locale ────
+// ── Helper: format Rupiah with thousands separators, no intl locale needed ──
 String _formatRupiah(num value) {
   final rounded = value.round();
   final isNegative = rounded < 0;
@@ -338,21 +337,21 @@ String _formatRupiah(num value) {
   return '${isNegative ? '-' : ''}Rp$buffer';
 }
 
-// ── Helper: format Rupiah RINGKAS (rb/jt) — SATU-SATUNYA versi ringkas ─────
+// ── Helper: format Rupiah COMPACTLY (K/M) — THE ONLY compact version ──────
 //
-// Sebelumnya ada 3 implementasi pembulatan berbeda tersebar di layar ini
-// (_fmtRev di top menu, _fmtRp di margin row, _fmtRp di branch revenue) —
-// disatukan supaya angka yang sama selalu tampil dengan format yang sama
-// di seluruh dashboard.
+// Previously there were 3 different rounding implementations scattered
+// across this screen (_fmtRev in top menu, _fmtRp in margin row, _fmtRp in
+// branch revenue) — unified so the same number always shows in the same
+// format across the whole dashboard.
 String _formatRupiahCompact(num value) {
   final v = value.toDouble();
-  if (v.abs() >= 1000000) return 'Rp${(v / 1000000).toStringAsFixed(1)}jt';
-  if (v.abs() >= 1000) return 'Rp${(v / 1000).toStringAsFixed(0)}rb';
+  if (v.abs() >= 1000000) return 'Rp${(v / 1000000).toStringAsFixed(1)}M';
+  if (v.abs() >= 1000) return 'Rp${(v / 1000).toStringAsFixed(0)}K';
   return _formatRupiah(v);
 }
 
-// ── Status semantik (good/warning/critical) — dipakai konsisten untuk
-// margin menu & status order, bukan warna kategori/rank ─────────────────
+// ── Semantic status (good/warning/critical) — used consistently for
+// menu margin & order status, not category/rank color ─────────────────
 class _StatusColors {
   static const good = Color(0xFF0CA30C);
   static const warning = Color(0xFFFAB219);
@@ -361,35 +360,35 @@ class _StatusColors {
 
 // ── Revenue Bar Chart ────────────────────────────────────────────────────────
 //
-// Dipilih Bar Chart (bukan Line Chart) karena data revenue harian itu
-// DISKRIT — tiap hari adalah angka berdiri sendiri, bukan rangkaian
-// kontinu. Line chart menyiratkan ada "alur"/interpolasi antar titik yang
-// sebenarnya tidak relevan secara analitis untuk perbandingan per-hari.
+// A Bar Chart (not a Line Chart) was chosen because daily revenue data is
+// DISCRETE — each day is a standalone number, not a continuous series.
+// A line chart implies a "flow"/interpolation between points that isn't
+// actually analytically relevant for day-by-day comparison.
 //
-// Perbaikan dibanding versi LineChart sebelumnya:
-//   • Grid HANYA horizontal (drawVerticalLine: false) → tidak ada lagi
-//     garis-garis vertikal yang membuat chart terlihat penuh & membingungkan
-//   • Label sumbu-X pakai TANGGAL ASLI (bukan "Sen/Sel/Rab" generik yang
-//     ambigu) + interval:1 supaya tidak dobel/tumpang-tindih
-//   • Bar "Hari Ini" diberi warna beda (accent) supaya langsung kelihatan
-//     mana performa hari ini vs riwayat 6 hari sebelumnya
-//   • Tooltip saat disentuh menampilkan nominal Rupiah ASLI (bukan cuma
-//     skala "rb") untuk kebutuhan drill-down analitis
+// Improvements over the previous LineChart version:
+//   • Grid is horizontal ONLY (drawVerticalLine: false) → no more vertical
+//     lines making the chart look cluttered & confusing
+//   • X-axis labels use the ACTUAL DATE (not the generic, ambiguous
+//     "Mon/Tue/Wed") + interval:1 so they don't double up/overlap
+//   • The "Today" bar is given a different color (accent) so it's
+//     immediately clear how today's performance compares to the previous 6 days
+//   • The tooltip on touch shows the ACTUAL Rupiah amount (not just the
+//     "K" scale) for analytical drill-down needs
 class _RevenueBarChart extends StatelessWidget {
   const _RevenueBarChart({required this.spots, this.periodDays = 7});
 
-  final List<FlSpot> spots; // x: index 0(n-1 hari lalu)..(n-1)(hari ini), y: ribuan
+  final List<FlSpot> spots; // x: index 0(n-1 days ago)..(n-1)(today), y: thousands
   final int periodDays;
 
   @override
   Widget build(BuildContext context) {
     final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
-    // Beri headroom 25% di atas nilai tertinggi supaya bar tidak mepet atap.
+    // Give 25% headroom above the highest value so bars don't touch the top.
     final chartMaxY = maxY <= 0 ? 1.0 : maxY * 1.25;
     final today = DateTime.now();
     const weekdayShort = [
-      'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'
-    ]; // index sesuai DateTime.weekday - 1
+      'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
+    ]; // index matches DateTime.weekday - 1
 
     return BarChart(
       BarChartData(
@@ -397,7 +396,7 @@ class _RevenueBarChart extends StatelessWidget {
         alignment: BarChartAlignment.spaceAround,
         gridData: FlGridData(
           show: true,
-          drawVerticalLine: false, // ← hilangkan garis vertikal yang ramai
+          drawVerticalLine: false, // ← remove the cluttered vertical lines
           horizontalInterval: chartMaxY / 4,
           getDrawingHorizontalLine: (_) => const FlLine(
             color: AppColors.border,
@@ -416,7 +415,7 @@ class _RevenueBarChart extends StatelessWidget {
               reservedSize: 40,
               interval: chartMaxY / 4 == 0 ? 1 : chartMaxY / 4,
               getTitlesWidget: (v, _) => Text(
-                v == 0 ? '0' : '${v.toStringAsFixed(0)}rb',
+                v == 0 ? '0' : '${v.toStringAsFixed(0)}K',
                 style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 10,
@@ -427,12 +426,12 @@ class _RevenueBarChart extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              interval: 1, // ← fix utama: cegah label dobel/tumpang-tindih
+              interval: 1, // ← main fix: prevent double/overlapping labels
               getTitlesWidget: (v, _) {
                 final idx = v.toInt();
                 if (idx < 0 || idx >= periodDays) return const SizedBox();
                 final date = today.subtract(Duration(days: periodDays - 1 - idx));
-                // Untuk bulan (30 hari): tampilkan label setiap 5 hari agar tidak penuh
+                // For monthly view (30 days): show a label every 5 days so it isn't crowded
                 if (periodDays > 7 && idx % 5 != 0 && idx != periodDays - 1) {
                   return const SizedBox();
                 }
@@ -560,10 +559,10 @@ class _TopMenuSection extends StatefulWidget {
 }
 
 class _TopMenuSectionState extends State<_TopMenuSection> {
-  String _selectedCategory = 'Semua';
+  String _selectedCategory = 'All';
 
   List<Map<String, dynamic>> get _filtered {
-    final list = _selectedCategory == 'Semua'
+    final list = _selectedCategory == 'All'
         ? widget.topMenus
         : widget.topMenus
             .where((m) => m['category'] == _selectedCategory)
@@ -588,7 +587,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
             child: Padding(
               padding: EdgeInsets.all(32),
               child: Center(
-                child: Text('Belum ada data untuk kategori ini',
+                child: Text('No data yet for this category',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 13,
@@ -601,17 +600,17 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
     }
 
     final maxQty = (filtered.first['qty'] as int).toDouble();
-    // Interval grid: bulatkan ke angka yang enak dibaca
+    // Grid interval: round to a nice, readable number
     double gridInterval = (maxQty / 4).ceilToDouble();
     if (gridInterval == 0) gridInterval = 1;
-    // Bulatkan ke kelipatan 5, 10, 25, 50, 100 dst supaya lebih rapi
+    // Round to a multiple of 5, 10, 25, 50, 100 etc. for tidiness
     final nice = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
     for (final n in nice) {
       if (gridInterval <= n) { gridInterval = n.toDouble(); break; }
     }
-    final chartMaxY = gridInterval * 5; // selalu 5 baris grid
+    final chartMaxY = gridInterval * 5; // always 5 grid rows
 
-    // Tinggi chart: min 200, max ~320 — cukup untuk 10 bar
+    // Chart height: min 200, max ~320 — enough for 10 bars
     final chartHeight = (filtered.length * 38.0).clamp(200.0, 320.0);
 
     return Column(
@@ -625,7 +624,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
             child: SizedBox(
-              height: chartHeight + 60, // +60 untuk label bawah
+              height: chartHeight + 60, // +60 for the bottom label
               child: BarChart(
                 BarChartData(
                   maxY: chartMaxY,
@@ -636,7 +635,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                       getTooltipItem: (group, _, rod, __) {
                         final item = filtered[group.x];
                         return BarTooltipItem(
-                          '${item['name']}\n${rod.toY.toInt()} terjual\n${_formatRupiahCompact(item['revenue'] as double)}',
+                          '${item['name']}\n${rod.toY.toInt()} sold\n${_formatRupiahCompact(item['revenue'] as double)}',
                           const TextStyle(
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w600,
@@ -689,7 +688,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                             return const SizedBox();
                           }
                           final name = filtered[idx]['name'] as String;
-                          // Potong nama panjang: maks 2 baris @ 8 karakter
+                          // Truncate long names: max 2 lines @ 8 characters
                           final words = name.split(' ');
                           final lines = <String>[];
                           var line = '';
@@ -724,14 +723,14 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                     final idx = entry.key;
                     final item = entry.value;
                     final qty = (item['qty'] as int).toDouble();
-                    // SATU warna konsisten untuk semua bar — rank/posisi
-                    // top-3 ditunjukkan lewat panjang bar + medali di legend
-                    // di bawah chart, BUKAN lewat warna. Sebelumnya top-3
-                    // dikasih hue beda (emas/perak/perunggu): kalau filter
-                    // kategori berubah dan item lain naik ke top-3, warnanya
-                    // ikut "berpindah" ke item itu — warna jadi mengikuti
-                    // RANK, bukan identitas menu, yang bikin re-color
-                    // membingungkan tiap kali filter diganti.
+                    // ONE consistent color for all bars — top-3 rank/position
+                    // is shown via bar length + medals in the legend below the
+                    // chart, NOT via color. Previously the top-3 were given
+                    // different hues (gold/silver/bronze): if the category filter
+                    // changed and a different item rose into the top-3, the
+                    // color would "move" to that item — color followed RANK
+                    // instead of menu identity, which made the re-coloring
+                    // confusing every time the filter changed.
                     return BarChartGroupData(
                       x: idx,
                       barRods: [
@@ -756,7 +755,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
             ),
           ),
         ),
-        // Legend singkat: rank 1-3 & total item
+        // Short legend: rank 1-3 & item totals
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
           child: Wrap(
@@ -771,7 +770,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                   Text(medals[e.key],
                       style: const TextStyle(fontSize: 13)),
                   const SizedBox(width: 4),
-                  Text('${item['name']} — ${item['qty']} terjual',
+                  Text('${item['name']} — ${item['qty']} sold',
                       style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 11,
@@ -785,7 +784,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
     );
   }
 
-  Widget _header() => Text('🏆 Menu Terlaris · ${widget.period.label}',
+  Widget _header() => Text('🏆 Best-Selling Menu · ${widget.period.label}',
       style: const TextStyle(
           fontFamily: 'Poppins',
           fontWeight: FontWeight.w700,
@@ -836,7 +835,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
 }
 
 // ── Menu Margin Section ───────────────────────────────────────────────────────
-// (tidak ada perubahan logic di sini, hanya subtitle description diupdate)
+// (no logic changes here, only the subtitle description was updated)
 
 class _MenuMarginSection extends StatelessWidget {
   final List<Map<String, dynamic>> menuMargins;
@@ -860,9 +859,9 @@ class _MenuMarginSection extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 fontSize: 16)),
         const SizedBox(height: 4),
-        // Subtitle diupdate: sekarang datanya dari costingProvider
+        // Subtitle updated: data now comes from costingProvider
         const Text(
-          'Berdasarkan HPP dari modul costing',
+          'Based on COGS from the costing module',
           style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 11,
@@ -875,7 +874,7 @@ class _MenuMarginSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('🟢 Margin Tertinggi',
+                const Text('🟢 Highest Margin',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
@@ -895,7 +894,7 @@ class _MenuMarginSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🔴 Perlu Perhatian (Margin Rendah)',
+                  const Text('🔴 Needs Attention (Low Margin)',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w600,
@@ -924,26 +923,27 @@ class _MarginRow extends StatelessWidget {
     final cogs = item['cogs'] as double;
     final margin = item['margin'] as double;
 
-    // Status good/warning/critical dari palet tervalidasi — dipakai sebagai
-    // warna IKON saja, bukan warna teks. Hex warning (#FAB219) kontrasnya
-    // cuma ~1.8:1 di atas putih (di bawah ambang baca teks kecil) — teks
-    // persentase sengaja tetap warna tinta netral (textPrimary), semantik
-    // dibawa oleh ikon + label kata, bukan warna teks itu sendiri.
+    // good/warning/critical status from the validated palette — used as the
+    // ICON color only, not the text color. The warning hex (#FAB219) has a
+    // contrast of only ~1.8:1 on white (below the readability threshold for
+    // small text) — the percentage text intentionally stays a neutral ink
+    // color (textPrimary); the semantics are carried by the icon + word
+    // label, not the text color itself.
     final IconData statusIcon;
     final Color statusColor;
     final String statusLabel;
     if (margin >= 50) {
       statusIcon = Icons.check_circle;
       statusColor = _StatusColors.good;
-      statusLabel = 'Sehat';
+      statusLabel = 'Healthy';
     } else if (margin >= 30) {
       statusIcon = Icons.warning_rounded;
       statusColor = _StatusColors.warning;
-      statusLabel = 'Perlu Diawasi';
+      statusLabel = 'Needs Monitoring';
     } else {
       statusIcon = Icons.error_rounded;
       statusColor = _StatusColors.critical;
-      statusLabel = 'Kritis';
+      statusLabel = 'Critical';
     }
 
     return Padding(
@@ -988,7 +988,7 @@ class _MarginRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
                 Text(
-                  'Jual ${_formatRupiah(price)}  •  COGS ${cogs > 0 ? _formatRupiah(cogs) : "belum diisi"}  •  $statusLabel',
+                  'Sell ${_formatRupiah(price)}  •  COGS ${cogs > 0 ? _formatRupiah(cogs) : "not set"}  •  $statusLabel',
                   style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 11,
@@ -1005,12 +1005,13 @@ class _MarginRow extends StatelessWidget {
 
 // ── Branch Revenue Section ────────────────────────────────────────────────────
 //
-// Sebelumnya dirender pakai LinearProgressIndicator bertumpuk — bukan chart
-// fl_chart sungguhan, jadi tidak dapat gridline/tooltip/skala yang konsisten
-// dengan 2 chart lain di dashboard ini. Diganti BarChart vertikal dengan
-// bahasa visual SAMA seperti Revenue Trend & Menu Terlaris (1 warna brand
-// konsisten, grid horizontal tipis, tooltip nominal penuh saat disentuh) —
-// cabang #1 ditandai lewat mahkota+bold di legend, BUKAN lewat hue berbeda.
+// Previously rendered with stacked LinearProgressIndicators — not a real
+// fl_chart chart, so it lacked the gridlines/tooltip/scale consistent with
+// the other 2 charts on this dashboard. Replaced with a vertical BarChart
+// using the SAME visual language as Revenue Trend & Best-Selling Menu (1
+// consistent brand color, thin horizontal grid, full nominal tooltip on
+// touch) — branch #1 is marked via a crown+bold in the legend, NOT via a
+// different hue.
 
 class _BranchRevenueSection extends StatelessWidget {
   final List<Map<String, dynamic>> branchRevenue;
@@ -1028,13 +1029,13 @@ class _BranchRevenueSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('🏪 Perbandingan Cabang',
+        const Text('🏪 Branch Comparison',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
                 fontSize: 16)),
         const SizedBox(height: 4),
-        const Text('Revenue bulan ini per cabang',
+        const Text('This month\'s revenue per branch',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
@@ -1144,7 +1145,7 @@ class _BranchRevenueSection extends StatelessWidget {
             ),
           ),
         ),
-        // Cabang #1 ditandai lewat label, bukan warna beda di chart.
+        // Branch #1 is marked via a label, not a different color in the chart.
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
           child: Row(
@@ -1152,7 +1153,7 @@ class _BranchRevenueSection extends StatelessWidget {
               const Text('👑 ', style: TextStyle(fontSize: 13)),
               Flexible(
                 child: Text(
-                  '${branchRevenue.first['name']} — ${_formatRupiah(branchRevenue.first['revenue'] as double)} bulan ini',
+                  '${branchRevenue.first['name']} — ${_formatRupiah(branchRevenue.first['revenue'] as double)} this month',
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontFamily: 'Poppins',

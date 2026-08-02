@@ -19,7 +19,7 @@ class QrPaymentScreen extends ConsumerStatefulWidget {
 class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
   QrPaymentMethod _selected = QrPaymentMethod.kasir;
   bool _isSubmitting = false;
-  String _orderNotes = ''; // ✅ FIX: state untuk notes
+  String _orderNotes = ''; // ✅ FIX: state for notes
 
   Future<void> _submitOrder() async {
     if (_isSubmitting) return;
@@ -36,7 +36,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Branch ID tidak ditemukan. Silakan scan ulang QR meja.'),
+            content: Text('Branch ID not found. Please rescan the table QR code.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -47,7 +47,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     final repo = ref.read(qrOrderRepositoryProvider);
 
     try {
-      // ✅ FIX: kirim notes ke createOrder
+      // ✅ FIX: send notes to createOrder
       final order = await repo.createOrder(
         session: cart,
         branchId: branchId,
@@ -72,11 +72,11 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
             'tableId': widget.tableId,
           });
         } else {
-          // ✅ FLOW BARU: langsung ke tracker, bayar setelah makan
+          // ✅ NEW FLOW: go straight to the tracker, pay after dining
           context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Pesanan #${order.queueNumber} dikirim ke dapur! Bayar ke kasir setelah makan.'),
+              content: Text('Order #${order.queueNumber} sent to the kitchen! Pay at the cashier after dining.'),
               backgroundColor: Colors.green,
             ),
           );
@@ -85,7 +85,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal membuat pesanan: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed to create order: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -102,7 +102,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: const Text('Pembayaran'),
+        title: const Text('Payment'),
         leading: BackButton(onPressed: () => context.pop()),
       ),
       body: CustomScrollView(
@@ -120,16 +120,16 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Metode Pembayaran',
+                  Text('Payment Method',
                       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   _PaymentMethodCard(
                     method: QrPaymentMethod.kasir,
                     selected: _selected,
-                    title: 'Bayar ke Kasir',
-                    subtitle: 'Bayar tunai atau kartu di kasir',
+                    title: 'Pay at Cashier',
+                    subtitle: 'Pay with cash or card at the cashier',
                     icon: Icons.point_of_sale_outlined,
-                    badge: 'Rekomendasi',
+                    badge: 'Recommended',
                     onTap: () => setState(() => _selected = QrPaymentMethod.kasir),
                   ),
                   const SizedBox(height: 10),
@@ -137,7 +137,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
                     method: QrPaymentMethod.qris,
                     selected: _selected,
                     title: 'QRIS',
-                    subtitle: 'Scan QR code untuk bayar digital',
+                    subtitle: 'Scan the QR code for digital payment',
                     icon: Icons.qr_code_scanner_outlined,
                     onTap: () => setState(() => _selected = QrPaymentMethod.qris),
                   ),
@@ -154,7 +154,7 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
               ),
             ),
 
-          // ✅ FIX: sambungkan onChanged ke _orderNotes
+          // ✅ FIX: connect onChanged to _orderNotes
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
@@ -209,10 +209,10 @@ class _OrderPreviewCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Ringkasan Pesanan',
+                  Text('Order Summary',
                       style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
                   Text(
-                    '${cart.tableName ?? "Meja"} · ${cart.customerName ?? "Tamu"}',
+                    '${cart.tableName ?? "Table"} · ${cart.customerName ?? "Guest"}',
                     style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline),
                   ),
                 ],
@@ -245,7 +245,7 @@ class _OrderPreviewCard extends StatelessWidget {
 
           if (cart.items.length > 3)
             Text(
-              '+${cart.items.length - 3} item lainnya',
+              '+${cart.items.length - 3} more item(s)',
               style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline),
             ),
 
@@ -261,7 +261,7 @@ class _OrderPreviewCard extends StatelessWidget {
           const SizedBox(height: 4),
           Row(
             children: [
-              Text('PPN (11%)', style: theme.textTheme.bodyMedium),
+              Text('VAT (11%)', style: theme.textTheme.bodyMedium),
               const Spacer(),
               Text(_formatPrice(cart.taxAmount), style: theme.textTheme.bodyMedium),
             ],
@@ -433,7 +433,7 @@ class _QrisInfoCard extends StatelessWidget {
               Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
               const SizedBox(width: 6),
               Text(
-                'Cara Bayar QRIS',
+                'How to Pay with QRIS',
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: Colors.blue.shade700,
                   fontWeight: FontWeight.bold,
@@ -442,13 +442,13 @@ class _QrisInfoCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          const _QrisStep(number: '1', text: 'Tekan tombol "Konfirmasi Pesanan" di bawah'),
-          const _QrisStep(number: '2', text: 'Tunjukkan nomor antrian ke kasir'),
-          const _QrisStep(number: '3', text: 'Kasir akan menampilkan QRIS'),
-          const _QrisStep(number: '4', text: 'Scan QR dengan aplikasi dompet digitalmu'),
+          const _QrisStep(number: '1', text: 'Tap the "Confirm Order" button below'),
+          const _QrisStep(number: '2', text: 'Show your queue number to the cashier'),
+          const _QrisStep(number: '3', text: 'The cashier will display the QRIS code'),
+          const _QrisStep(number: '4', text: 'Scan the QR code with your digital wallet app'),
           const _QrisStep(
               number: '5',
-              text: 'Order otomatis diproses setelah pembayaran dikonfirmasi kasir'),
+              text: 'The order is processed automatically once the cashier confirms payment'),
         ],
       ),
     );
@@ -521,7 +521,7 @@ class _NotesSection extends StatelessWidget {
               Icon(Icons.edit_note_outlined, size: 18, color: colorScheme.primary),
               const SizedBox(width: 8),
               Text(
-                'Catatan (Opsional)',
+                'Notes (Optional)',
                 style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
             ],
@@ -531,7 +531,7 @@ class _NotesSection extends StatelessWidget {
             onChanged: onChanged,
             maxLines: 3,
             decoration: InputDecoration(
-              hintText: 'Contoh: tidak pedas, alergi kacang, dll...',
+              hintText: 'Example: not spicy, nut allergy, etc...',
               filled: true,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -576,7 +576,7 @@ class _PaymentBottomBar extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Total Pembayaran',
+              Text('Total Payment',
                   style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.outline)),
               const Spacer(),
               Text(
@@ -610,7 +610,7 @@ class _PaymentBottomBar extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         ),
                         SizedBox(width: 10),
-                        Text('Memproses...'),
+                        Text('Processing...'),
                       ],
                     )
                   : Row(
@@ -625,8 +625,8 @@ class _PaymentBottomBar extends StatelessWidget {
                         const SizedBox(width: 8),
                         Text(
                           method == QrPaymentMethod.qris
-                              ? 'Konfirmasi & Bayar QRIS'
-                              : 'Konfirmasi Pesanan',
+                              ? 'Confirm & Pay with QRIS'
+                              : 'Confirm Order',
                           style:
                               theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
                         ),
@@ -666,7 +666,7 @@ class QrQrisScreen extends StatelessWidget {
         "00020101021126670016ID.CO.BANKMANDIRI01189360001100000000000215200000000000000303IDR0109${totalAmount.toInt()}5200000115300036058202ID5915Restoran A1 Kartika6007Jakarta6105123456304XXXX";
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bayar dengan QRIS')),
+      appBar: AppBar(title: const Text('Pay with QRIS')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -678,7 +678,7 @@ class QrQrisScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    const Text('Total yang harus dibayar', style: TextStyle(fontSize: 16)),
+                    const Text('Total amount due', style: TextStyle(fontSize: 16)),
                     const SizedBox(height: 8),
                     Text(
                       'Rp ${totalAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
@@ -708,7 +708,7 @@ class QrQrisScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             const Text(
-              'Scan QRIS ini menggunakan aplikasi\nbank atau e-wallet kamu',
+              'Scan this QRIS code using your\nbank or e-wallet app',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16, height: 1.4),
             ),
@@ -722,13 +722,13 @@ class QrQrisScreen extends StatelessWidget {
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Cara Membayar:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('How to Pay:', style: TextStyle(fontWeight: FontWeight.bold)),
                   SizedBox(height: 12),
-                  Text('1. Buka aplikasi bank / dompet digital'),
-                  Text('2. Pilih menu Scan QR'),
-                  Text('3. Arahkan kamera ke QR code di atas'),
-                  Text('4. Nominal akan muncul otomatis'),
-                  Text('5. Konfirmasi pembayaran'),
+                  Text('1. Open your bank / e-wallet app'),
+                  Text('2. Select the Scan QR menu'),
+                  Text('3. Point your camera at the QR code above'),
+                  Text('4. The amount will appear automatically'),
+                  Text('5. Confirm the payment'),
                 ],
               ),
             ),
@@ -736,7 +736,7 @@ class QrQrisScreen extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: () => context.go('/qr/$tableId/track/$orderId'),
               icon: const Icon(Icons.receipt_long),
-              label: const Text('Lihat Status Pesanan'),
+              label: const Text('View Order Status'),
               style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
             ),
           ],

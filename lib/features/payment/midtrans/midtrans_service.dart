@@ -1,12 +1,12 @@
 // lib/features/payment/midtrans/midtrans_service.dart
 // ─────────────────────────────────────────────────────────────────────────────
 // Midtrans Service
-// Bertanggung jawab:
-//   1. Panggil Edge Function midtrans-create-token → dapat snap_token
-//   2. Buka Midtrans Snap UI:
+// Responsible for:
+//   1. Calling the midtrans-create-token Edge Function → getting a snap_token
+//   2. Opening the Midtrans Snap UI:
 //        • Web    → MidtransWebService (snap.js via dart:js_interop)
 //        • Mobile → midtrans_sdk native
-//   3. Handle result: success / pending / failed
+//   3. Handling the result: success / pending / failed
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'dart:async';
@@ -28,19 +28,19 @@ import 'midtrans_web_stub.dart'
 class MidtransService {
   static MidtransSDK? _sdk;
 
-  // ── Inisialisasi ──────────────────────────────────────────────────────────
+  // ── Initialization ──────────────────────────────────────────────────────────
   //
-  // Web    → inject snap.js dari CDN Midtrans (via MidtransWebService)
-  // Mobile → init native SDK (midtrans_sdk)
+  // Web    → inject snap.js from the Midtrans CDN (via MidtransWebService)
+  // Mobile → init the native SDK (midtrans_sdk)
   //
-  // Di main.dart sudah dipanggil dengan guard !kIsWeb untuk mobile.
-  // Untuk web, MidtransWebService juga bisa lazy-init saat pay() pertama kali.
+  // Already called in main.dart with a !kIsWeb guard for mobile.
+  // For web, MidtransWebService can also lazy-init on the first pay() call.
   static Future<void> initialize({
     required String clientKey,
     required bool isProduction,
   }) async {
     if (kIsWeb) {
-      // Web: preload snap.js supaya tidak delay saat user klik "Bayar"
+      // Web: preload snap.js so there's no delay when the user taps "Pay"
       await MidtransWebService.initialize(
         clientKey: clientKey,
         isProduction: isProduction,
@@ -52,12 +52,12 @@ class MidtransService {
     _sdk = await MidtransSDK.init(
       config: MidtransConfig(
         clientKey: clientKey,
-        merchantBaseUrl: '', // kosong karena kita pakai Edge Function
+        merchantBaseUrl: '', // empty because we use the Edge Function
         enableLog: !isProduction,
       ),
     );
 
-    // Log callback untuk debugging (tidak dipakai untuk update DB)
+    // Log callback for debugging (not used to update the DB)
     _sdk!.setTransactionFinishedCallback((result) {
       debugPrint(
         '[Midtrans] callback: status=${result.status}, '
@@ -68,20 +68,20 @@ class MidtransService {
     });
   }
 
-  // ── Buat Snap Token via Edge Function ─────────────────────────────────────
+  // ── Create Snap Token via Edge Function ─────────────────────────────────────
   //
-  // PENTING: Midtrans WAJIB gross_amount === sum(item_details.price * qty).
-  // Sebelumnya `items` hanya berisi menu (subtotal), sedangkan `gross_amount`
-  // dikirim dari `order.totalAmount` yang sudah termasuk service charge,
-  // PB1/pajak, & diskon → menyebabkan mismatch dan Edge Function menolak
-  // request (400 Bad Request, error_messages: "gross_amount is not equal to
-  // the sum of item_details").
+  // IMPORTANT: Midtrans REQUIRES gross_amount === sum(item_details.price * qty).
+  // Previously `items` only contained menu entries (subtotal), while
+  // `gross_amount` was sent from `order.totalAmount`, which already included
+  // service charge, PB1/tax, & discount → causing a mismatch and the Edge
+  // Function rejecting the request (400 Bad Request, error_messages:
+  // "gross_amount is not equal to the sum of item_details").
   //
-  // Fix: service charge, pajak, & diskon ikut dikirim sebagai item_details
-  // tersendiri, dan gross_amount dihitung dari penjumlahan item_details yang
-  // sama (bukan dihitung independen dari order.totalAmount). Dengan begitu
-  // dua nilai itu dijamin selalu sinkron, termasuk kalau ada selisih
-  // pembulatan rupiah.
+  // Fix: service charge, tax, & discount are now sent as their own
+  // item_details entries, and gross_amount is computed from the sum of those
+  // same item_details (not computed independently from order.totalAmount).
+  // This guarantees the two values always stay in sync, including with
+  // rupiah rounding differences.
   static Future<MidtransTokenResult> createSnapToken({
     required OrderModel order,
     required String branchId,
@@ -91,8 +91,8 @@ class MidtransService {
 
       final items = <Map<String, dynamic>>[];
 
-      // 1. Item menu (subtotal) — pakai harga yang sudah dibulatkan per item
-      //    supaya konsisten dengan integer yang dikirim ke Midtrans.
+      // 1. Menu items (subtotal) — use the price already rounded per item
+      //    to stay consistent with the integers sent to Midtrans.
       for (final item in order.items) {
         items.add({
           'id': item.menuItemId,
@@ -102,15 +102,15 @@ class MidtransService {
         });
       }
 
-      // Subtotal "riil" yang dikirim ke Midtrans = penjumlahan item di atas.
-      // Dihitung ulang dari `items` (bukan order.subtotal) supaya tidak ada
-      // celah pembulatan antara nilai yang ditampilkan di UI vs yang dikirim.
+      // The "real" subtotal sent to Midtrans = sum of the items above.
+      // Recomputed from `items` (not order.subtotal) so there's no rounding
+      // gap between the value shown in the UI and the value sent.
       final itemsSubtotal = items.fold<int>(
         0,
         (sum, item) => sum + (item['price'] as int) * (item['quantity'] as int),
       );
 
-      // 2. Service charge (3%) — hanya ditambahkan kalau nilainya != 0
+      // 2. Service charge (3%) — only added if the value != 0
       final serviceCharge = (itemsSubtotal * 0.03).round();
       if (serviceCharge != 0) {
         items.add({
@@ -121,63 +121,63 @@ class MidtransService {
         });
       }
 
-      // 3. PB1 / Pajak (10%) — dihitung dari subtotal + service charge,
-      //    sama seperti rumus di OrderModel.pb1Amount
+      // 3. PB1 / Tax (10%) — computed from subtotal + service charge,
+      //    same as the formula in OrderModel.pb1Amount
       final pb1 = ((itemsSubtotal + serviceCharge) * 0.10).round();
       if (pb1 != 0) {
         items.add({
           'id': 'TAX_PB1',
-          'name': 'PB1 / Pajak (10%)',
+          'name': 'PB1 / Tax (10%)',
           'price': pb1,
           'quantity': 1,
         });
       }
 
-      // 3b. Kelebihan waktu makan (>2 jam sejak disajikan) — Rp 5.000/jam.
+      // 3b. Extra dining time (>2 hours since served) — Rp 5,000/hour.
       final overtimeCharge = order.overtimeCharge;
       if (overtimeCharge > 0) {
         items.add({
           'id': 'OVERTIME_CHARGE',
-          'name': 'Kelebihan Waktu Makan',
+          'name': 'Extra Dining Time',
           'price': overtimeCharge,
           'quantity': 1,
         });
       }
 
-      // 4. Diskon (kalau ada) — dikirim sebagai item dengan harga negatif.
-      //    Midtrans mendukung price negatif untuk merepresentasikan diskon.
+      // 4. Discount (if any) — sent as an item with a negative price.
+      //    Midtrans supports a negative price to represent a discount.
       final discount = order.discountAmount.round();
       if (discount > 0) {
         items.add({
           'id': 'DISCOUNT',
-          'name': 'Diskon',
+          'name': 'Discount',
           'price': -discount,
           'quantity': 1,
         });
       }
 
-      // gross_amount WAJIB dihitung dari `items` yang sama persis dengan
-      // yang dikirim di atas, supaya selalu sinkron dengan validasi Midtrans.
+      // gross_amount MUST be computed from exactly the same `items` sent
+      // above, so it always stays in sync with Midtrans validation.
       final grossAmount = items.fold<int>(
         0,
         (sum, item) => sum + (item['price'] as int) * (item['quantity'] as int),
       );
 
-      // PENTING: Midtrans mewajibkan transaction_details.order_id UNIK
-      // SELAMANYA per akun — tidak boleh dipakai ulang walau transaksi
-      // sebelumnya gagal/pending/expired (error: "order_id has already
-      // been taken").
+      // IMPORTANT: Midtrans requires transaction_details.order_id to be
+      // UNIQUE FOREVER per account — it cannot be reused even if the
+      // previous transaction failed/is pending/expired (error: "order_id
+      // has already been taken").
       //
-      // Karena itu kita kirim DUA id berbeda ke Edge Function:
-      //   - uniqueOrderId   → id unik per PERCOBAAN bayar, dikirim ke
-      //                       Midtrans sebagai transaction_details.order_id
-      //   - order.id        → UUID asli row di tabel `orders`, dipakai
-      //                       Edge Function untuk lookup/update ke DB
-      //                       (dikirim sebagai internal_order_id)
+      // Because of this we send TWO different ids to the Edge Function:
+      //   - uniqueOrderId   → unique id per payment ATTEMPT, sent to
+      //                       Midtrans as transaction_details.order_id
+      //   - order.id        → the real UUID row in the `orders` table, used
+      //                       by the Edge Function to look up/update the DB
+      //                       (sent as internal_order_id)
       //
-      // Setiap kali createSnapToken() dipanggil (termasuk saat user retry
-      // setelah pembayaran gagal/dibatalkan), timestamp baru akan membuat
-      // uniqueOrderId yang baru juga, sehingga tidak collision di Midtrans.
+      // Every time createSnapToken() is called (including when the user
+      // retries after a failed/cancelled payment), a new timestamp will
+      // also create a new uniqueOrderId, so there's no collision in Midtrans.
       final uniqueOrderId =
           '${order.id}-${DateTime.now().millisecondsSinceEpoch}';
 
@@ -187,7 +187,7 @@ class MidtransService {
           'order_id': uniqueOrderId,
           'internal_order_id': order.id,
           'gross_amount': grossAmount,
-          'customer_name': order.customerName ?? 'Pelanggan',
+          'customer_name': order.customerName ?? 'Customer',
           'customer_email': order.customerEmail ?? '',
           'customer_phone': order.customerPhone,
           'items': items,
@@ -197,7 +197,7 @@ class MidtransService {
       if (response.status != 200) {
         final errorData = response.data as Map<String, dynamic>?;
         return MidtransTokenResult.failure(
-          errorData?['error'] as String? ?? 'Gagal mendapatkan token pembayaran',
+          errorData?['error'] as String? ?? 'Failed to get payment token',
         );
       }
 
@@ -210,18 +210,18 @@ class MidtransService {
     } on FunctionException catch (e) {
       debugPrint('[Midtrans] Edge function error: $e');
       return MidtransTokenResult.failure(
-        'Gagal terhubung ke server: ${e.details}',
+        'Failed to connect to the server: ${e.details}',
       );
     } catch (e) {
       debugPrint('[Midtrans] createSnapToken error: $e');
-      return MidtransTokenResult.failure('Terjadi kesalahan: $e');
+      return MidtransTokenResult.failure('An error occurred: $e');
     }
   }
 
-  // ── Buka halaman pembayaran Midtrans ─────────────────────────────────────
+  // ── Open the Midtrans payment page ─────────────────────────────────────
   //
-  // Web    → buka Snap popup via snap.js (MidtransWebService.pay)
-  // Mobile → buka native Snap screen via midtrans_sdk
+  // Web    → open the Snap popup via snap.js (MidtransWebService.pay)
+  // Mobile → open the native Snap screen via midtrans_sdk
   static Future<MidtransPaymentResult> startPayment({
     required String snapToken,
     required String orderId,
@@ -239,7 +239,7 @@ class MidtransService {
     // ── Mobile path ─────────────────────────────────────────────────────────
     if (_sdk == null) {
       return MidtransPaymentResult.failure(
-        'Midtrans SDK belum diinisialisasi. Hubungi tim teknis.',
+        'Midtrans SDK has not been initialized. Please contact technical support.',
       );
     }
 
@@ -257,15 +257,15 @@ class MidtransService {
       );
       return _mapSdkResult(result, orderId);
     } on TimeoutException {
-      // Timeout bukan berarti gagal — user mungkin masih proses VA/QRIS.
+      // Timeout doesn't mean failure — the user may still be processing VA/QRIS.
       return MidtransPaymentResult.pending(orderId: orderId);
     } catch (e) {
       debugPrint('[Midtrans] startPayment error: $e');
-      return MidtransPaymentResult.failure('Gagal membuka halaman pembayaran: $e');
+      return MidtransPaymentResult.failure('Failed to open the payment page: $e');
     }
   }
 
-  // ── Full flow: buat token + bayar ────────────────────────────────────────
+  // ── Full flow: create token + pay ────────────────────────────────────────
   static Future<MidtransPaymentResult> processPayment({
     required BuildContext context,
     required OrderModel order,
@@ -284,10 +284,10 @@ class MidtransService {
     );
   }
 
-  // ── Cek status pembayaran dari Supabase ───────────────────────────────────
+  // ── Check payment status from Supabase ───────────────────────────────────
   //
-  // PENTING: selalu cek dari DB kita, bukan dari callback SDK.
-  // DB diupdate oleh webhook Midtrans → sumber kebenaran tunggal.
+  // IMPORTANT: always check against our DB, not the SDK callback.
+  // The DB is updated by the Midtrans webhook → the single source of truth.
   static Future<MidtransPaymentStatus> checkPaymentStatus(String orderId) async {
     try {
       final supabase = Supabase.instance.client;
@@ -315,7 +315,7 @@ class MidtransService {
     }
   }
 
-  // ── Poll status sampai paid atau timeout ──────────────────────────────────
+  // ── Poll status until paid or timeout ──────────────────────────────────
   static Future<MidtransPaymentStatus> pollUntilPaid({
     required String orderId,
     Duration interval = const Duration(seconds: 3),
@@ -333,10 +333,10 @@ class MidtransService {
     return MidtransPaymentStatus.pending;
   }
 
-  // ── Private: map SDK result → model kita (mobile only) ───────────────────
+  // ── Private: map SDK result → our model (mobile only) ───────────────────
   //
-  // CATATAN: midtrans_sdk hanya expose status, transactionId, paymentType,
-  // message — tidak ada orderId. Kita ambil orderId dari context kita sendiri.
+  // NOTE: midtrans_sdk only exposes status, transactionId, paymentType,
+  // message — no orderId. We get orderId from our own context.
   static MidtransPaymentResult _mapSdkResult(
     TransactionResult result,
     String orderId,
@@ -366,11 +366,11 @@ class MidtransService {
         status.contains('fail') ||
         status.contains('invalid')) {
       return MidtransPaymentResult.failure(
-        'Pembayaran $status. Silakan coba lagi.',
+        'Payment $status. Please try again.',
       );
     }
 
-    // Status tidak dikenal → treat sebagai pending, cek via webhook
+    // Unrecognized status → treat as pending, verify via webhook
     return MidtransPaymentResult.pending(
       orderId: orderId,
       paymentType: result.paymentType,

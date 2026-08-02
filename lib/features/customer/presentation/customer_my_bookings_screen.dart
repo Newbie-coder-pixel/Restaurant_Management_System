@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// ── Provider booking milik user — JOIN branches ───────────────────
+// ── User's bookings provider — JOIN branches ───────────────────────
 final _refreshTriggerProvider = StateProvider<int>((ref) => 0);
 
 final _myBookingsProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((
@@ -26,7 +26,7 @@ final _myBookingsProvider = FutureProvider.autoDispose<List<Map<String, dynamic>
   return (res as List).cast<Map<String, dynamic>>();
 });
 
-// ── Provider daftar cabang aktif ──────────────────────────────────
+// ── Active branches list provider ──────────────────────────────────
 final _branchesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
       final res = await Supabase.instance.client
@@ -37,27 +37,27 @@ final _branchesProvider =
       return (res as List).cast<Map<String, dynamic>>();
     });
 
-// ── Validasi nomor telepon Indonesia ─────────────────────────────
+// ── Validate Indonesian phone number ─────────────────────────────
 String? _validatePhone(String phone) {
   final cleaned = phone.replaceAll(RegExp(r'\s|-'), '');
-  if (cleaned.isEmpty) return 'Nomor HP wajib diisi';
+  if (cleaned.isEmpty) return 'Phone number is required';
   if (!RegExp(r'^(\+62|62|0)[0-9]+$').hasMatch(cleaned)) {
-    return 'Nomor HP hanya boleh berisi angka';
+    return 'Phone number can only contain digits';
   }
   String normalized = cleaned;
   if (normalized.startsWith('+62')) normalized = '0${normalized.substring(3)}';
   if (normalized.startsWith('62')) normalized = '0${normalized.substring(2)}';
   if (!normalized.startsWith('08')) {
-    return 'Nomor HP harus diawali 08 (contoh: 081234567890)';
+    return 'Phone number must start with 08 (example: 081234567890)';
   }
   if (normalized.length < 10 || normalized.length > 13) {
-    return 'Nomor HP harus 10–13 digit';
+    return 'Phone number must be 10–13 digits';
   }
   return null;
 }
 
 // ─────────────────────────────────────────────────────────────────
-// SCREEN UTAMA
+// MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────
 class CustomerMyBookingsScreen extends ConsumerStatefulWidget {
   const CustomerMyBookingsScreen({super.key});
@@ -98,7 +98,7 @@ class _CustomerMyBookingsScreenState
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Perhatian Penting',
+                  'Important Notice',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w700,
@@ -125,8 +125,8 @@ class _CustomerMyBookingsScreenState
                   ),
                 ),
                 child: const Text(
-                  '📌 Harap tiba minimal 30 menit sebelum jam reservasi yang kamu pilih.\n\n'
-                  'Keterlambatan lebih dari 15 menit dapat menyebabkan reservasi dibatalkan secara otomatis.',
+                  '📌 Please arrive at least 30 minutes before your chosen reservation time.\n\n'
+                  'Arriving more than 15 minutes late may cause the reservation to be automatically cancelled.',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 13,
@@ -159,7 +159,7 @@ class _CustomerMyBookingsScreenState
                       fontSize: 14,
                     ),
                   ),
-                  child: const Text('Saya Mengerti'),
+                  child: const Text('I Understand'),
                 ),
               ),
             ),
@@ -206,27 +206,27 @@ class _CustomerMyBookingsScreenState
 
     final (String message, Color color, IconData icon) = switch (status) {
       'confirmed' => (
-        '🎉 Reservasi kamu dikonfirmasi! Meja sudah disiapkan.',
+        '🎉 Your reservation is confirmed! Your table is ready.',
         const Color(0xFF10B981),
         Icons.check_circle,
       ),
       'cancelled' => (
-        '❌ Reservasi kamu dibatalkan.',
+        '❌ Your reservation has been cancelled.',
         const Color(0xFFEF4444),
         Icons.cancel,
       ),
       'waitlisted' => (
-        '⏳ Semua meja penuh, kamu masuk daftar tunggu.',
+        '⏳ All tables are full, you have been added to the waitlist.',
         const Color(0xFF8B5CF6),
         Icons.hourglass_top,
       ),
       'seated' => (
-        '🍽️ Selamat datang! Silakan menuju meja kamu.',
+        '🍽️ Welcome! Please head to your table.',
         const Color(0xFF06B6D4),
         Icons.restaurant,
       ),
       _ => (
-        'Status reservasi diperbarui.',
+        'Reservation status updated.',
         const Color(0xFF3B82F6),
         Icons.info,
       ),
@@ -298,11 +298,11 @@ class _CustomerMyBookingsScreenState
               tabs: const [
                 Tab(
                   icon: Icon(Icons.add_circle_outline, size: 20),
-                  text: 'Buat Reservasi',
+                  text: 'New Reservation',
                 ),
                 Tab(
                   icon: Icon(Icons.calendar_month_outlined, size: 20),
-                  text: 'Reservasi Saya',
+                  text: 'My Reservations',
                 ),
               ],
             ),
@@ -329,7 +329,7 @@ class _CustomerMyBookingsScreenState
 }
 
 // ─────────────────────────────────────────────────────────────────
-// FORM BUAT RESERVASI
+// NEW RESERVATION FORM
 // ─────────────────────────────────────────────────────────────────
 class _BookingForm extends ConsumerStatefulWidget {
   final bool isDesktop;
@@ -386,14 +386,14 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       'Feb',
       'Mar',
       'Apr',
-      'Mei',
+      'May',
       'Jun',
       'Jul',
-      'Agu',
+      'Aug',
       'Sep',
-      'Okt',
+      'Oct',
       'Nov',
-      'Des',
+      'Dec',
     ];
     return '${d.day} ${months[d.month]} ${d.year}';
   }
@@ -431,7 +431,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     final openHour = int.tryParse(openParts[0]) ?? 10;
     final closeHour = int.tryParse(closeParts[0]) ?? 22;
 
-    // Pakai waktu lokal (WIB) — bukan UTC
+    // Use local time (WIB) — not UTC
     final now = DateTime.now().toLocal();
     final selectedOrToday = _selectedDate ?? now;
     final isToday =
@@ -440,8 +440,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         selectedOrToday.day == now.day;
     final minHour = isToday ? now.hour + (now.minute > 0 ? 1 : 0) : openHour;
 
-    // Handle closing time melewati tengah malam (misal tutup jam 01:00)
-    // closeHour kecil (0-4) dianggap lewat tengah malam = valid sampai dini hari
+    // Handle closing time crossing midnight (e.g. closing at 01:00)
+    // A small closeHour (0-4) is treated as past midnight = valid until early morning
     final bool closesAfterMidnight = closeHour < openHour;
 
     final initialHour =
@@ -468,7 +468,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 
     if (picked == null || !mounted) return;
 
-    // Validasi: jam tidak boleh sebelum minHour (hari ini saja)
+    // Validation: time cannot be before minHour (today only)
     if (isToday && picked.hour < minHour) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -482,7 +482,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Jam ${picked.hour.toString().padLeft(2, '0')}:00 sudah lewat. Pilih jam ${minHour.toString().padLeft(2, '0')}:00 ke atas.',
+                  'Time ${picked.hour.toString().padLeft(2, '0')}:00 has already passed. Choose ${minHour.toString().padLeft(2, '0')}:00 or later.',
                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                 ),
               ),
@@ -500,9 +500,9 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       return;
     }
 
-    // Validasi: jam harus dalam range operasional
-    // Kalau tutup lewat tengah malam (misal 01:00), valid: >= openHour ATAU <= closeHour
-    // Kalau tutup sebelum tengah malam, valid: >= openHour DAN < closeHour
+    // Validation: time must be within operating hours
+    // If closing past midnight (e.g. 01:00), valid: >= openHour OR <= closeHour
+    // If closing before midnight, valid: >= openHour AND < closeHour
     final bool outOfRange = closesAfterMidnight
         ? (picked.hour < openHour && picked.hour > closeHour)
         : (picked.hour < openHour || picked.hour >= closeHour);
@@ -511,7 +511,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Jam harus antara $open – $close WIB',
+            'Time must be between $open – $close WIB',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
           ),
           backgroundColor: const Color(0xFFEF4444),
@@ -530,19 +530,19 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 
   Future<void> _submit(List<Map<String, dynamic>> branches) async {
     if (_selectedBranchId == null) {
-      _err('Pilih cabang dulu');
+      _err('Please select a branch first');
       return;
     }
     if (_selectedDate == null) {
-      _err('Pilih tanggal');
+      _err('Please select a date');
       return;
     }
     if (_selectedTime == null) {
-      _err('Pilih jam kedatangan');
+      _err('Please select an arrival time');
       return;
     }
     if (_nameCtrl.text.trim().isEmpty) {
-      _err('Nama wajib diisi');
+      _err('Name is required');
       return;
     }
 
@@ -612,7 +612,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         _showWaitlisted();
       }
     } catch (e) {
-      _err('Gagal membuat reservasi: $e');
+      _err('Failed to create reservation: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -663,7 +663,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Reservasi Berhasil!',
+              'Reservation Successful!',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 20,
@@ -696,7 +696,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Meja $tableNumber sudah disiapkan',
+                      'Table $tableNumber is ready',
                       style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 14,
@@ -709,7 +709,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               ),
             ],
             const Text(
-              'Reservasi kamu sudah dikonfirmasi.\nCek tab "Reservasi Saya" untuk detailnya.',
+              'Your reservation has been confirmed.\nCheck the "My Reservations" tab for details.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Poppins',
@@ -783,7 +783,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Masuk Waitlist',
+              'Added to Waitlist',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 20,
@@ -793,8 +793,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Semua meja sedang penuh untuk waktu tersebut.\n'
-              'Kamu sudah masuk daftar tunggu. Staff akan menghubungi nomor HP kamu jika ada meja tersedia.',
+              'All tables are currently full for that time.\n'
+              'You have been added to the waitlist. Staff will contact your phone number if a table becomes available.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Poppins',
@@ -823,7 +823,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                   widget.onSuccess();
                 },
                 child: const Text(
-                  'Mengerti',
+                  'Got It',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w700,
@@ -887,13 +887,13 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 8),
-            _sectionLabel('Pilih Cabang', Icons.store_outlined),
+            _sectionLabel('Choose Branch', Icons.store_outlined),
             if (branches.length == 1)
               _infoChip(Icons.store, branches[0]['name'] as String)
             else
               _dropdown(
                 value: _selectedBranchId,
-                hint: 'Pilih cabang',
+                hint: 'Choose a branch',
                 items: branches
                     .map(
                       (b) => DropdownMenuItem<String>(
@@ -926,7 +926,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               _timeField(openTime, closeTime),
             ],
             const SizedBox(height: 24),
-            _sectionLabel('Jumlah Tamu', Icons.people_outline),
+            _sectionLabel('Number of Guests', Icons.people_outline),
             _guestPicker(),
             const SizedBox(height: 24),
             if (widget.isDesktop)
@@ -944,13 +944,13 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               _phoneField(),
             ],
             const SizedBox(height: 24),
-            _sectionLabel('Catatan Khusus', Icons.note_add_outlined),
+            _sectionLabel('Special Notes', Icons.note_add_outlined),
             TextField(
               controller: _notesCtrl,
               maxLines: 3,
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
               decoration: _inputDeco(
-                'Contoh: alergi kacang, kursi tinggi untuk bayi...',
+                'Example: nut allergy, high chair for baby...',
                 null,
               ),
             ),
@@ -985,7 +985,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                       children: [
                         Icon(Icons.calendar_today, size: 20),
                         SizedBox(width: 10),
-                        Text('Buat Reservasi'),
+                        Text('Create Reservation'),
                       ],
                     ),
             ),
@@ -1133,7 +1133,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   Widget _dateField(String open, String close) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Tanggal Kedatangan', Icons.calendar_today_outlined),
+      _sectionLabel('Arrival Date', Icons.calendar_today_outlined),
       GestureDetector(
         onTap: _pickDate,
         child: Container(
@@ -1161,7 +1161,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               Text(
                 _selectedDate != null
                     ? _formatDate(_selectedDate!)
-                    : 'Pilih tanggal',
+                    : 'Select date',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 14,
@@ -1181,7 +1181,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   Widget _timeField(String open, String close) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Jam Kedatangan', Icons.access_time_outlined),
+      _sectionLabel('Arrival Time', Icons.access_time_outlined),
       GestureDetector(
         onTap: () => _pickTime(open, close),
         child: Container(
@@ -1210,7 +1210,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 child: Text(
                   _selectedTime != null
                       ? '${_formatTime(_selectedTime!)} WIB'
-                      : 'Pilih jam',
+                      : 'Select time',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 14,
@@ -1260,7 +1260,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               ),
               const SizedBox(width: 12),
               Text(
-                '$_guestCount orang',
+                '$_guestCount guest(s)',
                 style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 15,
@@ -1295,12 +1295,12 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   Widget _nameField() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Nama Lengkap', Icons.person_outline),
+      _sectionLabel('Full Name', Icons.person_outline),
       TextField(
         controller: _nameCtrl,
         style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
         decoration: _inputDeco(
-          'Nama sesuai identitas',
+          'Name as on your ID',
           const Icon(Icons.person_outline, size: 20, color: Color(0xFF94A3B8)),
         ),
       ),
@@ -1310,7 +1310,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   Widget _phoneField() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Nomor HP', Icons.phone_outlined),
+      _sectionLabel('Phone Number', Icons.phone_outlined),
       TextField(
         controller: _phoneCtrl,
         keyboardType: TextInputType.phone,
@@ -1363,7 +1363,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       const Padding(
         padding: EdgeInsets.only(top: 8, left: 4),
         child: Text(
-          'Format: 08xxxxxxxxxx (10–13 digit)',
+          'Format: 08xxxxxxxxxx (10–13 digits)',
           style: TextStyle(
             fontFamily: 'Poppins',
             fontSize: 11,
@@ -1401,7 +1401,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// RIWAYAT BOOKING
+// BOOKING HISTORY
 // ─────────────────────────────────────────────────────────────────
 class _BookingHistory extends ConsumerStatefulWidget {
   final bool isDesktop;
@@ -1424,7 +1424,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
   static const _doneStatuses = {'completed'};
   static const _cancelledStatuses = {'cancelled', 'no_show'};
 
-  /// Booking lama (selesai/batal) > 30 hari disembunyikan otomatis
+  /// Old bookings (done/cancelled) > 30 days are hidden automatically
   bool _isVisible(Map<String, dynamic> b) {
     final status = b['status'] as String? ?? 'pending';
     final isFinished =
@@ -1516,7 +1516,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
                 child: Row(
                   children: [
                     _FilterChip(
-                      label: 'Aktif',
+                      label: 'Active',
                       icon: Icons.radio_button_checked,
                       color: const Color(0xFF10B981),
                       count: _count(bookings, 'active'),
@@ -1525,7 +1525,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
                     ),
                     const SizedBox(width: 8),
                     _FilterChip(
-                      label: 'Selesai',
+                      label: 'Done',
                       icon: Icons.done_all,
                       color: const Color(0xFF3B82F6),
                       count: _count(bookings, 'done'),
@@ -1534,7 +1534,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
                     ),
                     const SizedBox(width: 8),
                     _FilterChip(
-                      label: 'Dibatalkan',
+                      label: 'Cancelled',
                       icon: Icons.cancel_outlined,
                       color: const Color(0xFFEF4444),
                       count: _count(bookings, 'cancelled'),
@@ -1543,7 +1543,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
                     ),
                     const SizedBox(width: 8),
                     _FilterChip(
-                      label: 'Semua',
+                      label: 'All',
                       icon: Icons.list_alt_outlined,
                       color: const Color(0xFF64748B),
                       count: _count(bookings, 'all'),
@@ -1556,7 +1556,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
             ),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
 
-            // ── Info banner untuk filter selesai/batal ────────────
+            // ── Info banner for done/cancelled filters ─────────────
             if (_filter == 'done' || _filter == 'cancelled' || _filter == 'all')
               Container(
                 margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -1579,7 +1579,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Riwayat lebih dari 30 hari disembunyikan otomatis',
+                        'History older than 30 days is hidden automatically',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 11,
@@ -1621,23 +1621,23 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
     final (icon, title, subtitle) = switch (filter) {
       'active' => (
         Icons.calendar_today_outlined,
-        'Tidak Ada Booking Aktif',
-        'Buat reservasi baru di tab "Buat Reservasi".',
+        'No Active Bookings',
+        'Create a new reservation in the "New Reservation" tab.',
       ),
       'done' => (
         Icons.done_all,
-        'Belum Ada Riwayat Selesai',
-        'Riwayat booking yang selesai akan muncul di sini.',
+        'No Completed History Yet',
+        'Completed booking history will appear here.',
       ),
       'cancelled' => (
         Icons.cancel_outlined,
-        'Tidak Ada Yang Dibatalkan',
-        'Syukurlah, tidak ada booking yang dibatalkan 😊',
+        'Nothing Cancelled',
+        'Great, no bookings have been cancelled 😊',
       ),
       _ => (
         Icons.calendar_today_outlined,
-        'Belum Ada Reservasi',
-        'Buat reservasi di tab "Buat Reservasi".',
+        'No Reservations Yet',
+        'Create a reservation in the "New Reservation" tab.',
       ),
     };
     final color = switch (filter) {
@@ -1782,7 +1782,7 @@ class _FilterChip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// KARTU BOOKING
+// BOOKING CARD
 // ─────────────────────────────────────────────────────────────────
 class _BookingCard extends StatefulWidget {
   final Map<String, dynamic> booking;
@@ -1810,13 +1810,13 @@ class _BookingCardState extends State<_BookingCard> {
   };
 
   String get _label => switch (_status) {
-    'confirmed' => 'Dikonfirmasi',
-    'cancelled' => 'Dibatalkan',
-    'completed' => 'Selesai',
-    'no_show' => 'Tidak Hadir',
-    'waitlisted' => 'Daftar Tunggu',
-    'seated' => 'Sedang Makan',
-    _ => 'Menunggu',
+    'confirmed' => 'Confirmed',
+    'cancelled' => 'Cancelled',
+    'completed' => 'Completed',
+    'no_show' => 'No Show',
+    'waitlisted' => 'Waitlisted',
+    'seated' => 'Dining',
+    _ => 'Pending',
   };
 
   IconData get _icon => switch (_status) {
@@ -1845,14 +1845,14 @@ class _BookingCardState extends State<_BookingCard> {
         'Feb',
         'Mar',
         'Apr',
-        'Mei',
+        'May',
         'Jun',
         'Jul',
-        'Agu',
+        'Aug',
         'Sep',
-        'Okt',
+        'Oct',
         'Nov',
-        'Des',
+        'Dec',
       ];
       return '${d.day} ${months[d.month]} ${d.year}';
     } catch (_) {
@@ -1865,7 +1865,7 @@ class _BookingCardState extends State<_BookingCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
-            'Nomor kontak cabang tidak tersedia. Silakan hubungi kami langsung.',
+            'Branch contact number not available. Please contact us directly.',
             style: TextStyle(fontFamily: 'Poppins'),
           ),
           backgroundColor: const Color(0xFF3B82F6),
@@ -1888,12 +1888,12 @@ class _BookingCardState extends State<_BookingCard> {
     final name = booking['customer_name'] as String? ?? '';
 
     final msg = Uri.encodeComponent(
-      'Halo, saya ingin menghubungi terkait reservasi saya:\n\n'
-      '👤 Nama: $name\n'
-      '📅 Tanggal: $date\n'
-      '🕐 Jam: $time WIB\n'
-      '👥 Tamu: $guests orang\n\n'
-      'Mohon bantuannya. Terima kasih 🙏',
+      'Hello, I would like to reach out about my reservation:\n\n'
+      '👤 Name: $name\n'
+      '📅 Date: $date\n'
+      '🕐 Time: $time WIB\n'
+      '👥 Guests: $guests\n\n'
+      'Thank you for your help 🙏',
     );
 
     final waUrl = Uri.parse('https://wa.me/$cleaned?text=$msg');
@@ -1908,7 +1908,7 @@ class _BookingCardState extends State<_BookingCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Tidak bisa membuka WhatsApp. No: $phone',
+              'Could not open WhatsApp. Number: $phone',
               style: const TextStyle(fontFamily: 'Poppins'),
             ),
             backgroundColor: const Color(0xFFEF4444),
@@ -1925,7 +1925,7 @@ class _BookingCardState extends State<_BookingCard> {
   @override
   Widget build(BuildContext context) {
     final branchData = booking['branches'] as Map<String, dynamic>?;
-    final branchName = branchData?['name'] as String? ?? 'Restoran';
+    final branchName = branchData?['name'] as String? ?? 'Restaurant';
     final branchPhone = branchData?['phone'] as String?;
 
     final tableId = booking['table_id'] as String?;
@@ -2055,7 +2055,7 @@ class _BookingCardState extends State<_BookingCard> {
                   _infoBanner(
                     icon: Icons.table_restaurant,
                     text:
-                        'Meja ${booking['restaurant_tables']?['table_number'] ?? ''} sudah disiapkan',
+                        'Table ${booking['restaurant_tables']?['table_number'] ?? ''} is ready',
                     color: const Color(0xFF10B981),
                     bgColor: const Color(0xFFD1FAE5),
                   ),
@@ -2065,7 +2065,7 @@ class _BookingCardState extends State<_BookingCard> {
                   _infoBanner(
                     icon: Icons.hourglass_top_outlined,
                     text:
-                        'Kamu di daftar tunggu. Staff akan menghubungi jika ada meja tersedia.\nAkan dihubungi via: ${booking['customer_phone']}',
+                        'You are on the waitlist. Staff will contact you if a table becomes available.\nWill be contacted via: ${booking['customer_phone']}',
                     color: const Color(0xFF8B5CF6),
                     bgColor: const Color(0xFFF3E8FF),
                   ),
@@ -2092,7 +2092,7 @@ class _BookingCardState extends State<_BookingCard> {
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Ingin mengubah atau membatalkan? Hubungi staff kami.',
+                            'Want to change or cancel? Contact our staff.',
                             style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 12,
@@ -2115,7 +2115,7 @@ class _BookingCardState extends State<_BookingCard> {
                         color: Color(0xFF25D366),
                       ),
                       label: const Text(
-                        'Hubungi Kami via WhatsApp',
+                        'Contact Us via WhatsApp',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w600,
@@ -2151,11 +2151,11 @@ class _BookingCardState extends State<_BookingCard> {
     final guests = widget.booking['guest_count'] ?? 1;
     return Column(
       children: [
-        _infoRow(Icons.calendar_today_outlined, 'Tanggal', date),
+        _infoRow(Icons.calendar_today_outlined, 'Date', date),
         const SizedBox(height: 12),
-        _infoRow(Icons.access_time_outlined, 'Jam', '$time WIB'),
+        _infoRow(Icons.access_time_outlined, 'Time', '$time WIB'),
         const SizedBox(height: 12),
-        _infoRow(Icons.people_outline, 'Tamu', '$guests orang'),
+        _infoRow(Icons.people_outline, 'Guests', '$guests'),
       ],
     );
   }
@@ -2166,7 +2166,7 @@ class _BookingCardState extends State<_BookingCard> {
           widget.booking['special_requests'].toString().isNotEmpty) ...[
         _infoRow(
           Icons.note_outlined,
-          'Catatan',
+          'Notes',
           widget.booking['special_requests'].toString(),
         ),
       ],

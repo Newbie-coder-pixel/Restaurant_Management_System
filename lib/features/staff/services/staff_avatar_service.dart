@@ -9,18 +9,18 @@ class StaffAvatarService {
   static final _client = Supabase.instance.client;
   static const _bucket = 'staff-avatars';
 
-  /// Pilih foto dari galeri atau kamera, lalu upload ke Supabase Storage.
-  /// Mengembalikan public URL baru, atau null jika dibatalkan / gagal.
+  /// Pick a photo from the gallery or camera, then upload it to Supabase Storage.
+  /// Returns the new public URL, or null if cancelled / failed.
   static Future<String?> pickAndUpload({
     required BuildContext context,
     required String staffId,
     String? oldAvatarUrl,
   }) async {
-    // 1. Pilih sumber foto
+    // 1. Pick a photo source
     final source = await _pickSource(context);
     if (source == null) return null;
 
-    // 2. Ambil gambar
+    // 2. Get the image
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: source,
@@ -35,7 +35,7 @@ class StaffAvatarService {
     final path = 'staff/$staffId/avatar.$ext';
 
     try {
-      // 3. Hapus file lama jika ada (agar tidak numpuk di storage)
+      // 3. Delete the old file if it exists (to avoid piling up in storage)
       if (oldAvatarUrl != null) {
         final oldPath = _extractStoragePath(oldAvatarUrl);
         if (oldPath != null) {
@@ -43,7 +43,7 @@ class StaffAvatarService {
         }
       }
 
-      // 4. Upload file baru
+      // 4. Upload the new file
       await _client.storage.from(_bucket).upload(
         path,
         file,
@@ -53,10 +53,10 @@ class StaffAvatarService {
         ),
       );
 
-      // 5. Ambil public URL
+      // 5. Get the public URL
       final publicUrl = _client.storage.from(_bucket).getPublicUrl(path);
 
-      // 6. Update kolom avatar_url di tabel staff
+      // 6. Update the avatar_url column in the staff table
       await _client
           .from('staff')
           .update({
@@ -69,7 +69,7 @@ class StaffAvatarService {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal upload foto: $e'),
+          content: Text('Failed to upload photo: $e'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -79,7 +79,7 @@ class StaffAvatarService {
     }
   }
 
-  /// Hapus avatar staff (set avatar_url jadi null).
+  /// Remove the staff avatar (set avatar_url to null).
   static Future<bool> removeAvatar({
     required BuildContext context,
     required String staffId,
@@ -101,7 +101,7 @@ class StaffAvatarService {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Gagal menghapus foto: $e'),
+          content: Text('Failed to remove photo: $e'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -113,7 +113,7 @@ class StaffAvatarService {
 
   // ── helpers ─────────────────────────────────────────────
 
-  /// Bottom sheet pilih kamera atau galeri
+  /// Bottom sheet to pick camera or gallery
   static Future<ImageSource?> _pickSource(BuildContext context) {
     return showModalBottomSheet<ImageSource>(
       context: context,
@@ -136,7 +136,7 @@ class StaffAvatarService {
                 padding: EdgeInsets.only(bottom: 8, left: 16),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Pilih Foto dari',
+                  child: Text('Choose Photo From',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w700,
@@ -148,9 +148,9 @@ class StaffAvatarService {
                   backgroundColor: Color(0xFFE3F2FD),
                   child: Icon(Icons.photo_library_outlined, color: Color(0xFF1976D2)),
                 ),
-                title: const Text('Galeri Foto',
+                title: const Text('Photo Gallery',
                     style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500)),
-                subtitle: const Text('Pilih dari foto yang sudah ada',
+                subtitle: const Text('Choose from existing photos',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () => Navigator.pop(ctx, ImageSource.gallery),
               ),
@@ -159,9 +159,9 @@ class StaffAvatarService {
                   backgroundColor: Color(0xFFE8F5E9),
                   child: Icon(Icons.camera_alt_outlined, color: Color(0xFF388E3C)),
                 ),
-                title: const Text('Kamera',
+                title: const Text('Camera',
                     style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500)),
-                subtitle: const Text('Ambil foto baru sekarang',
+                subtitle: const Text('Take a new photo now',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                 onTap: () => Navigator.pop(ctx, ImageSource.camera),
               ),
@@ -172,9 +172,9 @@ class StaffAvatarService {
     );
   }
 
-  /// Ekstrak path storage dari public URL Supabase.
-  /// Contoh URL: https://xxx.supabase.co/storage/v1/object/public/staff-avatars/staff/abc/avatar.jpg
-  /// → mengembalikan: staff/abc/avatar.jpg
+  /// Extract the storage path from a Supabase public URL.
+  /// Example URL: https://xxx.supabase.co/storage/v1/object/public/staff-avatars/staff/abc/avatar.jpg
+  /// → returns: staff/abc/avatar.jpg
   static String? _extractStoragePath(String url) {
     try {
       const marker = '/$_bucket/';

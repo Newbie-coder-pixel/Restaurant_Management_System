@@ -25,14 +25,14 @@ class _BranchItem {
 
 // ── Quick Actions ──────────────────────────────────────────────────────
 const _quickActionsV2 = [
-  _QuickAction(label: 'Report Harian',      emoji: '📊', prompt: 'Buatkan report harian lengkap hari ini',                                                          category: 'analytics'),
-  _QuickAction(label: 'Bandingkan Minggu',  emoji: '📈', prompt: 'Bandingkan revenue minggu ini vs minggu lalu',                                                    category: 'analytics'),
-  _QuickAction(label: 'Menu Terlaris',      emoji: '🏆', prompt: 'Menu apa yang paling terlaris bulan ini?',                                                        category: 'menu'),
-  _QuickAction(label: 'Booking Hari Ini',   emoji: '📅', prompt: 'Tampilkan semua booking hari ini beserta detailnya',                                              category: 'booking'),
-  _QuickAction(label: 'Revenue Bulan Ini',  emoji: '💰', prompt: 'Berapa total revenue bulan ini dan tren pertumbuhannya?',                                         category: 'analytics'),
-  _QuickAction(label: 'Info Menu',          emoji: '🍽️', prompt: 'Tampilkan semua menu beserta harga, kategori, dan info allergen/dietary-nya',                    category: 'menu'),
-  _QuickAction(label: 'Margin Menu',        emoji: '💡', prompt: 'Menu mana yang margin keuntungannya paling tinggi? Tampilkan perbandingannya',                    category: 'menu'),
-  _QuickAction(label: 'Export Laporan',     emoji: '📥', prompt: '__export__',                                                                                      category: 'export'),
+  _QuickAction(label: 'Daily Report',       emoji: '📊', prompt: 'Generate a complete daily report for today',                                                      category: 'analytics'),
+  _QuickAction(label: 'Compare Weeks',      emoji: '📈', prompt: 'Compare this week\'s revenue vs last week\'s',                                                    category: 'analytics'),
+  _QuickAction(label: 'Best-Selling Menu',  emoji: '🏆', prompt: 'What menu item is the best seller this month?',                                                   category: 'menu'),
+  _QuickAction(label: 'Today\'s Bookings',  emoji: '📅', prompt: 'Show all of today\'s bookings with details',                                                      category: 'booking'),
+  _QuickAction(label: 'Revenue This Month', emoji: '💰', prompt: 'What is total revenue this month and the growth trend?',                                         category: 'analytics'),
+  _QuickAction(label: 'Menu Info',          emoji: '🍽️', prompt: 'Show all menu items with prices, categories, and allergen/dietary info',                        category: 'menu'),
+  _QuickAction(label: 'Menu Margins',       emoji: '💡', prompt: 'Which menu item has the highest profit margin? Show a comparison',                                category: 'menu'),
+  _QuickAction(label: 'Export Report',      emoji: '📥', prompt: '__export__',                                                                                      category: 'export'),
 ];
 
 class _QuickAction {
@@ -63,7 +63,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final _scrollCtrl = ScrollController();
 
   List<String> _lowStockAlert = [];
-bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
+bool _quickActionsExpanded = false; // ← ADDED THIS LINE
 
   // ── Sentiment Detection ────────────────────────────────────────────
   static const _negativeKeywords = [
@@ -103,14 +103,14 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       final messages = ref.read(chatProvider).messages;
       if (messages.isEmpty) {
         _addBot(
-          '👋 Halo! Saya **Resto Analytics AI**.\n\n'
-          'Saya bisa bantu:\n'
-          '• 📊 Report harian\n'
-          '• 🏆 Analisis menu & margin\n'
-          '• 📦 Status inventory\n'
-          '• 🍽️ Info menu, allergen & dietary\n'
-          '• 💡 Insight bisnis\n\n'
-          'Silakan pilih atau ketik pertanyaan 👇',
+          '👋 Hi! I\'m **Resto Analytics AI**.\n\n'
+          'I can help with:\n'
+          '• 📊 Daily reports\n'
+          '• 🏆 Menu & margin analysis\n'
+          '• 📦 Inventory status\n'
+          '• 🍽️ Menu, allergen & dietary info\n'
+          '• 💡 Business insights\n\n'
+          'Pick an option or type a question below 👇',
         );
       }
     });
@@ -184,12 +184,12 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
         '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
 
     final branchLabel = _isSuperadmin && _selectedBranchId == null
-        ? 'Semua Cabang'
+        ? 'All Branches'
         : _branches
                 .where((b) => b.id == _selectedBranchId)
                 .firstOrNull
                 ?.name ??
-            'Cabang Saya';
+            'My Branch';
 
     try {
       // ── 1. Orders hari ini ──────────────────────────────────────────
@@ -223,7 +223,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       }
       final orderTypeSummary = orderTypeCount.entries
           .map((e) =>
-              '${e.key}: ${e.value} transaksi (Rp ${orderTypeRevenue[e.key]!.toStringAsFixed(0)})')
+              '${e.key}: ${e.value} transactions (Rp ${orderTypeRevenue[e.key]!.toStringAsFixed(0)})')
           .toList();
 
       final Map<String, int> paymentCount = {};
@@ -236,7 +236,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       }
       final paymentSummary = paymentCount.entries
           .map((e) =>
-              '${e.key}: ${e.value} transaksi (Rp ${paymentRevenue[e.key]!.toStringAsFixed(0)})')
+              '${e.key}: ${e.value} transactions (Rp ${paymentRevenue[e.key]!.toStringAsFixed(0)})')
           .toList();
 
       final Map<int, int> perJam = {};
@@ -354,7 +354,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
         final guests = b['guest_count'] ?? 0;
         final deposit = b['deposit_status'] ?? 'none';
         final notes = b['special_requests'];
-        return '$time - $name ($guests orang)${deposit == 'paid' ? ' [DP✅]' : ''}${notes != null ? ' - $notes' : ''}';
+        return '$time - $name ($guests guests)${deposit == 'paid' ? ' [Deposit✅]' : ''}${notes != null ? ' - $notes' : ''}';
       }).toList()
         ..sort();
 
@@ -362,7 +362,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
         final time = (b['booking_time'] as String?)?.substring(0, 5) ?? '-';
         final name = b['customer_name'] ?? '-';
         final guests = b['guest_count'] ?? 0;
-        return '$time - $name ($guests orang)';
+        return '$time - $name ($guests guests)';
       }).toList()
         ..sort();
 
@@ -380,7 +380,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       }).map((i) {
         final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
         final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
-        return '${i['name']} (stok: $cur ${i['unit']}, min: $min ${i['unit']})';
+        return '${i['name']} (stock: $cur ${i['unit']}, min: $min ${i['unit']})';
       }).toList();
 
       final nearLowStock = invRaw.where((i) {
@@ -389,7 +389,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
         return cur > min && cur <= min * 1.5 && min > 0;
       }).map((i) {
         final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
-        return '${i['name']} (stok: $cur ${i['unit']})';
+        return '${i['name']} (stock: $cur ${i['unit']})';
       }).toList();
 
       return {
@@ -440,13 +440,13 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
     }
   }
 
-  // ── Menu Data untuk AI ─────────────────────────────────────────────
+  // ── Menu Data for AI ─────────────────────────────────────────────────
   Future<Map<String, dynamic>> _fetchMenuData() async {
     final sb = Supabase.instance.client;
     final branchId = _isSuperadmin ? _selectedBranchId : _myBranchId;
 
     try {
-      // 1. Fetch menu items tanpa join
+      // 1. Fetch menu items without a join
       dynamic qMenu = sb
           .from('menu_items')
           .select('id, name, price, description, is_available, preparation_time_minutes, category_id');
@@ -454,9 +454,9 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       final menuRaw = ((await (qMenu as dynamic).order('name')) as List)
           .cast<Map<String, dynamic>>();
 
-      // 2. Fetch kategori terpisah
-      // PENTING: jangan kirim .eq('branch_id', '') saat branchId null (Semua Cabang)
-      // karena string kosong membuat Supabase return 400 Bad Request
+      // 2. Fetch categories separately
+      // IMPORTANT: don't send .eq('branch_id', '') when branchId is null (All Branches)
+      // because an empty string makes Supabase return a 400 Bad Request
       dynamic catQuery = sb.from('menu_categories').select('id, name');
       if (branchId != null) catQuery = catQuery.eq('branch_id', branchId);
       final catRaw = (await catQuery) as List;
@@ -470,7 +470,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
 
       final menuIds = menuRaw.map((m) => m['id'] as String).toList();
 
-      // 3. Fetch allergens untuk semua menu
+      // 3. Fetch allergens for all menu items
       final allergensRaw = (await sb
           .from('menu_item_allergens')
           .select('menu_item_id, allergen')
@@ -483,7 +483,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
         allergenMap.putIfAbsent(id, () => []).add(a['allergen'] as String);
       }
 
-      // 4. Fetch dietary tags untuk semua menu
+      // 4. Fetch dietary tags for all menu items
       final dietaryRaw = (await sb
           .from('menu_item_dietary')
           .select('menu_item_id, dietary_tag')
@@ -496,7 +496,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
         dietaryMap.putIfAbsent(id, () => []).add(d['dietary_tag'] as String);
       }
 
-      // 5. Fetch menu_ingredients untuk hitung COGS
+      // 5. Fetch menu_ingredients to calculate COGS
       final ingredientsRaw = (await sb
           .from('menu_ingredients')
           .select('menu_item_id, quantity, cost_per_unit')
@@ -511,7 +511,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
         cogsMap[id] = (cogsMap[id] ?? 0) + (qty * cost);
       }
 
-      // 6. Gabungkan semua data per menu item
+      // 6. Combine all data per menu item
       final List<Map<String, dynamic>> available = [];
       final List<String> unavailable = [];
 
@@ -531,12 +531,12 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
           'harga_raw': price,
           'kategori': category,
           'deskripsi': m['description'] ?? '-',
-          'prep_time': prepTime != null ? '$prepTime menit' : '-',
-          'cogs': cogs > 0 ? 'Rp ${cogs.toStringAsFixed(0)}' : 'belum diset',
+          'prep_time': prepTime != null ? '$prepTime min' : '-',
+          'cogs': cogs > 0 ? 'Rp ${cogs.toStringAsFixed(0)}' : 'not set yet',
           'cogs_raw': cogs,
-          'margin_persen': margin != null ? '${margin.toStringAsFixed(1)}%' : 'belum diset',
+          'margin_persen': margin != null ? '${margin.toStringAsFixed(1)}%' : 'not set yet',
           'margin_raw': margin,
-          'allergen': allergens.isEmpty ? 'tidak ada' : allergens.join(', '),
+          'allergen': allergens.isEmpty ? 'none' : allergens.join(', '),
           'dietary': dietary.isEmpty ? '-' : dietary.join(', '),
         };
 
@@ -547,7 +547,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
         }
       }
 
-      // 7. Ranking margin terbaik (hanya yang sudah ada COGS-nya)
+      // 7. Best margin ranking (only items that already have COGS)
       final withMargin = available
           .where((m) => (m['margin_raw'] as double?) != null && (m['cogs_raw'] as double) > 0)
           .toList()
@@ -560,7 +560,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       final rankingMargin = withMargin.take(5).map((m) =>
           '${m['nama']}: margin ${m['margin_persen']} (jual ${m['harga']}, COGS ${m['cogs']})').toList();
 
-      // 8. Format detail menu untuk AI (tanpa field raw)
+      // 8. Format menu detail for the AI (without raw fields)
       final availableForAI = available.map((m) => {
         'nama': m['nama'],
         'harga': m['harga'],
@@ -622,8 +622,8 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
 
     if (res.statusCode == 404) {
       throw Exception(
-        'Proxy 404: Vercel function /api/chat belum aktif.\n'
-        'Solusi: Tambahkan blok "functions" di vercel.json lalu redeploy.',
+        'Proxy 404: Vercel function /api/chat is not active yet.\n'
+        'Fix: Add a "functions" block in vercel.json then redeploy.',
       );
     }
 
@@ -631,7 +631,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       final body = jsonDecode(res.body);
       if ((body['error'] as String?)?.contains('GROQ_API_KEY') == true) {
         throw Exception(
-          'GROQ_API_KEY belum dikonfigurasi di Vercel Environment Variables.',
+          'GROQ_API_KEY is not configured in Vercel Environment Variables.',
         );
       }
     }
@@ -643,14 +643,14 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
   Future<void> _showExportSheet() async {
     final branchName = _isSuperadmin
         ? (_selectedBranchId == null
-            ? 'Semua Cabang'
+            ? 'All Branches'
             : _branches
                     .where((b) => b.id == _selectedBranchId)
                     .firstOrNull
                     ?.name ??
-                'Cabang')
+                'Branch')
         : (_branches.where((b) => b.id == _myBranchId).firstOrNull?.name ??
-            'Cabang Saya');
+            'My Branch');
 
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -663,7 +663,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
     );
 
     if (result == true && mounted) {
-      _addBot('✅ Laporan berhasil diekspor! File sudah tersedia di share sheet.');
+      _addBot('✅ Report exported successfully! The file is now available in the share sheet.');
     }
   }
 
@@ -680,12 +680,12 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       return;
     }
 
-    // Intercept export keywords dari user input
+    // Intercept export keywords from user input
     final lower = text.toLowerCase();
     if (_exportKeywords.any((k) => lower.contains(k))) {
       chatNotifier.addMessage(
           ChatMessage(role: 'user', content: text, timestamp: DateTime.now()));
-      _addBot('📥 Buka panel export laporan...');
+      _addBot('📥 Opening report export panel...');
       await Future.delayed(const Duration(milliseconds: 400));
       await _showExportSheet();
       return;
@@ -701,7 +701,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
 
     final sentiment = _detectSentiment(text);
 
-    // Fetch analytics + menu data secara paralel
+    // Fetch analytics + menu data in parallel
     final results = await Future.wait([
       _fetchAnalyticsData(),
       _fetchMenuData(),
@@ -724,7 +724,7 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
       });
     }
 
-    // Format detail menu untuk system prompt
+    // Format menu detail for the system prompt
     final menuTersedia = (menuData['menu_tersedia'] as List? ?? [])
         .cast<Map<String, dynamic>>();
     final menuDetail = menuTersedia.map((m) =>
@@ -737,60 +737,60 @@ bool _quickActionsExpanded = false; // ← TAMBAH BARIS INI
     final rankingMargin = (menuData['ranking_margin'] as List? ?? []);
 
     final systemPrompt = '''
-Kamu adalah AI Analytics restoran yang cerdas dan helpful untuk tim internal.
+You are a smart, helpful restaurant Analytics AI for the internal team.
 
-DATA ANALYTICS (sudah diambil dari database real-time):
+ANALYTICS DATA (already fetched from the real-time database):
 ${data.toString()}
 
-DATA MENU RESTORAN (real-time dari database):
-- Total menu: ${menuData['total_menu']} item (tersedia: ${menuData['total_tersedia']}, tidak tersedia: ${menuData['total_tidak_tersedia']})
-- Menu tidak tersedia saat ini: ${menuTidakTersedia.isEmpty ? 'tidak ada' : menuTidakTersedia.join(', ')}
-- Ranking margin terbaik: ${rankingMargin.isEmpty ? 'belum ada data COGS' : rankingMargin.join(' | ')}
+RESTAURANT MENU DATA (real-time from the database):
+- Total menu items: ${menuData['total_menu']} (available: ${menuData['total_tersedia']}, unavailable: ${menuData['total_tidak_tersedia']})
+- Currently unavailable menu items: ${menuTidakTersedia.isEmpty ? 'none' : menuTidakTersedia.join(', ')}
+- Best margin ranking: ${rankingMargin.isEmpty ? 'no COGS data yet' : rankingMargin.join(' | ')}
 
-DETAIL MENU YANG TERSEDIA:
-${menuDetail.isEmpty ? '(belum ada menu tersedia)' : menuDetail}
+DETAIL OF AVAILABLE MENU ITEMS:
+${menuDetail.isEmpty ? '(no menu items available yet)' : menuDetail}
 
-KEMAMPUAN KAMU:
-- Analisis performa hari ini, minggu ini, bulan ini
-- Bandingkan revenue/order minggu ini vs minggu lalu
-- Identifikasi jam paling ramai
-- Analisis menu terlaris & margin keuntungan
-- Hitung pertumbuhan bisnis
-- Peringatan stok menipis/habis
-- Info booking hari ini (confirmed, pending, no-show, daftar tamu)
-- Info lengkap menu: harga, kategori, allergen, dietary, COGS, margin
-- Rekomendasikan menu berdasarkan margin, kategori, atau dietary preference
-- Analisis order berdasarkan tipe (app, staff, qr_order, dll)
-- Berikan rekomendasi actionable berdasarkan data
+YOUR CAPABILITIES:
+- Analyze performance today, this week, this month
+- Compare revenue/orders this week vs last week
+- Identify the busiest hour
+- Analyze best-selling menu items & profit margins
+- Calculate business growth
+- Warn about low/out-of-stock inventory
+- Info on today's bookings (confirmed, pending, no-show, guest list)
+- Full menu info: price, category, allergen, dietary, COGS, margin
+- Recommend menu items based on margin, category, or dietary preference
+- Analyze orders by type (app, staff, qr_order, etc.)
+- Give actionable recommendations based on the data
 
-ATURAN MENU:
-- Jika ditanya tentang allergen (contoh: "ada menu bebas gluten?"), cek kolom allergen di data menu
-- Jika ditanya tentang dietary (contoh: "ada menu vegetarian?"), cek kolom dietary di data menu
-- Jika ditanya margin atau profitabilitas menu, gunakan data ranking_margin dan detail margin per item
-- Jika ditanya COGS atau harga pokok, tampilkan dari data menu
-- Jika menu belum punya data COGS, sampaikan bahwa data belum diisi
-- Selalu rekomendasikan menu dengan margin tinggi jika relevan
+MENU RULES:
+- If asked about allergens (e.g. "any gluten-free menu items?"), check the allergen column in the menu data
+- If asked about dietary (e.g. "any vegetarian menu items?"), check the dietary column in the menu data
+- If asked about margin or menu profitability, use the ranking_margin data and per-item margin detail
+- If asked about COGS or cost price, show it from the menu data
+- If a menu item doesn't have COGS data yet, say the data hasn't been filled in
+- Always recommend high-margin menu items when relevant
 
-ATURAN ORDER TYPE:
-- Data order_type di hari_ini berisi breakdown per tipe: app, staff, qr_order, atau lainnya
-- Jika ditanya "paling banyak dari mana" atau "app/staff/qr", gunakan data order_type
-- Tampilkan jumlah transaksi dan revenue per tipe pemesanan
+ORDER TYPE RULES:
+- The order_type data under hari_ini contains a breakdown per type: app, staff, qr_order, or other
+- If asked "where do most orders come from" or "app/staff/qr", use the order_type data
+- Show the transaction count and revenue per order type
 
-ATURAN PROACTIVE INSIGHT:
-- Jika ada data di "stok_habis_atau_dibawah_minimum", SELALU tampilkan peringatan 🚨 di awal respons
-- Jika ada data di "stok_hampir_habis", tampilkan peringatan ⚠️
-- Jika order dibatalkan > 20% dari total order, beri peringatan dan saran
-- Jika pertumbuhan minggu negatif, berikan analisis dan rekomendasi
+PROACTIVE INSIGHT RULES:
+- If there's data under "stok_habis_atau_dibawah_minimum", ALWAYS show a 🚨 warning at the start of the response
+- If there's data under "stok_hampir_habis", show a ⚠️ warning
+- If cancelled orders > 20% of total orders, give a warning and suggestion
+- If weekly growth is negative, give analysis and recommendations
 
-ATURAN FORMAT:
-- Jawab dalam Bahasa Indonesia yang ramah dan profesional
-- Format angka rupiah dengan titik sebagai separator ribuan (Rp 1.250.000)
-- Jika ditanya perbandingan, tampilkan kedua angka + persentase perubahan
-- Gunakan emoji secukupnya untuk keterbacaan
-- Berikan insight dan rekomendasi, bukan hanya angka mentah
+FORMAT RULES:
+- Reply in friendly, professional English
+- Format rupiah numbers with a period as the thousands separator (Rp 1.250.000)
+- If asked for a comparison, show both numbers + the percentage change
+- Use emoji sparingly for readability
+- Give insight and recommendations, not just raw numbers
 
-SENTIMENT STAFF: $sentiment
-${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan mengakui urgensi. Sarankan eskalasi ke manager jika perlu.' : sentiment == 'negative' ? '- Staff mengalami kesulitan. Mulai dengan empati, akui masalah dulu, gunakan tone supportif, berikan langkah troubleshooting yang jelas.' : '- Respons normal, ramah dan profesional.'}
+STAFF SENTIMENT: $sentiment
+${sentiment == 'urgent' ? '- URGENT: Prioritize a quick solution. Start by acknowledging the urgency. Suggest escalating to a manager if needed.' : sentiment == 'negative' ? '- The staff member is having difficulty. Start with empathy, acknowledge the problem first, use a supportive tone, give clear troubleshooting steps.' : '- Respond normally, friendly and professional.'}
 ''';
 
     try {
@@ -799,7 +799,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
           ? allMessages.sublist(allMessages.length - 10)
           : allMessages;
 
-      // Exclude pesan user terakhir (yang baru saja ditambahkan)
+      // Exclude the last user message (the one just added)
       final history = recent
           .where((m) => m != allMessages.last)
           .map((m) => {'role': m.role, 'content': m.content})
@@ -905,7 +905,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
                   ..._branches.map((b) => DropdownMenuItem<String?>(
@@ -921,7 +921,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
                   });
                   ref.read(chatProvider.notifier).clearHistory();
                   _addBot(
-                    '🏢 Beralih ke cabang: ${val == null ? "Semua Cabang" : _branches.firstWhere((b) => b.id == val).name}\n\nSilakan ajukan pertanyaan 👇',
+                    '🏢 Switched to branch: ${val == null ? "All Branches" : _branches.firstWhere((b) => b.id == val).name}\n\nGo ahead and ask a question 👇',
                   );
                 },
               ),
@@ -930,18 +930,18 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
           // Tombol clear history
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
-            tooltip: 'Hapus History Chat',
+            tooltip: 'Clear Chat History',
             onPressed: () {
               ref.read(chatProvider.notifier).clearHistory();
               _addBot(
-                '👋 Halo! Saya **Resto Analytics AI**.\n\n'
-                'Saya bisa bantu:\n'
-                '• 📊 Report harian\n'
-                '• 🏆 Analisis menu & margin\n'
-                '• 📦 Status inventory\n'
-                '• 🍽️ Info menu, allergen & dietary\n'
-                '• 💡 Insight bisnis\n\n'
-                'Silakan pilih atau ketik pertanyaan 👇',
+                '👋 Hi! I\'m **Resto Analytics AI**.\n\n'
+                'I can help with:\n'
+                '• 📊 Daily reports\n'
+                '• 🏆 Menu & margin analysis\n'
+                '• 📦 Inventory status\n'
+                '• 🍽️ Menu, allergen & dietary info\n'
+                '• 💡 Business insights\n\n'
+                'Pick an option or type a question below 👇',
               );
             },
           ),
@@ -985,7 +985,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  hasUrgent ? 'Stok Di Bawah Minimum!' : 'Stok Hampir Habis',
+                  hasUrgent ? 'Stock Below Minimum!' : 'Stock Running Low',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
@@ -1012,7 +1012,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
           ),
           GestureDetector(
             onTap: () => _send(
-                'Tampilkan detail peringatan stok yang bermasalah dan rekomendasinya'),
+                'Show details of the problematic stock warnings and recommendations'),
             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1057,7 +1057,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
         },
       );
 
-  // Bot bubble dengan MarkdownBody
+  // Bot bubble using MarkdownBody
   Widget _buildBotBubble(ChatMessage m) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
@@ -1209,7 +1209,7 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritaskan solusi cepat. Mulai dengan men
           ),
         ),
 
-        // ── Grid 2 kolom (hanya saat expanded) ────────────────
+        // ── 2-column grid (only when expanded) ────────────────
         if (_quickActionsExpanded)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -1291,7 +1291,7 @@ Color _categoryColor(String category) {
                 onSubmitted: (_) => _send(),
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Ketik pertanyaan...',
+                  hintText: 'Type a question...',
                   hintStyle: const TextStyle(
                     fontFamily: 'Poppins',
                     color: AppColors.textHint,

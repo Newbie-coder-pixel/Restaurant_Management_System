@@ -1,6 +1,6 @@
 // lib/features/auth/presentation/staff_reset_password_screen.dart
-// Layar untuk staff membuat password baru setelah klik link reset dari email.
-// Dibuka via route /reset-password (lihat app_router.dart, redirect type=recovery).
+// Screen for staff to set a new password after clicking the reset link from the email.
+// Opened via the /reset-password route (see app_router.dart, redirect type=recovery).
 import 'dart:js_interop';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -40,15 +40,15 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
     final confirmPass = _confirmCtrl.text.trim();
 
     if (newPass.isEmpty) {
-      _err('Password baru wajib diisi.');
+      _err('New password is required.');
       return;
     }
     if (newPass.length < 6) {
-      _err('Password minimal 6 karakter.');
+      _err('Password must be at least 6 characters.');
       return;
     }
     if (newPass != confirmPass) {
-      _err('Konfirmasi password tidak cocok.');
+      _err('Password confirmation does not match.');
       return;
     }
 
@@ -61,7 +61,7 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
     } on AuthException catch (e) {
       if (mounted) _err(_translate(e.message));
     } catch (_) {
-      if (mounted) _err('Gagal mereset password. Coba lagi.');
+      if (mounted) _err('Failed to reset password. Try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -70,15 +70,15 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
   String _translate(String raw) {
     final msg = raw.toLowerCase();
     if (msg.contains('same password')) {
-      return 'Password baru tidak boleh sama dengan password lama.';
+      return 'The new password cannot be the same as the old password.';
     }
     if (msg.contains('weak password') || msg.contains('password should be')) {
-      return 'Password terlalu lemah. Gunakan minimal 6 karakter.';
+      return 'Password is too weak. Use at least 6 characters.';
     }
     if (msg.contains('session') || msg.contains('expired')) {
-      return 'Link sudah kedaluwarsa. Minta link reset baru dari halaman login.';
+      return 'The link has expired. Request a new reset link from the login page.';
     }
-    return 'Terjadi kesalahan: $raw';
+    return 'An error occurred: $raw';
   }
 
   void _err(String m) {
@@ -94,8 +94,8 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
     ));
   }
 
-  // Bersihkan `?type=recovery` dari URL supaya router tidak terus-terusan
-  // memaksa balik ke layar ini setiap kali navigasi setelah selesai reset.
+  // Clear `?type=recovery` from the URL so the router doesn't keep
+  // forcing a return to this screen on every navigation after the reset is done.
   void _goToLogin() {
     if (kIsWeb) {
       try {
@@ -149,7 +149,7 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
                 color: AppColors.available, size: 60),
           ),
           const SizedBox(height: 32),
-          const Text('Password Berhasil Diubah!',
+          const Text('Password Changed Successfully!',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontFamily: 'Poppins',
@@ -157,7 +157,7 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary)),
           const SizedBox(height: 12),
-          const Text('Silakan masuk kembali dengan password baru kamu.',
+          const Text('Please log in again with your new password.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontFamily: 'Poppins', fontSize: 14, color: AppColors.textSecondary)),
@@ -173,7 +173,7 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
-              child: const Text('Ke Halaman Login',
+              child: const Text('Go to Login Page',
                   style: TextStyle(
                       fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700)),
             ),
@@ -185,14 +185,14 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Buat Password Baru',
+          const Text('Create New Password',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary)),
           const SizedBox(height: 4),
-          const Text('Masukkan password baru untuk akun staff kamu.',
+          const Text('Enter a new password for your staff account.',
               style: TextStyle(
                   fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
           const SizedBox(height: 24),
@@ -200,8 +200,8 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
             controller: _newPassCtrl,
             obscureText: _obscureNew,
             decoration: InputDecoration(
-              labelText: 'Password Baru',
-              hintText: 'Minimal 6 karakter',
+              labelText: 'New Password',
+              hintText: 'At least 6 characters',
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
                 icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
@@ -215,8 +215,8 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
             obscureText: _obscureConfirm,
             onSubmitted: (_) => _submit(),
             decoration: InputDecoration(
-              labelText: 'Konfirmasi Password',
-              hintText: 'Ulangi password baru',
+              labelText: 'Confirm Password',
+              hintText: 'Repeat the new password',
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
                 icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
@@ -240,7 +240,7 @@ class _StaffResetPasswordScreenState extends State<StaffResetPasswordScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
-                  : const Text('Simpan Password Baru'),
+                  : const Text('Save New Password'),
             ),
           ),
         ],

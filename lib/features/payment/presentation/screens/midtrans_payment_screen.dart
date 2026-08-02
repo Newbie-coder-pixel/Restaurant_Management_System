@@ -1,8 +1,8 @@
 // lib/features/payment/presentation/screens/midtrans_payment_screen.dart
 // ─────────────────────────────────────────────────────────────────────────────
 // Midtrans Payment Screen
-// Menggantikan payment_panel_screen.dart yang manual.
-// Tampilan: breakdown order → tombol "Bayar Sekarang" → buka Snap Midtrans
+// Replaces the old manual payment_panel_screen.dart.
+// UI: order breakdown → "Pay Now" button → opens Midtrans Snap
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'package:flutter/material.dart';
@@ -52,7 +52,7 @@ class MidtransPaymentScreen extends ConsumerStatefulWidget {
 class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
   String? _branchId;
 
-  // Kalkulasi breakdown
+  // Breakdown calculation
   double get _subtotal => widget.order.subtotal;
   double get _serviceCharge => _subtotal * 0.03;
   double get _pb1 => (_subtotal + _serviceCharge) * 0.10;
@@ -75,9 +75,9 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
 
     final notifier = ref.read(activeMidtransProvider.notifier);
 
-    // Atribusikan order ke staff yang memproses pembayaran, supaya terhitung
-    // di Staff Performance (get_staff_performance RPC baca orders.cashier_id).
-    // Non-blocking: kalau gagal, jangan halangi proses bayar tetap jalan.
+    // Attribute the order to the staff member processing the payment, so it
+    // counts in Staff Performance (get_staff_performance RPC reads orders.cashier_id).
+    // Non-blocking: if it fails, don't stop the payment flow from continuing.
     final cashierId = ref.read(currentStaffProvider)?.id;
     if (cashierId != null) {
       try {
@@ -86,7 +86,7 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
             .update({'cashier_id': cashierId})
             .eq('id', widget.order.id);
       } catch (e) {
-        debugPrint('[Midtrans] Gagal set cashier_id: $e');
+        debugPrint('[Midtrans] Failed to set cashier_id: $e');
       }
     }
 
@@ -98,11 +98,11 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
         if (status == MidtransPaymentStatus.paid) {
           _showSuccessSheet();
         } else if (status == MidtransPaymentStatus.failed) {
-          _showError('Pembayaran gagal. Silakan coba lagi.');
+          _showError('Payment failed. Please try again.');
         } else if (status == MidtransPaymentStatus.pending) {
           _showPendingSheet();
         }
-        // cancelled → tidak perlu tampil apa-apa, screen kembali normal
+        // cancelled → nothing to show, screen returns to normal
       },
     );
   }
@@ -169,7 +169,7 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _showError('Gagal mencetak struk: $e');
+      _showError('Failed to print receipt: $e');
     }
   }
 
@@ -192,7 +192,7 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
             const SizedBox(height: 16),
 
             // ── Breakdown ──────────────────────────────────────────────
-            const _SectionLabel('Rincian Pembayaran'),
+            const _SectionLabel('Payment Breakdown'),
             const SizedBox(height: 8),
             _BreakdownCard(
               subtotal: _subtotal,
@@ -204,11 +204,11 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ── Info Midtrans ──────────────────────────────────────────
+            // ── Midtrans Info ──────────────────────────────────────────
             _MidtransInfoBox(),
             const SizedBox(height: 24),
 
-            // ── Tombol Bayar ───────────────────────────────────────────
+            // ── Pay Button ───────────────────────────────────────────
             _PayButton(
               total: _total,
               isLoading: state.isLoading,
@@ -219,7 +219,7 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
         ),
       ),
 
-      // ── Overlay loading + polling ──────────────────────────────────────
+      // ── Loading + polling overlay ──────────────────────────────────────
       if (state.isLoading)
         Positioned.fill(
           child: _LoadingOverlay(
@@ -263,7 +263,7 @@ class _OrderHeader extends StatelessWidget {
               const Icon(Icons.table_restaurant_outlined,
                   size: 13, color: AppColors.textHint),
               const SizedBox(width: 4),
-              Text('Meja ${order.tableNumber}',
+              Text('Table ${order.tableNumber}',
                   style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
@@ -362,7 +362,7 @@ class _OrderItemsCard extends StatelessWidget {
               ]),
             )),
         if (order.items.length > 5)
-          Text('+${order.items.length - 5} item lainnya',
+          Text('+${order.items.length - 5} more item(s)',
               style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 11,
@@ -400,10 +400,10 @@ class _BreakdownCard extends StatelessWidget {
       child: Column(children: [
         _Row('Subtotal', subtotal),
         _Row('Service Charge (3%)', serviceCharge),
-        _Row('PB1 / Pajak (10%)', pb1),
-        if (discount > 0) _Row('Diskon', -discount, isDiscount: true),
+        _Row('PB1 / Tax (10%)', pb1),
+        if (discount > 0) _Row('Discount', -discount, isDiscount: true),
         if (overtimeCharge > 0)
-          _Row('Kelebihan Waktu Makan (>2 jam)', overtimeCharge),
+          _Row('Extra Dining Time (>2 hrs)', overtimeCharge),
         const Divider(height: 16, color: AppColors.border),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -467,10 +467,10 @@ class _Row extends StatelessWidget {
 class _MidtransInfoBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // Metode yang didukung lewat Midtrans
+    // Methods supported via Midtrans
     const methods = [
-      ('💳', 'Kartu Kredit/Debit'),
-      ('📱', 'QRIS (GoPay, OVO, Dana, dll)'),
+      ('💳', 'Credit/Debit Card'),
+      ('📱', 'QRIS (GoPay, OVO, Dana, etc.)'),
       ('🟢', 'GoPay'),
       ('🟠', 'ShopeePay'),
       ('🏦', 'Virtual Account (BCA, BNI, BRI, Mandiri)'),
@@ -500,7 +500,7 @@ class _MidtransInfoBox extends StatelessWidget {
               color: AppColors.available.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Text('Aman & Terenkripsi',
+            child: const Text('Safe & Encrypted',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 10,
@@ -509,7 +509,7 @@ class _MidtransInfoBox extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 10),
-        const Text('Metode pembayaran tersedia:',
+        const Text('Available payment methods:',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 12,
@@ -583,7 +583,7 @@ class _PayButton extends StatelessWidget {
             : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 const Icon(Icons.payment_rounded, size: 20),
                 const SizedBox(width: 10),
-                Text('Bayar ${_fmtRp(total)}',
+                Text('Pay ${_fmtRp(total)}',
                     style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 16,
@@ -608,15 +608,15 @@ class _LoadingOverlay extends StatelessWidget {
     final (icon, title, subtitle) = switch (state.step) {
       MidtransFlowStep.creatingToken => (
           Icons.lock_clock_outlined,
-          'Menyiapkan pembayaran...',
-          'Menghubungkan ke Midtrans',
+          'Preparing payment...',
+          'Connecting to Midtrans',
         ),
       MidtransFlowStep.polling => (
           Icons.sync_rounded,
-          'Mengecek status pembayaran...',
-          'Mohon tunggu (${state.pollingAttempt}/${state.maxPollingAttempts})',
+          'Checking payment status...',
+          'Please wait (${state.pollingAttempt}/${state.maxPollingAttempts})',
         ),
-      _ => (Icons.hourglass_top, 'Memproses...', ''),
+      _ => (Icons.hourglass_top, 'Processing...', ''),
     };
 
     return Container(
@@ -634,7 +634,7 @@ class _LoadingOverlay extends StatelessWidget {
             ],
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            // Animasi progress untuk polling
+            // Progress animation for polling
             if (state.step == MidtransFlowStep.polling)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -672,19 +672,19 @@ class _LoadingOverlay extends StatelessWidget {
                       color: AppColors.textSecondary),
                   textAlign: TextAlign.center),
             ],
-            // ── Tombol Tutup ───────────────────────────────────────────
-            // Penting: hanya tampil saat step polling (bukan creatingToken
-            // yang biasanya cuma 1-2 detik & belum ada transaksi tercatat).
-            // Transaksi yang sudah dibuat di Midtrans TETAP akan terbayar
-            // kalau pelanggan lanjut bayar — menutup overlay ini cuma
-            // menghentikan tampilan & pengecekan otomatis di app, bukan
-            // membatalkan transaksi di sisi Midtrans.
+            // ── Close Button ───────────────────────────────────────────
+            // Important: only shown during the polling step (not
+            // creatingToken, which is usually just 1-2 seconds & has no
+            // recorded transaction yet). A transaction already created in
+            // Midtrans will STILL be payable if the customer continues —
+            // closing this overlay only stops the app's automatic display &
+            // checking, it does not cancel the transaction on Midtrans's side.
             if (state.step == MidtransFlowStep.polling) ...[
               const SizedBox(height: 16),
               TextButton(
                 onPressed: onCancel,
                 child: const Text(
-                  'Tutup',
+                  'Close',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 13,
@@ -740,7 +740,7 @@ class _SuccessSheet extends StatelessWidget {
               size: 52, color: AppColors.available),
         ),
         const SizedBox(height: 16),
-        const Text('Pembayaran Berhasil!',
+        const Text('Payment Successful!',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,
@@ -765,7 +765,7 @@ class _SuccessSheet extends StatelessWidget {
             Expanded(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                label: const Text('Struk',
+                label: const Text('Receipt',
                     style: TextStyle(
                         fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                 onPressed: onPrint,
@@ -790,7 +790,7 @@ class _SuccessSheet extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Selesai',
+              child: const Text('Done',
                   style: TextStyle(
                       fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
             ),
@@ -836,7 +836,7 @@ class _PendingSheet extends StatelessWidget {
               size: 40, color: Color(0xFFD97706)),
         ),
         const SizedBox(height: 16),
-        const Text('Menunggu Pembayaran',
+        const Text('Awaiting Payment',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 20,
@@ -844,8 +844,8 @@ class _PendingSheet extends StatelessWidget {
                 color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         Text(
-          'Order #${order.orderNumber} sedang menunggu konfirmasi pembayaran. '
-          'Ini biasa terjadi untuk transfer VA atau QRIS.',
+          'Order #${order.orderNumber} is awaiting payment confirmation. '
+          'This is normal for VA transfers or QRIS.',
           style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 13,
@@ -858,7 +858,7 @@ class _PendingSheet extends StatelessWidget {
           width: double.infinity,
           child: ElevatedButton.icon(
             icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Cek Status Pembayaran',
+            label: const Text('Check Payment Status',
                 style:
                     TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
             onPressed: onCheckStatus,
@@ -874,7 +874,7 @@ class _PendingSheet extends StatelessWidget {
         const SizedBox(height: 10),
         TextButton(
           onPressed: onDone,
-          child: const Text('Tutup (cek nanti)',
+          child: const Text('Close (check later)',
               style: TextStyle(
                   fontFamily: 'Poppins', color: AppColors.textSecondary)),
         ),

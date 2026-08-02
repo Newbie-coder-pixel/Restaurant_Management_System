@@ -18,15 +18,15 @@ class InventoryCard extends ConsumerWidget {
 
     if (item.isOutOfStock) {
       statusColor = Colors.red.shade500;
-      statusLabel = 'Habis';
+      statusLabel = 'Out of Stock';
       statusIcon = Icons.remove_circle_outline;
     } else if (item.isLowStock) {
       statusColor = Colors.orange.shade600;
-      statusLabel = 'Hampir Habis';
+      statusLabel = 'Low Stock';
       statusIcon = Icons.warning_amber_rounded;
     } else {
       statusColor = Colors.green.shade600;
-      statusLabel = 'Tersedia';
+      statusLabel = 'Available';
       statusIcon = Icons.check_circle_outline;
     }
 
@@ -158,7 +158,7 @@ class InventoryCard extends ConsumerWidget {
                     ],
                   ),
 
-                  // Satuan sekunder (misal: ≈ 90 butir)
+                  // Secondary unit (e.g. ≈ 90 pieces)
                   if (item.hasSecondaryUnit)
                     Text(
                       '≈ ${_formatQty(item.availableStockSecondary)} ${item.unitSecondary}',
@@ -170,7 +170,7 @@ class InventoryCard extends ConsumerWidget {
                     ),
 
                   Text(
-                    'Stok Tersedia',
+                    'Available Stock',
                     style: TextStyle(
                       fontSize: 9,
                       color: colorScheme.onSurface.withValues(alpha: 0.45),
@@ -193,18 +193,18 @@ class InventoryCard extends ConsumerWidget {
 
                   const SizedBox(height: 8),
 
-                  // Awal / Terpakai / Akhir
+                  // Opening / Used / Closing
                   Row(
                     children: [
                       _MiniStat(
-                        label: 'Awal',
+                        label: 'Opening',
                         value: _formatQty(item.openingStock),
                         unit: item.unit,
                         color: Colors.blue.shade400,
                       ),
                       const Spacer(),
                       _MiniStat(
-                        label: 'Pakai',
+                        label: 'Used',
                         value: _formatQty(item.usedStock),
                         unit: item.hasSecondaryUnit
                             ? '${item.unitSecondary}'
@@ -217,7 +217,7 @@ class InventoryCard extends ConsumerWidget {
                       ),
                       const Spacer(),
                       _MiniStat(
-                        label: 'Akhir',
+                        label: 'Closing',
                         value: _formatQty(item.closingStock),
                         unit: item.unit,
                         color: statusColor,
@@ -294,7 +294,7 @@ class _MiniStat extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 1),
-        // Tampilkan satuan sekunder jika ada
+        // Show the secondary unit if present
         if (secondaryValue != null)
           Text(
             '${isNegative ? '-' : ''}$secondaryValue $unit',

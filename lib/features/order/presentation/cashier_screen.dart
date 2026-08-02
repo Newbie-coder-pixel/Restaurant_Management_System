@@ -27,11 +27,11 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
   // ── Branch filter (superadmin only) ──────────────────────────────────────
   List<Map<String, dynamic>> _branches = [];
-  String? _selectedBranchId; // null = semua cabang
+  String? _selectedBranchId; // null = all branches
 
   // ── Bill request notification tracking ───────────────────────────────────
   RealtimeChannel? _billChannel;
-  // Apakah bottom sheet sedang terbuka
+  // Whether the bottom sheet is currently open
   bool _billSheetOpen = false;
 
   @override
@@ -50,7 +50,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     _subscribeBillRealtime();
   }
 
-  // ── Load daftar branch (superadmin only) ─────────────────────────────────
+  // ── Load the branch list (superadmin only) ───────────────────────────────
   Future<void> _loadBranches() async {
     if (!_isSuperAdmin) return;
     try {
@@ -89,10 +89,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             order_items(*)
           ''')
           .eq('status', 'served')
-          // FIX: tambah 'unpaid' (standar baru) dan null-check untuk order lama
-          // yang dibuat sebelum kolom payment_status diisi secara konsisten
+          // FIX: add 'unpaid' (the new standard) and a null check for old orders
+          // created before the payment_status column was populated consistently
           .or('payment_status.eq.unpaid,payment_status.eq.pending,payment_status.is.null')
-          .gt('total_amount', 0); // exclude order kosong (Rp 0)
+          .gt('total_amount', 0); // exclude empty orders (Rp 0)
       if (effectiveBranchId != null) query = query.eq('branch_id', effectiveBranchId);
       final res = await query.order('created_at', ascending: true);
 
@@ -103,8 +103,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               .toList();
           _isLoading = false;
         });
-        // Setelah load: cek order yang sudah bill_requested = true
-        // supaya kasir yang baru buka halaman langsung lihat notif
+        // After loading: check for orders with bill_requested = true
+        // so a cashier who just opened the page sees the notification right away
         _checkAndShowBillSheet();
       }
     } catch (e) {
@@ -144,7 +144,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     super.dispose();
   }
 
-  // ── Subscribe khusus untuk bill_requested ────────────────────────────────
+  // ── Dedicated subscription for bill_requested ────────────────────────────
   void _subscribeBillRealtime() {
     _billChannel?.unsubscribe();
     if (!_isSuperAdmin && _branchId == null) return;
@@ -172,21 +172,21 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             final billRequested = newRecord['bill_requested'] as bool? ?? false;
             final orderId = newRecord['id'] as String? ?? '';
             if (billRequested && orderId.isNotEmpty) {
-              _load(); // refresh list dulu, lalu sheet akan auto-update
+              _load(); // refresh the list first, then the sheet auto-updates
             }
           },
         )
         .subscribe();
   }
 
-  // ── Cek & tampilkan bill sheet jika ada order yang minta bill ───────────
+  // ── Check for & show the bill sheet if any order requested a bill ───────
   void _checkAndShowBillSheet() {
     final billOrders = _orders.where((o) => o.billRequested).toList();
     if (billOrders.isEmpty) return;
-    // Kalau sheet sudah terbuka, tidak perlu buka lagi — sheet
-    // akan rebuild sendiri karena setState di _load()
+    // If the sheet is already open, no need to open it again — it
+    // will rebuild itself thanks to setState in _load()
     if (_billSheetOpen) return;
-    // Delay supaya widget sudah selesai build setelah setState
+    // Delay so the widget has finished building after setState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _showBillSheet();
@@ -204,7 +204,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _BillRequestSheet(
-        // Kirim getter live supaya sheet bisa rebuild saat _orders berubah
+        // Pass a live getter so the sheet can rebuild when _orders changes
         getOrders: () => _orders.where((o) => o.billRequested).toList(),
         onSelectOrder: (order) {
           Navigator.pop(ctx);
@@ -218,8 +218,8 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }
 
   // ─── CANCEL ORDER ─────────────────────────────────────────────────────────
-  // Cashier screen hanya load order berstatus ready/served,
-  // sehingga cancel hanya relevan untuk kedua status ini.
+  // The cashier screen only loads orders with ready/served status,
+  // so cancelling is only relevant for those two statuses.
   bool _canCancel(OrderModel order) =>
       order.status == OrderStatus.ready ||
       order.status == OrderStatus.served;
@@ -229,7 +229,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content:
-            Text('Order yang sudah siap/tersaji tidak dapat dibatalkan.'),
+            Text('Orders that are already ready/served cannot be cancelled.'),
         backgroundColor: _red,
       ));
       return;
@@ -253,23 +253,23 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                   color: Colors.orange, size: 20),
             ),
             const SizedBox(width: 10),
-            const Text('Perhatian',
+            const Text('Warning',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w700,
                     fontSize: 16)),
           ]),
           content: const Text(
-            'Dapur sedang memproses order ini.\n\n'
-            'Membatalkan order yang sedang dimasak dapat menyebabkan '
-            'pemborosan bahan. Yakin ingin melanjutkan?',
+            'The kitchen is currently preparing this order.\n\n'
+            'Cancelling an order that is being cooked can lead to '
+            'wasted ingredients. Are you sure you want to continue?',
             style: TextStyle(
                 fontFamily: 'Poppins', fontSize: 13, height: 1.5),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Tidak',
+              child: const Text('No',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       color: AppColors.textSecondary)),
@@ -282,7 +282,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('Lanjutkan',
+              child: const Text('Continue',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w600)),
@@ -297,11 +297,11 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     final reasonController = TextEditingController();
     String? selectedReason;
     final reasons = [
-      'Pelanggan membatalkan',
-      'Item tidak tersedia',
-      'Kesalahan input',
-      'Pesanan duplikat',
-      'Lainnya',
+      'Customer cancelled',
+      'Item unavailable',
+      'Input error',
+      'Duplicate order',
+      'Other',
     ];
 
     final confirmed = await showDialog<bool>(
@@ -322,7 +322,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                   color: _red, size: 20),
             ),
             const SizedBox(width: 10),
-            const Text('Batalkan Order',
+            const Text('Cancel Order',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w700,
@@ -339,7 +339,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                         fontWeight: FontWeight.w600,
                         color: AppColors.textSecondary)),
                 const SizedBox(height: 14),
-                const Text('Alasan Pembatalan *',
+                const Text('Cancellation Reason *',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 13,
@@ -363,7 +363,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                         .toList(),
                   ),
                 ),
-                if (selectedReason == 'Lainnya') ...[
+                if (selectedReason == 'Other') ...[
                   const SizedBox(height: 8),
                   TextField(
                     controller: reasonController,
@@ -371,7 +371,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                     style: const TextStyle(
                         fontFamily: 'Poppins', fontSize: 13),
                     decoration: InputDecoration(
-                      hintText: 'Tulis alasan...',
+                      hintText: 'Write a reason...',
                       hintStyle: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 13,
@@ -393,7 +393,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Tidak',
+              child: const Text('No',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       color: AppColors.textSecondary)),
@@ -409,7 +409,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('Ya, Batalkan',
+              child: const Text('Yes, Cancel',
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w600)),
@@ -421,9 +421,9 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
     if (confirmed != true) return;
 
-    final finalReason = selectedReason == 'Lainnya'
+    final finalReason = selectedReason == 'Other'
         ? (reasonController.text.trim().isEmpty
-            ? 'Lainnya'
+            ? 'Other'
             : reasonController.text.trim())
         : selectedReason!;
 
@@ -445,14 +445,14 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       if (!mounted) return;
       setState(() => _selected = null);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Order #${order.orderNumber} dibatalkan.'),
+        content: Text('Order #${order.orderNumber} cancelled.'),
         backgroundColor: _red,
       ));
       await _load();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Gagal membatalkan order.'),
+        content: Text('Failed to cancel order.'),
         backgroundColor: _red,
       ));
     }
@@ -487,7 +487,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                         child: TextButton.icon(
                           icon: const Icon(Icons.cancel_outlined,
                               size: 18, color: _red),
-                          label: const Text('Batalkan Order',
+                          label: const Text('Cancel Order',
                               style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontWeight: FontWeight.w600,
@@ -526,7 +526,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             if (_canCancel(_selected!))
               IconButton(
                 icon: const Icon(Icons.cancel_outlined),
-                tooltip: 'Batalkan Order',
+                tooltip: 'Cancel Order',
                 onPressed: () => _onCancelOrder(_selected!),
               ),
           ],
@@ -555,7 +555,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                     Icon(Icons.receipt_outlined,
                         size: 64, color: AppColors.textHint),
                     SizedBox(height: 12),
-                    Text('Tidak ada order pending',
+                    Text('No pending orders',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             color: AppColors.textSecondary)),
@@ -609,7 +609,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                         ),
                       ),
                       child: Row(children: [
-                        // Avatar dengan warna sesuai tipe
+                        // Avatar colored according to type
                         Container(
                           width: 42, height: 42,
                           decoration: BoxDecoration(
@@ -632,7 +632,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                               Row(children: [
                                 Text(
                                   o.tableNumber != null
-                                      ? 'Meja ${o.tableNumber}'
+                                      ? 'Table ${o.tableNumber}'
                                       : o.customerName != null
                                           ? 'Takeaway • ${o.customerName}'
                                           : 'Takeaway',
@@ -681,7 +681,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                                     child: const Row(mainAxisSize: MainAxisSize.min, children: [
                                       Icon(Icons.notifications_active, size: 9, color: Color(0xFFF59E0B)),
                                       SizedBox(width: 3),
-                                      Text('Minta Bill',
+                                      Text('Bill Requested',
                                         style: TextStyle(
                                           fontFamily: 'Poppins', fontSize: 9,
                                           fontWeight: FontWeight.w700,
@@ -730,7 +730,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Kasir'),
+        title: const Text('Cashier'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         titleTextStyle: const TextStyle(
@@ -753,7 +753,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Semua Cabang',
+                    child: Text('All Branches',
                         style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 11,
@@ -792,7 +792,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
             Icon(Icons.touch_app_outlined,
                 size: 64, color: AppColors.textHint),
             SizedBox(height: 12),
-            Text('Pilih order untuk proses pembayaran',
+            Text('Select an order to process payment',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     color: AppColors.textSecondary)),
@@ -802,7 +802,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 }
 
 // ─── Bill Request Bottom Sheet ────────────────────────────────────────────────
-// Stateful supaya bisa polling perubahan _orders dari parent via getOrders()
+// Stateful so it can poll for changes to _orders from the parent via getOrders()
 class _BillRequestSheet extends StatefulWidget {
   final List<OrderModel> Function() getOrders;
   final void Function(OrderModel) onSelectOrder;
@@ -856,7 +856,7 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('🔔 Minta Bill',
+                  const Text('🔔 Bill Requests',
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w800,
@@ -864,15 +864,15 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
                           color: Color(0xFF1A1A2E))),
                   Text(
                     orders.length == 1
-                        ? '1 customer menunggu bill'
-                        : '${orders.length} customer menunggu bill',
+                        ? '1 customer waiting for the bill'
+                        : '${orders.length} customers waiting for the bill',
                     style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 12,
                         color: AppColors.textSecondary)),
                 ]),
               ),
-              // Badge jumlah
+              // Count badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -903,8 +903,8 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
               separatorBuilder: (_, __) => const Divider(height: 1, indent: 20, endIndent: 20),
               itemBuilder: (_, i) {
                 final o = orders[i];
-                final lokasi = o.tableNumber != null
-                    ? 'Meja ${o.tableNumber}'
+                final location = o.tableNumber != null
+                    ? 'Table ${o.tableNumber}'
                     : o.customerName != null
                         ? o.customerName!
                         : 'Takeaway';
@@ -913,7 +913,7 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   child: Row(children: [
-                    // Avatar nomor antrian / meja
+                    // Queue number / table avatar
                     Container(
                       width: 44, height: 44,
                       decoration: BoxDecoration(
@@ -936,7 +936,7 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(lokasi,
+                          Text(location,
                               style: const TextStyle(
                                   fontFamily: 'Poppins',
                                   fontWeight: FontWeight.w700,
@@ -964,7 +964,7 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
                       ),
                     ),
 
-                    // Tombol Proses
+                    // Process button
                     ElevatedButton(
                       onPressed: () => widget.onSelectOrder(o),
                       style: ElevatedButton.styleFrom(
@@ -975,7 +975,7 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
-                      child: const Text('Proses',
+                      child: const Text('Process',
                           style: TextStyle(
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w700,
@@ -1002,7 +1002,7 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('Tutup — Proses Nanti',
+                child: const Text('Close — Process Later',
                     style: TextStyle(
                         fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
               ),

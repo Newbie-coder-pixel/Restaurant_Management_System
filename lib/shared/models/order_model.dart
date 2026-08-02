@@ -1,15 +1,15 @@
 enum OrderStatus { new_, created, preparing, ready, served, cancelled, paid }
 
-/// Batas waktu makan gratis setelah makanan disajikan, sebelum kena
-/// biaya kelebihan waktu (table turnover charge).
+/// Free dine-in time limit after food is served, before an
+/// overtime fee (table turnover charge) applies.
 const Duration kMaxDineInDuration = Duration(hours: 2);
 
-/// Biaya kelebihan waktu per jam (atau kelipatannya) setelah kMaxDineInDuration.
+/// Overtime charge per hour (or fraction thereof) after kMaxDineInDuration.
 const int kOvertimeChargePerHour = 5000;
 
-/// Hitung biaya kelebihan waktu makan berdasarkan waktu makanan disajikan.
-/// Dipakai bersama oleh [OrderModel], kartu meja, dan alur pembayaran supaya
-/// rumusnya selalu sinkron di seluruh aplikasi.
+/// Calculate the dine-in overtime charge based on when the food was served.
+/// Shared by [OrderModel], the table card, and the payment flow so the
+/// formula always stays in sync across the app.
 int calculateOvertimeCharge(DateTime? servedAt, {DateTime? now}) {
   if (servedAt == null) return 0;
   final elapsed = (now ?? DateTime.now()).difference(servedAt);
@@ -26,17 +26,17 @@ enum OrderItemStatus { pending, preparing, ready, served, cancelled }
 extension OrderStatusExt on OrderStatus {
   String get label {
     switch (this) {
-      case OrderStatus.new_:      return 'Baru (Internal)';
-      case OrderStatus.created:   return 'Baru (QR)';
-      case OrderStatus.preparing: return 'Dimasak';
-      case OrderStatus.ready:     return 'Siap';
-      case OrderStatus.served:    return 'Disajikan';
-      case OrderStatus.cancelled: return 'Dibatalkan';
-      case OrderStatus.paid:      return 'Lunas';
+      case OrderStatus.new_:      return 'New (Internal)';
+      case OrderStatus.created:   return 'New (QR)';
+      case OrderStatus.preparing: return 'Preparing';
+      case OrderStatus.ready:     return 'Ready';
+      case OrderStatus.served:    return 'Served';
+      case OrderStatus.cancelled: return 'Cancelled';
+      case OrderStatus.paid:      return 'Paid';
     }
   }
 
-  /// Nilai yang benar-benar disimpan ke database
+  /// The value actually stored in the database
   String get dbValue {
     switch (this) {
       case OrderStatus.new_:    return 'new';
@@ -61,7 +61,7 @@ extension OrderStatusExt on OrderStatus {
 }
 
 extension OrderSourceExt on OrderSource {
-  /// Nilai yang benar-benar disimpan ke database (snake_case)
+  /// The value actually stored in the database (snake_case)
   String get dbValue {
     switch (this) {
       case OrderSource.dineIn:   return 'dine_in';
@@ -90,7 +90,7 @@ class OrderItem {
   final int quantity;
   final double unitPrice;
 
-  // FIX Bug 2: simpan nilai DB mentah, expose getter yang tervalidasi
+  // FIX Bug 2: store the raw DB value, expose a validated getter
   final double _subtotalFromDb;
 
   final OrderItemStatus status;
@@ -112,12 +112,12 @@ class OrderItem {
     this.inventoryItemId,
   }) : _subtotalFromDb = subtotal;
 
-  /// Subtotal yang dihitung ulang dari quantity × unitPrice.
+  /// Subtotal recalculated from quantity × unitPrice.
   double get calculatedSubtotal => quantity * unitPrice;
 
-  /// Subtotal yang dipakai untuk semua kalkulasi:
-  /// pakai nilai DB kalau valid (> 0), fallback ke kalkulasi lokal.
-  /// Ini melindungi dari data korup di DB tanpa membuang nilai yang benar.
+  /// Subtotal used for all calculations:
+  /// use the DB value if valid (> 0), fallback to the local calculation.
+  /// This protects against corrupt DB data without discarding a correct value.
   double get subtotal =>
       _subtotalFromDb > 0 ? _subtotalFromDb : calculatedSubtotal;
 
@@ -157,54 +157,54 @@ class OrderModel {
   final List<OrderItem> items;
   final DateTime createdAt;
   final DateTime? servedAt;
-  final int? estimatedPrepMinutes; // hasil prediksi ML
+  final int? estimatedPrepMinutes; // ML prediction result
   final bool billRequested;
   final DateTime? billRequestedAt;
   final String? customerPhone;
   final String? customerEmail;
   final String? queueNumber;
 
-  // FIX Bug 1: simpan total dari DB sebagai fallback kalau items kosong
+  // FIX Bug 1: store the DB total as a fallback in case items is empty
   final double _totalAmountFromDb;
   final double _subtotalFromDb;
   final double _taxAmountFromDb;
 
-  // Kalkulasi dari items (sumber kebenaran utama)
+  // Calculated from items (primary source of truth)
   double get subtotal => items.isNotEmpty
       ? items.fold(0.0, (sum, item) => sum + item.subtotal)
-      : _subtotalFromDb; // fallback ke nilai DB
+      : _subtotalFromDb; // fallback to the DB value
 
   double get pb1Amount => (subtotal + serviceChargeAmount) * 0.10;
   double get serviceChargeAmount => subtotal * 0.03;
   double get taxAmount => pb1Amount + serviceChargeAmount;
 
-  /// Total yang dipakai di seluruh app.
-  /// Prioritas: kalkulasi dari items → fallback ke total_amount dari DB.
-  /// Mencegah Rp 0 di cashier screen saat join order_items gagal.
+  /// Total used throughout the app.
+  /// Priority: calculated from items → fallback to total_amount from DB.
+  /// Prevents Rp 0 on the cashier screen when the order_items join fails.
   double get totalAmount {
     if (items.isNotEmpty) {
       return subtotal + taxAmount - discountAmount;
     }
-    // Fallback: pakai nilai DB kalau items tidak ter-load
+    // Fallback: use the DB value if items didn't load
     if (_totalAmountFromDb > 0) return _totalAmountFromDb;
-    // Last resort: estimasi dari subtotal DB + 13% - diskon
+    // Last resort: estimate from the DB subtotal + 13% - discount
     if (_subtotalFromDb > 0) {
       return _subtotalFromDb * 1.13 - discountAmount;
     }
     return 0.0;
   }
 
-  /// Biaya kelebihan waktu makan (Rp), dihitung dari [servedAt].
-  /// 0 kalau makanan belum disajikan atau belum melewati kMaxDineInDuration.
+  /// Dine-in overtime charge (Rp), calculated from [servedAt].
+  /// 0 if the food hasn't been served yet or hasn't exceeded kMaxDineInDuration.
   int get overtimeCharge => calculateOvertimeCharge(servedAt);
 
   bool get isOvertime => overtimeCharge > 0;
 
-  /// Total akhir yang harus dibayar, termasuk biaya kelebihan waktu (kalau ada).
+  /// Final total to be paid, including the overtime charge (if any).
   double get totalAmountWithOvertime => totalAmount + overtimeCharge;
 
-  /// True kalau totalAmount berasal dari fallback DB, bukan dari items.
-  /// Berguna untuk UI yang perlu menampilkan indikator "data mungkin tidak lengkap".
+  /// True if totalAmount came from the DB fallback rather than from items.
+  /// Useful for UI that needs to show a "data may be incomplete" indicator.
   bool get isTotalEstimated => items.isEmpty && _totalAmountFromDb <= 0 && _subtotalFromDb > 0;
 
   OrderModel({
@@ -242,8 +242,8 @@ class OrderModel {
             .toList()
         : <OrderItem>[];
 
-    // FIX Bug 4: gunakan createdAt dari DB kalau ada, jangan fallback ke now()
-    // karena itu akan merusak sorting history. Pakai epoch sebagai sentinel.
+    // FIX Bug 4: use createdAt from the DB if present, don't fall back to now()
+    // since that would break history sorting. Use epoch as a sentinel.
     final createdAtRaw = j['created_at'] as String?;
     final createdAt = createdAtRaw != null
         ? DateTime.tryParse(createdAtRaw) ?? DateTime.fromMillisecondsSinceEpoch(0)
@@ -274,15 +274,15 @@ class OrderModel {
       customerPhone: j['customer_phone'] as String?,
       customerEmail: j['customer_email'] as String?,
       queueNumber: j['queue_number'] as String?,
-      // FIX Bug 1: baca nilai finansial dari DB sebagai fallback
+      // FIX Bug 1: read financial values from the DB as a fallback
       totalAmountFromDb: (j['total_amount'] ?? 0).toDouble(),
       subtotalFromDb: (j['subtotal'] ?? 0).toDouble(),
       taxAmountFromDb: (j['tax_amount'] ?? 0).toDouble(),
     );
   }
 
-  /// Buat salinan dengan field tertentu yang diubah.
-  /// Berguna untuk optimistic update status tanpa re-fetch dari DB.
+  /// Create a copy with specific fields changed.
+  /// Useful for an optimistic status update without re-fetching from the DB.
   OrderModel copyWith({
     String? id,
     String? branchId,

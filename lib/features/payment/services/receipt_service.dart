@@ -1,9 +1,9 @@
 // lib/features/payment/services/receipt_service.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// Generate & cetak struk PDF untuk order yang sudah dibayar.
-// Layout mengikuti lebar kertas thermal 80mm (PdfPageFormat.roll80), dengan
-// blok QR promosi ke customer app di bagian bawah, terpisah dari rincian
-// harga — supaya tidak disangka bagian dari nominal yang harus dibayar.
+// Generates & prints a PDF receipt for a paid order.
+// Layout follows the 80mm thermal paper width (PdfPageFormat.roll80), with a
+// promotional QR block for the customer app at the bottom, separate from the
+// price breakdown — so it isn't mistaken for part of the amount due.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'package:intl/intl.dart';
@@ -23,8 +23,8 @@ final _currency = NumberFormat.currency(
 );
 
 class ReceiptService {
-  /// Ambil data cabang + metode pembayaran terkini dari Supabase, susun PDF
-  /// struk, lalu buka dialog cetak/bagikan bawaan OS (`Printing.layoutPdf`).
+  /// Fetches the branch data + the current payment method from Supabase, builds
+  /// the receipt PDF, then opens the OS's built-in print/share dialog (`Printing.layoutPdf`).
   static Future<void> printReceipt({
     required OrderModel order,
     String? cashierName,
@@ -39,7 +39,7 @@ class ReceiptService {
           .eq('id', order.branchId)
           .maybeSingle();
     } catch (_) {
-      branch = null; // Struk tetap dicetak tanpa detail cabang kalau gagal
+      branch = null; // The receipt still prints without branch details if this fails
     }
 
     String? paymentMethod;
@@ -65,7 +65,7 @@ class ReceiptService {
 
     await Printing.layoutPdf(
       onLayout: (_) => pdf.save(),
-      name: 'Struk-${order.orderNumber}',
+      name: 'Receipt-${order.orderNumber}',
       format: PdfPageFormat.roll80,
     );
   }
@@ -101,7 +101,7 @@ class ReceiptService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
-              // ── Header cabang ──────────────────────────────────────
+              // ── Branch header ──────────────────────────────────────
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
@@ -124,17 +124,17 @@ class ReceiptService {
               pw.SizedBox(height: 8),
               pw.Divider(thickness: 0.75, color: PdfColors.black),
 
-              // ── Meta order ──────────────────────────────────────────
-              _metaRow('No. Order', order.orderNumber),
+              // ── Order meta ──────────────────────────────────────────
+              _metaRow('Order No.', order.orderNumber),
               if (order.tableNumber != null)
-                _metaRow('Meja', order.tableNumber!),
-              _metaRow('Tanggal', _formatDate(order.createdAt)),
-              if (cashierName != null) _metaRow('Kasir', cashierName),
+                _metaRow('Table', order.tableNumber!),
+              _metaRow('Date', _formatDate(order.createdAt)),
+              if (cashierName != null) _metaRow('Cashier', cashierName),
 
               pw.SizedBox(height: 4),
               pw.Divider(thickness: 0.5, color: PdfColors.grey600),
 
-              // ── Item ──────────────────────────────────────────────
+              // ── Items ──────────────────────────────────────────────
               ...order.items.map((item) => pw.Padding(
                     padding: const pw.EdgeInsets.symmetric(vertical: 2),
                     child: pw.Column(
@@ -170,9 +170,9 @@ class ReceiptService {
               _totalRow('PB1 (10%)', order.pb1Amount),
               _totalRow('Service (3%)', order.serviceChargeAmount),
               if (order.discountAmount > 0)
-                _totalRow('Diskon', -order.discountAmount),
+                _totalRow('Discount', -order.discountAmount),
               if (order.overtimeCharge > 0)
-                _totalRow('Kelebihan Waktu Makan',
+                _totalRow('Extra Dining Time',
                     order.overtimeCharge.toDouble()),
               pw.SizedBox(height: 3),
               pw.Row(
@@ -190,8 +190,8 @@ class ReceiptService {
               pw.SizedBox(height: 6),
               pw.Text(
                 paymentMethod != null
-                    ? 'Dibayar - ${MidtransPaymentMethod.label(paymentMethod)}'
-                    : 'Dibayar',
+                    ? 'Paid - ${MidtransPaymentMethod.label(paymentMethod)}'
+                    : 'Paid',
                 style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
               ),
               pw.SizedBox(height: 6),
@@ -203,7 +203,7 @@ class ReceiptService {
                     border: pw.Border.all(color: PdfColors.blue900, width: 1.2),
                     borderRadius: pw.BorderRadius.circular(2),
                   ),
-                  child: pw.Text('LUNAS',
+                  child: pw.Text('PAID',
                       style: pw.TextStyle(
                           fontSize: 11,
                           fontWeight: pw.FontWeight.bold,
@@ -212,19 +212,19 @@ class ReceiptService {
                 ),
               ),
 
-              // ── Blok promosi customer app (terpisah dari struk fiskal) ──
+              // ── Customer app promo block (separate from the fiscal receipt) ──
               pw.SizedBox(height: 10),
               pw.Container(decoration: dashed, padding: const pw.EdgeInsets.only(top: 10)),
               pw.Center(
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('Pesan online & booking meja lain kali?',
+                    pw.Text('Order online & book a table next time?',
                         textAlign: pw.TextAlign.center,
                         style: pw.TextStyle(
                             fontSize: 9, fontWeight: pw.FontWeight.bold)),
                     pw.Text(
-                        'Scan untuk cek riwayat order, booking meja, chat AI',
+                        'Scan to check order history, book a table, chat with AI',
                         textAlign: pw.TextAlign.center,
                         style: const pw.TextStyle(
                             fontSize: 7.5, color: PdfColors.grey700)),
@@ -249,7 +249,7 @@ class ReceiptService {
 
               pw.SizedBox(height: 10),
               pw.Center(
-                child: pw.Text('Terima kasih!',
+                child: pw.Text('Thank you!',
                     style: const pw.TextStyle(
                         fontSize: 8, color: PdfColors.grey700)),
               ),

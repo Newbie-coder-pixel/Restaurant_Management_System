@@ -8,7 +8,7 @@ import 'location_permission_sheet.dart';
 
 // ─── Supabase branches provider ──────────────────────────────────────────────
 
-/// Fetch semua cabang aktif dari Supabase yang memiliki koordinat.
+/// Fetch all active branches from Supabase that have coordinates.
 final _branchesProvider =
     FutureProvider.autoDispose<List<RestaurantBranch>>((ref) async {
   final res = await Supabase.instance.client
@@ -42,7 +42,7 @@ final _branchesProvider =
   }).toList();
 });
 
-/// Cek apakah sekarang dalam jam operasional (format "HH:MM").
+/// Check whether it's currently within operating hours (format "HH:MM").
 bool _isCurrentlyOpen(String? openTime, String? closeTime) {
   if (openTime == null || closeTime == null) return true;
   try {
@@ -52,7 +52,7 @@ bool _isCurrentlyOpen(String? openTime, String? closeTime) {
     final nowMinutes = now.hour * 60 + now.minute;
     final openMinutes = open.hour * 60 + open.minute;
     final closeMinutes = close.hour * 60 + close.minute;
-    // Handle overnight (misal 22:00 - 02:00)
+    // Handle overnight (e.g. 22:00 - 02:00)
     if (closeMinutes < openMinutes) {
       return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
     }
@@ -94,7 +94,7 @@ class NearestBranchNotifier extends StateNotifier<NearestBranchState> {
 
   final _service = LocationService();
 
-  /// Deteksi cabang terdekat dari list yang sudah di-fetch dari Supabase.
+  /// Detect the nearest branch from the list already fetched from Supabase.
   Future<void> detectNearestBranch(List<RestaurantBranch> branches) async {
     state = NearestBranchLoading();
 
@@ -106,13 +106,13 @@ class NearestBranchNotifier extends StateNotifier<NearestBranchState> {
 
     final position = await _service.getCurrentPosition();
     if (position == null) {
-      state = NearestBranchError('Gagal mendapatkan lokasi');
+      state = NearestBranchError('Failed to get location');
       return;
     }
 
     final result = _service.findNearestBranch(position, branches);
     if (result == null) {
-      state = NearestBranchError('Tidak ada cabang dengan koordinat tersedia');
+      state = NearestBranchError('No branches with available coordinates');
       return;
     }
 
@@ -124,7 +124,7 @@ class NearestBranchNotifier extends StateNotifier<NearestBranchState> {
   void reset() => state = NearestBranchInitial();
 }
 
-/// Provider untuk nearest branch result
+/// Provider for the nearest branch result
 final nearestBranchProvider =
     StateNotifierProvider<NearestBranchNotifier, NearestBranchState>(
   (ref) => NearestBranchNotifier(),
@@ -132,10 +132,10 @@ final nearestBranchProvider =
 
 // ─── Banner Widget ────────────────────────────────────────────────────────────
 
-/// Widget banner untuk ditampilkan di customer_landing_screen.dart
-/// Self-contained: fetch cabang dari Supabase sendiri, tidak perlu data luar.
+/// Banner widget to be shown in customer_landing_screen.dart
+/// Self-contained: fetches branches from Supabase itself, no external data needed.
 ///
-/// Taruh di bagian atas body, sebelum konten menu/lainnya:
+/// Place at the top of the body, before the menu content/others:
 /// ```dart
 /// NearestBranchBanner(
 ///   onBranchSelected: (branch) => context.push('/customer/menu/${branch.id}'),
@@ -151,7 +151,7 @@ class NearestBranchBanner extends ConsumerWidget {
     final branchesAsync = ref.watch(_branchesProvider);
     final state = ref.watch(nearestBranchProvider);
 
-    // Tunggu data Supabase dulu; jika error atau kosong, sembunyikan banner
+    // Wait for Supabase data first; if error or empty, hide the banner
     return branchesAsync.when(
       loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
@@ -239,7 +239,7 @@ class _PromptBanner extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Temukan cabang terdekat',
+                    'Find the nearest branch',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -248,7 +248,7 @@ class _PromptBanner extends StatelessWidget {
                   ),
                   SizedBox(height: 2),
                   Text(
-                    'Ketuk untuk izinkan akses lokasi',
+                    'Tap to allow location access',
                     style: TextStyle(fontSize: 12, color: Color(0xFF757575)),
                   ),
                 ],
@@ -286,7 +286,7 @@ class _LoadingBanner extends StatelessWidget {
           ),
           SizedBox(width: 12),
           Text(
-            'Mencari cabang terdekat...',
+            'Finding the nearest branch...',
             style: TextStyle(fontSize: 13, color: Color(0xFF757575)),
           ),
         ],
@@ -359,7 +359,7 @@ class _ResultBanner extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          isOpen ? 'Buka' : 'Tutup',
+                          isOpen ? 'Open' : 'Closed',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -435,7 +435,7 @@ class _ErrorBanner extends StatelessWidget {
           GestureDetector(
             onTap: onRetry,
             child: const Text(
-              'Coba lagi',
+              'Try again',
               style: TextStyle(
                 fontSize: 12,
                 color: Color(0xFFFF6B00),

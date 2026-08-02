@@ -51,7 +51,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
         description: row['description'] as String? ?? '',
         price: (row['price'] as num).toDouble(),
         categoryId: row['category_id'] as String? ?? '',
-        categoryName: cat?['name'] as String? ?? 'Lainnya',
+        categoryName: cat?['name'] as String? ?? 'Other',
         imageUrl: row['image_url'] as String?,
         isAvailable: row['is_available'] as bool? ?? true,
         sortOrder: row['sort_order'] as int? ?? 0,
@@ -77,22 +77,22 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
     return tableInfoAsync.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
-        body: Center(child: Text('Error memuat meja: $e')),
+        body: Center(child: Text('Error loading table: $e')),
       ),
       data: (tableData) {
         final branchId = (tableData?['branch_id'] as String?)?.trim() ?? '';
 
         if (branchId.isEmpty) {
           return const Scaffold(
-            body: Center(child: Text('Branch ID tidak ditemukan pada meja ini')),
+            body: Center(child: Text('Branch ID not found for this table')),
           );
         }
 
         final branch = tableData?['branches'] as Map<String, dynamic>?;
-        final branchName = branch?['name'] as String? ?? 'Restoran';
-        final tableName = (tableData?['table_number'] as String?) ?? 'Meja';
+        final branchName = branch?['name'] as String? ?? 'Restaurant';
+        final tableName = (tableData?['table_number'] as String?) ?? 'Table';
 
-        // Simpan data ke activeQrTableProvider
+        // Save data to activeQrTableProvider
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref.read(activeQrTableProvider.notifier).state = (
             tableId: widget.tableId,
@@ -166,10 +166,10 @@ class _MenuBody extends ConsumerWidget {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.wifi_off_outlined, size: 48),
                   const SizedBox(height: 12),
-                  Text('Gagal memuat menu: $e'),
+                  Text('Failed to load menu: $e'),
                   ElevatedButton(
                     onPressed: () => ref.invalidate(_menuDataProvider(branchId)),
-                    child: const Text('Coba Lagi'),
+                    child: const Text('Try Again'),
                   ),
                 ]),
               ),
@@ -257,7 +257,7 @@ class _CategorySidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final all = ['Semua', ...categories];
+    final all = ['All', ...categories];
 
     return Container(
       width: 180,
@@ -270,12 +270,12 @@ class _CategorySidebar extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Text('KATEGORI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
+            child: Text('CATEGORIES', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
           ),
           ...all.map((label) {
-            final isActive = selected == (label == 'Semua' ? null : label);
+            final isActive = selected == (label == 'All' ? null : label);
             return GestureDetector(
-              onTap: () => onSelect(label == 'Semua' ? null : label),
+              onTap: () => onSelect(label == 'All' ? null : label),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -311,7 +311,7 @@ class _CategorySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final allCategories = ['Semua', ...categories];
+    final allCategories = ['All', ...categories];
     final cs = Theme.of(context).colorScheme;
 
     return Container(
@@ -322,13 +322,13 @@ class _CategorySelector extends StatelessWidget {
         itemCount: allCategories.length,
         itemBuilder: (context, index) {
           final label = allCategories[index];
-          final isActive = selected == (label == 'Semua' ? null : label);
+          final isActive = selected == (label == 'All' ? null : label);
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
               selected: isActive,
               label: Text(label),
-              onSelected: (_) => onSelect(label == 'Semua' ? null : label),
+              onSelected: (_) => onSelect(label == 'All' ? null : label),
               backgroundColor: cs.surfaceContainer,
               selectedColor: cs.primary,
               labelStyle: TextStyle(
@@ -360,7 +360,7 @@ class _MenuContent extends StatelessWidget {
           children: [
             Icon(Icons.search_off, size: 48, color: Colors.grey),
             SizedBox(height: 12),
-            Text('Menu tidak ditemukan'),
+            Text('No menu items found'),
           ],
         ),
       );
@@ -456,7 +456,7 @@ class _MenuItemTile extends StatelessWidget {
                     Container(
                       color: Colors.black.withValues(alpha: 0.52),
                       child: const Center(
-                        child: Text('Habis', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                        child: Text('Sold Out', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                       ),
                     ),
                 ],
@@ -505,7 +505,7 @@ class _MenuItemTile extends StatelessWidget {
                       color: cs.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text('Habis', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+                    child: Text('Sold Out', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
                   )
                 : inCart
                     ? Container(
@@ -539,7 +539,7 @@ class _MenuItemTile extends StatelessWidget {
                             children: [
                               Icon(Icons.add, size: 14, color: cs.onPrimary),
                               const SizedBox(width: 4),
-                              Text('Tambah', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onPrimary)),
+                              Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onPrimary)),
                             ],
                           ),
                         ),
@@ -580,13 +580,13 @@ class _MenuItemBadges extends StatelessWidget {
             color: cs.onSurfaceVariant,
             bg: cs.surfaceContainerHighest,
           ),
-        // Dietary tags (hijau)
+        // Dietary tags (green)
         ...item.dietaryTags.map((tag) => _Badge(
               label: tag,
               color: Colors.green[700]!,
               bg: Colors.green.withValues(alpha: 0.10),
             )),
-        // Allergens (oranye) — max 2, sisanya "+N"
+        // Allergens (orange) — max 2, rest as "+N"
         ...item.allergens.take(2).map((a) => _Badge(
               label: a,
               icon: Icons.warning_amber_rounded,
@@ -726,7 +726,7 @@ class _QrMenuHeader extends StatelessWidget {
               ]),
               const SizedBox(height: 8),
               if (addOrderQueueNumber != null) ...[
-                // Banner tambah pesanan
+                // Add-to-order banner
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
@@ -737,7 +737,7 @@ class _QrMenuHeader extends StatelessWidget {
                     Icon(Icons.add_circle_outline, size: 14, color: cs.onPrimary),
                     const SizedBox(width: 6),
                     Text(
-                      'Tambah ke pesanan #$addOrderQueueNumber',
+                      'Add to order #$addOrderQueueNumber',
                       style: TextStyle(
                         color: cs.onPrimary,
                         fontSize: 12,
@@ -750,8 +750,8 @@ class _QrMenuHeader extends StatelessWidget {
               ],
               Text(
                 addOrderQueueNumber != null
-                    ? 'Pilih item yang ingin ditambahkan'
-                    : 'Pilih menu favoritmu',
+                    ? 'Select the items you want to add'
+                    : 'Choose your favorite menu',
                 style: theme.textTheme.headlineSmall?.copyWith(
                     color: cs.onPrimary, fontWeight: FontWeight.bold),
               ),
@@ -761,7 +761,7 @@ class _QrMenuHeader extends StatelessWidget {
                 onChanged: onSearchChanged,
                 style: theme.textTheme.bodyMedium,
                 decoration: InputDecoration(
-                  hintText: 'Cari makanan atau minuman...',
+                  hintText: 'Search for food or drinks...',
                   prefixIcon: const Icon(Icons.search, size: 20),
                   suffixIcon: searchCtrl.text.isNotEmpty
                       ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () { searchCtrl.clear(); onSearchChanged(''); })
@@ -823,11 +823,11 @@ class _CartFab extends StatelessWidget {
               ),
           ]),
           const SizedBox(width: 10),
-          Text('Keranjang', style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
+          Text('Cart', style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
           const SizedBox(width: 8),
           Container(width: 1, height: 16, color: cs.onPrimary.withValues(alpha: 0.4)),
           const SizedBox(width: 8),
-          // Saat add mode: tampilkan subtotal item baru saja (bukan total+pajak)
+          // In add mode: show only the new items' subtotal (not total+tax)
           Text(
             isAddMode ? _fmt(cart.subtotal) : _fmt(cart.totalAmount),
             style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold),

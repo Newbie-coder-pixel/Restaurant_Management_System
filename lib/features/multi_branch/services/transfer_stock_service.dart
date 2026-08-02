@@ -10,8 +10,8 @@ class TransferStockService {
 
   // ─── FETCH ────────────────────────────────────────────────────────────────
 
-  /// Fetch semua transfer yang relevan untuk branch ini
-  /// (sebagai pengirim ATAU penerima)
+  /// Fetch all transfers relevant to this branch
+  /// (as either sender OR receiver)
   Future<List<TransferStockModel>> fetchTransfers({
     required String branchId,
     TransferStatus? filterStatus,
@@ -33,7 +33,7 @@ class TransferStockService {
       query = query.eq('status', filterStatus.name);
     }
 
-    // Tampilkan yang relevan dengan branch ini
+    // Show entries relevant to this branch
     // (from_branch_id = branchId OR to_branch_id = branchId)
     final res = await query.order('created_at', ascending: false);
 
@@ -56,13 +56,13 @@ class TransferStockService {
       });
     }).toList();
 
-    // Filter hanya yang melibatkan branch ini
+    // Filter to only entries involving this branch
     return all.where((t) =>
       t.fromBranchId == branchId || t.toBranchId == branchId,
     ).toList();
   }
 
-  /// Fetch inventory items milik branch tertentu (untuk dropdown pilih item)
+  /// Fetch inventory items belonging to a specific branch (for the item picker dropdown)
   Future<List<Map<String, dynamic>>> fetchItemsForBranch(String branchId) async {
     final today = DateTime.now().toIso8601String().split('T').first;
     final res = await _client
@@ -74,7 +74,7 @@ class TransferStockService {
     return (res as List).cast<Map<String, dynamic>>();
   }
 
-  /// Fetch branches lain (selain branch asal) untuk dropdown tujuan
+  /// Fetch other branches (besides the source branch) for the destination dropdown
   Future<List<Map<String, dynamic>>> fetchOtherBranches(String excludeBranchId) async {
     final res = await _client
         .from('branches')
@@ -87,7 +87,7 @@ class TransferStockService {
 
   // ─── WRITE ────────────────────────────────────────────────────────────────
 
-  /// Request transfer stok (oleh manager/superadmin branch asal)
+  /// Request a stock transfer (by the source branch's manager/superadmin)
   Future<void> requestTransfer({
     required String fromBranchId,
     required String toBranchId,
@@ -95,7 +95,7 @@ class TransferStockService {
     required double quantity,
     required String requestedBy,
   }) async {
-    // 1. Insert ke inventory_transfers
+    // 1. Insert into inventory_transfers
     await _client.from('inventory_transfers').insert({
       'from_branch_id': fromBranchId,
       'to_branch_id':   toBranchId,
@@ -105,39 +105,39 @@ class TransferStockService {
       'requested_by':   requestedBy,
     });
 
-    // 2. Catat transfer_out di inventory_items branch asal
+    // 2. Record transfer_out in the source branch's inventory_items
     await _client.from('inventory_items').update({
       'transfer_out': _client.rpc('increment_field_value'),
       'updated_at': DateTime.now().toIso8601String(),
     });
 
-    // Pakai RPC untuk increment transfer_out
+    // Use RPC to increment transfer_out
     await _incrementField(itemId: itemId, field: 'transfer_out', amount: quantity);
   }
 
-  /// Konfirmasi terima transfer (oleh manager/superadmin branch tujuan)
+  /// Confirm receipt of a transfer (by the destination branch's manager/superadmin)
   Future<void> approveTransfer({
     required String transferId,
-    required String toItemId,   // item_id di branch tujuan (item yang sama)
+    required String toItemId,   // item_id in the destination branch (same item)
     required String approvedBy,
     required double quantity,
   }) async {
     final now = DateTime.now().toIso8601String();
 
-    // 1. Update status transfer → received
+    // 1. Update transfer status → received
     await _client.from('inventory_transfers').update({
       'status':      'received',
       'approved_by': approvedBy,
       'received_at': now,
     }).eq('id', transferId);
 
-    // 2. Tambah transfer_in di inventory_items branch tujuan
+    // 2. Add transfer_in in the destination branch's inventory_items
     await _incrementField(itemId: toItemId, field: 'transfer_in', amount: quantity);
   }
 
-  /// Batalkan transfer (hanya jika masih pending)
+  /// Cancel a transfer (only if it's still pending)
   Future<void> cancelTransfer(String transferId) async {
-    // Ambil data transfer dulu untuk rollback transfer_out
+    // Get the transfer data first to roll back transfer_out
     final res = await _client
         .from('inventory_transfers')
         .select('item_id, quantity, status')
@@ -145,14 +145,14 @@ class TransferStockService {
         .single();
 
     if (res['status'] != 'pending') {
-      throw Exception('Hanya transfer dengan status pending yang bisa dibatalkan.');
+      throw Exception('Only transfers with pending status can be cancelled.');
     }
 
-    // Rollback transfer_out di branch asal
+    // Roll back transfer_out in the source branch
     await _incrementField(
       itemId: res['item_id'] as String,
       field: 'transfer_out',
-      amount: -((res['quantity'] as num).toDouble()), // negatif = kurangi
+      amount: -((res['quantity'] as num).toDouble()), // negative = decrease
     );
 
     // Update status → cancelled
@@ -175,7 +175,7 @@ class TransferStockService {
         'p_amount': amount,
       });
     } catch (_) {
-      // Fallback: manual update jika RPC belum ada
+      // Fallback: manual update if the RPC doesn't exist yet
       final current = await _client
           .from('inventory_items')
           .select(field)

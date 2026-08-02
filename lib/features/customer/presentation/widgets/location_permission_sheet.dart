@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
-/// Bottom sheet minta izin lokasi — gaya Shopee/Tokopedia
-/// Panggil dengan: LocationPermissionSheet.show(context, onGranted: ...)
+/// Bottom sheet requesting location permission — Shopee/Tokopedia style
+/// Call with: LocationPermissionSheet.show(context, onGranted: ...)
 class LocationPermissionSheet extends StatelessWidget {
   final VoidCallback onGranted;
   final VoidCallback? onDenied;
@@ -41,7 +41,7 @@ class LocationPermissionSheet extends StatelessWidget {
     }
 
     if (permission == LocationPermission.deniedForever) {
-      // Arahkan ke settings
+      // Direct to settings
       await Geolocator.openAppSettings();
       return;
     }
@@ -81,7 +81,7 @@ class LocationPermissionSheet extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Ilustrasi lokasi
+          // Location illustration
           Container(
             width: 80,
             height: 80,
@@ -97,9 +97,9 @@ class LocationPermissionSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Judul
+          // Title
           const Text(
-            'Izinkan Akses Lokasi',
+            'Allow Location Access',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -108,9 +108,9 @@ class LocationPermissionSheet extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // Deskripsi
+          // Description
           Text(
-            'Kami akan menggunakan lokasi Anda untuk menampilkan cabang restoran terdekat dan memudahkan pemesanan.',
+            'We will use your location to show the nearest restaurant branch and make ordering easier.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -120,23 +120,23 @@ class LocationPermissionSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // Keuntungan fitur
+          // Feature benefits
           const _BenefitRow(
             icon: Icons.store_rounded,
-            text: 'Temukan cabang terdekat dari Anda',
+            text: 'Find the branch nearest to you',
           ),
           const _BenefitRow(
             icon: Icons.delivery_dining_rounded,
-            text: 'Estimasi waktu pengiriman lebih akurat',
+            text: 'More accurate delivery time estimates',
           ),
           const _BenefitRow(
             icon: Icons.navigation_rounded,
-            text: 'Navigasi langsung ke restoran',
+            text: 'Direct navigation to the restaurant',
           ),
 
           const SizedBox(height: 24),
 
-          // Tombol Izinkan
+          // Allow button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -151,7 +151,7 @@ class LocationPermissionSheet extends StatelessWidget {
                 elevation: 0,
               ),
               child: const Text(
-                'Izinkan Akses Lokasi',
+                'Allow Location Access',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -161,7 +161,7 @@ class LocationPermissionSheet extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // Tombol Lewati
+          // Skip button
           SizedBox(
             width: double.infinity,
             child: TextButton(
@@ -173,7 +173,7 @@ class LocationPermissionSheet extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'Lewati',
+                'Skip',
                 style: TextStyle(
                   fontSize: 15,
                   color: Colors.grey[600],
@@ -192,7 +192,7 @@ class LocationPermissionSheet extends StatelessWidget {
                 Icon(Icons.lock_outline, size: 12, color: Colors.grey[400]),
                 const SizedBox(width: 4),
                 Text(
-                  'Lokasi Anda hanya digunakan saat aplikasi dibuka',
+                  'Your location is only used while the app is open',
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.grey[400],

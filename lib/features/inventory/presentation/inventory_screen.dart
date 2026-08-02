@@ -69,7 +69,7 @@ class _InventoryScreenContentState
     setState(() => _selectedBranchId = branchId);
   }
 
-  /// branchId efektif: superadmin bisa pilih branch tertentu atau semua (null → pakai branchId sendiri sebagai fallback untuk widget yang wajib punya branchId)
+  /// Effective branchId: superadmin can pick a specific branch or all (null → falls back to their own branchId for widgets that require a branchId)
   String get _effectiveBranchId => _selectedBranchId ?? widget.branchId;
 
   void _openAddItem() {
@@ -123,7 +123,7 @@ class _InventoryScreenContentState
             heroTag: 'add',
             onPressed: _openAddItem,
             icon: const Icon(Icons.add),
-            label: const Text('Tambah Item',
+            label: const Text('Add Item',
                 style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
@@ -224,7 +224,7 @@ class _InventoryAppBar extends ConsumerWidget {
                 DropdownMenuItem<String?>(
                   value: null,
                   child: Text(
-                    'Semua Cabang',
+                    'All Branches',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 11,
@@ -261,7 +261,7 @@ class _InventoryAppBar extends ConsumerWidget {
         IconButton(
           onPressed: () => _showRolloverDialog(context, ref),
           icon: Icon(Icons.date_range_outlined, color: colorScheme.onSurface),
-          tooltip: 'Rollover Harian',
+          tooltip: 'Daily Rollover',
         ),
         const SizedBox(width: 8),
       ],
@@ -272,14 +272,14 @@ class _InventoryAppBar extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Rollover Stok Harian'),
+        title: const Text('Daily Stock Rollover'),
         content: const Text(
-          'Stok akhir hari ini akan dijadikan stok awal untuk besok. Lanjutkan?',
+          'Today\'s closing stock will become tomorrow\'s opening stock. Continue?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
@@ -290,7 +290,7 @@ class _InventoryAppBar extends ConsumerWidget {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('✅ Rollover berhasil'),
+                    content: Text('✅ Rollover successful'),
                     backgroundColor: Colors.green,
                   ),
                 );
@@ -338,7 +338,7 @@ class _SummaryBanner extends ConsumerWidget {
       child: Row(
         children: [
           _SummaryTile(
-            label: 'Total Item',
+            label: 'Total Items',
             value: '${summary.totalItems}',
             icon: Icons.inventory_2_outlined,
             color: colorScheme.primary,
@@ -352,14 +352,14 @@ class _SummaryBanner extends ConsumerWidget {
           ),
           _VerticalDivider(),
           _SummaryTile(
-            label: 'Habis',
+            label: 'Out of Stock',
             value: '${summary.outOfStockItems}',
             icon: Icons.remove_circle_outline,
             color: Colors.red.shade500,
           ),
           _VerticalDivider(),
           _SummaryTile(
-            label: 'Nilai Stok',
+            label: 'Stock Value',
             value: fmtCurrency(summary.totalInventoryValue),
             icon: Icons.account_balance_wallet_outlined,
             color: Colors.green.shade600,
@@ -449,7 +449,7 @@ class _SearchFilterBar extends ConsumerWidget {
                     (s) => s.copyWith(searchQuery: v),
                   ),
               decoration: InputDecoration(
-                hintText: 'Cari bahan / item...',
+                hintText: 'Search ingredients / items...',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: ValueListenableBuilder(
                   valueListenable: searchCtrl,
@@ -481,8 +481,8 @@ class _SearchFilterBar extends ConsumerWidget {
           // Low stock filter toggle
           Tooltip(
             message: filter.showLowStockOnly == true
-                ? 'Tampilkan semua'
-                : 'Hanya stok rendah',
+                ? 'Show all'
+                : 'Low stock only',
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
@@ -535,7 +535,7 @@ class _CategoryFilterTabs extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
           _CategoryChip(
-            label: 'Semua',
+            label: 'All',
             isSelected: filter.category == null,
             colorScheme: colorScheme,
             onTap: () => ref.read(inventoryFilterProvider.notifier).update(
@@ -620,7 +620,7 @@ class _DateSelector extends ConsumerWidget {
               color: colorScheme.onSurface.withValues(alpha: 0.5)),
           const SizedBox(width: 6),
           Text(
-            isToday ? 'Hari Ini' : _formatDate(selectedDate),
+            isToday ? 'Today' : _formatDate(selectedDate),
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -653,7 +653,7 @@ class _DateSelector extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                'Ganti Tanggal',
+                'Change Date',
                 style: TextStyle(
                   fontSize: 10,
                   color: colorScheme.primary,
@@ -700,13 +700,13 @@ class _InventoryGrid extends ConsumerWidget {
             Icon(Icons.error_outline,
                 size: 56, color: Colors.red.withValues(alpha: 0.7)),
             const SizedBox(height: 12),
-            Text('Gagal memuat inventory',
+            Text('Failed to load inventory',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: () =>
                   ref.invalidate(inventoryStreamProvider(branchId)),
-              child: const Text('Coba Lagi'),
+              child: const Text('Try Again'),
             ),
           ],
         ),
@@ -757,7 +757,7 @@ class _EmptyInventoryState extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Belum ada data inventory',
+            'No inventory data yet',
             style: Theme.of(context)
                 .textTheme
                 .titleLarge
@@ -765,7 +765,7 @@ class _EmptyInventoryState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Tambahkan bahan baku dan item\nuntuk mulai melacak stok.',
+            'Add raw materials and items\nto start tracking stock.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: colorScheme.onSurface.withValues(alpha: 0.55),

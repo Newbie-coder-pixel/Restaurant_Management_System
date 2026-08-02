@@ -49,7 +49,7 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
     if (widget.isSuperAdmin) {
       _loadBranches();
     } else {
-      // Non-superadmin: langsung set filter ke branch sendiri
+      // Non-superadmin: set the filter directly to their own branch
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ref.read(menuFilterProvider.notifier).update(
@@ -73,9 +73,9 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
       });
 
       // ── FIX REFRESH BUG ──────────────────────────────────────────────────
-      // Setelah branches di-load, cek apakah filter di provider sudah ada.
-      // Jika belum (misal setelah refresh), auto-pilih branch pertama
-      // supaya menu tidak tampil blank.
+      // After branches are loaded, check whether the provider already has a
+      // filter. If not (e.g. after a refresh), auto-select the first branch
+      // so the menu doesn't render blank.
       final currentFilter = ref.read(menuFilterProvider);
       if (currentFilter.branchId == null && branches.isNotEmpty) {
         final firstBranchId = branches.first['id'] as String;
@@ -84,8 +84,8 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
               (s) => s.copyWith(branchId: firstBranchId),
             );
       } else if (currentFilter.branchId != null) {
-        // Provider sudah punya filter (misal user sudah pilih sebelumnya),
-        // sync kembali ke local state supaya dropdown tidak reset ke null
+        // The provider already has a filter (e.g. user picked one before),
+        // sync it back to local state so the dropdown doesn't reset to null
         setState(() => _selectedBranchId = currentFilter.branchId);
       }
       // ─────────────────────────────────────────────────────────────────────
@@ -97,22 +97,22 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
     ref.read(menuFilterProvider.notifier).update(
           (s) => s.copyWith(
             branchId: branchId,
-            // reset category saat ganti branch
+            // reset category when switching branch
             clearCategory: true,
           ),
         );
   }
 
-  /// branchId efektif untuk widget yang butuh branchId eksplisit
+  /// Effective branchId for widgets that need an explicit branchId
   /// (AddMenuForm, CategoryTabs)
   String get _effectiveBranchId =>
       _selectedBranchId ?? widget.branchId;
 
   void _openAddMenu() {
-    // Jika superadmin belum pilih branch, jangan buka form
+    // If superadmin hasn't picked a branch yet, don't open the form
     if (widget.isSuperAdmin && _effectiveBranchId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih cabang terlebih dahulu.')),
+        const SnackBar(content: Text('Please select a branch first.')),
       );
       return;
     }
@@ -157,7 +157,7 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddMenu,
         icon: const Icon(Icons.add),
-        label: const Text('Tambah Menu',
+        label: const Text('Add Menu',
             style: TextStyle(fontWeight: FontWeight.w700)),
       ),
     );
@@ -259,7 +259,7 @@ class _MenuAppBar extends StatelessWidget {
         IconButton(
           onPressed: onAddMenu,
           icon: const Icon(Icons.add_circle_outline),
-          tooltip: 'Tambah Menu',
+          tooltip: 'Add Menu',
         ),
         const SizedBox(width: 8),
       ],
@@ -289,7 +289,7 @@ class _SearchFilterBar extends ConsumerWidget {
                     (s) => s.copyWith(searchQuery: v),
                   ),
               decoration: InputDecoration(
-                hintText: 'Cari menu...',
+                hintText: 'Search menu...',
                 hintStyle: TextStyle(
                     color: colorScheme.onSurface.withValues(alpha: 0.4)),
                 prefixIcon: Icon(Icons.search,
@@ -308,7 +308,7 @@ class _SearchFilterBar extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           FilterChip(
-            label: const Text('Tersedia', style: TextStyle(fontSize: 12)),
+            label: const Text('Available', style: TextStyle(fontSize: 12)),
             selected: filter.showAvailableOnly == true,
             onSelected: (v) =>
                 ref.read(menuFilterProvider.notifier).update(
@@ -347,12 +347,12 @@ class _CategoryTabs extends ConsumerWidget {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           children: [
-            // "Semua" chip
+            // "All" chip
             _categoryChip(
               context: context,
               colorScheme: colorScheme,
               emoji: '🍽️',
-              label: 'Semua',
+              label: 'All',
               count: counts.values.fold(0, (a, b) => a + b),
               isSelected: filter.categoryId == null,
               onTap: () => ref.read(menuFilterProvider.notifier).update(
@@ -466,12 +466,12 @@ class _StatsRow extends ConsumerWidget {
               label: 'Total', value: '$total', color: Colors.blue.shade400),
           const SizedBox(width: 8),
           _StatChip(
-              label: 'Tersedia',
+              label: 'Available',
               value: '$available',
               color: Colors.green.shade500),
           const SizedBox(width: 8),
           _StatChip(
-              label: 'Habis',
+              label: 'Out of Stock',
               value: '$unavailable',
               color: Colors.red.shade400),
         ],
@@ -538,7 +538,7 @@ class _MenuGrid extends ConsumerWidget {
             Icon(Icons.error_outline,
                 size: 56, color: Colors.red.withValues(alpha: 0.7)),
             const SizedBox(height: 12),
-            Text('Gagal memuat menu',
+            Text('Failed to load menu',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
@@ -554,7 +554,7 @@ class _MenuGrid extends ConsumerWidget {
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: () => ref.refresh(menuProvider),
-              child: const Text('Coba Lagi'),
+              child: const Text('Try Again'),
             ),
           ],
         ),
@@ -610,7 +610,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Belum ada menu',
+            'No menu items yet',
             style: Theme.of(context)
                 .textTheme
                 .titleLarge
@@ -618,7 +618,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Tambahkan menu pertama Anda\nuntuk mulai menerima pesanan.',
+            'Add your first menu item\nto start receiving orders.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: colorScheme.onSurface.withValues(alpha: 0.55),
