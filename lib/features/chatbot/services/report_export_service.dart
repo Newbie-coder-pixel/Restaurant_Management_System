@@ -18,46 +18,62 @@ class ReportExportService {
     required ReportPeriod period,
   }) async {
     final sb = Supabase.instance.client;
-    final now = DateTime.now();
+    final now = DateTime.now().toLocal();
 
-    String dateStr(DateTime d) => d.toIso8601String().substring(0, 10);
+    // PENTING: batas tanggal dibangun dari waktu LOKAL (WIB) lalu wajib
+    // dikonversi .toUtc() sebelum dikirim sebagai filter ke Postgres —
+    // string tanpa offset dibaca Postgres sebagai UTC, bukan WIB, jadi
+    // window "hari ini/minggu ini/bulan ini" bisa bergeser ±7 jam dari batas
+    // lokal yang sebenarnya. Batas atas selalu "besok jam 00:00 lokal" dan
+    // dipakai sebagai exclusive upper bound (`.lt`), bukan `23:59:59` yang
+    // bisa kehilangan data di detik terakhir hari itu.
+    DateTime localMidnight(DateTime d) => DateTime(d.year, d.month, d.day);
+    String isoUtc(DateTime local) => local.toUtc().toIso8601String();
+    String dateOnly(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-    late String startDate;
-    late String endDate;
+    late DateTime startLocal;
+    final endLocalExclusive = localMidnight(now).add(const Duration(days: 1));
     late String periodLabel;
 
     switch (period) {
       case ReportPeriod.daily:
-        startDate = '${dateStr(now)}T00:00:00';
-        endDate = '${dateStr(now)}T23:59:59';
+        startLocal = localMidnight(now);
         periodLabel = 'Harian — ${_formatDate(now)}';
         break;
       case ReportPeriod.weekly:
-        final weekStart = now.subtract(Duration(days: now.weekday - 1));
-        startDate = '${dateStr(weekStart)}T00:00:00';
-        endDate = '${dateStr(now)}T23:59:59';
+        final weekStartLocal =
+            localMidnight(now.subtract(Duration(days: now.weekday - 1)));
+        startLocal = weekStartLocal;
         periodLabel =
-            'Mingguan — ${_formatDate(weekStart)} s/d ${_formatDate(now)}';
+            'Mingguan — ${_formatDate(weekStartLocal)} s/d ${_formatDate(now)}';
         break;
       case ReportPeriod.monthly:
-        final monthStart = DateTime(now.year, now.month, 1);
-        startDate = '${dateStr(monthStart)}T00:00:00';
-        endDate = '${dateStr(now)}T23:59:59';
-        periodLabel =
-            'Bulanan — ${_bulanIndo(now.month)} ${now.year}';
+        startLocal = DateTime(now.year, now.month, 1);
+        periodLabel = 'Bulanan — ${_bulanIndo(now.month)} ${now.year}';
         break;
     }
+
+    final startDate = isoUtc(startLocal);
+    final endDate = isoUtc(endLocalExclusive);
+    final startDateOnly = dateOnly(startLocal);
+    final endDateOnly = dateOnly(endLocalExclusive);
 
     // Orders
     var qOrders = sb
         .from('orders')
         .select('total_amount, status, order_type, payment_method, created_at, customer_name')
         .gte('created_at', startDate)
-        .lte('created_at', endDate);
+        .lt('created_at', endDate);
     if (branchId != null) qOrders = qOrders.eq('branch_id', branchId);
     final orders = (await qOrders as List).cast<Map<String, dynamic>>();
 
-    final completed = orders.where((o) => o['status'] == 'completed').toList();
+    // Order yang lunas statusnya 'paid' (lihat OrderStatus enum di
+    // order_model.dart) — 'completed' adalah status BOOKING, bukan order.
+    // Sebelumnya filter ini salah pakai 'completed', jadi revenue/rata-rata
+    // order/breakdown pembayaran/top menu di laporan selalu 0 walau transaksi
+    // jalan terus.
+    final completed = orders.where((o) => o['status'] == 'paid').toList();
     final cancelled = orders.where((o) => o['status'] == 'cancelled').length;
     final totalRevenue = completed.fold<double>(
         0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
@@ -77,8 +93,8 @@ class ReportExportService {
         .from('order_items')
         .select('menu_item_name, quantity, unit_price, orders!inner(status, created_at, branch_id)')
         .gte('orders.created_at', startDate)
-        .lte('orders.created_at', endDate)
-        .eq('orders.status', 'completed');
+        .lt('orders.created_at', endDate)
+        .eq('orders.status', 'paid');
     if (branchId != null) qItems = qItems.eq('orders.branch_id', branchId);
     final items = (await qItems as List).cast<Map<String, dynamic>>();
 
@@ -103,12 +119,14 @@ class ReportExportService {
             })
         .toList();
 
-    // Bookings
+    // Bookings — booking_date kolom DATE (tanpa timezone), jadi pakai
+    // startDateOnly/endDateOnly (tanggal kalender LOKAL), bukan substring dari
+    // startDate/endDate yang sekarang sudah dikonversi ke UTC di atas.
     var qBooking = sb
         .from('bookings')
         .select('status, guest_count')
-        .gte('booking_date', startDate.substring(0, 10))
-        .lte('booking_date', endDate.substring(0, 10));
+        .gte('booking_date', startDateOnly)
+        .lt('booking_date', endDateOnly);
     if (branchId != null) qBooking = qBooking.eq('branch_id', branchId);
     final bookings = (await qBooking as List).cast<Map<String, dynamic>>();
 

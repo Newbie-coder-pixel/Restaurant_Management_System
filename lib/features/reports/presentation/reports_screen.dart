@@ -87,26 +87,35 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // KPI row
+                  // Catatan penting: "Order Masuk" dihitung dari waktu ORDER
+                  // DIBUAT, sedangkan "Pendapatan" dihitung dari waktu
+                  // PEMBAYARAN SETTLE (tabel berbeda) — dua populasi yang
+                  // legitimately berbeda (order VA/QRIS bisa settle beberapa
+                  // menit-jam setelah dibuat), bukan bug — makanya diberi
+                  // subtitle eksplisit di sini supaya tidak disangka dua
+                  // angka yang seharusnya sama.
                   Row(children: [
-                    _kpiCard('Order Hari Ini', '${s.todayOrders}',
-                        Icons.receipt_long, AppColors.primary),
+                    _kpiCard('Order Masuk', '${s.todayOrders}',
+                        Icons.receipt_long, AppColors.primary,
+                        subtitle: 'order dibuat hari ini'),
                     const SizedBox(width: 12),
                     _kpiCard(
-                        'Revenue',
-                        'Rp ${(s.todayRevenue / 1000).toStringAsFixed(0)}rb',
+                        'Pendapatan',
+                        _formatRupiahCompact(s.todayRevenue),
                         Icons.monetization_on_outlined,
-                        AppColors.available),
-                    const SizedBox(width: 12),
-                    _kpiCard('Booking', '${s.todayBookings}',
-                        Icons.event_available, AppColors.reserved),
+                        _StatusColors.good,
+                        subtitle: 'pembayaran settle hari ini'),
                   ]),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Row(children: [
+                    _kpiCard('Booking Hari Ini', '${s.todayBookings}',
+                        Icons.event_available, const Color(0xFF4A3AA7)),
+                    const SizedBox(width: 12),
                     _kpiCard(
                         'COGS Hari Ini',
-                        'Rp ${(s.todayCogs / 1000).toStringAsFixed(0)}rb',
+                        _formatRupiahCompact(s.todayCogs),
                         Icons.calculate_outlined,
-                        Colors.orange),
+                        const Color(0xFFEB6834)),
                   ]),
                   const SizedBox(height: 24),
 
@@ -212,16 +221,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 fontFamily: 'Poppins',
                                 fontWeight: FontWeight.w600),
                           ),
-                          subtitle: Text(
-                            '${o.items.length} item • ${o.status.label}',
-                            style: AppTextStyles.caption,
+                          subtitle: Row(
+                            children: [
+                              Text('${o.items.length} item • ',
+                                  style: AppTextStyles.caption),
+                              _orderStatusChip(o.status),
+                            ],
                           ),
                           trailing: Text(
-                            'Rp ${o.totalAmount.toStringAsFixed(0)}',
-                            style: const TextStyle(
+                            _formatRupiah(o.totalAmount),
+                            style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.accent),
+                                // Order yang belum/tidak lunas ditampilkan
+                                // dengan tinta netral (bukan warna accent
+                                // yang sama seperti order lunas) — sebelumnya
+                                // semua order di daftar ini (termasuk yang
+                                // dibatalkan/belum bayar) diberi bobot visual
+                                // sama seperti order yang benar-benar lunas.
+                                color: o.status == OrderStatus.paid
+                                    ? AppColors.accent
+                                    : AppColors.textHint),
                           ),
                         ),
                       )),
@@ -232,7 +252,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   Widget _kpiCard(
-          String label, String value, IconData icon, Color color) =>
+          String label, String value, IconData icon, Color color,
+          {String? subtitle}) =>
       Expanded(
         child: Card(
           child: Padding(
@@ -250,11 +271,50 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         color: color)),
                 const SizedBox(height: 4),
                 Text(label, style: AppTextStyles.caption),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 9.5,
+                          color: AppColors.textHint)),
+                ],
               ],
             ),
           ),
         ),
       );
+
+  Widget _orderStatusChip(OrderStatus status) {
+    final Color color;
+    switch (status) {
+      case OrderStatus.paid:
+        color = _StatusColors.good;
+        break;
+      case OrderStatus.cancelled:
+        color = _StatusColors.critical;
+        break;
+      default:
+        color = AppColors.textHint;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(status.label,
+          style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: status == OrderStatus.paid
+                  ? Colors.green[800]
+                  : status == OrderStatus.cancelled
+                      ? Colors.red[800]
+                      : AppColors.textSecondary)),
+    );
+  }
 }
 
 // ── Helper: cek apakah semua nilai revenue 7 hari = 0 ──────────────────────
@@ -276,6 +336,27 @@ String _formatRupiah(num value) {
     buffer.write(digits[i]);
   }
   return '${isNegative ? '-' : ''}Rp$buffer';
+}
+
+// ── Helper: format Rupiah RINGKAS (rb/jt) — SATU-SATUNYA versi ringkas ─────
+//
+// Sebelumnya ada 3 implementasi pembulatan berbeda tersebar di layar ini
+// (_fmtRev di top menu, _fmtRp di margin row, _fmtRp di branch revenue) —
+// disatukan supaya angka yang sama selalu tampil dengan format yang sama
+// di seluruh dashboard.
+String _formatRupiahCompact(num value) {
+  final v = value.toDouble();
+  if (v.abs() >= 1000000) return 'Rp${(v / 1000000).toStringAsFixed(1)}jt';
+  if (v.abs() >= 1000) return 'Rp${(v / 1000).toStringAsFixed(0)}rb';
+  return _formatRupiah(v);
+}
+
+// ── Status semantik (good/warning/critical) — dipakai konsisten untuk
+// margin menu & status order, bukan warna kategori/rank ─────────────────
+class _StatusColors {
+  static const good = Color(0xFF0CA30C);
+  static const warning = Color(0xFFFAB219);
+  static const critical = Color(0xFFD03B3B);
 }
 
 // ── Revenue Bar Chart ────────────────────────────────────────────────────────
@@ -481,9 +562,6 @@ class _TopMenuSection extends StatefulWidget {
 class _TopMenuSectionState extends State<_TopMenuSection> {
   String _selectedCategory = 'Semua';
 
-  String _fmtRev(double v) =>
-      'Rp ${(v / 1000).toStringAsFixed(0)}rb';
-
   List<Map<String, dynamic>> get _filtered {
     final list = _selectedCategory == 'Semua'
         ? widget.topMenus
@@ -558,7 +636,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                       getTooltipItem: (group, _, rod, __) {
                         final item = filtered[group.x];
                         return BarTooltipItem(
-                          '${item['name']}\n${rod.toY.toInt()} terjual\n${_fmtRev(item['revenue'] as double)}',
+                          '${item['name']}\n${rod.toY.toInt()} terjual\n${_formatRupiahCompact(item['revenue'] as double)}',
                           const TextStyle(
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w600,
@@ -646,15 +724,14 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                     final idx = entry.key;
                     final item = entry.value;
                     final qty = (item['qty'] as int).toDouble();
-                    // Top 3: warna solid, sisanya agak transparan
-                    final barColor = idx == 0
-                        ? const Color(0xFFFFD700)   // emas
-                        : idx == 1
-                            ? const Color(0xFFC0C0C0) // perak
-                            : idx == 2
-                                ? const Color(0xFFCD7F32) // perunggu
-                                : AppColors.primary.withValues(alpha: 0.55);
-
+                    // SATU warna konsisten untuk semua bar — rank/posisi
+                    // top-3 ditunjukkan lewat panjang bar + medali di legend
+                    // di bawah chart, BUKAN lewat warna. Sebelumnya top-3
+                    // dikasih hue beda (emas/perak/perunggu): kalau filter
+                    // kategori berubah dan item lain naik ke top-3, warnanya
+                    // ikut "berpindah" ke item itu — warna jadi mengikuti
+                    // RANK, bukan identitas menu, yang bikin re-color
+                    // membingungkan tiap kali filter diganti.
                     return BarChartGroupData(
                       x: idx,
                       barRods: [
@@ -663,7 +740,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                           width: (filtered.length <= 5 ? 28 : 18).toDouble(),
                           borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(4)),
-                          color: idx < 3 ? barColor : AppColors.primary,
+                          color: AppColors.primary,
                           backDrawRodData: BackgroundBarChartRodData(
                             show: true,
                             toY: chartMaxY,
@@ -840,11 +917,6 @@ class _MarginRow extends StatelessWidget {
   final Map<String, dynamic> item;
   const _MarginRow({required this.item});
 
-  String _fmtRp(double v) => 'Rp ${v.toStringAsFixed(0).replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-        (m) => '${m[1]}.',
-      )}';
-
   @override
   Widget build(BuildContext context) {
     final name = item['name'] as String;
@@ -852,13 +924,26 @@ class _MarginRow extends StatelessWidget {
     final cogs = item['cogs'] as double;
     final margin = item['margin'] as double;
 
-    final Color marginColor;
+    // Status good/warning/critical dari palet tervalidasi — dipakai sebagai
+    // warna IKON saja, bukan warna teks. Hex warning (#FAB219) kontrasnya
+    // cuma ~1.8:1 di atas putih (di bawah ambang baca teks kecil) — teks
+    // persentase sengaja tetap warna tinta netral (textPrimary), semantik
+    // dibawa oleh ikon + label kata, bukan warna teks itu sendiri.
+    final IconData statusIcon;
+    final Color statusColor;
+    final String statusLabel;
     if (margin >= 50) {
-      marginColor = Colors.green[700]!;
+      statusIcon = Icons.check_circle;
+      statusColor = _StatusColors.good;
+      statusLabel = 'Sehat';
     } else if (margin >= 30) {
-      marginColor = Colors.orange[700]!;
+      statusIcon = Icons.warning_rounded;
+      statusColor = _StatusColors.warning;
+      statusLabel = 'Perlu Diawasi';
     } else {
-      marginColor = Colors.red[700]!;
+      statusIcon = Icons.error_rounded;
+      statusColor = _StatusColors.critical;
+      statusLabel = 'Kritis';
     }
 
     return Padding(
@@ -866,20 +951,28 @@ class _MarginRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 54,
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            width: 58,
+            padding: const EdgeInsets.symmetric(vertical: 6),
             decoration: BoxDecoration(
-              color: marginColor.withValues(alpha: 0.12),
+              color: statusColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(
-              '${margin.toStringAsFixed(0)}%',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: marginColor),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(statusIcon, color: statusColor, size: 14),
+                const SizedBox(height: 2),
+                Text(
+                  '${margin.toStringAsFixed(0)}%',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                      fontFeatures: [FontFeature.tabularFigures()]),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
@@ -895,7 +988,7 @@ class _MarginRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
                 Text(
-                  'Jual ${_fmtRp(price)}  •  COGS ${cogs > 0 ? _fmtRp(cogs) : "belum diisi"}',
+                  'Jual ${_formatRupiah(price)}  •  COGS ${cogs > 0 ? _formatRupiah(cogs) : "belum diisi"}  •  $statusLabel',
                   style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 11,
@@ -911,22 +1004,26 @@ class _MarginRow extends StatelessWidget {
 }
 
 // ── Branch Revenue Section ────────────────────────────────────────────────────
-// (tidak ada perubahan sama sekali di section ini)
+//
+// Sebelumnya dirender pakai LinearProgressIndicator bertumpuk — bukan chart
+// fl_chart sungguhan, jadi tidak dapat gridline/tooltip/skala yang konsisten
+// dengan 2 chart lain di dashboard ini. Diganti BarChart vertikal dengan
+// bahasa visual SAMA seperti Revenue Trend & Menu Terlaris (1 warna brand
+// konsisten, grid horizontal tipis, tooltip nominal penuh saat disentuh) —
+// cabang #1 ditandai lewat mahkota+bold di legend, BUKAN lewat hue berbeda.
 
 class _BranchRevenueSection extends StatelessWidget {
   final List<Map<String, dynamic>> branchRevenue;
   const _BranchRevenueSection({required this.branchRevenue});
 
-  String _fmtRp(double v) {
-    if (v >= 1000000) return 'Rp ${(v / 1000000).toStringAsFixed(1)}jt';
-    return 'Rp ${(v / 1000).toStringAsFixed(0)}rb';
-  }
-
   @override
   Widget build(BuildContext context) {
     if (branchRevenue.isEmpty) return const SizedBox.shrink();
 
-    final maxRevenue = (branchRevenue.first['revenue'] as double);
+    final maxRevenue =
+        branchRevenue.map((b) => b['revenue'] as double).reduce((a, b) => a > b ? a : b);
+    final chartMaxY = maxRevenue <= 0 ? 1.0 : maxRevenue * 1.25;
+    final gridInterval = chartMaxY / 4 == 0 ? 1.0 : chartMaxY / 4;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -945,71 +1042,126 @@ class _BranchRevenueSection extends StatelessWidget {
         const SizedBox(height: 12),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: branchRevenue.asMap().entries.map((entry) {
-                final rank = entry.key;
-                final item = entry.value;
-                final name = item['name'] as String;
-                final revenue = item['revenue'] as double;
-                final ratio =
-                    maxRevenue > 0 ? revenue / maxRevenue : 0.0;
-                final barColor = rank == 0
-                    ? AppColors.primary
-                    : AppColors.primary.withValues(alpha: 0.45);
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(children: [
-                            if (rank == 0)
-                              const Text('👑 ',
-                                  style: TextStyle(fontSize: 12)),
-                            Text(name,
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontWeight: rank == 0
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    fontSize: 13)),
-                          ]),
-                          Text(
-                            revenue > 0
-                                ? _fmtRp(revenue)
-                                : 'Belum ada',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: rank == 0
-                                    ? AppColors.primary
-                                    : AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: ratio,
-                          minHeight: 8,
-                          backgroundColor:
-                              AppColors.primary.withValues(alpha: 0.08),
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(barColor),
+            padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+            child: SizedBox(
+              height: 220,
+              child: BarChart(
+                BarChartData(
+                  maxY: chartMaxY,
+                  alignment: BarChartAlignment.spaceAround,
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: gridInterval,
+                    getDrawingHorizontalLine: (_) => const FlLine(
+                      color: AppColors.border,
+                      strokeWidth: 1,
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipColor: (_) => AppColors.primary,
+                      getTooltipItem: (group, _, rod, __) {
+                        final name = branchRevenue[group.x]['name'] as String;
+                        return BarTooltipItem(
+                          '$name\n${_formatRupiah(rod.toY)}',
+                          const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              fontSize: 11),
+                        );
+                      },
+                    ),
+                  ),
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 44,
+                        interval: gridInterval,
+                        getTitlesWidget: (v, _) => Text(
+                          v == 0 ? '0' : _formatRupiahCompact(v),
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 9,
+                              color: AppColors.textSecondary),
                         ),
                       ),
-                    ],
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 32,
+                        getTitlesWidget: (v, _) {
+                          final idx = v.toInt();
+                          if (idx < 0 || idx >= branchRevenue.length) {
+                            return const SizedBox();
+                          }
+                          final name = branchRevenue[idx]['name'] as String;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              name.length > 10 ? '${name.substring(0, 9)}…' : name,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 9.5,
+                                  color: AppColors.textSecondary),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                );
-              }).toList(),
+                  barGroups: branchRevenue.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final revenue = entry.value['revenue'] as double;
+                    return BarChartGroupData(
+                      x: idx,
+                      barRods: [
+                        BarChartRodData(
+                          toY: revenue,
+                          width: 26,
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4)),
+                          color: AppColors.primary,
+                          backDrawRodData: BackgroundBarChartRodData(
+                            show: true,
+                            toY: chartMaxY,
+                            color: AppColors.surfaceVariant,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
             ),
+          ),
+        ),
+        // Cabang #1 ditandai lewat label, bukan warna beda di chart.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+          child: Row(
+            children: [
+              const Text('👑 ', style: TextStyle(fontSize: 13)),
+              Flexible(
+                child: Text(
+                  '${branchRevenue.first['name']} — ${_formatRupiah(branchRevenue.first['revenue'] as double)} bulan ini',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                      color: AppColors.textSecondary),
+                ),
+              ),
+            ],
           ),
         ),
       ],

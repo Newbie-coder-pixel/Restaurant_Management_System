@@ -266,6 +266,19 @@ serve(async (req: Request) => {
 
     await supabase.from("orders").update(orderUpdate).eq("id", internalOrderId);
 
+    // ── 6b. Refund: tandai payment asli jadi refunded ──────────────────────
+    // Sebelumnya notifikasi "refund" cuma mengubah orders.status/payment_status
+    // — baris di tabel `payments` yang sudah tercatat "paid" saat pembayaran
+    // awal TIDAK PERNAH diupdate, jadi revenue yang sudah di-refund tetap
+    // kehitung selamanya di semua query Reports yang filter payments.status='paid'.
+    if (transaction_status === "refund") {
+      await supabase
+        .from("payments")
+        .update({ status: "refunded" })
+        .eq("order_id", internalOrderId)
+        .eq("status", "paid");
+    }
+
     // ── 7. Insert payment record (hanya kalau paid) ────────────────────────
     if (isPaid) {
       const { data: existingPayment } = await supabase

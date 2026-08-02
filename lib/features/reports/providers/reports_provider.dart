@@ -211,16 +211,24 @@ Future<void> init() async {
       final t = today.add(const Duration(days: 1));
       return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
     }();
+    // PENTING: DateTime(y,m,d) di sini adalah waktu LOKAL (WIB). Sebelumnya
+    // langsung dipanggil .toIso8601String() tanpa .toUtc() dulu, hasilnya
+    // string TANPA offset/'Z' (mis. "2026-08-02T00:00:00.000") — Postgres
+    // membaca string tanpa offset itu sebagai UTC, bukan WIB, jadi window
+    // "hari ini" bergeser ±7 jam dari tengah malam WIB sebenarnya. Fix:
+    // konversi ke UTC dulu supaya instant yang dikirim ke DB akurat.
     final todayStart =
-        DateTime(today.year, today.month, today.day).toIso8601String();
-    final tomorrowStart =
-        DateTime(today.year, today.month, today.day + 1).toIso8601String();
+        DateTime(today.year, today.month, today.day).toUtc().toIso8601String();
+    final tomorrowStart = DateTime(today.year, today.month, today.day + 1)
+        .toUtc()
+        .toIso8601String();
 
     // Hitung range berdasarkan periode yang dipilih
     final periodDays = _state.period.days; // 7 atau 30
     final periodStartDate = today.subtract(Duration(days: periodDays - 1));
     final periodStartIso = DateTime(
             periodStartDate.year, periodStartDate.month, periodStartDate.day)
+        .toUtc()
         .toIso8601String();
 
     try {
@@ -245,11 +253,15 @@ Future<void> init() async {
       final payRes = await payQ;
 
       // ── Today bookings ─────────────────────────────────────────
+      // Exclude cancelled/no-show — sebelumnya tidak difilter status sama
+      // sekali, jadi booking yang batal/tidak datang ikut menggembungkan
+      // angka "Booking Hari Ini".
       var bookQ = Supabase.instance.client
           .from('bookings')
           .select('id')
           .gte('booking_date', todayStr)
-          .lt('booking_date', tomorrowStr);
+          .lt('booking_date', tomorrowStr)
+          .not('status', 'in', '(cancelled,no_show)');
       if (effectiveBranchId != null) bookQ = bookQ.eq('branch_id', effectiveBranchId);
       final bookRes = await bookQ;
 
@@ -338,7 +350,12 @@ Future<void> init() async {
 
         topMenus = agg.values.toList()
           ..sort((a, b) => (b['qty'] as int).compareTo(a['qty'] as int));
-        topMenus = topMenus.take(20).toList(); // ambil 20 supaya filter kategori punya cukup data
+        // TIDAK dipotong top-20 di sini — UI (_TopMenuSection._filtered) yang
+        // men-take(10) SETELAH filter kategori diterapkan. Sebelumnya list ini
+        // dipotong top-20 dulu sebelum kategori dikumpulkan/difilter, jadi
+        // kategori yang best-seller-nya di luar top-20 global (mis. menu
+        // "Minuman" di resto yang didominasi makanan) terlihat kosong padahal
+        // datanya ada, cuma belum sampai ke daftar ini.
 
         // Kumpulkan daftar kategori unik (urut abjad, 'Semua' di depan)
         final catSet = topMenus.map((m) => m['category'] as String).toSet();
@@ -382,9 +399,9 @@ Future<void> init() async {
       List<Map<String, dynamic>> branchRevenue = [];
       if (_state.isSuperAdmin && _state.branches.isNotEmpty) {
         try {
-          final now = DateTime.now();
+          final now = DateTime.now().toLocal();
           final monthStart =
-              DateTime(now.year, now.month, 1).toIso8601String();
+              DateTime(now.year, now.month, 1).toUtc().toIso8601String();
 
           final results = await Future.wait(
             _state.branches.map((b) async {
