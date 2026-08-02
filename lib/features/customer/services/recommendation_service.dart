@@ -4,6 +4,13 @@
 // 1. Personal History  — item yang sering dipesan customer ini
 // 2. Collaborative     — item yang sering dipesan BARENG item favorit customer
 // 3. Popular Fallback  — menu terpopuler di branch (untuk customer baru/guest)
+//
+// Sebelumnya SEMUA 3 layer (termasuk fallback popular) filter
+// orders.status == 'completed' — status yang tidak pernah dimiliki order
+// (order lunas statusnya 'paid'; 'completed' itu status booking). Akibatnya
+// getRecommendations() selalu return kosong, tanpa error apapun yang
+// kelihatan — fitur rekomendasi ini secara diam-diam tidak pernah
+// menghasilkan apa-apa sejak dibuat.
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -119,7 +126,7 @@ class RecommendationService {
               'menu_item_id, menu_item_name, quantity, orders!inner(branch_id, status, customer_user_id, created_at)')
           .eq('orders.branch_id', branchId)
           .eq('orders.customer_user_id', customerUserId)
-          .eq('orders.status', 'completed')
+          .eq('orders.status', 'paid')
           .gte('orders.created_at', since.toIso8601String());
 
       if ((res as List).isEmpty) return [];
@@ -170,7 +177,7 @@ class RecommendationService {
           .select('menu_item_id, quantity, orders!inner(branch_id, status, customer_user_id, created_at)')
           .eq('orders.branch_id', branchId)
           .eq('orders.customer_user_id', customerUserId)
-          .eq('orders.status', 'completed')
+          .eq('orders.status', 'paid')
           .gte('orders.created_at', since.toIso8601String());
 
       final Map<String, int> freq = {};
@@ -209,7 +216,7 @@ class RecommendationService {
           .select('order_id, orders!inner(branch_id, status, created_at)')
           .inFilter('menu_item_id', seedItemIds)
           .eq('orders.branch_id', branchId)
-          .eq('orders.status', 'completed')
+          .eq('orders.status', 'paid')
           .gte('orders.created_at', since.toIso8601String());
 
       if ((seedOrders as List).isEmpty) return [];
@@ -272,7 +279,7 @@ class RecommendationService {
           .from('order_items')
           .select('menu_item_id, menu_item_name, quantity, orders!inner(branch_id, status, created_at)')
           .eq('orders.branch_id', branchId)
-          .eq('orders.status', 'completed')
+          .eq('orders.status', 'paid')
           .gte('orders.created_at', since.toIso8601String());
 
       if ((res as List).isEmpty) return [];
