@@ -428,20 +428,45 @@ class _CustomerOrderTrackerScreenState
 
     if (confirm != true || !mounted) return;
 
+    // Prices are re-validated server-side on checkout insert anyway (menu
+    // price always wins), but fetch current prices here too so the cart the
+    // customer sees isn't silently stale versus what they'll actually pay.
+    final menuItemIds =
+        validItems.map((i) => i['menu_item_id'] as String).toSet().toList();
+    final currentPrices = <String, double>{};
+    try {
+      final rows = await Supabase.instance.client
+          .from('menu_items')
+          .select('id, price')
+          .inFilter('id', menuItemIds);
+      for (final r in (rows as List)) {
+        currentPrices[r['id'] as String] = (r['price'] as num).toDouble();
+      }
+    } catch (_) {
+      // Fall back to historical prices below if this fails.
+    }
+
+    bool priceChanged = false;
     ref.read(cartProvider.notifier).setBranch(branchId, '');
     for (final item in validItems) {
+      final menuItemId = item['menu_item_id'] as String;
+      final historicalPrice = (item['unit_price'] as num).toDouble();
+      final currentPrice = currentPrices[menuItemId] ?? historicalPrice;
+      if ((currentPrice - historicalPrice).abs() > 0.01) priceChanged = true;
       ref.read(cartProvider.notifier).addItem(CartItem(
-        menuItemId: item['menu_item_id'] as String,
+        menuItemId: menuItemId,
         name: (item['menu_items'] as Map)['name'] as String,
-        price: (item['unit_price'] as num).toDouble(),
+        price: currentPrice,
         quantity: item['quantity'] as int? ?? 1,
       ));
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('✅ Item added to cart!'),
-        backgroundColor: Color(0xFF1D9E75)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(priceChanged
+            ? '✅ Items added to cart. Some prices have changed since your last order.'
+            : '✅ Item added to cart!'),
+        backgroundColor: const Color(0xFF1D9E75)));
       context.go('/customer/checkout');
     }
   }
@@ -712,7 +737,11 @@ class _OrderStatusCard extends StatelessWidget {
     final subtotal     = items.fold<double>(0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
     final discount     = (order['discount_amount'] as num?)?.toDouble() ?? 0;
     final serviceCharge = subtotal * 0.03;
-    final pb1Amount    = (subtotal + serviceCharge) * 0.10;
+    // PB1 is computed from subtotal only, matching the formula the customer
+    // actually confirmed at checkout (see cart_provider.dart pb1Amount) —
+    // this used to be (subtotal + serviceCharge) * 0.10 here, which showed a
+    // different total post-order than what was agreed to at checkout.
+    final pb1Amount    = subtotal * 0.10;
     final total        = subtotal + serviceCharge + pb1Amount - discount;
     final customerName = order['customer_name'] as String?;
     final notes        = order['notes'] as String?;

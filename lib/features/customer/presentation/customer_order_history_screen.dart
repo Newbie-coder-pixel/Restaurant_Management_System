@@ -141,22 +141,47 @@ class _CustomerOrderHistoryScreenState
 
     if (confirm != true || !mounted) return;
 
+    // Prices are re-validated server-side on checkout insert anyway (menu
+    // price always wins), but fetch current prices here too so the cart the
+    // customer sees isn't silently stale versus what they'll actually pay.
+    final menuItemIds =
+        validItems.map((i) => i['menu_item_id'] as String).toSet().toList();
+    final currentPrices = <String, double>{};
+    try {
+      final rows = await Supabase.instance.client
+          .from('menu_items')
+          .select('id, price')
+          .inFilter('id', menuItemIds);
+      for (final r in (rows as List)) {
+        currentPrices[r['id'] as String] = (r['price'] as num).toDouble();
+      }
+    } catch (_) {
+      // Fall back to historical prices below if this fails.
+    }
+
+    bool priceChanged = false;
     ref.read(cartProvider.notifier).setBranch(branchId, '');
     for (final item in validItems) {
+      final menuItemId = item['menu_item_id'] as String;
+      final historicalPrice = (item['unit_price'] as num).toDouble();
+      final currentPrice = currentPrices[menuItemId] ?? historicalPrice;
+      if ((currentPrice - historicalPrice).abs() > 0.01) priceChanged = true;
       ref.read(cartProvider.notifier).addItem(CartItem(
-        menuItemId: item['menu_item_id'] as String,
+        menuItemId: menuItemId,
         name: (item['menu_items'] as Map)['name'] as String,
-        price: (item['unit_price'] as num).toDouble(),
+        price: currentPrice,
         quantity: item['quantity'] as int? ?? 1,
       ));
     }
 
     if (!mounted) return;
     messenger.showSnackBar(SnackBar(
-      content: const Row(children: [
-        Icon(Icons.check_circle, color: Colors.white, size: 20),
-        SizedBox(width: 12),
-        Expanded(child: Text('Item added to cart!')),
+      content: Row(children: [
+        const Icon(Icons.check_circle, color: Colors.white, size: 20),
+        const SizedBox(width: 12),
+        Expanded(child: Text(priceChanged
+            ? 'Items added to cart. Some prices have changed since your last order.'
+            : 'Item added to cart!')),
       ]),
       backgroundColor: const Color(0xFF1D9E75),
       behavior: SnackBarBehavior.floating,

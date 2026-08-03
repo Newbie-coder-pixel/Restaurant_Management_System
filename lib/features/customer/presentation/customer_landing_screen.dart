@@ -623,8 +623,18 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
     try {
       final orders = await Supabase.instance.client
           .from('orders')
-          .select()
-          .ilike('order_number', '%$code%')
+          // Columns explicitly restricted (not select all) — order_number can
+          // be guessed/enumerated (short format A001..Z999) and this endpoint
+          // is accessible without login, so sensitive data such as customer
+          // phone number & email is deliberately NOT fetched here. Exact
+          // match only (not ilike wildcard) to avoid making enumeration easier.
+          .select('id, order_number, queue_number, table_id, table_name, '
+              'branch_id, customer_name, status, payment_status, '
+              'payment_method, order_type, source, subtotal, tax_amount, '
+              'discount_amount, total_amount, notes, bill_requested, '
+              'bill_requested_at, estimated_prep_minutes, sent_to_kitchen_at, '
+              'served_at, created_at, updated_at')
+          .eq('order_number', code)
           .limit(1);
 
       if ((orders as List).isEmpty) {

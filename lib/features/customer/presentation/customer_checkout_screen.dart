@@ -42,12 +42,17 @@ class _CustomerCheckoutScreenState
         (id, _) => !items.any((i) => i.menuItemId == id));
   }
 
+  // Order number is the only lookup key anonymous customers have for
+  // tracking their order (see customer_order_tracker_screen.dart), and is
+  // now enforced unique at the DB level for the WEB- scheme (see migration
+  // 20260803020000). A 6-digit suffix (900,000 values/day) makes collisions
+  // rare; _placeOrder() also retries with a fresh number on a 23505 conflict.
   String _generateOrderNumber() {
     final now  = DateTime.now();
     final date = '${now.year}'
         '${now.month.toString().padLeft(2, '0')}'
         '${now.day.toString().padLeft(2, '0')}';
-    final rand = Random().nextInt(9000) + 1000;
+    final rand = Random().nextInt(900000) + 100000;
     return 'WEB-$date-$rand';
   }
 
@@ -246,35 +251,47 @@ class _CustomerCheckoutScreenState
     try {
       final user = Supabase.instance.client.auth.currentUser;
 
-      // Generate id & order_number client-side — avoid .select() after insert
-      // to avoid an RLS 403 on anon SELECT
-      final orderId      = const Uuid().v4();
-      final orderNumber  = _generateOrderNumber();
-
-      await Supabase.instance.client
-          .from('orders')
-          .insert({
-            'id':               orderId,
-            'branch_id':        cart.branchId,
-            'order_number':     orderNumber,
-            'status':           'new',
-            'source':           'takeaway',
-            'order_type':       'takeaway',
-            'customer_name':    _nameCtrl.text.trim(),
-            'customer_phone':   _phoneCtrl.text.trim().isEmpty
-                ? null : _phoneCtrl.text.trim(),
-            'customer_email':   user?.email,
-            'customer_user_id': user?.id,
-            'table_id':         null,
-            'table_name':       null,
-            'discount_amount':  0,
-            'subtotal':         cart.subtotal,
-            'tax_amount':       cart.pb1Amount,
-            'total_amount':     cart.total,
-            'payment_status':   'unpaid',
-            'notes':            _notesCtrl.text.trim().isEmpty
-                ? null : _notesCtrl.text.trim(),
-          });
+      // order_number is unique-constrained for the WEB- scheme at the DB
+      // level (migration 20260803020000); retry with a fresh number on the
+      // rare chance of a same-day random collision (postgres code 23505).
+      String orderId = const Uuid().v4();
+      String orderNumber = _generateOrderNumber();
+      const maxAttempts = 3;
+      for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await Supabase.instance.client
+              .from('orders')
+              .insert({
+                'id':               orderId,
+                'branch_id':        cart.branchId,
+                'order_number':     orderNumber,
+                'status':           'new',
+                'source':           'takeaway',
+                'order_type':       'takeaway',
+                'customer_name':    _nameCtrl.text.trim(),
+                'customer_phone':   _phoneCtrl.text.trim().isEmpty
+                    ? null : _phoneCtrl.text.trim(),
+                'customer_email':   user?.email,
+                'customer_user_id': user?.id,
+                'table_id':         null,
+                'table_name':       null,
+                'discount_amount':  0,
+                'subtotal':         cart.subtotal,
+                'tax_amount':       cart.pb1Amount,
+                'total_amount':     cart.total,
+                'payment_status':   'unpaid',
+                'notes':            _notesCtrl.text.trim().isEmpty
+                    ? null : _notesCtrl.text.trim(),
+              });
+          break;
+        } on PostgrestException catch (e) {
+          final isConflict = e.code == '23505';
+          if (!isConflict || attempt == maxAttempts) rethrow;
+          // Fresh id + number, try again.
+          orderId = const Uuid().v4();
+          orderNumber = _generateOrderNumber();
+        }
+      }
 
       final orderItems = ref.read(cartProvider).items.map((item) => {
         'order_id':        orderId,
