@@ -17,6 +17,7 @@ class QrOrderRepository {
     required QrOrderSession session,
     required String branchId,
     String? notes,
+    String? deviceId,
   }) async {
     final queueNumber = await _generateQueueNumber(branchId);
 
@@ -44,6 +45,7 @@ class QrOrderRepository {
             'order_type': 'qr_order',
             'source': 'dine_in',
             if (notes != null && notes.isNotEmpty) 'notes': notes,
+            if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
             'created_at': DateTime.now().toIso8601String(),
           })
           .select()
@@ -287,7 +289,7 @@ await _client.from('order_items').insert(orderItemsData);
         .select(
           'id, order_number, queue_number, table_id, table_name, '
           'customer_name, customer_phone, total_amount, status, payment_status, '
-          'payment_method, created_at, updated_at, branch_id, notes',
+          'payment_method, created_at, updated_at, branch_id, notes, device_id',
         )
         .eq('id', orderId)
         .maybeSingle();
@@ -312,7 +314,7 @@ await _client.from('order_items').insert(orderItemsData);
         .select(
           'id, order_number, queue_number, table_id, table_name, '
           'customer_name, customer_phone, total_amount, status, payment_status, '
-          'payment_method, created_at, updated_at, branch_id, notes',
+          'payment_method, created_at, updated_at, branch_id, notes, device_id',
         )
         .eq('table_id', tableId)
         .not('status', 'in', '(paid,cancelled)')
@@ -338,7 +340,7 @@ await _client.from('order_items').insert(orderItemsData);
         .select(
           'id, order_number, queue_number, table_id, table_name, '
           'customer_name, customer_phone, total_amount, status, payment_status, '
-          'payment_method, created_at, updated_at, branch_id, notes',
+          'payment_method, created_at, updated_at, branch_id, notes, device_id',
         )
         .eq('queue_number', queueNumber)
         .gte('created_at', startOfDay.toIso8601String())

@@ -122,6 +122,7 @@ class QrOrderModel {
   final String? notes;
   final bool billRequested;
   final DateTime? billRequestedAt;
+  final String? deviceId;
 
   const QrOrderModel({
     required this.id,
@@ -141,6 +142,7 @@ class QrOrderModel {
     this.notes,
     this.billRequested = false,
     this.billRequestedAt,
+    this.deviceId,
   });
 
   // ── Correct calculation ──────────────────────────────────────────
@@ -199,6 +201,7 @@ class QrOrderModel {
         billRequestedAt: map['bill_requested_at'] != null
             ? DateTime.tryParse(map['bill_requested_at'] as String)
             : null,
+        deviceId: map['device_id'] as String?,
       );
 
   Map<String, dynamic> toMap() => {
@@ -220,6 +223,7 @@ class QrOrderModel {
         'bill_requested': billRequested,
         if (billRequestedAt != null)
           'bill_requested_at': billRequestedAt!.toIso8601String(),
+        if (deviceId != null) 'device_id': deviceId,
       };
 
   QrOrderModel copyWith({

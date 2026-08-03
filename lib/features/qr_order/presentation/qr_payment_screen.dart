@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
+import '../services/qr_device_id_service.dart';
 
 class QrPaymentScreen extends ConsumerStatefulWidget {
   final String tableId;
@@ -48,10 +49,12 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
 
     try {
       // ✅ FIX: send notes to createOrder
+      final deviceId = await QrDeviceIdService.getDeviceId();
       final order = await repo.createOrder(
         session: cart,
         branchId: branchId,
         notes: _orderNotes.trim().isEmpty ? null : _orderNotes.trim(),
+        deviceId: deviceId,
       );
 
       if (_selected == QrPaymentMethod.qris) {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
+import '../services/qr_device_id_service.dart';
 import '../../../../core/services/prep_time_service.dart'; // ← ML Service
 
 class QrCartScreen extends ConsumerStatefulWidget {
@@ -322,9 +323,11 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
     try {
       final correctedSession = cart.copyWith(tableId: tableId);
+      final deviceId = await QrDeviceIdService.getDeviceId();
       final order = await repo.createOrder(
         session:  correctedSession,
         branchId: branchId,
+        deviceId: deviceId,
       );
 
       notifier.clearCart();

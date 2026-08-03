@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 import '../models/qr_order_model.dart';
+import '../services/qr_device_id_service.dart';
 
 final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, branchId) async => ref.read(qrOrderRepositoryProvider).fetchMenuByBranch(branchId),
@@ -88,9 +89,24 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
     ref.read(activeQrCartNotifierProvider).clearCart();
   }
 
+  // Only the device that created the table's active order may add items to
+  // it or start a fresh one — every other device scanning the same QR is
+  // forced to finish/pay on the original device, and can only check status
+  // from here. See supabase/migrations/20260803010000_qr_order_device_id.sql.
   Future<void> _showActiveOrderDialog(QrOrderModel order) async {
     if (!mounted) return;
+    final deviceId = await QrDeviceIdService.getDeviceId();
+    if (!mounted) return;
+
+    final isOwner = order.deviceId != null &&
+        order.deviceId!.isNotEmpty &&
+        order.deviceId == deviceId;
     final itemCount = order.items.fold<int>(0, (s, i) => s + i.quantity);
+
+    void goToStatus(BuildContext ctx) {
+      Navigator.pop(ctx);
+      context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
+    }
 
     await showDialog(
       context: context,
@@ -99,39 +115,43 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
         canPop: false,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('This table already has an order',
-              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          title: Text(
+            isOwner ? 'You have an order in progress' : 'This table already has an order',
+            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+          ),
           content: Text(
-            'Order #${order.queueNumber} ($itemCount item${itemCount == 1 ? '' : 's'}) is '
-            'already open at this table. If you\'re dining together, add your items to it '
-            'or view its status — only start a separate order if you\'re a different party.',
+            isOwner
+                ? 'Order #${order.queueNumber} ($itemCount item${itemCount == 1 ? '' : 's'}) is '
+                    'already open at this table. Add more items to it or check its status.'
+                : 'Order #${order.queueNumber} is already open at this table on another '
+                    'device or browser. Please finish and complete payment there first — '
+                    'this device can only check its status until then.',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
           ),
           actionsOverflowDirection: VerticalDirection.down,
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Start a separate order',
-                  style: TextStyle(fontFamily: 'Poppins')),
-            ),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                context.go(
-                    '/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
-              },
-              child: const Text('View order status',
-                  style: TextStyle(fontFamily: 'Poppins')),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _joinActiveOrder(order);
-              },
-              child: Text('Add to Order #${order.queueNumber}',
-                  style: const TextStyle(fontFamily: 'Poppins')),
-            ),
-          ],
+          actions: isOwner
+              ? [
+                  OutlinedButton(
+                    onPressed: () => goToStatus(ctx),
+                    child: const Text('View order status',
+                        style: TextStyle(fontFamily: 'Poppins')),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _joinActiveOrder(order);
+                    },
+                    child: Text('Add to Order #${order.queueNumber}',
+                        style: const TextStyle(fontFamily: 'Poppins')),
+                  ),
+                ]
+              : [
+                  ElevatedButton(
+                    onPressed: () => goToStatus(ctx),
+                    child: const Text('View order status',
+                        style: TextStyle(fontFamily: 'Poppins')),
+                  ),
+                ],
         ),
       ),
     );

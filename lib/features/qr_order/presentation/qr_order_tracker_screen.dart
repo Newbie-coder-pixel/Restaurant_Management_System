@@ -7,6 +7,7 @@ import '../data/qr_order_repository.dart';
 import '../models/qr_order_model.dart';
 import '../../../core/services/prep_time_service.dart'; // ← ML Service
 import '../providers/qr_cart_provider.dart';
+import '../services/qr_device_id_service.dart';
 
 class QrOrderTrackerScreen extends ConsumerWidget {
   final String orderId;
@@ -1067,12 +1068,18 @@ class _TrackerActions extends ConsumerStatefulWidget {
 class _TrackerActionsState extends ConsumerState<_TrackerActions> {
   bool _billRequested = false;
   bool _isRequestingBill = false;
+  String? _deviceId;
 
   @override
   void initState() {
     super.initState();
     // Init from the model so it persists after a refresh
     _billRequested = widget.order.billRequested;
+    // Only the device that placed this order may add items to it — see
+    // supabase/migrations/20260803010000_qr_order_device_id.sql.
+    QrDeviceIdService.getDeviceId().then((id) {
+      if (mounted) setState(() => _deviceId = id);
+    });
   }
 
   @override
@@ -1152,11 +1159,42 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
     final isPaid = order.status == QrOrderStatus.paid;
     final isCancelled = order.status == QrOrderStatus.cancelled;
 
-    // Adding to the order is allowed until served/paid/cancelled
-    final canAddOrder = (isCreated || isPreparing || isReady) && !isCancelled;
+    // Adding to the order is allowed until served/paid/cancelled, and only
+    // from the device that placed it — every other device is view-only.
+    final isOwner = _deviceId != null &&
+        order.deviceId != null &&
+        order.deviceId!.isNotEmpty &&
+        order.deviceId == _deviceId;
+    final canAddOrderStatus = (isCreated || isPreparing || isReady) && !isCancelled;
+    final canAddOrder = canAddOrderStatus && isOwner;
 
     return Column(
       children: [
+        // ── Not the owning device: explain why "Add Order" isn't offered ──
+        if (canAddOrderStatus && !isOwner) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.smartphone_outlined, size: 16, color: colorScheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Only the device that placed this order can add items to it.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: colorScheme.onSurfaceVariant, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         // ── Add Order button (active until served) ───────
         if (canAddOrder) ...[
           SizedBox(
