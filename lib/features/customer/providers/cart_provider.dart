@@ -44,7 +44,14 @@ class CartState {
 
   double get subtotal => items.fold(0, (s, i) => s + i.subtotal);
   double get serviceCharge => subtotal * 0.03;
-  double get pb1Amount => subtotal * 0.10; // fix: from subtotal only, not subtotal+serviceCharge
+  // Must match OrderModel.pb1Amount / qr_cart_provider.dart's formula exactly:
+  // PB1 is 10% of (subtotal + service charge), not subtotal alone. The
+  // Midtrans Edge Function validates gross_amount against orders.total_amount
+  // with only a Rp1 tolerance, so this order's stored total_amount (computed
+  // here at checkout) must exactly match what OrderModel recomputes when the
+  // payment screen fetches the order back — otherwise every customer-app
+  // payment is rejected with "gross_amount does not match order total".
+  double get pb1Amount => (subtotal + serviceCharge) * 0.10;
   double get tax => 0; // VAT removed, kept so it's not a breaking change
   double get total => subtotal + serviceCharge + pb1Amount;
   int get itemCount => items.fold(0, (s, i) => s + i.quantity);
