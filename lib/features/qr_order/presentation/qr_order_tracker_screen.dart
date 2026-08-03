@@ -747,6 +747,32 @@ class _StatusStepper extends StatelessWidget {
 
 // ─── Payment Status Card ──────────────────────────────────────────────────────
 
+// Mirrors mapPaymentMethod() in supabase/functions/midtrans-webhook/index.ts
+// — that's what actually writes orders.payment_method for a self-service
+// Pay Now payment, and it's far broader than just 'qris'/'cashier'. Labeling
+// every other method as "Cashier" (the old code) was actively misleading on
+// a receipt: a customer who just paid via GoPay or a bank VA would see
+// "Payment via Cashier confirmed", as if a cashier had processed it.
+String _paymentMethodLabel(String method) {
+  switch (method) {
+    case 'qris': return 'QRIS';
+    case 'gopay': return 'GoPay';
+    case 'shopeepay': return 'ShopeePay';
+    case 'credit_card': return 'Card';
+    case 'bank_transfer': return 'Bank Transfer';
+    case 'akulaku': return 'Akulaku';
+    case 'kredivo': return 'Kredivo';
+    case 'retail_outlet': return 'Indomaret/Alfamart';
+    case 'kasir': case 'cash': return 'Cashier';
+    default:
+      // e.g. 'bca_va', 'bni_va' → 'BCA VA', 'BNI VA'
+      if (method.endsWith('_va')) {
+        return '${method.substring(0, method.length - 3).toUpperCase()} VA';
+      }
+      return 'Cashier';
+  }
+}
+
 class _PaymentStatusCard extends StatelessWidget {
   final QrOrderModel order;
 
@@ -757,8 +783,7 @@ class _PaymentStatusCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isPaid = order.paymentStatus == QrPaymentStatus.paid;
-    final methodLabel =
-        order.paymentMethod == 'qris' ? 'QRIS' : 'Cashier';
+    final methodLabel = _paymentMethodLabel(order.paymentMethod);
 
     return Container(
       decoration: BoxDecoration(
