@@ -19,6 +19,7 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/models/order_model.dart';
 import '../../payment/midtrans/midtrans_provider.dart';
 import '../../payment/models/midtrans_model.dart' show MidtransPaymentStatus, MidtransPaymentMethod;
+import '../../payment/services/receipt_service.dart';
 import '../data/qr_order_repository.dart';
 
 // autoDispose: this must never serve a stale cached order across visits to
@@ -85,6 +86,14 @@ class _QrPayNowScreenState extends ConsumerState<QrPayNowScreen> {
     );
   }
 
+  Future<void> _printReceipt(OrderModel order) async {
+    try {
+      await ReceiptService.printReceipt(order: order);
+    } catch (e) {
+      _showSnack('Failed to open receipt: $e', isError: true);
+    }
+  }
+
   void _showSnack(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -116,6 +125,7 @@ class _QrPayNowScreenState extends ConsumerState<QrPayNowScreen> {
         paymentMethodLabel: paymentType != null && paymentType.isNotEmpty
             ? MidtransPaymentMethod.label(paymentType)
             : 'Midtrans',
+        onPrint: () => _printReceipt(order),
         onDone: () {
           Navigator.pop(context);
           ref.read(midtransProvider(order.id).notifier).reset();
@@ -481,6 +491,7 @@ class _PaySuccessSheet extends StatelessWidget {
   final double total;
   final DateTime paidAt;
   final String paymentMethodLabel;
+  final VoidCallback onPrint;
   final VoidCallback onDone;
   const _PaySuccessSheet({
     required this.order,
@@ -488,6 +499,7 @@ class _PaySuccessSheet extends StatelessWidget {
     required this.total,
     required this.paidAt,
     required this.paymentMethodLabel,
+    required this.onPrint,
     required this.onDone,
   });
 
@@ -562,19 +574,36 @@ class _PaySuccessSheet extends StatelessWidget {
           const SizedBox(height: 12),
           _BreakdownCard(order: order, overtimeCharge: overtimeCharge, total: total),
           const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: onDone,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                minimumSize: const Size(0, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: const Text('Receipt',
+                    style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                onPressed: onPrint,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: cs.primary,
+                  side: BorderSide(color: cs.primary),
+                  minimumSize: const Size(0, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
-              child: const Text('Done', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
             ),
-          ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: ElevatedButton(
+                onPressed: onDone,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  minimumSize: const Size(0, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Done', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
         ]),
       ),
     );
