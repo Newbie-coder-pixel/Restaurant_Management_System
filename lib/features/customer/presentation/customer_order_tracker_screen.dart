@@ -292,7 +292,7 @@ class _CustomerOrderTrackerScreenState
                 'branch_id, customer_name, status, payment_status, '
                 'payment_method, order_type, source, subtotal, tax_amount, '
                 'discount_amount, total_amount, notes, bill_requested, '
-                'bill_requested_at, estimated_prep_minutes, sent_to_kitchen_at, '
+                'bill_requested_at, estimated_prep_minutes, '
                 'served_at, created_at, updated_at')
             .eq('order_number', code)
             .eq('customer_user_id', user.id)
@@ -314,7 +314,7 @@ class _CustomerOrderTrackerScreenState
                 'branch_id, customer_name, status, payment_status, '
                 'payment_method, order_type, source, subtotal, tax_amount, '
                 'discount_amount, total_amount, notes, bill_requested, '
-                'bill_requested_at, estimated_prep_minutes, sent_to_kitchen_at, '
+                'bill_requested_at, estimated_prep_minutes, '
                 'served_at, created_at, updated_at')
             .eq('order_number', code)
             .limit(1);
@@ -335,7 +335,7 @@ class _CustomerOrderTrackerScreenState
                 'branch_id, customer_name, status, payment_status, '
                 'payment_method, order_type, source, subtotal, tax_amount, '
                 'discount_amount, total_amount, notes, bill_requested, '
-                'bill_requested_at, estimated_prep_minutes, sent_to_kitchen_at, '
+                'bill_requested_at, estimated_prep_minutes, '
                 'served_at, created_at, updated_at')
             .eq('order_number', code)
             .limit(1);
@@ -353,6 +353,7 @@ class _CustomerOrderTrackerScreenState
         });
       }
     } catch (e) {
+      debugPrint('CustomerOrderTrackerScreen._search failed: $e');
       if (mounted) {
         setState(() { _error = 'An error occurred. Please try again.'; _loading = false; });
       }
