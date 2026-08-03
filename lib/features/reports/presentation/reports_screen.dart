@@ -162,7 +162,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   ],
                                 ),
                               )
-                            : _RevenueBarChart(
+                            : _RevenueLineChart(
                                 spots: s.revenueSpots,
                                 periodDays: s.period.days,
                               ),
@@ -358,24 +358,19 @@ class _StatusColors {
   static const critical = Color(0xFFD03B3B);
 }
 
-// ── Revenue Bar Chart ────────────────────────────────────────────────────────
+// ── Revenue Line Chart ───────────────────────────────────────────────────────
 //
-// A Bar Chart (not a Line Chart) was chosen because daily revenue data is
-// DISCRETE — each day is a standalone number, not a continuous series.
-// A line chart implies a "flow"/interpolation between points that isn't
-// actually analytically relevant for day-by-day comparison.
-//
-// Improvements over the previous LineChart version:
-//   • Grid is horizontal ONLY (drawVerticalLine: false) → no more vertical
-//     lines making the chart look cluttered & confusing
-//   • X-axis labels use the ACTUAL DATE (not the generic, ambiguous
-//     "Mon/Tue/Wed") + interval:1 so they don't double up/overlap
-//   • The "Today" bar is given a different color (accent) so it's
-//     immediately clear how today's performance compares to the previous 6 days
-//   • The tooltip on touch shows the ACTUAL Rupiah amount (not just the
-//     "K" scale) for analytical drill-down needs
-class _RevenueBarChart extends StatelessWidget {
-  const _RevenueBarChart({required this.spots, this.periodDays = 7});
+// Was a BarChart with a full-height "track" behind every bar
+// (BackgroundBarChartRodData toY: chartMaxY on every single bar). With mostly
+// low/zero-revenue days in the period (e.g. viewing "This Month" before the
+// month has much history), that track dominated the chart as a wall of
+// near-full-height grey columns with only the odd real value poking through
+// — the actual trend was unreadable. A single trend line with a shaded area
+// underneath doesn't have that artifact: zero-revenue days just sit on the
+// baseline instead of drawing a misleading full-height block, so the actual
+// shape of the trend (and the one standout day) reads immediately.
+class _RevenueLineChart extends StatelessWidget {
+  const _RevenueLineChart({required this.spots, this.periodDays = 7});
 
   final List<FlSpot> spots; // x: index 0(n-1 days ago)..(n-1)(today), y: thousands
   final int periodDays;
@@ -383,20 +378,20 @@ class _RevenueBarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
-    // Give 25% headroom above the highest value so bars don't touch the top.
+    // Give 25% headroom above the highest value so the line doesn't touch the top.
     final chartMaxY = maxY <= 0 ? 1.0 : maxY * 1.25;
     final today = DateTime.now();
     const weekdayShort = [
       'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
     ]; // index matches DateTime.weekday - 1
 
-    return BarChart(
-      BarChartData(
+    return LineChart(
+      LineChartData(
+        minY: 0,
         maxY: chartMaxY,
-        alignment: BarChartAlignment.spaceAround,
         gridData: FlGridData(
           show: true,
-          drawVerticalLine: false, // ← remove the cluttered vertical lines
+          drawVerticalLine: false, // keep the grid uncluttered
           horizontalInterval: chartMaxY / 4,
           getDrawingHorizontalLine: (_) => const FlLine(
             color: AppColors.border,
@@ -426,7 +421,7 @@ class _RevenueBarChart extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              interval: 1, // ← main fix: prevent double/overlapping labels
+              interval: 1, // prevent double/overlapping labels
               getTitlesWidget: (v, _) {
                 final idx = v.toInt();
                 if (idx < 0 || idx >= periodDays) return const SizedBox();
@@ -457,40 +452,54 @@ class _RevenueBarChart extends StatelessWidget {
             ),
           ),
         ),
-        barTouchData: BarTouchData(
-          touchTooltipData: BarTouchTooltipData(
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
             getTooltipColor: (_) => AppColors.primary,
-            getTooltipItem: (group, _, rod, __) => BarTooltipItem(
-              _formatRupiah(rod.toY * 1000),
-              const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  fontSize: 11),
-            ),
+            getTooltipItems: (touchedSpots) => touchedSpots.map((t) {
+              return LineTooltipItem(
+                _formatRupiah(t.y * 1000),
+                const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    fontSize: 11),
+              );
+            }).toList(),
           ),
         ),
-        barGroups: spots.map((spot) {
-          final idx = spot.x.toInt();
-          final isToday = idx == periodDays - 1;
-          return BarChartGroupData(
-            x: idx,
-            barRods: [
-              BarChartRodData(
-                toY: spot.y,
-                width: periodDays <= 7 ? 22 : 9,
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(4)),
-                color: isToday ? AppColors.accent : AppColors.primary,
-                backDrawRodData: BackgroundBarChartRodData(
-                  show: true,
-                  toY: chartMaxY,
-                  color: AppColors.surfaceVariant,
-                ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            curveSmoothness: 0.2,
+            color: AppColors.primary,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (spot, percent, bar, index) {
+                final isToday = spot.x.toInt() == periodDays - 1;
+                return FlDotCirclePainter(
+                  radius: isToday ? 5 : (periodDays <= 7 ? 3.5 : 2),
+                  color: isToday ? AppColors.accent : AppColors.primary,
+                  strokeWidth: 2,
+                  strokeColor: Colors.white,
+                );
+              },
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.18),
+                  AppColors.primary.withValues(alpha: 0.0),
+                ],
               ),
-            ],
-          );
-        }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
