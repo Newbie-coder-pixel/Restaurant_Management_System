@@ -600,22 +600,50 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
           ],
 
           const SizedBox(height: 20),
-          const Text('Change Status:',
-            style: TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
-          const SizedBox(height: 12),
-          ...TableStatus.values
-              .where((s) => s != table.status)
-              .map((s) => ListTile(
-                leading: CircleAvatar(backgroundColor: s.color, radius: 8),
-                title: Text(s.label,
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.pop(context);
-                  widget.onStatusChange(s);
-                },
-              )),
+          // Occupied tables with a real active order can only be freed by
+          // completing/paying that order (order_screen.dart / cashier_screen.dart
+          // already flip the table back to available automatically) — showing a
+          // manual override here is how a staff member accidentally un-occupies
+          // a table mid-order. Only fall back to the manual list once the order
+          // fetch has finished AND found nothing, which means the table is
+          // genuinely stuck (no order data), not actively in use.
+          if (table.status == TableStatus.occupied && (_loadingOrder || _order != null)) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.textHint.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(children: [
+                Icon(Icons.lock_outline_rounded, size: 16, color: AppColors.textSecondary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This table has an active order — status changes automatically once it\'s paid/completed.',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ),
+              ]),
+            ),
+          ] else ...[
+            const Text('Change Status:',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
+            const SizedBox(height: 12),
+            ...TableStatus.values
+                .where((s) => s != table.status)
+                .map((s) => ListTile(
+                  leading: CircleAvatar(backgroundColor: s.color, radius: 8),
+                  title: Text(s.label,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.pop(context);
+                    widget.onStatusChange(s);
+                  },
+                )),
+          ],
         ],
       ),
     );
