@@ -13,6 +13,7 @@ import '../../features/customer/presentation/customer_menu_screen.dart';
 import '../../features/customer/presentation/customer_my_bookings_screen.dart';
 import '../../features/customer/presentation/customer_checkout_screen.dart';
 import '../../features/customer/presentation/customer_order_tracker_screen.dart';
+import '../../features/customer/presentation/customer_pay_now_screen.dart';
 import '../../features/customer/presentation/customer_reset_password_screen.dart';
 
 import '../../features/qr_order/presentation/qr_menu_screen.dart';
@@ -56,6 +57,7 @@ abstract class AppRoutes {
   static const customerMenu           = '/customer/menu/:branchId';
   static const customerBooking        = '/customer/booking/:branchId';
   static const customerCheckout       = '/customer/checkout';
+  static const customerPayment        = '/customer/payment/:orderId';
   static const customerTrack          = '/customer/track';
   static const customerTrackOrder     = '/customer/track/:orderNumber';
   static const customerOrderSuccess   = '/customer/order-success/:orderNumber';
@@ -283,6 +285,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.customerCheckout,
         builder: (_, __) => const CustomerCheckoutScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.customerPayment,
+        builder: (_, state) => CustomerPayNowScreen(
+          orderId: state.pathParameters['orderId']!,
+        ),
       ),
       GoRoute(
         path: AppRoutes.customerTrack,

@@ -312,7 +312,7 @@ class _CustomerCheckoutScreenState
       ref.read(cartProvider.notifier).clear();
 
       if (mounted) {
-        context.go('/customer/order-success/$orderNumber');
+        context.go('/customer/payment/$orderId');
       }
     } catch (e) {
       if (mounted) {
@@ -483,7 +483,7 @@ class _CustomerCheckoutScreenState
               ]),
             ),
             const SizedBox(height: 8),
-            const Text('💡 Payment is made at the cashier',
+            const Text("💡 You'll pay online on the next step",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
