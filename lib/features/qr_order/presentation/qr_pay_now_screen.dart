@@ -194,8 +194,10 @@ class _QrPayNowScreenState extends ConsumerState<QrPayNowScreen> {
           // Already settled (e.g. the cashier processed it, or the customer
           // paid from another device already) — never show a Pay button for
           // a paid order, so it's structurally impossible to double-charge
-          // from this screen.
-          if (order.status == OrderStatus.paid) {
+          // from this screen. Checks paymentStatus (order.isPaid), not
+          // status, since status no longer reliably reaches OrderStatus.paid
+          // for every order type (see midtrans-webhook/index.ts).
+          if (order.isPaid) {
             return _AlreadyPaidView(
               order: order,
               onDone: () => _goToTracker(order),

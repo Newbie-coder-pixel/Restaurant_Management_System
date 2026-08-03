@@ -1888,6 +1888,7 @@ class _OrderStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = order['status'] as String? ?? 'new';
+    final paymentStatus = order['payment_status'] as String?;
     final statusLabel = _statusLabels[status] ?? status;
     final statusColor = _statusColors[status] ?? Colors.grey;
     final statusMsg = _statusMessages[status] ?? '';
@@ -1954,7 +1955,7 @@ class _OrderStatusCard extends StatelessWidget {
                     height: 1.4))),
         ],
         const Divider(height: 24, thickness: 1),
-        _StatusProgress(status: status),
+        _StatusProgress(status: status, paymentStatus: paymentStatus),
         const SizedBox(height: 20),
         const Text('Order Items',
             style: TextStyle(
@@ -2055,7 +2056,7 @@ class _OrderStatusCard extends StatelessWidget {
                       fontSize: 18,
                       color: Color(0xFFE94560))),
             ]),
-        if (status != 'paid' && status != 'cancelled') ...[
+        if (paymentStatus != 'paid' && status != 'cancelled') ...[
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(10),
@@ -2094,7 +2095,8 @@ class _OrderStatusCard extends StatelessWidget {
 // ── Status Progress ───────────────────────────────────────────────
 class _StatusProgress extends StatelessWidget {
   final String status;
-  const _StatusProgress({required this.status});
+  final String? paymentStatus;
+  const _StatusProgress({required this.status, this.paymentStatus});
 
   @override
   Widget build(BuildContext context) {
@@ -2102,6 +2104,10 @@ class _StatusProgress extends StatelessWidget {
     const labels = ['New', 'Cooking', 'Ready', 'Served', 'Paid'];
     final currentIdx = steps.indexOf(status);
     final isCancelled = status == 'cancelled';
+    // Orders paid up front never actually get `status` set to 'paid' by the
+    // webhook (see midtrans-webhook/index.ts) — payment_status is the real
+    // signal for the last step, independent of kitchen progress.
+    final isPaid = paymentStatus == 'paid';
 
     if (isCancelled) {
       return Container(
@@ -2129,9 +2135,9 @@ class _StatusProgress extends StatelessWidget {
     return Row(
       children: steps.asMap().entries.map((e) {
         final idx = e.key;
-        final isActive = idx <= currentIdx;
-        final isCurrent = idx == currentIdx;
         final isLast = idx == steps.length - 1;
+        final isActive = idx <= currentIdx || (isLast && isPaid);
+        final isCurrent = idx == currentIdx;
 
         return Expanded(
           child: Row(children: [

@@ -462,7 +462,10 @@ class _OrderHistoryCard extends StatelessWidget {
     return s == 'new' || s == 'preparing' || s == 'ready' || s == 'served';
   }
 
-  bool get _isPaid => order['status'] == 'paid';
+  // payment_status, not status — orders paid up front (customer app) never
+  // get `status` set to 'paid' by the webhook, since that column tracks
+  // kitchen progress, not money (see midtrans-webhook/index.ts).
+  bool get _isPaid => order['payment_status'] == 'paid';
 
   String _fmtDate(String? iso) {
     if (iso == null) return '-';

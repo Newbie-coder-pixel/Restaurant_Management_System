@@ -163,6 +163,12 @@ class OrderModel {
   final String? customerPhone;
   final String? customerEmail;
   final String? queueNumber;
+  // The real "has this been paid" signal — independent of [status], which
+  // tracks kitchen progress and, for orders paid up front (e.g. the customer
+  // app), may never itself become OrderStatus.paid at all (see
+  // supabase/functions/midtrans-webhook/index.ts).
+  final String? paymentStatus;
+  bool get isPaid => paymentStatus == 'paid';
 
   // FIX Bug 1: store the DB total as a fallback in case items is empty
   final double _totalAmountFromDb;
@@ -228,6 +234,7 @@ class OrderModel {
     this.customerPhone,
     this.customerEmail,
     this.queueNumber,
+    this.paymentStatus,
     double totalAmountFromDb = 0.0,
     double subtotalFromDb = 0.0,
     double taxAmountFromDb = 0.0,
@@ -274,6 +281,7 @@ class OrderModel {
       customerPhone: j['customer_phone'] as String?,
       customerEmail: j['customer_email'] as String?,
       queueNumber: j['queue_number'] as String?,
+      paymentStatus: j['payment_status'] as String?,
       // FIX Bug 1: read financial values from the DB as a fallback
       totalAmountFromDb: (j['total_amount'] ?? 0).toDouble(),
       subtotalFromDb: (j['subtotal'] ?? 0).toDouble(),
@@ -304,6 +312,7 @@ class OrderModel {
     String? customerPhone,
     String? customerEmail,
     String? queueNumber,
+    String? paymentStatus,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -326,6 +335,7 @@ class OrderModel {
       customerPhone: customerPhone ?? this.customerPhone,
       customerEmail: customerEmail ?? this.customerEmail,
       queueNumber: queueNumber ?? this.queueNumber,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
       totalAmountFromDb: _totalAmountFromDb,
       subtotalFromDb: _subtotalFromDb,
       taxAmountFromDb: _taxAmountFromDb,

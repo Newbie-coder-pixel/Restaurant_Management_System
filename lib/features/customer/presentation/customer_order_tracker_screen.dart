@@ -646,7 +646,9 @@ class _CustomerOrderTrackerScreenState
             curve: Curves.easeOutCubic,
             child: _OrderStatusCard(order: _order!, items: _items),
           ),
-          if (_order!['status'] == 'paid') ...[
+          // payment_status, not status — a paid-up-front order's status may
+          // never literally reach 'paid' (see midtrans-webhook/index.ts).
+          if (_order!['payment_status'] == 'paid') ...[
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -730,7 +732,8 @@ class _OrderStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status      = order['status'] as String? ?? 'new';
+    final status        = order['status'] as String? ?? 'new';
+    final paymentStatus = order['payment_status'] as String?;
     final statusLabel = _statusLabels[status] ?? status;
     final statusColor = _statusColors[status] ?? Colors.grey;
     final statusMsg   = _statusMessages[status] ?? '';
@@ -845,7 +848,7 @@ class _OrderStatusCard extends StatelessWidget {
           // Progress indicator
           _StatusProgress(
             status: status,
-            paymentStatus: order['payment_status'] as String?,
+            paymentStatus: paymentStatus,
           ),
 
           // ── ML Time Estimate (only when new / preparing) ────────────
@@ -1096,7 +1099,11 @@ class _OrderStatusCard extends StatelessWidget {
             ],
           ),
 
-          if (status != 'paid' && status != 'cancelled') ...[
+          // `status` tracks kitchen progress and (for orders paid up front,
+          // e.g. the customer app) may never literally become 'paid' at all
+          // — payment_status is the real signal for whether this still needs
+          // paying, independent of how far the kitchen has got.
+          if (paymentStatus != 'paid' && status != 'cancelled') ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

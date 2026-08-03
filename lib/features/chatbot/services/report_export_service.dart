@@ -62,7 +62,7 @@ class ReportExportService {
     // Orders
     var qOrders = sb
         .from('orders')
-        .select('total_amount, status, order_type, payment_method, created_at, customer_name')
+        .select('total_amount, status, payment_status, order_type, payment_method, created_at, customer_name')
         .gte('created_at', startDate)
         .lt('created_at', endDate);
     if (branchId != null) qOrders = qOrders.eq('branch_id', branchId);
@@ -73,7 +73,15 @@ class ReportExportService {
     // This filter used to incorrectly use 'completed', so revenue/average
     // order value/payment breakdown/top menu in the report were always 0
     // even though transactions kept coming in.
-    final completed = orders.where((o) => o['status'] == 'paid').toList();
+    //
+    // Also include payment_status == 'paid' directly: orders paid up front
+    // (customer app) never get `status` set to 'paid' by the webhook — that
+    // column tracks kitchen progress, not money (see
+    // supabase/functions/midtrans-webhook/index.ts) — so status alone would
+    // permanently exclude every customer-app order from this report.
+    final completed = orders
+        .where((o) => o['status'] == 'paid' || o['payment_status'] == 'paid')
+        .toList();
     final cancelled = orders.where((o) => o['status'] == 'cancelled').length;
     final totalRevenue = completed.fold<double>(
         0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
@@ -91,10 +99,11 @@ class ReportExportService {
     // Top menu items
     var qItems = sb
         .from('order_items')
-        .select('menu_item_name, quantity, unit_price, orders!inner(status, created_at, branch_id)')
+        .select('menu_item_name, quantity, unit_price, orders!inner(status, payment_status, created_at, branch_id)')
         .gte('orders.created_at', startDate)
         .lt('orders.created_at', endDate)
-        .eq('orders.status', 'paid');
+        // Same "completed" definition as `completed` above.
+        .or('status.eq.paid,payment_status.eq.paid', referencedTable: 'orders');
     if (branchId != null) qItems = qItems.eq('orders.branch_id', branchId);
     final items = (await qItems as List).cast<Map<String, dynamic>>();
 

@@ -238,7 +238,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 // in this list (including cancelled/unpaid ones)
                                 // were given the same visual weight as orders
                                 // that were actually paid.
-                                color: o.status == OrderStatus.paid
+                                color: o.isPaid
                                     ? AppColors.accent
                                     : AppColors.textHint),
                           ),

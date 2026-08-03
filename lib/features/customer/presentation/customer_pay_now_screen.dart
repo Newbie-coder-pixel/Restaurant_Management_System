@@ -182,8 +182,11 @@ class _CustomerPayNowScreenState extends ConsumerState<CustomerPayNowScreen> {
         data: (order) {
           // Already settled (e.g. paid on another device, or by staff) — never
           // show a Pay button for a paid order, so double-charging from here
-          // is structurally impossible.
-          if (order.status == OrderStatus.paid) {
+          // is structurally impossible. Checks paymentStatus, not status —
+          // pay-up-front orders never get status set to OrderStatus.paid at
+          // all (see supabase/functions/midtrans-webhook/index.ts), so status
+          // alone would never catch an already-paid order here.
+          if (order.isPaid) {
             return _AlreadyPaidView(
               order: order,
               onDone: () => _goToTracker(order),

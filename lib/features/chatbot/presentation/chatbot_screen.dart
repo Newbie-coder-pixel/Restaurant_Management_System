@@ -196,15 +196,22 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       var qToday = sb
           .from('orders')
           .select(
-              'total_amount, status, created_at, order_type, payment_method')
+              'total_amount, status, payment_status, created_at, order_type, payment_method')
           .gte('created_at', todayStart)
           .lte('created_at', todayEnd);
       if (branchId != null) qToday = qToday.eq('branch_id', branchId);
       final ordersToday =
           (await qToday as List).cast<Map<String, dynamic>>();
 
-      final completedToday =
-          ordersToday.where((o) => (o['status'] == 'paid' || o['status'] == 'served')).toList();
+      // "Completed" = served/paid kitchen-wise, OR already paid up front
+      // (customer-app orders never reach status 'paid' — see
+      // midtrans-webhook/index.ts — so payment_status is the real signal).
+      final completedToday = ordersToday
+          .where((o) =>
+              o['status'] == 'paid' ||
+              o['status'] == 'served' ||
+              o['payment_status'] == 'paid')
+          .toList();
       final revenueToday = completedToday.fold<double>(
           0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
       final cancelledToday =
@@ -253,42 +260,51 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       // ── 2. Orders minggu ini ────────────────────────────────────────
       var qWeek = sb
           .from('orders')
-          .select('total_amount, status, created_at')
+          .select('total_amount, status, payment_status, created_at')
           .gte('created_at', '${weekStart}T00:00:00')
           .lte('created_at', todayEnd);
       if (branchId != null) qWeek = qWeek.eq('branch_id', branchId);
       final ordersWeek =
           (await qWeek as List).cast<Map<String, dynamic>>();
       final revenueWeek = ordersWeek
-          .where((o) => (o['status'] == 'paid' || o['status'] == 'served'))
+          .where((o) =>
+              o['status'] == 'paid' ||
+              o['status'] == 'served' ||
+              o['payment_status'] == 'paid')
           .fold<double>(
               0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
       // ── 3. Orders minggu lalu ───────────────────────────────────────
       var qLastWeek = sb
           .from('orders')
-          .select('total_amount, status')
+          .select('total_amount, status, payment_status')
           .gte('created_at', '${lastWeekStart}T00:00:00')
           .lte('created_at', '${lastWeekEnd}T23:59:59');
       if (branchId != null) qLastWeek = qLastWeek.eq('branch_id', branchId);
       final ordersLastWeek =
           (await qLastWeek as List).cast<Map<String, dynamic>>();
       final revenueLastWeek = ordersLastWeek
-          .where((o) => (o['status'] == 'paid' || o['status'] == 'served'))
+          .where((o) =>
+              o['status'] == 'paid' ||
+              o['status'] == 'served' ||
+              o['payment_status'] == 'paid')
           .fold<double>(
               0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
       // ── 4. Orders bulan ini ─────────────────────────────────────────
       var qMonth = sb
           .from('orders')
-          .select('total_amount, status')
+          .select('total_amount, status, payment_status')
           .gte('created_at', '${monthStart}T00:00:00')
           .lte('created_at', todayEnd);
       if (branchId != null) qMonth = qMonth.eq('branch_id', branchId);
       final ordersMonth =
           (await qMonth as List).cast<Map<String, dynamic>>();
       final revenueMonth = ordersMonth
-          .where((o) => (o['status'] == 'paid' || o['status'] == 'served'))
+          .where((o) =>
+              o['status'] == 'paid' ||
+              o['status'] == 'served' ||
+              o['payment_status'] == 'paid')
           .fold<double>(
               0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
 
@@ -296,7 +312,9 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       var qCompletedOrders = sb
           .from('orders')
           .select('id')
-          .inFilter('status', ['paid', 'served'])
+          // Same "completed" definition as the revenue sections above: served/
+          // paid kitchen-wise, OR already paid up front regardless of kitchen stage.
+          .or('status.in.(paid,served),payment_status.eq.paid')
           .gte('created_at', '${monthStart}T00:00:00')
           .lte('created_at', todayEnd);
       if (branchId != null) qCompletedOrders = qCompletedOrders.eq('branch_id', branchId);
