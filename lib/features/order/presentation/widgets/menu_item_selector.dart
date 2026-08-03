@@ -5,6 +5,7 @@ import '../../../../shared/models/menu_model.dart';
 import '../../../../shared/models/table_model.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/prep_time_service.dart'; // ← ML Service
+import '../../../../core/config/app_config.dart';
 
 class MenuItemSelector extends StatefulWidget {
   final String branchId;
@@ -220,6 +221,14 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       final date = '${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}';
       final orderNumber = 'ORD-$date-${Random().nextInt(9000) + 1000}';
 
+      // Compute subtotal/tax/total up front — order_items are inserted right
+      // after this, and the price-integrity trigger (trg_enforce_order_total_sanity)
+      // rejects the resulting orders.subtotal recompute if total_amount is left
+      // at its 0 default, since total_amount must never be < subtotal - discount.
+      final subtotal   = _cartPrice;
+      final taxAmount  = subtotal * AppConfig.defaultTaxRate;
+      final totalAmount = subtotal + taxAmount;
+
       final orderRes = await Supabase.instance.client.from('orders').insert({
         'branch_id':      widget.branchId,
         'table_id':       _selectedTableId,
@@ -230,6 +239,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         'customer_name':  _nameCtrl.text.trim().isNotEmpty ? _nameCtrl.text.trim() : null,
         'customer_phone': _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
         'discount_amount': 0,
+        'subtotal':       subtotal,
+        'tax_amount':     taxAmount,
+        'total_amount':   totalAmount,
         'payment_status': 'unpaid', // required so the order shows up on the cashier screen
         // Store the ML estimate in the DB so the KDS can show it without re-predicting
         if (_estimatedMinutes != null)
