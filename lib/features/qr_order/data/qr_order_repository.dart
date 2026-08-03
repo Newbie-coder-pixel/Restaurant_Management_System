@@ -283,6 +283,27 @@ await _client.from('order_items').insert(orderItemsData);
     return controller.stream;
   }
 
+  // ── Claim an ownerless order (device_id IS NULL) for this device ───────────
+  // Orders placed before the device-lock feature shipped (or any other order
+  // that somehow never got a device_id recorded at insert time) have no way
+  // to prove who placed them. Rather than permanently locking every device
+  // out of such an order, the first device to open it claims it — exactly
+  // what would have happened at insert time. The DB only allows this
+  // transition when device_id is currently null (see
+  // 20260803030000_qr_order_device_id_claim.sql); it can't be used to steal
+  // an order that already has an owner.
+  Future<void> claimOrderIfUnowned(String orderId, String deviceId) async {
+    try {
+      await _client
+          .from('orders')
+          .update({'device_id': deviceId})
+          .eq('id', orderId)
+          .isFilter('device_id', null);
+    } catch (e) {
+      debugPrint('⚠️ claimOrderIfUnowned failed (non-fatal): $e');
+    }
+  }
+
   // ── Fetch order + items (TWO SEPARATE QUERIES) ─────────────────────────────
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     final orderResp = await _client

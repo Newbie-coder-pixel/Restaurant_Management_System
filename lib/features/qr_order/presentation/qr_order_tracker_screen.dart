@@ -1078,7 +1078,17 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
     // Only the device that placed this order may add items to it — see
     // supabase/migrations/20260803010000_qr_order_device_id.sql.
     QrDeviceIdService.getDeviceId().then((id) {
-      if (mounted) setState(() => _deviceId = id);
+      if (!mounted) return;
+      setState(() => _deviceId = id);
+      // Orders with no device_id recorded (e.g. placed before this feature
+      // shipped) can't prove who placed them — claim it for this device
+      // instead of permanently locking everyone out. No-op if some other
+      // device already claimed it in the meantime (DB-enforced, see
+      // 20260803030000_qr_order_device_id_claim.sql).
+      final order = widget.order;
+      if (order.deviceId == null || order.deviceId!.isEmpty) {
+        ref.read(qrOrderRepositoryProvider).claimOrderIfUnowned(order.id, id);
+      }
     });
   }
 
@@ -1161,10 +1171,13 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
 
     // Adding to the order is allowed until served/paid/cancelled, and only
     // from the device that placed it — every other device is view-only.
+    // An order with no device_id recorded at all (placed before this
+    // feature shipped) has no owner to defer to, so this device is treated
+    // as the owner and (see initState) claims it for real in the background.
+    final orderHasNoOwner =
+        order.deviceId == null || order.deviceId!.isEmpty;
     final isOwner = _deviceId != null &&
-        order.deviceId != null &&
-        order.deviceId!.isNotEmpty &&
-        order.deviceId == _deviceId;
+        (orderHasNoOwner || order.deviceId == _deviceId);
     final canAddOrderStatus = (isCreated || isPreparing || isReady) && !isCancelled;
     final canAddOrder = canAddOrderStatus && isOwner;
 

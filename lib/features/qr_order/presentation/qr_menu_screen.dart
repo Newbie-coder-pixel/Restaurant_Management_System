@@ -98,9 +98,15 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
     final deviceId = await QrDeviceIdService.getDeviceId();
     if (!mounted) return;
 
-    final isOwner = order.deviceId != null &&
-        order.deviceId!.isNotEmpty &&
-        order.deviceId == deviceId;
+    // An order with no device_id recorded at all (placed before the
+    // device-lock feature shipped) has no owner to defer to, so this device
+    // is treated as the owner and claims it for real in the background —
+    // otherwise the customer who placed it would be permanently locked out.
+    final orderHasNoOwner = order.deviceId == null || order.deviceId!.isEmpty;
+    final isOwner = orderHasNoOwner || order.deviceId == deviceId;
+    if (orderHasNoOwner) {
+      ref.read(qrOrderRepositoryProvider).claimOrderIfUnowned(order.id, deviceId);
+    }
     final itemCount = order.items.fold<int>(0, (s, i) => s + i.quantity);
 
     void goToStatus(BuildContext ctx) {
