@@ -168,27 +168,6 @@ serve(async (req: Request) => {
     let orderStatus: string | undefined; // undefined = don't change the order status
     let paymentStatus = "pending";
 
-    if (transaction_status === "capture" && fraud_status === "accept") {
-      isPaid = true;
-      orderStatus = "paid";
-      paymentStatus = "paid";
-    } else if (transaction_status === "settlement") {
-      isPaid = true;
-      orderStatus = "paid";
-      paymentStatus = "paid";
-    } else if (
-      transaction_status === "deny" ||
-      transaction_status === "expire" ||
-      transaction_status === "cancel"
-    ) {
-      orderStatus = "served"; // revert to served so the cashier can retry
-      paymentStatus = "failed";
-    } else if (transaction_status === "refund") {
-      orderStatus = "cancelled";
-      paymentStatus = "refunded";
-    }
-    // "pending" → orderStatus stays undefined, don't change the order status
-
     // ── 4. Initialize the Supabase client ────────────────────────────────────
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -198,9 +177,49 @@ serve(async (req: Request) => {
     // `order_id` from this notification is no longer the real orders.id UUID.
     const { data: order, error: orderError } = await supabase
       .from("orders")
-      .select("id, status, table_id, branch_id, subtotal, tax_amount, discount_amount, total_amount, served_at")
+      .select("id, status, payment_status, table_id, branch_id, subtotal, tax_amount, discount_amount, total_amount, served_at")
       .eq("midtrans_order_id", order_id)
       .single();
+
+    // Whether the kitchen had already fully served this order BEFORE this
+    // payment notification arrived. `status` tracks kitchen progress
+    // (new/preparing/ready/served); `paid` used to be treated as the next
+    // stage after `served` for every order type. That's only true for the
+    // staff-cashier and QR self-pay flows, where payment always happens
+    // AFTER the food is served. The customer app now pays UP FRONT, before
+    // the kitchen ever sees the order — forcing `status` straight to "paid"
+    // there would skip it past new/preparing/ready/served entirely, hiding
+    // it from the KDS kitchen queue (which only looks for those four
+    // statuses) and falsely marking every item "served" before it was even
+    // cooked. So: only advance `status` to "paid" (and only auto-serve
+    // items / free the table) when the order was ALREADY served — otherwise
+    // just record `payment_status` and leave `status` alone so the normal
+    // kitchen pipeline still runs.
+    const wasAlreadyServed = order?.status === "served";
+
+    if (transaction_status === "capture" && fraud_status === "accept") {
+      isPaid = true;
+      orderStatus = wasAlreadyServed ? "paid" : undefined;
+      paymentStatus = "paid";
+    } else if (transaction_status === "settlement") {
+      isPaid = true;
+      orderStatus = wasAlreadyServed ? "paid" : undefined;
+      paymentStatus = "paid";
+    } else if (
+      transaction_status === "deny" ||
+      transaction_status === "expire" ||
+      transaction_status === "cancel"
+    ) {
+      // Only revert to "served" if it was ever there in the first place —
+      // for a paid-up-front order that failed, there's nothing to revert;
+      // the kitchen pipeline was never touched.
+      orderStatus = wasAlreadyServed ? "served" : undefined;
+      paymentStatus = "failed";
+    } else if (transaction_status === "refund") {
+      orderStatus = "cancelled";
+      paymentStatus = "refunded";
+    }
+    // "pending" → orderStatus stays undefined, don't change the order status
 
     if (orderError || !order) {
       console.error("Order not found for midtrans_order_id:", order_id, orderError);
@@ -262,8 +281,11 @@ serve(async (req: Request) => {
       }
     }
 
-    // Skip if already paid (Midtrans sometimes sends duplicate notifications)
-    if (order.status === "paid" && isPaid) {
+    // Skip if already paid (Midtrans sometimes sends duplicate notifications).
+    // Checks payment_status, not status — a paid-up-front order never sets
+    // status to "paid" at all (see wasAlreadyServed above), so status alone
+    // can no longer be trusted as the "already processed" signal.
+    if (order.payment_status === "paid" && isPaid) {
       console.log("Order already paid, skipping:", internalOrderId);
       return new Response(
         JSON.stringify({ message: "Already processed" }),
@@ -331,18 +353,23 @@ serve(async (req: Request) => {
           settled_at: settlement_time || new Date().toISOString(),
         });
 
-        // Sync order_items → served
-        await supabase
-          .from("order_items")
-          .update({ status: "served" })
-          .eq("order_id", internalOrderId);
-
-        // Free up the table → cleaning
-        if (order.table_id) {
+        // Sync order_items → served, and free the table for cleaning — only
+        // when the order was already served before this payment. A
+        // paid-up-front order hasn't been cooked yet, so nothing here should
+        // be force-marked "served" and there's no table to release (its
+        // table_id is null for the customer app's takeaway orders anyway).
+        if (wasAlreadyServed) {
           await supabase
-            .from("restaurant_tables")
-            .update({ status: "cleaning" })
-            .eq("id", order.table_id);
+            .from("order_items")
+            .update({ status: "served" })
+            .eq("order_id", internalOrderId);
+
+          if (order.table_id) {
+            await supabase
+              .from("restaurant_tables")
+              .update({ status: "cleaning" })
+              .eq("id", order.table_id);
+          }
         }
       }
     }

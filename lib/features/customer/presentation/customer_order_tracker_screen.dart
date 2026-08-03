@@ -843,7 +843,10 @@ class _OrderStatusCard extends StatelessWidget {
           const Divider(height: 28, thickness: 1, color: Color(0xFFEEEEEE)),
 
           // Progress indicator
-          _StatusProgress(status: status),
+          _StatusProgress(
+            status: status,
+            paymentStatus: order['payment_status'] as String?,
+          ),
 
           // ── ML Time Estimate (only when new / preparing) ────────────
           if (status == 'new' || status == 'preparing') ...[
@@ -1316,7 +1319,8 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
 // ── Progress Bar ──────────────────────────────────────────────────
 class _StatusProgress extends StatelessWidget {
   final String status;
-  const _StatusProgress({required this.status});
+  final String? paymentStatus;
+  const _StatusProgress({required this.status, this.paymentStatus});
 
   @override
   Widget build(BuildContext context) {
@@ -1324,6 +1328,12 @@ class _StatusProgress extends StatelessWidget {
     const labels = ['New', 'Cooking', 'Ready', 'Served', 'Paid'];
     final currentIdx  = steps.indexOf(status);
     final isCancelled = status == 'cancelled';
+    // Orders paid up front (customer app: pay before the kitchen even sees
+    // the order) never actually get `status` set to 'paid' by the webhook —
+    // that column tracks kitchen progress, not money, so it keeps advancing
+    // through new/preparing/ready/served on its own. payment_status is the
+    // real signal for the last step, independent of how far cooking has got.
+    final isPaid = paymentStatus == 'paid';
 
     if (isCancelled) {
       return Container(
@@ -1354,9 +1364,9 @@ class _StatusProgress extends StatelessWidget {
     return Row(
       children: steps.asMap().entries.map((e) {
         final idx = e.key;
-        final isActive = idx <= currentIdx;
-        final isCurrent = idx == currentIdx;
         final isLast = idx == steps.length - 1;
+        final isActive = idx <= currentIdx || (isLast && isPaid);
+        final isCurrent = idx == currentIdx;
 
         return Expanded(
           child: Row(
