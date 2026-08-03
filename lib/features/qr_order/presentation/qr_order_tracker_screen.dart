@@ -1245,6 +1245,32 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
           const SizedBox(height: 10),
         ],
 
+        // ── Pay Now button (self-service Midtrans, only while served) ────────
+        if (isServed) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => context.push('/qr/${order.tableId}/pay/${order.id}'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.payment_rounded),
+              label: const Text('Pay Now',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text('or',
+                style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+          ),
+          const SizedBox(height: 8),
+        ],
+
         // ── Request Bill button (only while served) ──────────────────────────
         if (isServed) ...[
           if (!_billRequested)

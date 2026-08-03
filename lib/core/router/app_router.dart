@@ -18,6 +18,7 @@ import '../../features/customer/presentation/customer_reset_password_screen.dart
 import '../../features/qr_order/presentation/qr_menu_screen.dart';
 import '../../features/qr_order/presentation/qr_cart_screen.dart';
 import '../../features/qr_order/presentation/qr_order_tracker_screen.dart';
+import '../../features/qr_order/presentation/qr_pay_now_screen.dart';
 
 import '../../features/auth/presentation/staff_reset_password_screen.dart';
 
@@ -339,6 +340,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   orderId: orderId,
                   queueNumber: queueNumber,
                 ),
+              );
+            },
+          ),
+          GoRoute(
+            path: 'pay/:orderId',
+            name: 'qrPayNow',
+            pageBuilder: (context, state) {
+              final tableId = state.pathParameters['tableId']!;
+              final orderId = state.pathParameters['orderId']!;
+              return MaterialPage(
+                key: state.pageKey,
+                child: QrPayNowScreen(tableId: tableId, orderId: orderId),
               );
             },
           ),

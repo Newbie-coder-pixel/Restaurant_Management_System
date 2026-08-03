@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/qr_order_model.dart';
 import '../providers/qr_cart_provider.dart';
+import '../../../shared/models/order_model.dart';
 
 class QrOrderRepository {
   final SupabaseClient _client;
@@ -329,6 +330,32 @@ await _client.from('order_items').insert(orderItemsData);
         .eq('order_id', orderResp['id'] as String);
 
     return QrOrderModel.fromMap(_normalizeOrderMap(orderResp, itemsResp));
+  }
+
+  // ── Fetch as OrderModel for self-service Midtrans payment ──────────────────
+  // Same select shape as the staff cashier screen's query, so OrderModel's
+  // overtime-charge math (which depends on `served_at`) and totals behave
+  // identically regardless of who — staff or the customer's own device —
+  // initiates the Midtrans payment. See MidtransService.createSnapToken and
+  // supabase/functions/midtrans-create-token, which independently recompute
+  // the same formula server-side and must match what's shown here.
+  Future<OrderModel> fetchOrderModelForPayment(String orderId) async {
+    final row = await _client
+        .from('orders')
+        .select('''
+          id, branch_id, table_id, order_number,
+          status, source, order_type, customer_name,
+          customer_phone, queue_number, table_name,
+          discount_amount, notes, created_at, updated_at, served_at,
+          payment_status, bill_requested, bill_requested_at,
+          total_amount, subtotal, tax_amount,
+          restaurant_tables(table_number),
+          order_items(*)
+        ''')
+        .eq('id', orderId)
+        .single();
+
+    return OrderModel.fromJson(row);
   }
 
   Future<QrOrderModel?> fetchByQueueNumber(String queueNumber) async {

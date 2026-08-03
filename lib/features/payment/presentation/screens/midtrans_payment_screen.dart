@@ -177,6 +177,22 @@ class _MidtransPaymentScreenState extends ConsumerState<MidtransPaymentScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(activeMidtransProvider);
 
+    // Surface token-creation failures explicitly — createSnapToken() can fail
+    // (network, amount mismatch, order already paid elsewhere, missing
+    // branch, etc.) BEFORE the Snap UI ever opens. That specific failure
+    // (step: creatingToken → idle) never reaches onStatusConfirmed() in
+    // _pay(), so nothing else in this screen told the cashier why the
+    // loading overlay just disappeared — it was silent. (Failures that DO
+    // go through polling are already reported via onStatusConfirmed below,
+    // so this only covers the gap, not a duplicate.)
+    ref.listen<MidtransState>(activeMidtransProvider, (previous, next) {
+      if (previous?.step == MidtransFlowStep.creatingToken &&
+          next.step == MidtransFlowStep.idle &&
+          next.errorMessage != null) {
+        _showError(next.errorMessage!);
+      }
+    });
+
     return Stack(children: [
       SingleChildScrollView(
         padding: const EdgeInsets.all(20),
