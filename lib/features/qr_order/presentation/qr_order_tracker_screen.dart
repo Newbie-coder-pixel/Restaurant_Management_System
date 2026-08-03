@@ -1166,7 +1166,6 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
     final isPreparing = order.status == QrOrderStatus.preparing;
     final isReady = order.status == QrOrderStatus.ready;
     final isServed = order.status == QrOrderStatus.served;
-    final isPaid = order.status == QrOrderStatus.paid;
     final isCancelled = order.status == QrOrderStatus.cancelled;
 
     // Adding to the order is allowed until served/paid/cancelled, and only
@@ -1335,19 +1334,6 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
                 ],
               ),
             ),
-          const SizedBox(height: 10),
-        ],
-
-        // ── Order again after payment is complete ───────────────────────────────────────
-        if (isPaid) ...[
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => context.go('/qr/${order.tableId}'),
-              icon: const Icon(Icons.add_shopping_cart_outlined),
-              label: const Text('Order Again'),
-            ),
-          ),
           const SizedBox(height: 10),
         ],
 
