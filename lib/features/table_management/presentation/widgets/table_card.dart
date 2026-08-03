@@ -219,6 +219,32 @@ class _TableCardState extends State<TableCard> {
                   ),
                 ),
               ),
+
+            // Customer flagged this table's status doesn't match reality
+            // (reported from the QR ordering gate screen) — see
+            // 20260803040000_table_status_gate_and_anon_lockdown.sql.
+            if (table.customerReportedAt != null)
+              Positioned(
+                top: 6,
+                left: 6,
+                child: Tooltip(
+                  message: 'A customer flagged this table from the QR screen',
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade700,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.orange.withValues(alpha: 0.4),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1)),
+                      ],
+                    ),
+                    child: const Icon(Icons.flag_rounded, size: 11, color: Colors.white),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

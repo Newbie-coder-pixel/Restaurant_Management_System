@@ -503,6 +503,19 @@ await _client.from('order_items').insert(orderItemsData);
     }
   }
 
+  // ── Report a table status mismatch from the QR gate ─────────────────────
+  // e.g. status says "cleaning" but the table looks fine to the customer, or
+  // vice versa. Staff see a badge on the table card; it's cleared the next
+  // time staff changes that table's status (see table_screen.dart
+  // _updateStatus). Anon may only ever set this column and status=occupied
+  // on restaurant_tables — see 20260803040000_table_status_gate_and_anon_lockdown.sql.
+  Future<void> reportTableIssue(String tableId) async {
+    await _client
+        .from('restaurant_tables')
+        .update({'customer_reported_at': DateTime.now().toIso8601String()})
+        .eq('id', tableId);
+  }
+
   Future<String> _generateQueueNumber(String branchId) async {
     final now = DateTime.now().toUtc();
     // Use UTC midnight to stay consistent with Supabase timestamps (UTC)

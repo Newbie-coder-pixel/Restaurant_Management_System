@@ -7,6 +7,7 @@ import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 import '../models/qr_order_model.dart';
 import '../services/qr_device_id_service.dart';
+import '../../../shared/models/table_model.dart';
 
 final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, branchId) async => ref.read(qrOrderRepositoryProvider).fetchMenuByBranch(branchId),
@@ -199,6 +200,23 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
         final branchName = branch?['name'] as String? ?? 'Restaurant';
         final tableName = (tableData?['table_number'] as String?) ?? 'Table';
 
+        // Gate ordering on the table's real status — the staff app already
+        // enforces this structurally (MenuItemSelector's table dropdown only
+        // ever lists available tables), QR ordering had no equivalent check
+        // at all since there's no dropdown to filter, just whichever QR was
+        // scanned. 'occupied' is deliberately NOT gated here — that case is
+        // already handled by the active-order-for-table dialog below (join
+        // the existing order / view its status), which is more specific.
+        final tableStatus =
+            TableStatusExt.fromString(tableData?['status'] as String? ?? 'available');
+        if (tableStatus == TableStatus.cleaning || tableStatus == TableStatus.reserved) {
+          return _TableNotReadyScreen(
+            tableId: widget.tableId,
+            tableName: tableName,
+            status: tableStatus,
+          );
+        }
+
         // Save data to activeQrTableProvider
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref.read(activeQrTableProvider.notifier).state = (
@@ -219,6 +237,155 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
           searchCtrl: _searchCtrl,
         );
       },
+    );
+  }
+}
+
+// ─── Table Not Ready Screen ────────────────────────────────────────────────────
+// Shown instead of the menu when the scanned table's status is 'cleaning' or
+// 'reserved' — the customer can flag staff instead of silently being allowed
+// to order. See supabase/migrations/20260803040000_table_status_gate_and_anon_lockdown.sql.
+class _TableNotReadyScreen extends ConsumerStatefulWidget {
+  final String tableId;
+  final String tableName;
+  final TableStatus status;
+
+  const _TableNotReadyScreen({
+    required this.tableId,
+    required this.tableName,
+    required this.status,
+  });
+
+  @override
+  ConsumerState<_TableNotReadyScreen> createState() => _TableNotReadyScreenState();
+}
+
+class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
+  bool _reporting = false;
+  bool _reported = false;
+
+  bool get _isCleaning => widget.status == TableStatus.cleaning;
+
+  Future<void> _reportIssue() async {
+    setState(() => _reporting = true);
+    try {
+      await ref.read(qrOrderRepositoryProvider).reportTableIssue(widget.tableId);
+      if (mounted) setState(() { _reported = true; _reporting = false; });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _reporting = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to notify staff: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final color = widget.status.color;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _isCleaning ? Icons.cleaning_services_rounded : Icons.event_seat_rounded,
+                    color: color,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Table ${widget.tableName}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _isCleaning ? 'This table is still being cleaned' : 'This table is reserved',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _isCleaning
+                      ? 'Please wait for staff to finish preparing this table before ordering. '
+                        "If it actually looks ready, let staff know and they'll update it."
+                      : 'This table is reserved for another booking. If this is your reservation, '
+                        'please let our staff know so they can seat you.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 32),
+                if (_reported)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.green.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_outline, color: Colors.green.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Staff notified — thanks!',
+                            style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _reporting ? null : _reportIssue,
+                      icon: _reporting
+                          ? const SizedBox(
+                              width: 16, height: 16,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.campaign_outlined),
+                      label: Text(_reporting ? 'Notifying...' : 'Notify Staff'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    ref.invalidate(_tableInfoProvider(widget.tableId));
+                  },
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Check again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

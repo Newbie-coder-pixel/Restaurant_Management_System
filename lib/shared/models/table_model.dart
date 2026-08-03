@@ -38,6 +38,10 @@ class TableModel {
   final String? notes;
   // ── IMPROVEMENT: add updatedAt for the occupied timer ──
   final DateTime? updatedAt;
+  // Set when a customer flags via the QR ordering gate that this table's
+  // real-world state doesn't match its status. See
+  // supabase/migrations/20260803040000_table_status_gate_and_anon_lockdown.sql.
+  final DateTime? customerReportedAt;
 
   const TableModel({
     required this.id, required this.branchId, required this.tableNumber,
@@ -45,6 +49,7 @@ class TableModel {
     required this.positionX, required this.positionY, required this.floorLevel,
     required this.isMergeable, this.notes,
     this.updatedAt, // ← NEW
+    this.customerReportedAt,
   });
 
   factory TableModel.fromJson(Map<String, dynamic> j) => TableModel(
@@ -62,6 +67,9 @@ class TableModel {
     updatedAt: j['updated_at'] != null
         ? DateTime.tryParse(j['updated_at'])?.toLocal()
         : null,
+    customerReportedAt: j['customer_reported_at'] != null
+        ? DateTime.tryParse(j['customer_reported_at'])?.toLocal()
+        : null,
   );
 
   Map<String, dynamic> toJson() => {
@@ -77,6 +85,7 @@ class TableModel {
       capacity: capacity, shape: shape, floorLevel: floorLevel,
       isMergeable: isMergeable, notes: notes,
       updatedAt: updatedAt, // ← BARU
+      customerReportedAt: customerReportedAt,
       status: status ?? this.status,
       positionX: positionX ?? this.positionX,
       positionY: positionY ?? this.positionY,

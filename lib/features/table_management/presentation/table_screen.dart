@@ -172,9 +172,13 @@ class _TableScreenState extends ConsumerState<TableScreen> {
   }
 
   Future<void> _updateStatus(String id, TableStatus status) async {
-    await Supabase.instance.client.from('restaurant_tables').update(
-      {'status': status.name, 'updated_at': DateTime.now().toIso8601String()},
-    ).eq('id', id);
+    await Supabase.instance.client.from('restaurant_tables').update({
+      'status': status.name,
+      'updated_at': DateTime.now().toIso8601String(),
+      // Clear any customer-reported mismatch — staff just acted on this
+      // table's status, so whatever prompted the report no longer applies.
+      'customer_reported_at': null,
+    }).eq('id', id);
   }
 
   // ── Seed data: create sample tables if empty ──────────────────
