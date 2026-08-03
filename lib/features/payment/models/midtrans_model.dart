@@ -144,6 +144,8 @@ class MidtransPaymentMethod {
       case 'kredivo':       return 'Kredivo';
       case 'indomaret':     return 'Indomaret';
       case 'alfamart':      return 'Alfamart';
+      case 'kasir':
+      case 'cash':          return 'Cashier';
       default:              return paymentType;
     }
   }

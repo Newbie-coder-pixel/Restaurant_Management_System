@@ -8,6 +8,7 @@ import '../models/qr_order_model.dart';
 import '../../../core/services/prep_time_service.dart'; // ← ML Service
 import '../providers/qr_cart_provider.dart';
 import '../services/qr_device_id_service.dart';
+import '../../payment/models/midtrans_model.dart';
 
 class QrOrderTrackerScreen extends ConsumerWidget {
   final String orderId;
@@ -747,32 +748,6 @@ class _StatusStepper extends StatelessWidget {
 
 // ─── Payment Status Card ──────────────────────────────────────────────────────
 
-// Mirrors mapPaymentMethod() in supabase/functions/midtrans-webhook/index.ts
-// — that's what actually writes orders.payment_method for a self-service
-// Pay Now payment, and it's far broader than just 'qris'/'cashier'. Labeling
-// every other method as "Cashier" (the old code) was actively misleading on
-// a receipt: a customer who just paid via GoPay or a bank VA would see
-// "Payment via Cashier confirmed", as if a cashier had processed it.
-String _paymentMethodLabel(String method) {
-  switch (method) {
-    case 'qris': return 'QRIS';
-    case 'gopay': return 'GoPay';
-    case 'shopeepay': return 'ShopeePay';
-    case 'credit_card': return 'Card';
-    case 'bank_transfer': return 'Bank Transfer';
-    case 'akulaku': return 'Akulaku';
-    case 'kredivo': return 'Kredivo';
-    case 'retail_outlet': return 'Indomaret/Alfamart';
-    case 'kasir': case 'cash': return 'Cashier';
-    default:
-      // e.g. 'bca_va', 'bni_va' → 'BCA VA', 'BNI VA'
-      if (method.endsWith('_va')) {
-        return '${method.substring(0, method.length - 3).toUpperCase()} VA';
-      }
-      return 'Cashier';
-  }
-}
-
 class _PaymentStatusCard extends StatelessWidget {
   final QrOrderModel order;
 
@@ -783,7 +758,9 @@ class _PaymentStatusCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isPaid = order.paymentStatus == QrPaymentStatus.paid;
-    final methodLabel = _paymentMethodLabel(order.paymentMethod);
+    // Same label source the staff cashier PDF receipt uses (receipt_service.dart)
+    // — one mapping, so a payment method never reads differently across receipts.
+    final methodLabel = MidtransPaymentMethod.label(order.paymentMethod);
 
     return Container(
       decoration: BoxDecoration(
@@ -970,7 +947,9 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
                             ))),
                       const SizedBox(height: 10),
                       Divider(height: 1, color: colorScheme.outlineVariant),
-                      // ── Subtotal, Service Charge, PB1, Total breakdown ──
+                      // Same row labels & order as the staff cashier PDF
+                      // receipt (receipt_service.dart _totalRow calls) —
+                      // Subtotal, PB1, Service, [Discount], [Overtime], Total.
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
                         child: _PriceRow(
@@ -984,8 +963,8 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
                         child: _PriceRow(
-                          label: 'Service Charge (3%)',
-                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 0.03,
+                          label: 'PB1 (10%)',
+                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 1.03 * 0.10,
                           theme: theme,
                           colorScheme: colorScheme,
                           formatPrice: _formatPrice,
@@ -995,8 +974,8 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
                         child: _PriceRow(
-                          label: 'PB1 (10%)',
-                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 1.03 * 0.10,
+                          label: 'Service (3%)',
+                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 0.03,
                           theme: theme,
                           colorScheme: colorScheme,
                           formatPrice: _formatPrice,

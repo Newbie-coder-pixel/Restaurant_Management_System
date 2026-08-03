@@ -18,7 +18,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/models/order_model.dart';
 import '../../payment/midtrans/midtrans_provider.dart';
-import '../../payment/models/midtrans_model.dart';
+import '../../payment/models/midtrans_model.dart' show MidtransPaymentStatus, MidtransPaymentMethod;
 import '../data/qr_order_repository.dart';
 
 // autoDispose: this must never serve a stale cached order across visits to
@@ -97,6 +97,10 @@ class _QrPayNowScreenState extends ConsumerState<QrPayNowScreen> {
 
   void _showSuccessSheet(OrderModel order) {
     final overtimeCharge = order.overtimeCharge.toDouble();
+    // The raw Midtrans payment_type from the Snap result, e.g. 'gopay',
+    // 'bca_va' — same values MidtransPaymentMethod.label() (also used by
+    // the staff cashier PDF receipt) already knows how to format.
+    final paymentType = ref.read(midtransProvider(order.id)).result?.paymentType;
     showModalBottomSheet(
       context: context,
       isDismissible: false,
@@ -109,6 +113,9 @@ class _QrPayNowScreenState extends ConsumerState<QrPayNowScreen> {
         overtimeCharge: overtimeCharge,
         total: order.totalAmount + overtimeCharge,
         paidAt: DateTime.now(),
+        paymentMethodLabel: paymentType != null && paymentType.isNotEmpty
+            ? MidtransPaymentMethod.label(paymentType)
+            : 'Midtrans',
         onDone: () {
           Navigator.pop(context);
           ref.read(midtransProvider(order.id).notifier).reset();
@@ -317,11 +324,14 @@ class _BreakdownCard extends StatelessWidget {
                 ]),
               )),
           const Divider(height: 20, thickness: 0.5),
+          // Same row labels & order as the staff cashier PDF receipt
+          // (receipt_service.dart _totalRow calls) so the bill reads
+          // identically whether it's self-paid here or printed at the till.
           _row(cs, 'Subtotal', order.subtotal),
-          _row(cs, 'Service Charge (3%)', order.serviceChargeAmount),
-          _row(cs, 'PB1 / Tax (10%)', order.pb1Amount),
+          _row(cs, 'PB1 (10%)', order.pb1Amount),
+          _row(cs, 'Service (3%)', order.serviceChargeAmount),
           if (order.discountAmount > 0) _row(cs, 'Discount', -order.discountAmount, isDiscount: true),
-          if (overtimeCharge > 0) _row(cs, 'Extra Dining Time (>2 hrs)', overtimeCharge),
+          if (overtimeCharge > 0) _row(cs, 'Extra Dining Time', overtimeCharge),
           const Divider(height: 20, thickness: 0.5),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             const Text('Total',
@@ -470,12 +480,14 @@ class _PaySuccessSheet extends StatelessWidget {
   final double overtimeCharge;
   final double total;
   final DateTime paidAt;
+  final String paymentMethodLabel;
   final VoidCallback onDone;
   const _PaySuccessSheet({
     required this.order,
     required this.overtimeCharge,
     required this.total,
     required this.paidAt,
+    required this.paymentMethodLabel,
     required this.onDone,
   });
 
@@ -543,7 +555,7 @@ class _PaySuccessSheet extends StatelessWidget {
                 ),
               ]),
               const SizedBox(height: 2),
-              Text('Paid via Midtrans · ${_fmtDateTime(paidAt)}',
+              Text('Paid via $paymentMethodLabel · ${_fmtDateTime(paidAt)}',
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: cs.onSurfaceVariant)),
             ]),
           ),
