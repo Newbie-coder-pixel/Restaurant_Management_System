@@ -9,12 +9,17 @@
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../shared/models/order_model.dart';
 import '../models/midtrans_model.dart';
+
+// Conditional import:
+//   • Web    → pdf_tab_opener_web.dart  (opens the PDF in a new tab)
+//   • Mobile → pdf_tab_opener_stub.dart (native print/share sheet)
+import 'pdf_tab_opener_stub.dart'
+    if (dart.library.js_interop) 'pdf_tab_opener_web.dart';
 
 final _currency = NumberFormat.currency(
   locale: 'id_ID',
@@ -24,7 +29,8 @@ final _currency = NumberFormat.currency(
 
 class ReceiptService {
   /// Fetches the branch data + the current payment method from Supabase, builds
-  /// the receipt PDF, then opens the OS's built-in print/share dialog (`Printing.layoutPdf`).
+  /// the receipt PDF, then opens it in a new browser tab (web) or the native
+  /// print/share sheet (mobile/desktop).
   static Future<void> printReceipt({
     required OrderModel order,
     String? cashierName,
@@ -63,11 +69,8 @@ class ReceiptService {
       cashierName: cashierName,
     );
 
-    await Printing.layoutPdf(
-      onLayout: (_) => pdf.save(),
-      name: 'Receipt-${order.orderNumber}',
-      format: PdfPageFormat.roll80,
-    );
+    final bytes = await pdf.save();
+    await openPdfInNewTab(bytes, 'Receipt-${order.orderNumber}');
   }
 
   static Future<pw.Document> _buildDocument({
