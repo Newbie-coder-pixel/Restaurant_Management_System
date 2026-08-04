@@ -119,17 +119,15 @@ class RecommendationService {
       final sb = Supabase.instance.client;
       final since = DateTime.now().subtract(const Duration(days: 90));
 
-      // Get all order_items from this customer's completed orders
-      final res = await sb
-          .from('order_items')
-          .select(
-              'menu_item_id, menu_item_name, quantity, orders!inner(branch_id, status, customer_user_id, created_at)')
-          .eq('orders.branch_id', branchId)
-          .eq('orders.customer_user_id', customerUserId)
-          .eq('orders.status', 'paid')
-          .gte('orders.created_at', since.toIso8601String());
+      // get_customer_order_items RPC rather than a direct SELECT — see
+      // supabase/migrations/20260805070000_recommendation_service_rpc.sql.
+      final res = await sb.rpc('get_customer_order_items', params: {
+        'p_branch_id': branchId,
+        'p_customer_user_id': customerUserId,
+        'p_since': since.toIso8601String(),
+      }) as List<dynamic>;
 
-      if ((res as List).isEmpty) return [];
+      if (res.isEmpty) return [];
 
       // Calculate frequency + total quantity per menu item
       final Map<String, _ItemScore> scores = {};
@@ -172,16 +170,16 @@ class RecommendationService {
       final sb = Supabase.instance.client;
       final since = DateTime.now().subtract(const Duration(days: 90));
 
-      final res = await sb
-          .from('order_items')
-          .select('menu_item_id, quantity, orders!inner(branch_id, status, customer_user_id, created_at)')
-          .eq('orders.branch_id', branchId)
-          .eq('orders.customer_user_id', customerUserId)
-          .eq('orders.status', 'paid')
-          .gte('orders.created_at', since.toIso8601String());
+      // get_customer_order_items RPC rather than a direct SELECT — see
+      // supabase/migrations/20260805070000_recommendation_service_rpc.sql.
+      final res = await sb.rpc('get_customer_order_items', params: {
+        'p_branch_id': branchId,
+        'p_customer_user_id': customerUserId,
+        'p_since': since.toIso8601String(),
+      }) as List<dynamic>;
 
       final Map<String, int> freq = {};
-      for (final item in res as List) {
+      for (final item in res) {
         final id = item['menu_item_id'] as String? ?? '';
         if (id.isEmpty) continue;
         freq[id] = (freq[id] ?? 0) + 1;
@@ -210,16 +208,15 @@ class RecommendationService {
       final sb = Supabase.instance.client;
       final since = DateTime.now().subtract(const Duration(days: 60));
 
-      // Find all order_ids that contain one of the seed items
-      final seedOrders = await sb
-          .from('order_items')
-          .select('order_id, orders!inner(branch_id, status, created_at)')
-          .inFilter('menu_item_id', seedItemIds)
-          .eq('orders.branch_id', branchId)
-          .eq('orders.status', 'paid')
-          .gte('orders.created_at', since.toIso8601String());
+      // Find all order_ids that contain one of the seed items — via RPC,
+      // see supabase/migrations/20260805070000_recommendation_service_rpc.sql.
+      final seedOrders = await sb.rpc('get_orders_containing_items', params: {
+        'p_branch_id': branchId,
+        'p_menu_item_ids': seedItemIds,
+        'p_since': since.toIso8601String(),
+      }) as List<dynamic>;
 
-      if ((seedOrders as List).isEmpty) return [];
+      if (seedOrders.isEmpty) return [];
 
       final orderIds = seedOrders
           .map((o) => o['order_id'] as String)
@@ -228,14 +225,13 @@ class RecommendationService {
 
       if (orderIds.isEmpty) return [];
 
-      // From those orders, get all the other items
-      final coItems = await sb
-          .from('order_items')
-          .select('menu_item_id, menu_item_name, quantity')
-          .inFilter('order_id', orderIds)
-          .not('menu_item_id', 'in', '(${excludeItemIds.join(',')})');
+      // From those orders, get all the other items — via RPC.
+      final coItems = await sb.rpc('get_items_in_orders', params: {
+        'p_order_ids': orderIds,
+        'p_exclude_menu_item_ids': excludeItemIds,
+      }) as List<dynamic>;
 
-      if ((coItems as List).isEmpty) return [];
+      if (coItems.isEmpty) return [];
 
       // Calculate co-occurrence score
       final Map<String, _ItemScore> scores = {};
@@ -275,14 +271,14 @@ class RecommendationService {
       final sb = Supabase.instance.client;
       final since = DateTime.now().subtract(const Duration(days: 30));
 
-      final res = await sb
-          .from('order_items')
-          .select('menu_item_id, menu_item_name, quantity, orders!inner(branch_id, status, created_at)')
-          .eq('orders.branch_id', branchId)
-          .eq('orders.status', 'paid')
-          .gte('orders.created_at', since.toIso8601String());
+      // get_branch_popular_items RPC rather than a direct SELECT — see
+      // supabase/migrations/20260805070000_recommendation_service_rpc.sql.
+      final res = await sb.rpc('get_branch_popular_items', params: {
+        'p_branch_id': branchId,
+        'p_since': since.toIso8601String(),
+      }) as List<dynamic>;
 
-      if ((res as List).isEmpty) return [];
+      if (res.isEmpty) return [];
 
       final Map<String, _ItemScore> scores = {};
       for (final item in res) {
