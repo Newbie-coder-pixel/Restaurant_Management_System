@@ -78,11 +78,24 @@ void main() async {
         } catch (_) {}
       }
 
-      // Determine the fallback fragment based on APP_MODE
-      // - customer/qr  → back to /customer
-      // - staff        → back to /login (router will handle the per-role redirect)
+      // Determine where to land after stripping ?code= from the URL.
+      // Preference order:
+      // 1. Existing hash route (e.g. #/qr/<tableId>) — keep it as-is.
+      // 2. Existing path (e.g. a QR sticker link like /qr/<tableId> with no
+      //    hash yet) — without this, a lingering ?code= param on a QR/customer
+      //    deep link would wipe out the tableId/branchId and strand the user
+      //    on the generic mode fallback below.
+      // 3. Mode default — customer/qr → /customer, staff → /login (router
+      //    handles the per-role redirect from there).
       const fallbackFragment = appMode == 'staff' ? '#/login' : '#/customer';
-      final fragment = uri.fragment.isNotEmpty ? '#${uri.fragment}' : fallbackFragment;
+      final String fragment;
+      if (uri.fragment.isNotEmpty) {
+        fragment = '#${uri.fragment}';
+      } else if (uri.path.isNotEmpty && uri.path != '/') {
+        fragment = '#${uri.path}';
+      } else {
+        fragment = fallbackFragment;
+      }
       _replaceState(null, '', '/$fragment');
     }
   }
