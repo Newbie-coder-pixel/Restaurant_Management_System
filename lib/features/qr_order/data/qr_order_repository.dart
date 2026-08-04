@@ -354,12 +354,15 @@ await _client.from('order_items').insert(orderItemsData);
   }
 
   // ── Fetch order + items (TWO SEPARATE QUERIES) ─────────────────────────────
+  // customer_phone deliberately not selected — QrOrderModel has no field for
+  // it (dead weight over the wire) and, unlike fetchOrderModelForPayment,
+  // this path isn't used for anything that needs it.
   Future<QrOrderModel?> fetchOrder(String orderId) async {
     final orderResp = await _client
         .from('orders')
         .select(
           'id, order_number, queue_number, table_id, table_name, '
-          'customer_name, customer_phone, total_amount, status, payment_status, '
+          'customer_name, total_amount, status, payment_status, '
           'payment_method, created_at, updated_at, branch_id, notes, device_id',
         )
         .eq('id', orderId)
@@ -384,7 +387,7 @@ await _client.from('order_items').insert(orderItemsData);
         .from('orders')
         .select(
           'id, order_number, queue_number, table_id, table_name, '
-          'customer_name, customer_phone, total_amount, status, payment_status, '
+          'customer_name, total_amount, status, payment_status, '
           'payment_method, created_at, updated_at, branch_id, notes, device_id',
         )
         .eq('table_id', tableId)
@@ -428,21 +431,30 @@ await _client.from('order_items').insert(orderItemsData);
     return OrderModel.fromJson(row);
   }
 
+  // Goes through the get_order_by_number RPC rather than a direct table
+  // SELECT — this is reachable with no login and a guessable "A001"-style
+  // number, so it must never be able to return more than the one exact
+  // match, and must never expose customer_phone/customer_email (see
+  // supabase/migrations/20260805040000_get_order_by_number_rpc.sql — a
+  // direct SELECT here was, until this fix, live-exploitable to dump every
+  // customer's name/phone/email from the last 24 hours with no filter at all).
   Future<QrOrderModel?> fetchByQueueNumber(String queueNumber) async {
-    final today = DateTime.now();
-    final startOfDay = DateTime(today.year, today.month, today.day);
+    final rows = await _client.rpc('get_order_by_number', params: {
+      'p_order_number': queueNumber,
+    }) as List<dynamic>;
+    if (rows.isEmpty) return null;
+    final orderResp = rows.first as Map<String, dynamic>;
 
-    final orderResp = await _client
-        .from('orders')
-        .select(
-          'id, order_number, queue_number, table_id, table_name, '
-          'customer_name, customer_phone, total_amount, status, payment_status, '
-          'payment_method, created_at, updated_at, branch_id, notes, device_id',
-        )
-        .eq('queue_number', queueNumber)
-        .gte('created_at', startOfDay.toIso8601String())
-        .maybeSingle();
-    if (orderResp == null) return null;
+    // queue_number/order_number ("A001") is reused across different days —
+    // only accept a match from today, same as the old query's date filter.
+    final createdAt = DateTime.tryParse(orderResp['created_at'] as String);
+    final today = DateTime.now();
+    if (createdAt == null ||
+        createdAt.year != today.year ||
+        createdAt.month != today.month ||
+        createdAt.day != today.day) {
+      return null;
+    }
 
     final itemsResp = await _client
         .from('order_items')

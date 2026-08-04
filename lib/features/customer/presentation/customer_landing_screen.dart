@@ -621,23 +621,17 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
     _channel?.unsubscribe();
 
     try {
+      // Goes through the get_order_by_number RPC rather than a direct table
+      // SELECT — this is reachable with no login and a guessable "A001"-style
+      // number, so it must never return more than the one exact match, and
+      // must never expose customer_phone/customer_email (see
+      // supabase/migrations/20260805040000_get_order_by_number_rpc.sql — a
+      // direct SELECT here was, until this fix, live-exploitable to dump
+      // every customer's name/phone/email from the last 24h with no filter).
       final orders = await Supabase.instance.client
-          .from('orders')
-          // Columns explicitly restricted (not select all) — order_number can
-          // be guessed/enumerated (short format A001..Z999) and this endpoint
-          // is accessible without login, so sensitive data such as customer
-          // phone number & email is deliberately NOT fetched here. Exact
-          // match only (not ilike wildcard) to avoid making enumeration easier.
-          .select('id, order_number, queue_number, table_id, table_name, '
-              'branch_id, customer_name, status, payment_status, '
-              'payment_method, order_type, source, subtotal, tax_amount, '
-              'discount_amount, total_amount, notes, bill_requested, '
-              'bill_requested_at, estimated_prep_minutes, '
-              'served_at, created_at, updated_at')
-          .eq('order_number', code)
-          .limit(1);
+          .rpc('get_order_by_number', params: {'p_order_number': code}) as List<dynamic>;
 
-      if ((orders as List).isEmpty) {
+      if (orders.isEmpty) {
         if (mounted) {
           setState(() {
             _error =

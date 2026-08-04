@@ -273,6 +273,21 @@ class _CustomerOrderTrackerScreenState
         .subscribe();
   }
 
+  // Goes through the get_order_by_number RPC rather than a direct table
+  // SELECT — this is reachable with no login and a guessable "A001"/"WEB-..."
+  // style number, so it must never be able to return more than the one exact
+  // match, and must never expose customer_phone/customer_email (see
+  // supabase/migrations/20260805040000_get_order_by_number_rpc.sql — a direct
+  // SELECT here was, until this fix, live-exploitable to dump every
+  // customer's name/phone/email from the last 24 hours with no filter at all).
+  Future<Map<String, dynamic>?> _fetchAnyOrderByNumber(String code) async {
+    final rows = await Supabase.instance.client.rpc('get_order_by_number', params: {
+      'p_order_number': code,
+    }) as List<dynamic>;
+    if (rows.isEmpty) return null;
+    return rows.first as Map<String, dynamic>;
+  }
+
   Future<void> _search() async {
     final code = _ctrl.text.trim().toUpperCase();
     if (code.isEmpty) return;
@@ -306,45 +321,18 @@ class _CustomerOrderTrackerScreenState
           return;
         }
 
-        // Fallback: find any order with this number
-        final anyOrder = await Supabase.instance.client
-            .from('orders')
-            // Columns explicitly restricted (not select all) — order_number can
-            // be guessed/enumerated (short format A001..Z999) and this endpoint
-            // is accessible without login, so sensitive data such as customer
-            // phone number & email is deliberately NOT fetched here.
-            .select('id, order_number, queue_number, table_id, table_name, '
-                'branch_id, customer_name, status, payment_status, '
-                'payment_method, order_type, source, subtotal, tax_amount, '
-                'discount_amount, total_amount, notes, bill_requested, '
-                'bill_requested_at, estimated_prep_minutes, '
-                'served_at, created_at, updated_at')
-            .eq('order_number', code)
-            .limit(1);
-
-        if ((anyOrder as List).isNotEmpty) {
-          await _processOrderResult(anyOrder.first);
+        // Fallback: find any order with this number — via RPC, not a direct
+        // table SELECT (see _fetchAnyOrderByNumber).
+        final anyOrder = await _fetchAnyOrderByNumber(code);
+        if (anyOrder != null) {
+          await _processOrderResult(anyOrder);
           return;
         }
       } else {
-        // Anon user: build a new query (do not reuse the old query object)
-        final res = await Supabase.instance.client
-            .from('orders')
-            // Columns explicitly restricted (not select all) — order_number can
-            // be guessed/enumerated (short format A001..Z999) and this endpoint
-            // is accessible without login, so sensitive data such as customer
-            // phone number & email is deliberately NOT fetched here.
-            .select('id, order_number, queue_number, table_id, table_name, '
-                'branch_id, customer_name, status, payment_status, '
-                'payment_method, order_type, source, subtotal, tax_amount, '
-                'discount_amount, total_amount, notes, bill_requested, '
-                'bill_requested_at, estimated_prep_minutes, '
-                'served_at, created_at, updated_at')
-            .eq('order_number', code)
-            .limit(1);
-
-        if ((res as List).isNotEmpty) {
-          await _processOrderResult(res.first);
+        // Anon user — via RPC, not a direct table SELECT.
+        final res = await _fetchAnyOrderByNumber(code);
+        if (res != null) {
+          await _processOrderResult(res);
           return;
         }
       }
