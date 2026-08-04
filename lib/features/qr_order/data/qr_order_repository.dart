@@ -93,7 +93,26 @@ class QrOrderRepository {
             if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
             'created_at': DateTime.now().toIso8601String(),
           })
-          .select()
+          // NOT .select() (== select=*): PostgREST does INSERT ... RETURNING
+          // <selected columns>, which requires SELECT privilege on every
+          // returned column. Since 20260805060000_fix_orders_column_revoke
+          // revoked anon's SELECT on customer_phone/customer_email, a bare
+          // RETURNING * here made the whole INSERT fail with "permission
+          // denied for table orders" (42501) — the insert itself was fine,
+          // but the implicit re-select of the just-inserted row was not.
+          // This list mirrors exactly the column set granted to anon in that
+          // migration (i.e. every orders column except the two PII ones).
+          .select(
+            'id, branch_id, booking_id, staff_id, cashier_id, order_number, '
+            'status, source, customer_name, subtotal, discount_amount, '
+            'tax_amount, total_amount, notes, created_at, updated_at, '
+            'cancel_reason, cancelled_by, queue_number, table_name, '
+            'payment_status, payment_method, order_type, table_id, '
+            'customer_user_id, pb1_amount, service_charge_amount, '
+            'estimated_prep_minutes, bill_requested, bill_requested_at, '
+            'midtrans_snap_token, midtrans_redirect_url, '
+            'midtrans_transaction_id, midtrans_order_id, served_at, device_id',
+          )
           .single();
 
       final String orderId = orderResponse['id'] as String;
