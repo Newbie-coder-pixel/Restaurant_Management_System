@@ -291,11 +291,15 @@ class MidtransService {
   static Future<MidtransPaymentStatus> checkPaymentStatus(String orderId) async {
     try {
       final supabase = Supabase.instance.client;
-      final res = await supabase
-          .from('orders')
-          .select('payment_status, status, midtrans_transaction_id')
-          .eq('id', orderId)
-          .single();
+      // get_order_by_id RPC rather than a direct SELECT — see
+      // supabase/migrations/20260805050000_full_order_pii_lockdown.sql.
+      // Granted to both anon and authenticated, so this works unchanged for
+      // both the customer/QR self-service flow and staff-initiated payments.
+      final rows = await supabase.rpc('get_order_by_id', params: {
+        'p_order_id': orderId,
+      }) as List<dynamic>;
+      if (rows.isEmpty) return MidtransPaymentStatus.pending;
+      final res = rows.first as Map<String, dynamic>;
 
       switch (res['payment_status'] as String?) {
         case 'paid':

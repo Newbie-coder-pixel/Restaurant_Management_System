@@ -18,22 +18,42 @@ import '../../payment/models/midtrans_model.dart' show MidtransPaymentStatus, Mi
 
 // autoDispose: never serve a stale cached order across visits to this screen
 // (e.g. browser back button after the order was already paid elsewhere).
+//
+// Reassembled from get_order_by_id + get_order_items + a plain
+// restaurant_tables select (table_number is public-readable by design,
+// unaffected by this lockdown) into the same shape OrderModel.fromJson
+// expects, instead of one direct nested SELECT on `orders` — see
+// supabase/migrations/20260805050000_full_order_pii_lockdown.sql.
+// get_order_by_id legitimately includes customer_phone/customer_email,
+// which Midtrans needs.
 final _payOrderProvider = FutureProvider.autoDispose.family<OrderModel, String>(
   (ref, orderId) async {
-    final row = await Supabase.instance.client
-        .from('orders')
-        .select('''
-          id, branch_id, table_id, order_number,
-          status, source, order_type, customer_name,
-          customer_phone, customer_email, table_name,
-          discount_amount, notes, created_at, updated_at, served_at,
-          payment_status, total_amount, subtotal, tax_amount,
-          restaurant_tables(table_number),
-          order_items(*)
-        ''')
-        .eq('id', orderId)
-        .single();
-    return OrderModel.fromJson(row);
+    final client = Supabase.instance.client;
+    final rows = await client.rpc('get_order_by_id', params: {
+      'p_order_id': orderId,
+    }) as List<dynamic>;
+    if (rows.isEmpty) throw Exception('Order not found');
+    final order = rows.first as Map<String, dynamic>;
+
+    final items = await client.rpc('get_order_items', params: {
+      'p_order_id': orderId,
+    }) as List<dynamic>;
+
+    Map<String, dynamic>? table;
+    final tableId = order['table_id'] as String?;
+    if (tableId != null) {
+      table = await client
+          .from('restaurant_tables')
+          .select('table_number')
+          .eq('id', tableId)
+          .maybeSingle();
+    }
+
+    return OrderModel.fromJson({
+      ...order,
+      'restaurant_tables': table,
+      'order_items': items,
+    });
   },
 );
 

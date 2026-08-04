@@ -196,11 +196,11 @@ await _client.from('order_items').insert(orderItemsData);
 
       // 1. Check order status — must be `created`
       //    Also make sure no item has already been sent_to_kitchen (extra guard)
-      final orderCheck = await _client
-          .from('orders')
-          .select('id, status, total_amount, subtotal, branch_id')
-          .eq('id', orderId)
-          .single();
+      final orderCheckRows = await _client.rpc('get_order_by_id', params: {
+        'p_order_id': orderId,
+      }) as List<dynamic>;
+      if (orderCheckRows.isEmpty) throw Exception('Order not found');
+      final orderCheck = orderCheckRows.first as Map<String, dynamic>;
 
       final currentStatus = orderCheck['status'] as String;
       if (currentStatus != 'created') {
@@ -237,10 +237,9 @@ await _client.from('order_items').insert(orderItemsData);
       debugPrint('✅ ${orderItemsData.length} new item(s) saved');
 
       // 3. Re-fetch all items to recompute the total
-      final allItemsResp = await _client
-          .from('order_items')
-          .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
-          .eq('order_id', orderId);
+      final allItemsResp = await _client.rpc('get_order_items', params: {
+        'p_order_id': orderId,
+      }) as List<dynamic>;
 
       // 4. Recompute the total from all items (old + new)
       //    Formula: subtotal → service_charge 3% → pb1 10% of (subtotal + SC)
@@ -354,25 +353,23 @@ await _client.from('order_items').insert(orderItemsData);
   }
 
   // ── Fetch order + items (TWO SEPARATE QUERIES) ─────────────────────────────
-  // customer_phone deliberately not selected — QrOrderModel has no field for
-  // it (dead weight over the wire) and, unlike fetchOrderModelForPayment,
-  // this path isn't used for anything that needs it.
+  // Goes through get_order_by_id/get_order_items RPCs rather than direct
+  // table SELECTs — see supabase/migrations/20260805050000_full_order_pii_lockdown.sql.
+  // customer_phone/email aren't used downstream here (QrOrderModel has no
+  // field for them) but the RPC returns them regardless — harmless, since a
+  // caller who already knows this exact order id isn't the class of anon
+  // access this lockdown is protecting against (that's order_number/
+  // queue_number/table_id-based lookups, which are guessable).
   Future<QrOrderModel?> fetchOrder(String orderId) async {
-    final orderResp = await _client
-        .from('orders')
-        .select(
-          'id, order_number, queue_number, table_id, table_name, '
-          'customer_name, total_amount, status, payment_status, '
-          'payment_method, created_at, updated_at, branch_id, notes, device_id',
-        )
-        .eq('id', orderId)
-        .maybeSingle();
-    if (orderResp == null) return null;
+    final rows = await _client.rpc('get_order_by_id', params: {
+      'p_order_id': orderId,
+    }) as List<dynamic>;
+    if (rows.isEmpty) return null;
+    final orderResp = rows.first as Map<String, dynamic>;
 
-    final itemsResp = await _client
-        .from('order_items')
-        .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
-        .eq('order_id', orderId);
+    final itemsResp = await _client.rpc('get_order_items', params: {
+      'p_order_id': orderId,
+    }) as List<dynamic>;
 
     debugPrint('📦 fetchOrder items: ${itemsResp.length}');
 
@@ -382,25 +379,19 @@ await _client.from('order_items').insert(orderItemsData);
 
   // ── Active order for a table (prevents disconnected duplicate orders when
   // the same table's QR is scanned again while an order is already open) ──
+  // Uses get_active_order_for_table, NOT get_order_by_id — a different
+  // customer's device can scan the SAME table's QR, so this one must never
+  // return customer_phone/customer_email (get_order_by_id deliberately does).
   Future<QrOrderModel?> fetchActiveOrderForTable(String tableId) async {
-    final orderResp = await _client
-        .from('orders')
-        .select(
-          'id, order_number, queue_number, table_id, table_name, '
-          'customer_name, total_amount, status, payment_status, '
-          'payment_method, created_at, updated_at, branch_id, notes, device_id',
-        )
-        .eq('table_id', tableId)
-        .not('status', 'in', '(paid,cancelled)')
-        .order('created_at', ascending: false)
-        .limit(1)
-        .maybeSingle();
-    if (orderResp == null) return null;
+    final rows = await _client.rpc('get_active_order_for_table', params: {
+      'p_table_id': tableId,
+    }) as List<dynamic>;
+    if (rows.isEmpty) return null;
+    final orderResp = rows.first as Map<String, dynamic>;
 
-    final itemsResp = await _client
-        .from('order_items')
-        .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
-        .eq('order_id', orderResp['id'] as String);
+    final itemsResp = await _client.rpc('get_order_items', params: {
+      'p_order_id': orderResp['id'] as String,
+    }) as List<dynamic>;
 
     return QrOrderModel.fromMap(_normalizeOrderMap(orderResp, itemsResp));
   }
@@ -412,23 +403,38 @@ await _client.from('order_items').insert(orderItemsData);
   // initiates the Midtrans payment. See MidtransService.createSnapToken and
   // supabase/functions/midtrans-create-token, which independently recompute
   // the same formula server-side and must match what's shown here.
+  // Reassembled from get_order_by_id + get_order_items + a plain
+  // restaurant_tables select (table_number is public-readable by design,
+  // unaffected by this lockdown — see 20260803040000's own comment) into the
+  // same shape OrderModel.fromJson expects, instead of one direct nested
+  // SELECT on `orders`. get_order_by_id legitimately includes
+  // customer_phone, which Midtrans needs (see midtrans_service.dart).
   Future<OrderModel> fetchOrderModelForPayment(String orderId) async {
-    final row = await _client
-        .from('orders')
-        .select('''
-          id, branch_id, table_id, order_number,
-          status, source, order_type, customer_name,
-          customer_phone, queue_number, table_name,
-          discount_amount, notes, created_at, updated_at, served_at,
-          payment_status, bill_requested, bill_requested_at,
-          total_amount, subtotal, tax_amount,
-          restaurant_tables(table_number),
-          order_items(*)
-        ''')
-        .eq('id', orderId)
-        .single();
+    final rows = await _client.rpc('get_order_by_id', params: {
+      'p_order_id': orderId,
+    }) as List<dynamic>;
+    if (rows.isEmpty) throw Exception('Order not found');
+    final order = rows.first as Map<String, dynamic>;
 
-    return OrderModel.fromJson(row);
+    final items = await _client.rpc('get_order_items', params: {
+      'p_order_id': orderId,
+    }) as List<dynamic>;
+
+    Map<String, dynamic>? table;
+    final tableId = order['table_id'] as String?;
+    if (tableId != null) {
+      table = await _client
+          .from('restaurant_tables')
+          .select('table_number')
+          .eq('id', tableId)
+          .maybeSingle();
+    }
+
+    return OrderModel.fromJson({
+      ...order,
+      'restaurant_tables': table,
+      'order_items': items,
+    });
   }
 
   // Goes through the get_order_by_number RPC rather than a direct table
@@ -456,10 +462,9 @@ await _client.from('order_items').insert(orderItemsData);
       return null;
     }
 
-    final itemsResp = await _client
-        .from('order_items')
-        .select('id, menu_item_id, menu_item_name, unit_price, quantity, subtotal, special_requests')
-        .eq('order_id', orderResp['id'] as String);
+    final itemsResp = await _client.rpc('get_order_items', params: {
+      'p_order_id': orderResp['id'] as String,
+    }) as List<dynamic>;
 
     return QrOrderModel.fromMap(_normalizeOrderMap(orderResp, itemsResp));
   }

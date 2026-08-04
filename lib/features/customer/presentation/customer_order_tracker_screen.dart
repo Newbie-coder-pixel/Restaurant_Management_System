@@ -253,6 +253,16 @@ class _CustomerOrderTrackerScreenState
     super.dispose();
   }
 
+  // Deliberately does NOT merge payload.newRecord directly into _order — the
+  // Postgres change payload comes off the WAL and it's unclear whether
+  // Supabase Realtime enforces the same column-level grants a REST SELECT
+  // does (see the column revoke in
+  // supabase/migrations/20260805050000_full_order_pii_lockdown.sql). Since
+  // _order never held customer_phone/customer_email in the first place,
+  // re-fetching through get_order_by_number (NOT get_order_by_id, which
+  // deliberately DOES include them) on every change event guarantees this
+  // screen can't accidentally pick them up via a live-update path that
+  // bypasses the same protection its initial fetch already has.
   void _subscribeRealtime(String orderId) {
     _channel?.unsubscribe();
     _channel = Supabase.instance.client
@@ -265,9 +275,14 @@ class _CustomerOrderTrackerScreenState
             type: PostgresChangeFilterType.eq,
             column: 'id',
             value: orderId),
-          callback: (payload) {
-            if (mounted && payload.newRecord.isNotEmpty) {
-              setState(() => _order = {..._order!, ...payload.newRecord});
+          callback: (_) async {
+            final orderNumber = _order?['order_number'] as String?;
+            if (orderNumber == null) return;
+            final rows = await Supabase.instance.client.rpc('get_order_by_number', params: {
+              'p_order_number': orderNumber,
+            }) as List<dynamic>;
+            if (mounted && rows.isNotEmpty) {
+              setState(() => _order = rows.first as Map<String, dynamic>);
             }
           })
         .subscribe();
@@ -354,16 +369,16 @@ class _CustomerOrderTrackerScreenState
   // ── FIX 1: Add preparation_time_minutes to the select ──────────────
   Future<void> _processOrderResult(Map<String, dynamic> order) async {
     try {
-      final items = await Supabase.instance.client
-          .from('order_items')
-          .select('*, menu_items(name, preparation_time_minutes)') // <-- FIXED
-          .eq('order_id', order['id'])
-          .order('created_at');
+      // get_order_items RPC rather than a direct SELECT — see
+      // supabase/migrations/20260805050000_full_order_pii_lockdown.sql.
+      final items = await Supabase.instance.client.rpc('get_order_items', params: {
+        'p_order_id': order['id'],
+      }) as List<dynamic>;
 
       if (mounted) {
         setState(() {
           _order = order;
-          _items = (items as List).cast();
+          _items = items.cast();
           _loading = false;
         });
         _subscribeRealtime(order['id'] as String);
