@@ -24,7 +24,7 @@ class OrderNumberService {
     final row = rows.first as Map<String, dynamic>;
     return (
       seq: row['seq_number'] as int,
-      orderDate: DateTime.parse(row['order_date'] as String),
+      orderDate: DateTime.parse(row['result_date'] as String),
     );
   }
 
