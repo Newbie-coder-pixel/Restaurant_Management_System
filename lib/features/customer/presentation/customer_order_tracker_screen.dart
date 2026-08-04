@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/cart_provider.dart';
 import '../../../core/services/prep_time_service.dart';
+import '../../../shared/models/order_model.dart';
+import '../../payment/services/receipt_service.dart';
 
 // ── Order Success Screen ───────────────────────────────────────────
 class CustomerOrderSuccessScreen extends StatelessWidget {
@@ -233,6 +235,7 @@ class _CustomerOrderTrackerScreenState
   bool _loading = false;
   String? _error;
   RealtimeChannel? _channel;
+  bool _printingReceipt = false;
 
   @override
   void initState() {
@@ -381,6 +384,35 @@ class _CustomerOrderTrackerScreenState
       if (mounted) {
         setState(() { _error = 'Failed to load order details.'; _loading = false; });
       }
+    }
+  }
+
+  // Gated on payment_status (not the kitchen-progress `status`) — an order
+  // paid up front (Midtrans/QRIS) can have a receipt printed as soon as
+  // payment clears, regardless of whether the kitchen has served it yet; an
+  // order still `served` but unpaid (pay-at-cashier flow, if this app ever
+  // supports it) has nothing to receipt yet. Mirrors the existing QR
+  // self-service flow's receipt button (qr_pay_now_screen.dart), which gates
+  // the same way.
+  Future<void> _printReceipt() async {
+    if (_order == null || _printingReceipt) return;
+    setState(() => _printingReceipt = true);
+    try {
+      final order = OrderModel.fromJson({
+        ..._order!,
+        'order_items': _items,
+        'restaurant_tables': {'table_number': _order!['table_name']},
+      });
+      await ReceiptService.printReceipt(order: order);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to open receipt: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _printingReceipt = false);
     }
   }
 
@@ -650,26 +682,58 @@ class _CustomerOrderTrackerScreenState
           // never literally reach 'paid' (see midtrans-webhook/index.ts).
           if (_order!['payment_status'] == 'paid') ...[
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _reorder,
-                icon: const Icon(Icons.replay_outlined, size: 20, color: Color(0xFFE94560)),
-                label: const Text(
-                  'Reorder',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                    color: Color(0xFFE94560),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _printingReceipt ? null : _printReceipt,
+                    icon: _printingReceipt
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Color(0xFFE94560)),
+                          )
+                        : const Icon(Icons.receipt_long_outlined,
+                            size: 20, color: Color(0xFFE94560)),
+                    label: const Text(
+                      'Receipt',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: Color(0xFFE94560),
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: Color(0xFFE94560), width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
                   ),
                 ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: const BorderSide(color: Color(0xFFE94560), width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _reorder,
+                    icon: const Icon(Icons.replay_outlined, size: 20, color: Color(0xFFE94560)),
+                    label: const Text(
+                      'Reorder',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: Color(0xFFE94560),
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: Color(0xFFE94560), width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ],
@@ -1368,11 +1432,22 @@ class _StatusProgress extends StatelessWidget {
       );
     }
 
+    // Precomputed once so the connecting line between two steps can check
+    // whether BOTH of its endpoints are active — previously the line used
+    // `idx < currentIdx`, which ignored the `isLast && isPaid` special case
+    // entirely: an order sitting at status 'served' with payment_status
+    // 'paid' had every circle checkmarked (including Paid, via that special
+    // case) but the last line segment stayed grey, since 3 < 3 is false.
+    final activeFlags = List<bool>.generate(
+      steps.length,
+      (i) => i <= currentIdx || (i == steps.length - 1 && isPaid),
+    );
+
     return Row(
       children: steps.asMap().entries.map((e) {
         final idx = e.key;
         final isLast = idx == steps.length - 1;
-        final isActive = idx <= currentIdx || (isLast && isPaid);
+        final isActive = activeFlags[idx];
         final isCurrent = idx == currentIdx;
 
         return Expanded(
@@ -1417,7 +1492,7 @@ class _StatusProgress extends StatelessWidget {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 400),
                     height: 3,
-                    color: idx < currentIdx
+                    color: (activeFlags[idx] && activeFlags[idx + 1])
                         ? const Color(0xFFE94560)
                         : const Color(0xFFE9ECF0),
                   ),
