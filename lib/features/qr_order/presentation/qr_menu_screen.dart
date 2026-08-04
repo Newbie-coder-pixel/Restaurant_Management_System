@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import 'dart:async';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 import '../models/qr_order_model.dart';
 import '../services/qr_device_id_service.dart';
 import '../../../shared/models/table_model.dart';
+import '../../../shared/utils/branch_hours.dart';
 
 final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, branchId) async => ref.read(qrOrderRepositoryProvider).fetchMenuByBranch(branchId),
@@ -26,6 +28,14 @@ final _activeOrderForTableProvider = FutureProvider.family<QrOrderModel?, String
 
 final _selectedCategoryProvider = StateProvider<String?>((ref) => null);
 final _searchQueryProvider = StateProvider<String>((ref) => '');
+
+// Ticks every 30s so a menu screen left open across the branch's closing
+// time re-evaluates isBranchOpen() without needing a network refetch or a
+// user action — otherwise a customer who opened the menu while open could
+// keep browsing/ordering indefinitely on that same session after close.
+final _clockTickProvider = StreamProvider<int>((ref) {
+  return Stream<int>.periodic(const Duration(seconds: 30), (i) => i);
+});
 
 class QrMenuScreen extends ConsumerStatefulWidget {
   final String tableId;
@@ -167,6 +177,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     final tableInfoAsync = ref.watch(_tableInfoProvider(widget.tableId));
+    ref.watch(_clockTickProvider); // forces a rebuild every 30s; value unused
 
     ref.listen<AsyncValue<QrOrderModel?>>(
       _activeOrderForTableProvider(widget.tableId),
@@ -199,6 +210,22 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
         final branch = tableData?['branches'] as Map<String, dynamic>?;
         final branchName = branch?['name'] as String? ?? 'Restaurant';
         final tableName = (tableData?['table_number'] as String?) ?? 'Table';
+
+        // Gate ordering on the branch's operating hours — a customer who
+        // scanned this table's QR once can keep the link/tab and reopen it
+        // any time later, including outside hours, with no re-scan required.
+        // Checked BEFORE the table-status gate below since it's the broader
+        // condition (branch closed implies no table is orderable either).
+        final openingTime = branch?['opening_time'] as String?;
+        final closingTime = branch?['closing_time'] as String?;
+        if (!isBranchOpen(openingTime: openingTime, closingTime: closingTime)) {
+          return _BranchClosedScreen(
+            tableId: widget.tableId,
+            branchName: branchName,
+            openingTime: openingTime,
+            closingTime: closingTime,
+          );
+        }
 
         // Gate ordering on the table's real status — the staff app already
         // enforces this structurally (MenuItemSelector's table dropdown only
@@ -237,6 +264,85 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
           searchCtrl: _searchCtrl,
         );
       },
+    );
+  }
+}
+
+// ─── Branch Closed Screen ───────────────────────────────────────────────────────
+// Shown instead of the menu whenever the current time falls outside the
+// branch's opening_time/closing_time — including when a customer reopens a
+// previously-scanned/bookmarked table QR link after hours. See
+// supabase/migrations/20260804000000_enforce_branch_hours_on_orders.sql for
+// the matching server-side gate (this screen is UX only; that migration is
+// what actually makes it unbypassable).
+class _BranchClosedScreen extends ConsumerWidget {
+  final String tableId;
+  final String branchName;
+  final String? openingTime;
+  final String? closingTime;
+
+  const _BranchClosedScreen({
+    required this.tableId,
+    required this.branchName,
+    required this.openingTime,
+    required this.closingTime,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final hasHours = openingTime != null && closingTime != null;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: colorScheme.error.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.nights_stay_outlined, color: colorScheme.error, size: 40),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  branchName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "We're currently closed",
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  hasHours
+                      ? 'Ordering opens again at ${formatHhMm(openingTime)}–${formatHhMm(closingTime)} '
+                        'WIB. Please come back during operating hours.'
+                      : 'Please come back during our operating hours.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 32),
+                TextButton.icon(
+                  onPressed: () => ref.invalidate(_tableInfoProvider(tableId)),
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Check again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

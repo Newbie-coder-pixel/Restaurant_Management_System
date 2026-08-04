@@ -7,11 +7,54 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/qr_order_model.dart';
 import '../providers/qr_cart_provider.dart';
 import '../../../shared/models/order_model.dart';
+import '../../../shared/utils/branch_hours.dart';
+
+/// Thrown when a customer tries to place/add to an order while the branch is
+/// outside its operating hours. Kept separate from a generic Exception so
+/// callers could special-case it later if needed; today the screens just
+/// display its message as-is (see QrOrderRepository's doc comment above
+/// enforce_branch_open_for_order_insert in the matching migration).
+class QrRestaurantClosedException implements Exception {
+  final String? openingTime;
+  final String? closingTime;
+  QrRestaurantClosedException({this.openingTime, this.closingTime});
+
+  @override
+  String toString() {
+    if (openingTime == null || closingTime == null) {
+      return 'This restaurant is currently closed. Please order again during operating hours.';
+    }
+    return 'This restaurant is currently closed (opens ${formatHhMm(openingTime)}–'
+        '${formatHhMm(closingTime)}). Please order again during operating hours.';
+  }
+}
 
 class QrOrderRepository {
   final SupabaseClient _client;
 
   QrOrderRepository(this._client);
+
+  // ── Re-check (fresh, not cached) that a branch is open right now — called
+  // right before every order-creating write so a customer who's been sitting
+  // on a stale bookmarked QR link (or just idling past closing time with the
+  // menu already loaded) can't slip an order in between the client-side gate
+  // rendering and the actual insert. This is a UX nicety only: the Postgres
+  // triggers are what actually make this unbypassable against a direct REST
+  // call with the anon key.
+  Future<void> _assertBranchOpen(String branchId) async {
+    if (branchId.trim().isEmpty) return;
+    final branch = await _client
+        .from('branches')
+        .select('opening_time, closing_time')
+        .eq('id', branchId)
+        .maybeSingle();
+    if (branch == null) return;
+    final opening = branch['opening_time'] as String?;
+    final closing = branch['closing_time'] as String?;
+    if (!isBranchOpen(openingTime: opening, closingTime: closing)) {
+      throw QrRestaurantClosedException(openingTime: opening, closingTime: closing);
+    }
+  }
 
   // ─── Create Order ──────────────────────────────────────────────────────────
   Future<QrOrderModel> createOrder({
@@ -20,6 +63,7 @@ class QrOrderRepository {
     String? notes,
     String? deviceId,
   }) async {
+    await _assertBranchOpen(branchId);
     final queueNumber = await _generateQueueNumber(branchId);
 
     try {
@@ -154,7 +198,7 @@ await _client.from('order_items').insert(orderItemsData);
       //    Also make sure no item has already been sent_to_kitchen (extra guard)
       final orderCheck = await _client
           .from('orders')
-          .select('id, status, total_amount, subtotal')
+          .select('id, status, total_amount, subtotal, branch_id')
           .eq('id', orderId)
           .single();
 
@@ -165,6 +209,11 @@ await _client.from('order_items').insert(orderItemsData);
           'Only orders that have not yet been sent to the kitchen can be added to.',
         );
       }
+
+      // The original order may have been placed while the branch was open;
+      // re-check now in case it closed in the meantime (e.g. customer keeps
+      // adding items well past closing time).
+      await _assertBranchOpen(orderCheck['branch_id'] as String? ?? '');
 
       // 2. Insert the new items into order_items
       //    `sent_to_kitchen_at` left null → new items not yet sent to the kitchen
@@ -489,7 +538,7 @@ await _client.from('order_items').insert(orderItemsData);
     try {
       final row = await _client
           .from('restaurant_tables')
-          .select('*, branches(id, name)')
+          .select('*, branches(id, name, opening_time, closing_time)')
           .eq('id', tableId)
           .maybeSingle();
       return row;
