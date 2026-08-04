@@ -504,7 +504,7 @@ class _QueueHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      order.queueNumber,
+                      order.queueNumber ?? order.orderNumber,
                       style: theme.textTheme.displayMedium?.copyWith(
                         color: colorScheme.onPrimary,
                         fontWeight: FontWeight.bold,
@@ -514,8 +514,8 @@ class _QueueHeader extends StatelessWidget {
                     const SizedBox(height: 8),
                     GestureDetector(
                       onTap: () {
-                        Clipboard.setData(
-                            ClipboardData(text: order.queueNumber));
+                        Clipboard.setData(ClipboardData(
+                            text: order.queueNumber ?? order.orderNumber));
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                               content: Text('Queue number copied!'),
@@ -555,7 +555,7 @@ class _QueueHeader extends StatelessWidget {
 
               const SizedBox(height: 4),
               Text(
-                '${order.tableName} · ${order.customerName}',
+                '${order.tableName ?? 'Table'} · ${order.customerName}',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: colorScheme.onPrimary.withValues(alpha: 0.75)),
               ),
@@ -760,7 +760,10 @@ class _PaymentStatusCard extends StatelessWidget {
     final isPaid = order.paymentStatus == QrPaymentStatus.paid;
     // Same label source the staff cashier PDF receipt uses (receipt_service.dart)
     // — one mapping, so a payment method never reads differently across receipts.
-    final methodLabel = MidtransPaymentMethod.label(order.paymentMethod);
+    // Staff-created dine-in orders never set payment_method (that column is
+    // QR-flow-only) — 'kasir' maps to "Cashier", the correct real-world
+    // meaning for an order with no online payment method recorded.
+    final methodLabel = MidtransPaymentMethod.label(order.paymentMethod ?? 'kasir');
 
     return Container(
       decoration: BoxDecoration(
@@ -1149,7 +1152,7 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
     // Set add-order mode
     ref.read(addOrderModeProvider.notifier).state = AddOrderModeState(
       orderId: order.id,
-      queueNumber: order.queueNumber,
+      queueNumber: order.queueNumber ?? order.orderNumber,
       tableId: order.tableId,
     );
 

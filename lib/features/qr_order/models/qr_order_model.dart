@@ -107,15 +107,26 @@ class QrOrderItemModel {
 class QrOrderModel {
   final String id;
   final String orderNumber;
-  final String queueNumber;
+  // Nullable: queue_number/table_name/payment_method are only ever populated
+  // by the QR self-order insert path (qr_order_repository.createOrder). A
+  // dine-in order created by staff via the cashier's order module
+  // (menu_item_selector.dart) shares the same `orders` table and the same
+  // table_id space — so fetchActiveOrderForTable can and does return staff
+  // rows here too — but never sets these three columns. Forcing them
+  // non-null used to throw on the cast, silently discarded by
+  // AsyncValue.valueOrNull in qr_menu_screen.dart's ref.listen, which made
+  // the "this table already has an order" guard invisible for exactly the
+  // orders it most needed to catch: a table already occupied via the staff
+  // app looked "free" to a customer scanning that table's QR code.
+  final String? queueNumber;
   final String tableId;
-  final String tableName;
+  final String? tableName;
   final String customerName;
   final List<QrOrderItemModel> items;
   final double totalAmountFromDb; // store the DB value but don't use it directly
   final QrOrderStatus status;
   final QrPaymentStatus paymentStatus;
-  final String paymentMethod;
+  final String? paymentMethod;
   final DateTime createdAt;
   final DateTime? updatedAt;
   final String? branchId;
@@ -127,15 +138,15 @@ class QrOrderModel {
   const QrOrderModel({
     required this.id,
     required this.orderNumber,
-    required this.queueNumber,
+    this.queueNumber,
     required this.tableId,
-    required this.tableName,
+    this.tableName,
     required this.customerName,
     required this.items,
     required this.totalAmountFromDb,
     required this.status,
     required this.paymentStatus,
-    required this.paymentMethod,
+    this.paymentMethod,
     required this.createdAt,
     this.updatedAt,
     this.branchId,
@@ -170,10 +181,10 @@ class QrOrderModel {
   factory QrOrderModel.fromMap(Map<String, dynamic> map) => QrOrderModel(
         id: map['id'] as String,
         orderNumber: map['order_number'] as String,
-        queueNumber: map['queue_number'] as String,
+        queueNumber: map['queue_number'] as String?,
         tableId: map['table_id'] as String,
-        tableName: map['table_name'] as String,
-        customerName: map['customer_name'] as String,
+        tableName: map['table_name'] as String?,
+        customerName: map['customer_name'] as String? ?? 'Guest',
         items: ((map['items'] ?? map['order_items']) as List<dynamic>? ?? [])
             .map((e) => QrOrderItemModel.fromMap(e as Map<String, dynamic>))
             .toList(),
@@ -190,7 +201,7 @@ class QrOrderModel {
             orElse: () => QrPaymentStatus.pending,
           );
         }(),
-        paymentMethod: map['payment_method'] as String,
+        paymentMethod: map['payment_method'] as String?,
         createdAt: DateTime.parse(map['created_at'] as String),
         updatedAt: map['updated_at'] != null
             ? DateTime.parse(map['updated_at'] as String)
@@ -207,15 +218,15 @@ class QrOrderModel {
   Map<String, dynamic> toMap() => {
         'id': id,
         'order_number': orderNumber,
-        'queue_number': queueNumber,
+        if (queueNumber != null) 'queue_number': queueNumber,
         'table_id': tableId,
-        'table_name': tableName,
+        if (tableName != null) 'table_name': tableName,
         'customer_name': customerName,
         'items': items.map((i) => i.toMap()).toList(),
         'total_amount': totalAmount,
         'status': status.dbValue,
         'payment_status': paymentStatus.dbValue,
-        'payment_method': paymentMethod,
+        if (paymentMethod != null) 'payment_method': paymentMethod,
         'created_at': createdAt.toIso8601String(),
         if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
         if (branchId != null) 'branch_id': branchId,

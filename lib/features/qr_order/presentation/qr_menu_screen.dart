@@ -94,7 +94,10 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
   void _joinActiveOrder(QrOrderModel order) {
     ref.read(addOrderModeProvider.notifier).state = AddOrderModeState(
       orderId: order.id,
-      queueNumber: order.queueNumber,
+      // Staff-created dine-in orders never get a queue_number (that column
+      // is QR-flow-only) — fall back to order_number so a staff order can
+      // still be joined/displayed with a real identifier instead of null.
+      queueNumber: order.queueNumber ?? order.orderNumber,
       tableId: order.tableId,
     );
     ref.read(activeQrCartNotifierProvider).clearCart();
@@ -119,10 +122,13 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
       ref.read(qrOrderRepositoryProvider).claimOrderIfUnowned(order.id, deviceId);
     }
     final itemCount = order.items.fold<int>(0, (s, i) => s + i.quantity);
+    // Staff-created dine-in orders never get a queue_number — fall back to
+    // order_number everywhere it's shown/passed on from here.
+    final displayQueue = order.queueNumber ?? order.orderNumber;
 
     void goToStatus(BuildContext ctx) {
       Navigator.pop(ctx);
-      context.go('/qr/${widget.tableId}/track/${order.id}?queue=${order.queueNumber}');
+      context.go('/qr/${widget.tableId}/track/${order.id}?queue=$displayQueue');
     }
 
     await showDialog(
@@ -138,9 +144,9 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
           ),
           content: Text(
             isOwner
-                ? 'Order #${order.queueNumber} ($itemCount item${itemCount == 1 ? '' : 's'}) is '
+                ? 'Order #$displayQueue ($itemCount item${itemCount == 1 ? '' : 's'}) is '
                     'already open at this table. Add more items to it or check its status.'
-                : 'Order #${order.queueNumber} is already open at this table on another '
+                : 'Order #$displayQueue is already open at this table on another '
                     'device or browser. Please finish and complete payment there first — '
                     'this device can only check its status until then.',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
@@ -158,7 +164,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
                       Navigator.pop(ctx);
                       _joinActiveOrder(order);
                     },
-                    child: Text('Add to Order #${order.queueNumber}',
+                    child: Text('Add to Order #$displayQueue',
                         style: const TextStyle(fontFamily: 'Poppins')),
                   ),
                 ]
@@ -182,6 +188,15 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
     ref.listen<AsyncValue<QrOrderModel?>>(
       _activeOrderForTableProvider(widget.tableId),
       (previous, next) {
+        // AsyncValue.valueOrNull collapses "no active order" and "the query
+        // errored" into the same null — which previously meant a genuinely
+        // active order silently failed to block a duplicate order (see
+        // QrOrderModel's doc comment on queueNumber/tableName/paymentMethod).
+        // Logging here means a future shape mismatch fails loudly in devtools
+        // instead of quietly disabling this guard again.
+        if (next.hasError) {
+          debugPrint('⚠️ _activeOrderForTableProvider errored: ${next.error}');
+        }
         final order = next.valueOrNull;
         if (order == null || _activeOrderPromptShown) return;
         // Already in add-order mode for this exact order (e.g. came back
