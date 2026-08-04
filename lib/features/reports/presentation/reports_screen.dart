@@ -385,10 +385,83 @@ class _RevenueLineChart extends StatelessWidget {
       'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
     ]; // index matches DateTime.weekday - 1
 
+    // Which points get a permanent value label above the dot: all of them
+    // for a 7-day view, but only first/peak/today for a 30-day view — labeling
+    // all 30 points would overlap into an unreadable smear, defeating the
+    // "read it without hovering" goal instead of serving it.
+    final peakIndex = () {
+      var best = 0;
+      for (var i = 1; i < spots.length; i++) {
+        if (spots[i].y > spots[best].y) best = i;
+      }
+      return best;
+    }();
+    final labeledIndices = periodDays <= 7
+        ? List.generate(spots.length, (i) => i).toSet()
+        : {0, peakIndex, spots.length - 1};
+
+    final lineBarData = LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      curveSmoothness: 0.2,
+      color: AppColors.primary,
+      barWidth: 3,
+      isStrokeCapRound: true,
+      dotData: FlDotData(
+        show: true,
+        getDotPainter: (spot, percent, bar, index) {
+          final isToday = spot.x.toInt() == periodDays - 1;
+          return FlDotCirclePainter(
+            radius: isToday ? 5 : (periodDays <= 7 ? 3.5 : 2),
+            color: isToday ? AppColors.accent : AppColors.primary,
+            strokeWidth: 2,
+            strokeColor: Colors.white,
+          );
+        },
+      ),
+      belowBarData: BarAreaData(
+        show: true,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.primary.withValues(alpha: 0.18),
+            AppColors.primary.withValues(alpha: 0.0),
+          ],
+        ),
+      ),
+    );
+
     return LineChart(
       LineChartData(
         minY: 0,
         maxY: chartMaxY,
+        showingTooltipIndicators: labeledIndices
+            .where((i) => i >= 0 && i < spots.length)
+            .map((i) => ShowingTooltipIndicators(
+                [LineBarSpot(lineBarData, 0, spots[i])]))
+            .toList(),
+        lineTouchData: LineTouchData(
+          enabled: false,
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (_) => Colors.transparent,
+            tooltipPadding: EdgeInsets.zero,
+            tooltipMargin: 10,
+            fitInsideVertically: true,
+            fitInsideHorizontally: true,
+            getTooltipItems: (touchedSpots) => touchedSpots.map((t) {
+              final isToday = t.x.toInt() == periodDays - 1;
+              return LineTooltipItem(
+                _formatRupiahCompact(t.y * 1000),
+                TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    color: isToday ? AppColors.accent : AppColors.primary,
+                    fontSize: 10),
+              );
+            }).toList(),
+          ),
+        ),
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false, // keep the grid uncluttered
@@ -452,54 +525,7 @@ class _RevenueLineChart extends StatelessWidget {
             ),
           ),
         ),
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => AppColors.primary,
-            getTooltipItems: (touchedSpots) => touchedSpots.map((t) {
-              return LineTooltipItem(
-                _formatRupiah(t.y * 1000),
-                const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    fontSize: 11),
-              );
-            }).toList(),
-          ),
-        ),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            curveSmoothness: 0.2,
-            color: AppColors.primary,
-            barWidth: 3,
-            isStrokeCapRound: true,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (spot, percent, bar, index) {
-                final isToday = spot.x.toInt() == periodDays - 1;
-                return FlDotCirclePainter(
-                  radius: isToday ? 5 : (periodDays <= 7 ? 3.5 : 2),
-                  color: isToday ? AppColors.accent : AppColors.primary,
-                  strokeWidth: 2,
-                  strokeColor: Colors.white,
-                );
-              },
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.primary.withValues(alpha: 0.18),
-                  AppColors.primary.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
-          ),
-        ],
+        lineBarsData: [lineBarData],
       ),
     );
   }
@@ -638,17 +664,24 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                 BarChartData(
                   maxY: chartMaxY,
                   alignment: BarChartAlignment.spaceAround,
+                  // Value labels are permanent (showingTooltipIndicators on every
+                  // group, touch disabled) rather than shown on hover/tap — the
+                  // whole point of this redesign is that the exact qty sold is
+                  // readable in one glance, not after moving a cursor onto the bar.
                   barTouchData: BarTouchData(
+                    enabled: false,
                     touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (_) => AppColors.primary,
+                      getTooltipColor: (_) => Colors.transparent,
+                      tooltipPadding: EdgeInsets.zero,
+                      tooltipMargin: 6,
+                      fitInsideVertically: true,
                       getTooltipItem: (group, _, rod, __) {
-                        final item = filtered[group.x];
                         return BarTooltipItem(
-                          '${item['name']}\n${rod.toY.toInt()} sold\n${_formatRupiahCompact(item['revenue'] as double)}',
+                          rod.toY.toInt().toString(),
                           const TextStyle(
                               fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
                               fontSize: 11),
                         );
                       },
@@ -756,7 +789,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                           ),
                         ),
                       ],
-                      showingTooltipIndicators: [],
+                      showingTooltipIndicators: [0],
                     );
                   }).toList(),
                 ),
@@ -1069,17 +1102,23 @@ class _BranchRevenueSection extends StatelessWidget {
                     ),
                   ),
                   borderData: FlBorderData(show: false),
+                  // Same permanent-label technique as the other charts on this
+                  // screen: the revenue figure sits above the bar at all times
+                  // instead of only appearing on hover/tap.
                   barTouchData: BarTouchData(
+                    enabled: false,
                     touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (_) => AppColors.primary,
+                      getTooltipColor: (_) => Colors.transparent,
+                      tooltipPadding: EdgeInsets.zero,
+                      tooltipMargin: 6,
+                      fitInsideVertically: true,
                       getTooltipItem: (group, _, rod, __) {
-                        final name = branchRevenue[group.x]['name'] as String;
                         return BarTooltipItem(
-                          '$name\n${_formatRupiah(rod.toY)}',
+                          _formatRupiahCompact(rod.toY),
                           const TextStyle(
                               fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
                               fontSize: 11),
                         );
                       },
@@ -1147,6 +1186,7 @@ class _BranchRevenueSection extends StatelessWidget {
                           ),
                         ),
                       ],
+                      showingTooltipIndicators: [0],
                     );
                   }).toList(),
                 ),
