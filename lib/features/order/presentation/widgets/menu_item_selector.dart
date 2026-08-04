@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/models/menu_model.dart';
@@ -6,6 +5,7 @@ import '../../../../shared/models/table_model.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/prep_time_service.dart'; // ← ML Service
 import '../../../../core/config/app_config.dart';
+import '../../../../shared/services/order_number_service.dart';
 
 class MenuItemSelector extends StatefulWidget {
   final String branchId;
@@ -217,9 +217,13 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
 
     setState(() => _isSubmitting = true);
     try {
-      final now  = DateTime.now();
-      final date = '${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}';
-      final orderNumber = 'ORD-$date-${Random().nextInt(9000) + 1000}';
+      // Numeric suffix comes from the same shared per-branch daily sequence
+      // the QR and customer-app paths use (OrderNumberService) — order
+      // numbers across all three apps read as one continuous sequence per
+      // branch, only the prefix differs.
+      final seqResult = await OrderNumberService.nextSequence(widget.branchId);
+      final orderNumber =
+          OrderNumberService.formatStaffOrderNumber(seqResult.seq, seqResult.orderDate);
 
       // Compute subtotal/tax/total up front — order_items are inserted right
       // after this, and the price-integrity trigger (trg_enforce_order_total_sanity)

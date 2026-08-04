@@ -1,10 +1,10 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../providers/cart_provider.dart';
+import '../../../shared/services/order_number_service.dart';
 
 class CustomerCheckoutScreen extends ConsumerStatefulWidget {
   const CustomerCheckoutScreen({super.key});
@@ -43,17 +43,17 @@ class _CustomerCheckoutScreenState
   }
 
   // Order number is the only lookup key anonymous customers have for
-  // tracking their order (see customer_order_tracker_screen.dart), and is
-  // now enforced unique at the DB level for the WEB- scheme (see migration
-  // 20260803020000). A 6-digit suffix (900,000 values/day) makes collisions
-  // rare; _placeOrder() also retries with a fresh number on a 23505 conflict.
-  String _generateOrderNumber() {
-    final now  = DateTime.now();
-    final date = '${now.year}'
-        '${now.month.toString().padLeft(2, '0')}'
-        '${now.day.toString().padLeft(2, '0')}';
-    final rand = Random().nextInt(900000) + 100000;
-    return 'WEB-$date-$rand';
+  // tracking their order (see customer_order_tracker_screen.dart). The
+  // numeric suffix now comes from the same shared per-branch daily sequence
+  // the QR and staff cashier paths use (OrderNumberService) — order numbers
+  // across all three apps read as one continuous sequence per branch, only
+  // the prefix differs. Still enforced unique at the DB level, per-branch
+  // (see migration 20260805000000); _placeOrder() still retries on a 23505
+  // conflict as a defensive fallback, though a genuine collision should no
+  // longer be possible since each call reserves a fresh integer atomically.
+  Future<String> _generateOrderNumber(String branchId) async {
+    final result = await OrderNumberService.nextSequence(branchId);
+    return OrderNumberService.formatWebOrderNumber(result.seq, result.orderDate);
   }
 
   Future<bool> _showConfirmDialog(CartState cart) async {
@@ -255,7 +255,7 @@ class _CustomerCheckoutScreenState
       // level (migration 20260803020000); retry with a fresh number on the
       // rare chance of a same-day random collision (postgres code 23505).
       String orderId = const Uuid().v4();
-      String orderNumber = _generateOrderNumber();
+      String orderNumber = await _generateOrderNumber(cart.branchId!);
       const maxAttempts = 3;
       for (var attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -289,7 +289,7 @@ class _CustomerCheckoutScreenState
           if (!isConflict || attempt == maxAttempts) rethrow;
           // Fresh id + number, try again.
           orderId = const Uuid().v4();
-          orderNumber = _generateOrderNumber();
+          orderNumber = await _generateOrderNumber(cart.branchId!);
         }
       }
 

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,6 +7,7 @@ import '../models/qr_order_model.dart';
 import '../providers/qr_cart_provider.dart';
 import '../../../shared/models/order_model.dart';
 import '../../../shared/utils/branch_hours.dart';
+import '../../../shared/services/order_number_service.dart';
 
 /// Thrown when a customer tries to place/add to an order while the branch is
 /// outside its operating hours. Kept separate from a generic Exception so
@@ -565,29 +565,15 @@ await _client.from('order_items').insert(orderItemsData);
         .eq('id', tableId);
   }
 
+  // Reserves this branch/day's next number from the ONE counter shared with
+  // the customer app and staff cashier (see OrderNumberService), then
+  // formats it into the "A001" look QR queue numbers have always had. No
+  // fallback-to-random on error anymore — that was the exact race/collision
+  // risk this shared counter exists to remove; a failed reservation now
+  // surfaces as a real error instead of a silently-duplicate-prone number.
   Future<String> _generateQueueNumber(String branchId) async {
-    final now = DateTime.now().toUtc();
-    // Use UTC midnight to stay consistent with Supabase timestamps (UTC)
-    final startOfDayUtc = DateTime.utc(now.year, now.month, now.day);
-    try {
-      final rows = await _client
-          .from('orders')
-          .select('queue_number')
-          .eq('branch_id', branchId)
-          .gte('created_at', startOfDayUtc.toIso8601String())
-          .order('created_at', ascending: false)
-          .limit(1);
-
-      if (rows.isEmpty) return 'A001';
-      final lastQueue = rows.first['queue_number'] as String;
-      if (lastQueue.length < 2) return 'A001';
-      final letter = lastQueue[0];
-      final number = int.tryParse(lastQueue.substring(1)) ?? 0;
-      if (number < 999) return '$letter${(number + 1).toString().padLeft(3, '0')}';
-      return '${String.fromCharCode(letter.codeUnitAt(0) + 1)}001';
-    } catch (_) {
-      return 'A${(Random().nextInt(999) + 1).toString().padLeft(3, '0')}';
-    }
+    final result = await OrderNumberService.nextSequence(branchId);
+    return OrderNumberService.formatQrQueueNumber(result.seq);
   }
 }
 
