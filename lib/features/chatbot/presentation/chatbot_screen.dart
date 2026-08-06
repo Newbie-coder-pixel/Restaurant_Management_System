@@ -72,6 +72,11 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   List<String> _lowStockAlert = [];
 bool _quickActionsExpanded = false; // ← ADDED THIS LINE
 
+  // Last date range the staff asked about in chat (e.g. "report from 2 aug
+  // - 5 aug"), so the export sheet's Period can default to that instead of
+  // always Daily. Cleared whenever the conversation/branch resets.
+  ({DateTime start, DateTime end})? _lastReportRange;
+
   // ── Sentiment Detection ────────────────────────────────────────────
   static const _negativeKeywords = [
     'lambat', 'lama', 'error', 'rusak', 'masalah', 'problem', 'gagal',
@@ -774,6 +779,8 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       builder: (_) => ReportExportSheet(
         branchId: _isSuperadmin ? _selectedBranchId : _myBranchId,
         branchName: branchName,
+        initialCustomStart: _lastReportRange?.start,
+        initialCustomEnd: _lastReportRange?.end,
       ),
     );
 
@@ -816,6 +823,7 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
 
     final sentiment = _detectSentiment(text);
     final dateRange = _parseDateRange(text);
+    if (dateRange != null) _lastReportRange = dateRange;
 
     // Fetch analytics + menu data (+ a custom date range, if the message named one) in parallel
     final results = await Future.wait([
@@ -1123,6 +1131,7 @@ have instead.
                     _selectedBranchId = val;
                     _lowStockAlert = [];
                   });
+                  _lastReportRange = null;
                   ref.read(chatProvider.notifier).clearHistory();
                   _addBot(
                     '🏢 Switched to branch: ${val == null ? "All Branches" : _branches.firstWhere((b) => b.id == val).name}\n\nGo ahead and ask a question 👇',
@@ -1156,6 +1165,7 @@ have instead.
 
   void _resetChat() {
     ref.read(chatProvider.notifier).clearHistory();
+    _lastReportRange = null;
     _addBot(_welcomeMessage);
   }
 
@@ -1237,6 +1247,7 @@ have instead.
                     _selectedBranchId = val;
                     _lowStockAlert = [];
                   });
+                  _lastReportRange = null;
                   ref.read(chatProvider.notifier).clearHistory();
                   _addBot(
                     '🏢 Switched to branch: ${val == null ? "All Branches" : _branches.firstWhere((b) => b.id == val).name}\n\nGo ahead and ask a question 👇',

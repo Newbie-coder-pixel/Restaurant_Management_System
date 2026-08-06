@@ -7,7 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-enum ReportPeriod { daily, weekly, monthly }
+enum ReportPeriod { daily, weekly, monthly, custom }
 
 enum ReportFormat { pdf, csv }
 
@@ -16,6 +16,8 @@ class ReportExportService {
   static Future<Map<String, dynamic>> fetchReportData({
     required String? branchId,
     required ReportPeriod period,
+    DateTime? customStart,
+    DateTime? customEnd,
   }) async {
     final sb = Supabase.instance.client;
     final now = DateTime.now().toLocal();
@@ -33,24 +35,38 @@ class ReportExportService {
         '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
     late DateTime startLocal;
-    final endLocalExclusive = localMidnight(now).add(const Duration(days: 1));
+    late DateTime endLocalExclusive;
     late String periodLabel;
 
     switch (period) {
       case ReportPeriod.daily:
         startLocal = localMidnight(now);
+        endLocalExclusive = localMidnight(now).add(const Duration(days: 1));
         periodLabel = 'Daily — ${_formatDate(now)}';
         break;
       case ReportPeriod.weekly:
         final weekStartLocal =
             localMidnight(now.subtract(Duration(days: now.weekday - 1)));
         startLocal = weekStartLocal;
+        endLocalExclusive = localMidnight(now).add(const Duration(days: 1));
         periodLabel =
             'Weekly — ${_formatDate(weekStartLocal)} to ${_formatDate(now)}';
         break;
       case ReportPeriod.monthly:
         startLocal = DateTime(now.year, now.month, 1);
+        endLocalExclusive = localMidnight(now).add(const Duration(days: 1));
         periodLabel = 'Monthly — ${_bulanIndo(now.month)} ${now.year}';
+        break;
+      case ReportPeriod.custom:
+        final start = customStart!;
+        final endInclusive = customEnd!;
+        startLocal = localMidnight(start);
+        endLocalExclusive = localMidnight(endInclusive).add(const Duration(days: 1));
+        periodLabel = start.year == endInclusive.year &&
+                start.month == endInclusive.month &&
+                start.day == endInclusive.day
+            ? 'Custom — ${_formatDate(start)}'
+            : 'Custom — ${_formatDate(start)} to ${_formatDate(endInclusive)}';
         break;
     }
 
@@ -518,10 +534,19 @@ class ReportExportSheet extends StatefulWidget {
   final String? branchId;
   final String branchName;
 
+  /// Pre-fills the Custom period, when the staff already asked the AI
+  /// chatbot for a report over a specific date range earlier in the
+  /// conversation. Null when they opened export without naming a range —
+  /// the sheet then behaves exactly as before (Daily/Weekly/Monthly only).
+  final DateTime? initialCustomStart;
+  final DateTime? initialCustomEnd;
+
   const ReportExportSheet({
     super.key,
     required this.branchId,
     required this.branchName,
+    this.initialCustomStart,
+    this.initialCustomEnd,
   });
 
   @override
@@ -529,10 +554,19 @@ class ReportExportSheet extends StatefulWidget {
 }
 
 class _ReportExportSheetState extends State<ReportExportSheet> {
-  ReportPeriod _period = ReportPeriod.daily;
+  late ReportPeriod _period;
   ReportFormat _format = ReportFormat.pdf;
   bool _isLoading = false;
   String? _errorMsg;
+
+  bool get _hasCustomRange =>
+      widget.initialCustomStart != null && widget.initialCustomEnd != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _period = _hasCustomRange ? ReportPeriod.custom : ReportPeriod.daily;
+  }
 
   Future<void> _export() async {
     setState(() {
@@ -544,6 +578,8 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
       final data = await ReportExportService.fetchReportData(
         branchId: widget.branchId,
         period: _period,
+        customStart: widget.initialCustomStart,
+        customEnd: widget.initialCustomEnd,
       );
 
       if (_format == ReportFormat.pdf) {
@@ -586,8 +622,13 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
         return 'weekly';
       case ReportPeriod.monthly:
         return 'monthly';
+      case ReportPeriod.custom:
+        return 'custom';
     }
   }
+
+  String _formatShortDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   @override
   Widget build(BuildContext context) {
@@ -651,8 +692,24 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
               _periodChip(ReportPeriod.weekly, '📆 Weekly'),
               const SizedBox(width: 8),
               _periodChip(ReportPeriod.monthly, '🗓️ Monthly'),
+              if (_hasCustomRange) ...[
+                const SizedBox(width: 8),
+                _periodChip(ReportPeriod.custom, '✨ Custom'),
+              ],
             ],
           ),
+          if (_hasCustomRange && _period == ReportPeriod.custom) ...[
+            const SizedBox(height: 8),
+            Text(
+              'From your chat: ${_formatShortDate(widget.initialCustomStart!)} '
+              '– ${_formatShortDate(widget.initialCustomEnd!)}',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
 
           // Format
