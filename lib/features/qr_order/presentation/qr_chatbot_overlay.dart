@@ -32,42 +32,31 @@ class QrChatbotOverlay extends ConsumerStatefulWidget {
 class _QrChatbotOverlayState extends ConsumerState<QrChatbotOverlay> {
   bool _open = false;
 
-  ({bool visible, String? tableId, bool allowAddToCart, bool onMenuScreen})
-      get _routeInfo {
+  ({bool visible, String? tableId, bool allowAddToCart}) get _routeInfo {
     final segments =
         widget.currentPath.split('/').where((s) => s.isNotEmpty).toList();
     // ['qr', tableId, ...rest]
     if (segments.length < 2 || segments[0] != 'qr') {
-      return (
-        visible: false,
-        tableId: null,
-        allowAddToCart: false,
-        onMenuScreen: false
-      );
+      return (visible: false, tableId: null, allowAddToCart: false);
     }
     final tableId = segments[1];
     final rest = segments.sublist(2);
     if (rest.isEmpty) {
-      return (
-        visible: true,
-        tableId: tableId,
-        allowAddToCart: true,
-        onMenuScreen: true
-      ); // menu
+      return (visible: true, tableId: tableId, allowAddToCart: true); // menu
     }
     if (rest.first == 'track') {
-      return (
-        visible: true,
-        tableId: tableId,
-        allowAddToCart: false,
-        onMenuScreen: false
-      ); // tracker
+      // Also covers "Add to order" mode: tapping "Add Order" on the tracker
+      // pushes the menu route back on top (see qr_order_tracker_screen's
+      // _goToAddOrder), but GoRouter's matched location here stays on this
+      // 'track' segment rather than updating to the bare menu path — so the
+      // QrMenuScreen (and its "Cart Rp XX" pill) can be showing even though
+      // this branch, not the `rest.isEmpty` one above, is what matches.
+      return (visible: true, tableId: tableId, allowAddToCart: false);
     }
     return (
       visible: false,
       tableId: tableId,
-      allowAddToCart: false,
-      onMenuScreen: false
+      allowAddToCart: false
     ); // cart, pay
   }
 
@@ -89,8 +78,7 @@ class _QrChatbotOverlayState extends ConsumerState<QrChatbotOverlay> {
     final cartHasItems = ref.watch(
       activeQrCartProvider.select((cart) => !cart.isEmpty),
     );
-    final liftForCartPill =
-        (info.onMenuScreen && cartHasItems) ? _cartPillClearance : 0.0;
+    final liftForCartPill = (visible && cartHasItems) ? _cartPillClearance : 0.0;
     final fabBottom = 24 + liftForCartPill;
     final panelBottom = 96 + liftForCartPill;
 
