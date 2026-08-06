@@ -488,6 +488,7 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
 
   List<DateTime> _extractDates(String text) {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final lower = text.toLowerCase();
     final dates = <DateTime>[];
 
@@ -500,21 +501,38 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       final year = m.group(3) != null ? int.parse(m.group(3)!) : now.year;
       dates.add(DateTime(year, month, day));
     }
-    if (dates.isNotEmpty) return dates;
 
-    // "2/8", "2-8", "02/08/2026" (day/month order)
-    final numeric = RegExp(r'(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?');
-    for (final m in numeric.allMatches(lower)) {
-      final day = int.tryParse(m.group(1)!);
-      final month = int.tryParse(m.group(2)!);
-      if (day == null || month == null || day > 31 || month > 12) continue;
-      int year = now.year;
-      if (m.group(3) != null) {
-        final y = int.parse(m.group(3)!);
-        year = y < 100 ? 2000 + y : y;
+    // "2/8", "2-8", "02/08/2026" (day/month order) — only if no named date matched
+    if (dates.isEmpty) {
+      final numeric = RegExp(r'(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?');
+      for (final m in numeric.allMatches(lower)) {
+        final day = int.tryParse(m.group(1)!);
+        final month = int.tryParse(m.group(2)!);
+        if (day == null || month == null || day > 31 || month > 12) continue;
+        int year = now.year;
+        if (m.group(3) != null) {
+          final y = int.parse(m.group(3)!);
+          year = y < 100 ? 2000 + y : y;
+        }
+        dates.add(DateTime(year, month, day));
       }
-      dates.add(DateTime(year, month, day));
     }
+
+    // "from 5 July 2026 - now/today/present/sekarang/hari ini/saat ini" —
+    // treat as the other end of the range being today's actual date. Only
+    // applies when paired with an explicit date already found above, so a
+    // bare "today" question (e.g. the Daily Report quick action) doesn't
+    // start being treated as a custom range.
+    if (dates.isNotEmpty) {
+      final nowKeywords = RegExp(
+        r'\b(now|present|currently|current date|to date|sekarang|saat ini|hari ini)\b',
+      );
+      if (nowKeywords.hasMatch(lower) &&
+          !dates.any((d) => d.year == today.year && d.month == today.month && d.day == today.day)) {
+        dates.add(today);
+      }
+    }
+
     return dates;
   }
 
