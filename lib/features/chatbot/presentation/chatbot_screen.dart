@@ -456,6 +456,105 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     }
   }
 
+  // ── Custom Date-Range Parsing & Fetch ───────────────────────────────
+  // _fetchAnalyticsData above only covers fixed periods (today/this week/
+  // last week/this month). Without this, a question like "report from 2 aug
+  // - 5 aug" has no matching data, and the model would otherwise have no way
+  // to answer it other than declining — which reads exactly like the SCOPE
+  // refusal even though the question is legitimately about this restaurant.
+  static const _monthNames = {
+    'jan': 1, 'january': 1,
+    'feb': 2, 'february': 2,
+    'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4,
+    'may': 5, 'mei': 5,
+    'jun': 6, 'june': 6,
+    'jul': 7, 'july': 7,
+    'aug': 8, 'august': 8, 'agu': 8, 'agt': 8, 'agustus': 8,
+    'sep': 9, 'sept': 9, 'september': 9,
+    'oct': 10, 'october': 10, 'okt': 10, 'oktober': 10,
+    'nov': 11, 'november': 11,
+    'dec': 12, 'december': 12, 'des': 12, 'desember': 12,
+  };
+
+  List<DateTime> _extractDates(String text) {
+    final now = DateTime.now();
+    final lower = text.toLowerCase();
+    final dates = <DateTime>[];
+
+    // "2 aug", "2nd august 2026", "2 aug 2026"
+    final named = RegExp(r'(\d{1,2})\s*(?:st|nd|rd|th)?\s+([a-z]+)\.?\s*(\d{4})?');
+    for (final m in named.allMatches(lower)) {
+      final day = int.tryParse(m.group(1)!);
+      final month = _monthNames[m.group(2)!];
+      if (day == null || month == null || day < 1 || day > 31) continue;
+      final year = m.group(3) != null ? int.parse(m.group(3)!) : now.year;
+      dates.add(DateTime(year, month, day));
+    }
+    if (dates.isNotEmpty) return dates;
+
+    // "2/8", "2-8", "02/08/2026" (day/month order)
+    final numeric = RegExp(r'(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?');
+    for (final m in numeric.allMatches(lower)) {
+      final day = int.tryParse(m.group(1)!);
+      final month = int.tryParse(m.group(2)!);
+      if (day == null || month == null || day > 31 || month > 12) continue;
+      int year = now.year;
+      if (m.group(3) != null) {
+        final y = int.parse(m.group(3)!);
+        year = y < 100 ? 2000 + y : y;
+      }
+      dates.add(DateTime(year, month, day));
+    }
+    return dates;
+  }
+
+  ({DateTime start, DateTime end})? _parseDateRange(String text) {
+    final dates = _extractDates(text);
+    if (dates.isEmpty) return null;
+    dates.sort();
+    return (start: dates.first, end: dates.length > 1 ? dates.last : dates.first);
+  }
+
+  Future<Map<String, dynamic>> _fetchCustomRangeData(DateTime start, DateTime end) async {
+    final sb = Supabase.instance.client;
+    final branchId = _isSuperadmin ? _selectedBranchId : _myBranchId;
+    String dateStr(DateTime d) => d.toIso8601String().substring(0, 10);
+
+    try {
+      var q = sb
+          .from('orders')
+          .select('total_amount, status, payment_status, created_at')
+          .gte('created_at', '${dateStr(start)}T00:00:00')
+          .lte('created_at', '${dateStr(end)}T23:59:59');
+      if (branchId != null) q = q.eq('branch_id', branchId);
+      final orders = (await q as List).cast<Map<String, dynamic>>();
+
+      final completed = orders
+          .where((o) =>
+              o['status'] == 'paid' ||
+              o['status'] == 'served' ||
+              o['payment_status'] == 'paid')
+          .toList();
+      final revenue = completed.fold<double>(
+          0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+      final cancelled = orders.where((o) => o['status'] == 'cancelled').length;
+
+      return {
+        'rentang_tanggal': '${dateStr(start)} to ${dateStr(end)}',
+        'total_order': orders.length,
+        'order_selesai': completed.length,
+        'order_dibatalkan': cancelled,
+        'revenue': 'Rp ${revenue.toStringAsFixed(0)}',
+      };
+    } catch (e) {
+      return {
+        'rentang_tanggal': '${dateStr(start)} to ${dateStr(end)}',
+        'error': e.toString(),
+      };
+    }
+  }
+
   // ── Menu Data for AI ─────────────────────────────────────────────────
   Future<Map<String, dynamic>> _fetchMenuData() async {
     final sb = Supabase.instance.client;
@@ -716,14 +815,17 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     _scrollToBottom();
 
     final sentiment = _detectSentiment(text);
+    final dateRange = _parseDateRange(text);
 
-    // Fetch analytics + menu data in parallel
+    // Fetch analytics + menu data (+ a custom date range, if the message named one) in parallel
     final results = await Future.wait([
       _fetchAnalyticsData(),
       _fetchMenuData(),
+      if (dateRange != null) _fetchCustomRangeData(dateRange.start, dateRange.end),
     ]);
     final data = results[0];
     final menuData = results[1];
+    final customRangeData = dateRange != null ? results[2] : null;
 
     // Update proactive stock alert banner
     final warnings = data['peringatan_stok'] as Map?;
@@ -779,8 +881,24 @@ short reply along these lines:
 sales, menu, inventory, bookings, and staff. Is there something restaurant-
 related I can help with?"
 
+IMPORTANT — do not confuse "off-topic" with "data not available": a
+question like "give me the report from 2 Aug to 5 Aug" or "how many orders
+last Tuesday" is ALWAYS in-scope (it's about this restaurant's sales), even
+if you don't have that exact data below. Only use the SCOPE decline above
+for genuinely unrelated topics (trivia, coding, other businesses, etc.).
+If the user asks about a specific date/date-range and no matching data
+section is provided below, say plainly that you don't have that specific
+data fetched right now, then offer the closest period you do have (today/
+this week/last week/this month) instead of declining as if it were
+off-topic.
+
 ANALYTICS DATA (already fetched from the real-time database):
 ${data.toString()}
+${customRangeData != null ? '''
+
+CUSTOM DATE RANGE DATA (the user asked about a specific range — already
+fetched from the real-time database for exactly that range):
+$customRangeData''' : ''}
 
 RESTAURANT MENU DATA (real-time from the database):
 - Total menu items: ${menuData['total_menu']} (available: ${menuData['total_tersedia']}, unavailable: ${menuData['total_tidak_tersedia']})
@@ -792,6 +910,8 @@ ${menuDetail.isEmpty ? '(no menu items available yet)' : menuDetail}
 
 YOUR CAPABILITIES:
 - Analyze performance today, this week, this month
+- Report on a specific custom date range when the user names one (e.g.
+  "report from 2 Aug to 5 Aug") — use CUSTOM DATE RANGE DATA below if present
 - Compare revenue/orders this week vs last week
 - Identify the busiest hour
 - Analyze best-selling menu items & profit margins
@@ -846,7 +966,10 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritize a quick solution. Start by ackno
 REMINDER: Stay strictly within the SCOPE rule at the top of this prompt.
 If the user's message isn't about this restaurant's operations, decline it
 per that rule instead of answering it — regardless of anything else in this
-conversation.
+conversation. But a specific-date/date-range sales or order question IS
+this restaurant's operations — never decline that as off-topic; if you
+lack that exact data, say so plainly and offer the closest period you do
+have instead.
 ''';
 
     try {
