@@ -41,13 +41,15 @@ write_vercel_json build/staff
 echo "✓ Staff build selesai → build/staff (+ api/ + vercel.json ikut)"
 
 # ── 2. Customer App ───────────────────────────────────────────────────────────
-# flutter clean + pub get first: flutter web's build cache isn't reliably
-# keyed on --dart-define, so building straight after Staff in the same
-# working directory can silently reuse Staff's compiled output instead of
-# recompiling for this mode.
+# flutter's web build cache isn't reliably keyed on --dart-define, so
+# building straight after Staff in the same working directory can silently
+# reuse Staff's compiled output instead of recompiling for this mode.
+# `flutter clean` would fix that but ALSO wipes the whole build/ tree —
+# including build/staff, already copied out above — so clear only
+# build/web + the build cache instead.
 echo ""
 echo "▶ [2/3] Building CUSTOMER app..."
-flutter clean
+rm -rf build/web .dart_tool
 flutter pub get
 flutter build web \
   --dart-define=APP_MODE=customer \
@@ -62,7 +64,7 @@ echo "✓ Customer build selesai → build/customer (+ api/ + vercel.json ikut)"
 # ── 3. QR App ─────────────────────────────────────────────────────────────────
 echo ""
 echo "▶ [3/3] Building QR app..."
-flutter clean
+rm -rf build/web .dart_tool
 flutter pub get
 flutter build web \
   --dart-define=APP_MODE=qr \
