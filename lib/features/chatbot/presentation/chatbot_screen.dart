@@ -472,13 +472,13 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
   // to answer it other than declining — which reads exactly like the SCOPE
   // refusal even though the question is legitimately about this restaurant.
   static const _monthNames = {
-    'jan': 1, 'january': 1,
-    'feb': 2, 'february': 2,
-    'mar': 3, 'march': 3,
+    'jan': 1, 'january': 1, 'januari': 1,
+    'feb': 2, 'february': 2, 'februari': 2,
+    'mar': 3, 'march': 3, 'maret': 3,
     'apr': 4, 'april': 4,
     'may': 5, 'mei': 5,
-    'jun': 6, 'june': 6,
-    'jul': 7, 'july': 7,
+    'jun': 6, 'june': 6, 'juni': 6,
+    'jul': 7, 'july': 7, 'juli': 7,
     'aug': 8, 'august': 8, 'agu': 8, 'agt': 8, 'agustus': 8,
     'sep': 9, 'sept': 9, 'september': 9,
     'oct': 10, 'october': 10, 'okt': 10, 'oktober': 10,
