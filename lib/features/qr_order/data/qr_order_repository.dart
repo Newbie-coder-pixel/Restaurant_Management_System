@@ -570,6 +570,45 @@ await _client.from('order_items').insert(orderItemsData);
     }
   }
 
+  // ── Today's real top-selling items (for the menu-recommendation chatbot) ──
+  // Uses the same get_branch_popular_items RPC as RecommendationService (see
+  // supabase/migrations/20260805070000_recommendation_service_rpc.sql),
+  // just with `since` pinned to local midnight instead of a 30-day window,
+  // so the chatbot can ground a "most ordered today" claim in real numbers
+  // instead of guessing at one.
+  Future<List<Map<String, dynamic>>> fetchTopOrderedToday(
+    String branchId, {
+    int limit = 5,
+  }) async {
+    if (branchId.trim().isEmpty) return [];
+    try {
+      final now = DateTime.now();
+      final midnight = DateTime(now.year, now.month, now.day);
+      final res = await _client.rpc('get_branch_popular_items', params: {
+        'p_branch_id': branchId,
+        'p_since': midnight.toIso8601String(),
+      }) as List<dynamic>;
+
+      final Map<String, int> qtyByName = {};
+      for (final row in res) {
+        final name = row['menu_item_name'] as String? ?? '';
+        final qty = (row['quantity'] as num?)?.toInt() ?? 0;
+        if (name.isEmpty) continue;
+        qtyByName[name] = (qtyByName[name] ?? 0) + qty;
+      }
+
+      final sorted = qtyByName.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      return sorted
+          .take(limit)
+          .map((e) => {'name': e.key, 'qty': e.value})
+          .toList();
+    } catch (e) {
+      debugPrint('fetchTopOrderedToday error: $e');
+      return [];
+    }
+  }
+
   Future<Map<String, dynamic>?> fetchTableInfo(String tableId) async {
     try {
       final row = await _client

@@ -32,6 +32,8 @@ class QrChatbotService {
     required String closingTime,
     required List<MenuItem> menu,
     required bool allowAddToCart,
+    String? weatherContext,
+    String topSellersText = '(no sales data yet today)',
   }) {
     final buf = StringBuffer();
     for (final item in menu) {
@@ -87,6 +89,33 @@ YOUR JOB:
   preparation time
 - Keep answers short and appetizing — this is a small mobile chat panel, not
   a report
+
+REAL CONTEXT (verified data — this is the ONLY source you may use for
+weather or popularity claims):
+${weatherContext ?? "Weather info not available for this customer."}
+Today's real top-selling items so far: $topSellersText
+
+RECOMMENDATION RULES (STRICT — NEVER HALLUCINATE):
+- NEVER invent or guess sales numbers, "customer favorites", or popularity
+  claims of any kind. Only cite the "Today's real top-selling items" line
+  above, and only if it isn't "(no sales data yet today)". If it says that,
+  say plainly that there's no sales data yet instead of making a claim up —
+  you can still recommend based on the menu's own attributes (ingredients,
+  category, price) in that case.
+- If the customer asks for a general recommendation ("recommend me
+  something", "what's good?", "what's popular?") without stating a
+  preference (mood, spice level, budget, dietary need) AND they haven't
+  already told you one earlier in this conversation, ask ONE short
+  clarifying question first (e.g. "Spicy or mild?" / "Any budget in mind?"
+  / "Vegetarian?") instead of guessing blindly.
+- Exception: if the weather context above is available (not "not
+  available"), that alone is enough for a sensible first suggestion — you
+  may recommend directly, explain the weather reasoning ("since it's
+  pretty hot right now, something cold might hit the spot..."), and cite
+  the real top-seller data if it applies, instead of asking further
+  questions.
+- Never state or imply an item is "popular", "a favorite", or "best-selling"
+  unless it is literally in the today's top-selling list above.
 
 $addToCartSection
 

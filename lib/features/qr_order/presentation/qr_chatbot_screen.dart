@@ -7,6 +7,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../data/qr_order_repository.dart';
 import '../providers/qr_cart_provider.dart';
 import '../services/qr_chatbot_service.dart';
+import '../services/qr_weather_service.dart';
 
 class _QrChatMessage {
   final String role;
@@ -20,6 +21,24 @@ const _quickActions = [
   ('🌿 Vegetarian', 'What vegetarian options do you have?'),
   ('⚠️ Allergies', 'I have allergies, can you help me pick something safe?'),
   ('💸 Budget-friendly', "What's good and cheap?"),
+];
+
+// Quick-reply chips shown while waiting for the customer to answer the
+// hot/cold fallback question (see _awaitingWeatherReply).
+const _weatherFallbackReplies = [
+  ('🔥 Panas/gerah', 'Lagi panas dan gerah di sini'),
+  ('❄️ Sejuk/adem', 'Lagi sejuk dan adem di sini'),
+];
+
+// Free-text triggers that mean "give me a general recommendation" — these
+// are gated on a weather check (see _isRecommendationTrigger) so the AI has
+// real context instead of guessing. Deliberately excludes generic "good"
+// wording that could false-positive on unrelated chat.
+const _recommendationKeywords = [
+  'recommend', 'recommendation', 'suggest', 'suggestion',
+  'rekomendasi', 'sarankan', 'usulkan', 'usul',
+  'popular', 'terlaris', 'best seller', 'bestseller', 'laris',
+  'paling enak', 'apa yang enak', 'menu apa yang enak', 'menu apa yang cocok',
 ];
 
 /// Menu-recommendation chatbot for the QR ordering flow. Shown while
@@ -49,11 +68,20 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
   bool _isTyping = false;
   bool _loadingContext = true;
 
+  String _branchId = '';
   String _branchName = 'Restaurant';
   String _tableName = 'Table';
   String _openingTime = '10:00';
   String _closingTime = '22:00';
   List<MenuItem> _menu = [];
+
+  // ── Recommendation grounding (weather + real sales data) ──────────
+  QrWeatherInfo? _weather;
+  String? _weatherManualAnswer;
+  bool _weatherAsked = false;
+  bool _awaitingWeatherReply = false;
+  String _topSellersText = '(no sales data yet today)';
+  bool _topSellersLoaded = false;
 
   @override
   void initState() {
@@ -81,6 +109,7 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
       final tableInfo = await repo.fetchTableInfo(widget.tableId);
       final branch = tableInfo?['branches'] as Map<String, dynamic>?;
       final branchId = (tableInfo?['branch_id'] as String?)?.trim() ?? '';
+      _branchId = branchId;
 
       _branchName = branch?['name'] as String? ?? 'Restaurant';
       _tableName = (tableInfo?['table_number'] as String?) ?? 'Table';
@@ -119,17 +148,93 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
             "tap \"Add Order\" on this screen when you're ready to order more.";
   }
 
+  // ── Weather/recommendation grounding ─────────────────────────────
+  bool _isRecommendationTrigger(String text) {
+    final lower = text.toLowerCase();
+    return _recommendationKeywords.any((k) => lower.contains(k));
+  }
+
+  Future<void> _fetchTopSellersIfNeeded() async {
+    if (_topSellersLoaded) return;
+    _topSellersLoaded = true;
+    if (_branchId.isEmpty) return;
+    try {
+      final repo = ref.read(qrOrderRepositoryProvider);
+      final top = await repo.fetchTopOrderedToday(_branchId);
+      if (top.isNotEmpty) {
+        _topSellersText = top
+            .map((e) => '${e['name']} (${e['qty']}x ordered today)')
+            .join(', ');
+      }
+    } catch (e) {
+      debugPrint('QrChatbotScreen._fetchTopSellersIfNeeded error: $e');
+    }
+  }
+
   // ── Send ──────────────────────────────────────────────────────────
   Future<void> _send([String? quick]) async {
     final text = (quick ?? _msgCtrl.text).trim();
     if (text.isEmpty || _isTyping || _loadingContext) return;
 
     _msgCtrl.clear();
+
+    // Treat this message as the answer to the hot/cold fallback question,
+    // then resume the recommendation normally — the original request is
+    // still right there in the chat history for the model to see.
+    if (_awaitingWeatherReply) {
+      setState(() {
+        _messages.add(_QrChatMessage(role: 'user', content: text));
+        _awaitingWeatherReply = false;
+      });
+      _weatherManualAnswer = text;
+      _scrollToBottom();
+      await _fetchTopSellersIfNeeded();
+      await _dispatchToAi(text);
+      return;
+    }
+
     setState(() {
       _messages.add(_QrChatMessage(role: 'user', content: text));
-      _isTyping = true;
     });
     _scrollToBottom();
+
+    // First time the customer asks for a general recommendation this
+    // session: try to ground it in real weather via device location before
+    // letting the AI answer at all. If permission is denied/unavailable,
+    // fall back to asking the customer directly in chat instead of guessing.
+    if (!_weatherAsked && _isRecommendationTrigger(text)) {
+      _weatherAsked = true;
+      setState(() => _isTyping = true);
+      final weather = await QrWeatherService.tryFetch();
+      if (mounted) setState(() => _isTyping = false);
+
+      if (weather != null) {
+        _weather = weather;
+        await _fetchTopSellersIfNeeded();
+        await _dispatchToAi(text);
+      } else {
+        _awaitingWeatherReply = true;
+        _addBot(
+          "Biar rekomendasinya pas dulu ya — di tempat kamu sekarang lagi "
+          "panas/gerah atau adem/sejuk? 🌤️",
+        );
+      }
+      return;
+    }
+
+    await _dispatchToAi(text);
+  }
+
+  Future<void> _dispatchToAi(String text) async {
+    setState(() => _isTyping = true);
+    _scrollToBottom();
+
+    final weatherContext = _weather?.toPromptLine() ??
+        (_weatherManualAnswer != null
+            ? "Customer self-reported weather (location permission wasn't "
+                "available, so this is what they typed, not a live reading): "
+                "\"$_weatherManualAnswer\"."
+            : null);
 
     final systemPrompt = QrChatbotService.buildSystemPrompt(
       branchName: _branchName,
@@ -138,6 +243,8 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
       closingTime: _closingTime,
       menu: _menu,
       allowAddToCart: widget.allowAddToCart,
+      weatherContext: weatherContext,
+      topSellersText: _topSellersText,
     );
 
     final recent = _messages.length > 12
@@ -393,7 +500,9 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
-            children: _quickActions
+            children: (_awaitingWeatherReply
+                    ? _weatherFallbackReplies
+                    : _quickActions)
                 .map((e) => Padding(
                       padding: const EdgeInsets.only(right: 6),
                       child: GestureDetector(
