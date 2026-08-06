@@ -7,6 +7,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../shared/widgets/date_range_calendar_picker.dart';
+
 enum ReportPeriod { daily, weekly, monthly, custom }
 
 enum ReportFormat { pdf, csv }
@@ -902,28 +904,62 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
   }
 
   Widget _rangePicker() {
-    final label = (_customStart != null && _customEnd != null)
-        ? '${_formatShortDate(_customStart!)} – ${_formatShortDate(_customEnd!)}'
+    final hasRange = _customStart != null && _customEnd != null;
+    final label = hasRange
+        ? 'Date is in between ${_formatShortDate(_customStart!)} → ${_formatShortDate(_customEnd!)}'
         : 'Pick a date range';
-    return _pickerButton(
-      label: label,
-      onTap: () async {
-        final now = DateTime.now();
-        final picked = await showDateRangePicker(
-          context: context,
-          firstDate: DateTime(now.year - 5),
-          lastDate: now,
-          initialDateRange: (_customStart != null && _customEnd != null)
-              ? DateTimeRange(start: _customStart!, end: _customEnd!)
-              : null,
-        );
-        if (picked != null) {
-          setState(() {
-            _customStart = picked.start;
-            _customEnd = picked.end;
-          });
-        }
-      },
+
+    Future<void> openDialog() async {
+      final now = DateTime.now();
+      final picked = await DateRangeCalendarPicker.show(
+        context,
+        initialStart: _customStart,
+        initialEnd: _customEnd,
+        firstDate: DateTime(now.year - 5),
+        lastDate: now,
+      );
+      if (picked != null) {
+        setState(() {
+          _customStart = picked.start;
+          _customEnd = picked.end;
+        });
+      }
+    }
+
+    return GestureDetector(
+      onTap: openDialog,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: hasRange ? const Color(0xFFEEF0FB) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: hasRange ? const Color(0xFF1A1A2E) : Colors.grey[300]!),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_today_rounded, size: 16, color: Colors.grey),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+              ),
+            ),
+            if (hasRange)
+              GestureDetector(
+                onTap: () => setState(() {
+                  _customStart = null;
+                  _customEnd = null;
+                }),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 6),
+                  child: Icon(Icons.close_rounded, size: 16, color: Colors.grey),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
