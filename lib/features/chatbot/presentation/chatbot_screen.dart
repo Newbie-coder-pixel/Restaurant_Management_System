@@ -49,6 +49,10 @@ const _exportKeywords = [
   'export', 'ekspor', 'download', 'unduh', 'cetak', 'simpan laporan',
   'laporan pdf', 'laporan excel', 'laporan csv', 'generate report',
   'buat laporan', 'kirim laporan', 'share laporan',
+  // Bare format words / phrasings — catches follow-ups like "convert to pdf"
+  // or "as a pdf" after a report has already been shown in chat.
+  'pdf', 'excel', 'csv', 'convert to', 'save as', 'jadikan pdf',
+  'jadi pdf', 'ubah ke pdf',
 ];
 
 // ── Screen ─────────────────────────────────────────────────────────────
