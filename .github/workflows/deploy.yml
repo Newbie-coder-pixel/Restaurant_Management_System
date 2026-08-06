@@ -6,7 +6,19 @@ on:
     branches: [ main ]
 
 jobs:
+  # One job per app mode, each on its own fresh runner — no shared
+  # filesystem/.dart_tool/build cache between modes at all. The previous
+  # single-job version built staff/customer/qr sequentially in one working
+  # directory; something in Flutter's web build cache kept reusing a
+  # previous mode's compiled output even after `rm -rf build/web .dart_tool`
+  # between builds, so QR silently shipped stale JS with no error. Separate
+  # jobs run on separate VMs, which makes that class of bug structurally
+  # impossible instead of just less likely.
   build-and-deploy:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [staff, customer, qr]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,136 +34,49 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # ── Build & package tiap app ───────────────────────────────
-      # vercel.json di-copy dari ROOT repo (sudah ada "functions" block yang benar)
-      # Tidak pakai heredoc inline — heredoc dengan indentasi YAML menyebabkan
-      # delimiter penutup tidak dikenali bash → file vercel.json kosong/corrupt → 404
+      - name: Build Flutter Web (${{ matrix.mode }})
+        run: flutter build web --release --dart-define=APP_MODE=${{ matrix.mode }}
 
-      - name: Build Flutter Web (Staff)
-        run: flutter build web --release --dart-define=APP_MODE=staff
-
-      - name: Copy API & vercel.json (Staff)
+      - name: Copy API & vercel.json
         run: |
           cp -r api build/web/api
           cp vercel.json build/web/vercel.json
 
-      - name: Copy Staff build
-        run: cp -r build/web build/staff
-
-      # flutter build web's cache under .dart_tool/flutter_build isn't always
-      # keyed on --dart-define, so building Customer/QR right after Staff in
-      # the same working directory can silently reuse Staff's compiled output
-      # instead of recompiling. `flutter clean` would fix that but ALSO wipes
-      # the whole build/ tree — including build/staff, already copied out in
-      # the step above — so clear only build/web + the build cache instead.
-      - name: Clean before Customer build
-        run: rm -rf build/web .dart_tool
-
-      - name: Reinstall dependencies (Customer)
-        run: flutter pub get
-
-      - name: Build Flutter Web (Customer)
-        run: flutter build web --release --dart-define=APP_MODE=customer
-
-      - name: Copy API & vercel.json (Customer)
-        run: |
-          cp -r api build/web/api
-          cp vercel.json build/web/vercel.json
-
-      - name: Copy Customer build
-        run: cp -r build/web build/customer
-
-      - name: Clean before QR build
-        run: rm -rf build/web .dart_tool
-
-      - name: Reinstall dependencies (QR)
-        run: flutter pub get
-
-      - name: Build Flutter Web (QR)
-        run: flutter build web --release --dart-define=APP_MODE=qr
-
-      - name: Copy API & vercel.json (QR)
-        run: |
-          cp -r api build/web/api
-          cp vercel.json build/web/vercel.json
-
-      - name: Copy QR build
-        run: cp -r build/web build/qr
-
-      # ── Verify build contents sebelum deploy ───────────────────
-
+      # Content sanity check — fails the build loudly instead of silently
+      # deploying stale/wrong output. index.html should always exist; the
+      # QR-only marker proves this specific mode's code actually compiled in
+      # (catches the exact staleness bug this matrix split is meant to rule out).
       - name: Verify build contents
         run: |
-          echo "=== build/staff/ ==="
-          ls -la build/staff/
-          echo ""
-          echo "=== build/staff/api/ ==="
-          ls -la build/staff/api/ || echo "❌ api folder MISSING di staff!"
-          echo ""
-          echo "=== build/customer/api/ ==="
-          ls -la build/customer/api/ || echo "❌ api folder MISSING di customer!"
-          echo ""
-          echo "=== build/qr/api/ ==="
-          ls -la build/qr/api/ || echo "❌ api folder MISSING di qr!"
-          echo ""
-          echo "=== vercel.json staff (harus ada 'functions') ==="
-          cat build/staff/vercel.json || echo "❌ vercel.json MISSING di staff!"
-
-      # ── Install Vercel CLI ─────────────────────────────────────
+          test -f build/web/index.html || { echo "❌ index.html missing from build/web"; exit 1; }
+          test -f build/web/api/chat.js || { echo "❌ api/chat.js missing from build/web"; exit 1; }
+          echo "main.dart.js size: $(wc -c < build/web/main.dart.js) bytes"
+          if [ "${{ matrix.mode }}" = "qr" ]; then
+            grep -q "Menu Assistant" build/web/main.dart.js || { echo "❌ QR build is missing the AI menu assistant — stale/wrong build, refusing to deploy"; exit 1; }
+            echo "✓ QR build contains the AI menu assistant"
+          fi
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      # ── Deploy Staff ───────────────────────────────────────────
+      - name: Resolve Vercel project ID for this mode
+        run: |
+          case "${{ matrix.mode }}" in
+            staff)    echo "VERCEL_PROJECT_ID=${{ secrets.VERCEL_PROJECT_ID_STAFF }}" >> "$GITHUB_ENV" ;;
+            customer) echo "VERCEL_PROJECT_ID=${{ secrets.VERCEL_PROJECT_ID_CUSTOMER }}" >> "$GITHUB_ENV" ;;
+            qr)       echo "VERCEL_PROJECT_ID=${{ secrets.VERCEL_PROJECT_ID_QR }}" >> "$GITHUB_ENV" ;;
+          esac
 
-      - name: Deploy Staff to Vercel (Production)
+      - name: Deploy to Vercel (Production)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: build/staff
+        working-directory: build/web
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
 
-      - name: Deploy Staff to Vercel (Preview)
+      - name: Deploy to Vercel (Preview)
         if: github.event_name == 'pull_request'
         run: vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: build/staff
+        working-directory: build/web
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_STAFF }}
-
-      # ── Deploy Customer ────────────────────────────────────────
-
-      - name: Deploy Customer to Vercel (Production)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: build/customer
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CUSTOMER }}
-
-      - name: Deploy Customer to Vercel (Preview)
-        if: github.event_name == 'pull_request'
-        run: vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: build/customer
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_CUSTOMER }}
-
-      # ── Deploy QR ──────────────────────────────────────────────
-
-      - name: Deploy QR to Vercel (Production)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: build/qr
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_QR }}
-
-      - name: Deploy QR to Vercel (Preview)
-        if: github.event_name == 'pull_request'
-        run: vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: build/qr
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_QR }}
