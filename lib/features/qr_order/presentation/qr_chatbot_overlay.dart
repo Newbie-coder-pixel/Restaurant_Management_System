@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/router/app_router.dart';
+import '../providers/qr_cart_provider.dart';
 import 'qr_chatbot_screen.dart';
 
 /// Floating "Menu Assistant" launcher for the QR app. Visible only while
@@ -49,6 +50,13 @@ class _QrChatbotOverlayState extends ConsumerState<QrChatbotOverlay> {
     if (appMode != 'qr') return const SizedBox.shrink();
 
     final info = _routeInfo;
+    // Second, route-independent guard — see qrChatbotSuppressedProvider's
+    // doc comment. The FAB must never be able to sit on top of the cart's
+    // "Order Now" button, even if the route-string check above ever
+    // disagrees with what's actually on screen.
+    final suppressed = ref.watch(qrChatbotSuppressedProvider);
+    final visible = info.visible && !suppressed;
+
     final size = MediaQuery.of(context).size;
     final panelWidth = size.width < 420 ? size.width - 32 : 380.0;
     final panelHeight = (size.height * 0.7).clamp(400.0, 620.0);
@@ -62,7 +70,7 @@ class _QrChatbotOverlayState extends ConsumerState<QrChatbotOverlay> {
             right: 16,
             bottom: 96,
             child: Offstage(
-              offstage: !(info.visible && _open && info.tableId != null),
+              offstage: !(visible && _open && info.tableId != null),
               child: SizedBox(
                 width: panelWidth,
                 height: panelHeight,
@@ -77,7 +85,7 @@ class _QrChatbotOverlayState extends ConsumerState<QrChatbotOverlay> {
               ),
             ),
           ),
-          if (info.visible)
+          if (visible)
             Positioned(
               right: 16,
               bottom: 24,

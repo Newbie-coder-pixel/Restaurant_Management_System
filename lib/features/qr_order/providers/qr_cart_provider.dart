@@ -236,3 +236,12 @@ class AddOrderModeState {
 /// Set by the tracker screen when the customer taps "Add Order".
 /// Cleared by the cart screen after a successful submit.
 final addOrderModeProvider = StateProvider<AddOrderModeState?>((ref) => null);
+
+// ─── Chatbot suppression (belt-and-suspenders) ─────────────────────────────
+/// QrChatbotOverlay already hides its FAB based on the current route (see
+/// its own route-parsing logic) — this is a second, route-independent guard
+/// set directly by QrCartScreen's init/dispose. Cart/checkout is where the
+/// customer is about to tap "Order Now"; the FAB must never be able to sit
+/// on top of that button even if route-string parsing ever disagrees with
+/// what screen is actually on screen.
+final qrChatbotSuppressedProvider = StateProvider<bool>((ref) => false);

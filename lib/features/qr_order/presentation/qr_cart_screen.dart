@@ -27,6 +27,18 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   List<QrCartItem> _lastCartItems = [];
 
   @override
+  void initState() {
+    super.initState();
+    // Keep the QR menu assistant FAB off this screen entirely — it must
+    // never sit on top of the "Order Now" button. See
+    // qrChatbotSuppressedProvider's own doc comment for why this exists
+    // alongside QrChatbotOverlay's route-based hiding.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(qrChatbotSuppressedProvider.notifier).state = true;
+    });
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final cart = ref.read(activeQrCartProvider);
@@ -46,6 +58,10 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
 
   @override
   void dispose() {
+    // Restore the FAB for whichever screen the customer navigates to next
+    // (menu/tracker) — only this screen (and pay, which suppresses itself
+    // separately) needs it hidden.
+    ref.read(qrChatbotSuppressedProvider.notifier).state = false;
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     super.dispose();
