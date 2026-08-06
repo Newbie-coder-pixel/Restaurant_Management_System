@@ -29,6 +29,17 @@ class QrRestaurantClosedException implements Exception {
   }
 }
 
+// Result of QrOrderRepository.fetchTopOrderedSmart — the items plus which
+// time window they actually came from (today / the past 7 days / the past
+// 30 days), so callers can label the claim accurately instead of always
+// saying "today" regardless of which window had data.
+class QrPopularItemsResult {
+  final List<Map<String, dynamic>> items;
+  final String periodLabel;
+
+  const QrPopularItemsResult({required this.items, required this.periodLabel});
+}
+
 class QrOrderRepository {
   final SupabaseClient _client;
 
@@ -570,23 +581,45 @@ await _client.from('order_items').insert(orderItemsData);
     }
   }
 
-  // ── Today's real top-selling items (for the menu-recommendation chatbot) ──
+  // ── Real top-selling items (for the menu-recommendation chatbot) ─────────
   // Uses the same get_branch_popular_items RPC as RecommendationService (see
-  // supabase/migrations/20260805070000_recommendation_service_rpc.sql),
-  // just with `since` pinned to local midnight instead of a 30-day window,
-  // so the chatbot can ground a "most ordered today" claim in real numbers
-  // instead of guessing at one.
-  Future<List<Map<String, dynamic>>> fetchTopOrderedToday(
+  // supabase/migrations/20260805070000_recommendation_service_rpc.sql), so
+  // the chatbot can ground a "most ordered" claim in real numbers instead of
+  // guessing at one. Tries today first, then widens to the past 7 days, then
+  // 30 days — a brand-new branch or an early-morning table shouldn't leave
+  // the bot with nothing real to cite just because today's till is empty.
+  Future<QrPopularItemsResult> fetchTopOrderedSmart(
     String branchId, {
     int limit = 5,
   }) async {
-    if (branchId.trim().isEmpty) return [];
+    if (branchId.trim().isEmpty) {
+      return const QrPopularItemsResult(items: [], periodLabel: 'today');
+    }
+    final now = DateTime.now();
+    final windows = <(DateTime since, String label)>[
+      (DateTime(now.year, now.month, now.day), 'today'),
+      (now.subtract(const Duration(days: 7)), 'the past 7 days'),
+      (now.subtract(const Duration(days: 30)), 'the past 30 days'),
+    ];
+
+    for (final window in windows) {
+      final items = await _fetchPopularSince(branchId, window.$1, limit: limit);
+      if (items.isNotEmpty) {
+        return QrPopularItemsResult(items: items, periodLabel: window.$2);
+      }
+    }
+    return const QrPopularItemsResult(items: [], periodLabel: 'today');
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPopularSince(
+    String branchId,
+    DateTime since, {
+    int limit = 5,
+  }) async {
     try {
-      final now = DateTime.now();
-      final midnight = DateTime(now.year, now.month, now.day);
       final res = await _client.rpc('get_branch_popular_items', params: {
         'p_branch_id': branchId,
-        'p_since': midnight.toIso8601String(),
+        'p_since': since.toIso8601String(),
       }) as List<dynamic>;
 
       final Map<String, int> qtyByName = {};
@@ -604,7 +637,7 @@ await _client.from('order_items').insert(orderItemsData);
           .map((e) => {'name': e.key, 'qty': e.value})
           .toList();
     } catch (e) {
-      debugPrint('fetchTopOrderedToday error: $e');
+      debugPrint('_fetchPopularSince error: $e');
       return [];
     }
   }

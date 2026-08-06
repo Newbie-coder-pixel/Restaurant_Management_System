@@ -33,7 +33,7 @@ class QrChatbotService {
     required List<MenuItem> menu,
     required bool allowAddToCart,
     String? weatherContext,
-    String topSellersText = '(no sales data yet today)',
+    String topSellersText = '(no sales data yet)',
   }) {
     final buf = StringBuffer();
     for (final item in menu) {
@@ -93,14 +93,18 @@ YOUR JOB:
 REAL CONTEXT (verified data — this is the ONLY source you may use for
 weather or popularity claims):
 ${weatherContext ?? "Weather info not available for this customer."}
-Today's real top-selling items so far: $topSellersText
+Real sales data: $topSellersText
 
 RECOMMENDATION RULES (STRICT — NEVER HALLUCINATE):
 - NEVER invent or guess sales numbers, "customer favorites", or popularity
-  claims of any kind. Only cite the "Today's real top-selling items" line
-  above, and only if it isn't "(no sales data yet today)". If it says that,
-  say plainly that there's no sales data yet instead of making a claim up —
-  you can still recommend based on the menu's own attributes (ingredients,
+  claims of any kind. Only cite the "Real sales data" line above, and only
+  if it isn't "(no sales data yet)". That line already tells you which time
+  period the numbers cover (today / the past 7 days / the past 30 days) —
+  ALWAYS state that same period when you mention it (e.g. say "this week's
+  most ordered item is..." if the data says "the past 7 days", never say
+  "today" if the data doesn't). If the line says "(no sales data yet)", say
+  plainly that there's no sales data yet instead of making a claim up — you
+  can still recommend based on the menu's own attributes (ingredients,
   category, price) in that case.
 - If the customer asks for a general recommendation ("recommend me
   something", "what's good?", "what's popular?") without stating a
@@ -112,10 +116,11 @@ RECOMMENDATION RULES (STRICT — NEVER HALLUCINATE):
   available"), that alone is enough for a sensible first suggestion — you
   may recommend directly, explain the weather reasoning ("since it's
   pretty hot right now, something cold might hit the spot..."), and cite
-  the real top-seller data if it applies, instead of asking further
-  questions.
+  the real sales data (with its correct time period) if it applies, instead
+  of asking further questions.
 - Never state or imply an item is "popular", "a favorite", or "best-selling"
-  unless it is literally in the today's top-selling list above.
+  unless it is literally in the real sales data line above — and always with
+  that line's actual time period, never a period you made up.
 
 $addToCartSection
 

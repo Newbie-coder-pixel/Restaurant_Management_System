@@ -80,7 +80,7 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
   String? _weatherManualAnswer;
   bool _weatherAsked = false;
   bool _awaitingWeatherReply = false;
-  String _topSellersText = '(no sales data yet today)';
+  String _topSellersText = '(no sales data yet)';
   bool _topSellersLoaded = false;
 
   @override
@@ -160,11 +160,13 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     if (_branchId.isEmpty) return;
     try {
       final repo = ref.read(qrOrderRepositoryProvider);
-      final top = await repo.fetchTopOrderedToday(_branchId);
-      if (top.isNotEmpty) {
-        _topSellersText = top
-            .map((e) => '${e['name']} (${e['qty']}x ordered today)')
+      final result = await repo.fetchTopOrderedSmart(_branchId);
+      if (result.items.isNotEmpty) {
+        final list = result.items
+            .map((e) => '${e['name']} (${e['qty']}x ordered)')
             .join(', ');
+        _topSellersText =
+            'Top-selling items over ${result.periodLabel}: $list';
       }
     } catch (e) {
       debugPrint('QrChatbotScreen._fetchTopSellersIfNeeded error: $e');
