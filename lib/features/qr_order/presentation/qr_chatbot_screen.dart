@@ -47,12 +47,14 @@ const _recommendationKeywords = [
 /// for the route gating.
 class QrChatbotScreen extends ConsumerStatefulWidget {
   final String tableId;
+  final String? orderId;
   final bool allowAddToCart;
   final VoidCallback onClose;
 
   const QrChatbotScreen({
     super.key,
     required this.tableId,
+    this.orderId,
     required this.allowAddToCart,
     required this.onClose,
   });
@@ -227,6 +229,35 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     await _dispatchToAi(text);
   }
 
+  /// Live status of the order being tracked, read straight from the same
+  /// realtime-backed provider the tracker screen itself watches — so the AI
+  /// always answers "where's my order" with the current DB row, never a
+  /// stale snapshot from when the chat panel first opened.
+  String? _buildOrderStatusContext() {
+    final orderId = widget.orderId;
+    if (orderId == null) return null;
+    // read(), not watch(): this is called from an event handler, not build().
+    // The tracker screen underneath already keeps this provider's realtime
+    // subscription alive via its own watch(), so read() here always reflects
+    // the current row, not a one-time snapshot.
+    final async = ref.read(qrOrderWatchProvider(orderId));
+    return async.when(
+      data: (order) {
+        final itemsText = order.items
+            .map((i) => '${i.quantity}x ${i.menuItemName}')
+            .join(', ');
+        final minutesAgo = DateTime.now().difference(order.createdAt).inMinutes;
+        final queue = order.queueNumber ?? order.orderNumber;
+        return 'Queue number $queue, status: "${order.status.label}" '
+            '(placed $minutesAgo minute(s) ago). Items: $itemsText. '
+            '${order.billRequested ? "The bill has been requested." : ""}';
+      },
+      loading: () => 'Order status is currently loading — tell the customer '
+          'you\'re checking and to give it a moment if they ask again.',
+      error: (e, _) => null,
+    );
+  }
+
   Future<void> _dispatchToAi(String text) async {
     setState(() => _isTyping = true);
     _scrollToBottom();
@@ -247,6 +278,7 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
       allowAddToCart: widget.allowAddToCart,
       weatherContext: weatherContext,
       topSellersText: _topSellersText,
+      orderStatusContext: _buildOrderStatusContext(),
     );
 
     final recent = _messages.length > 12

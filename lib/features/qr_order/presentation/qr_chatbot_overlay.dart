@@ -32,17 +32,28 @@ class QrChatbotOverlay extends ConsumerStatefulWidget {
 class _QrChatbotOverlayState extends ConsumerState<QrChatbotOverlay> {
   bool _open = false;
 
-  ({bool visible, String? tableId, bool allowAddToCart}) get _routeInfo {
+  ({bool visible, String? tableId, String? orderId, bool allowAddToCart})
+      get _routeInfo {
     final segments =
         widget.currentPath.split('/').where((s) => s.isNotEmpty).toList();
     // ['qr', tableId, ...rest]
     if (segments.length < 2 || segments[0] != 'qr') {
-      return (visible: false, tableId: null, allowAddToCart: false);
+      return (
+        visible: false,
+        tableId: null,
+        orderId: null,
+        allowAddToCart: false
+      );
     }
     final tableId = segments[1];
     final rest = segments.sublist(2);
     if (rest.isEmpty) {
-      return (visible: true, tableId: tableId, allowAddToCart: true); // menu
+      return (
+        visible: true,
+        tableId: tableId,
+        orderId: null,
+        allowAddToCart: true
+      ); // menu
     }
     if (rest.first == 'track') {
       // Also covers "Add to order" mode: tapping "Add Order" on the tracker
@@ -51,11 +62,18 @@ class _QrChatbotOverlayState extends ConsumerState<QrChatbotOverlay> {
       // 'track' segment rather than updating to the bare menu path — so the
       // QrMenuScreen (and its "Cart Rp XX" pill) can be showing even though
       // this branch, not the `rest.isEmpty` one above, is what matches.
-      return (visible: true, tableId: tableId, allowAddToCart: false);
+      final orderId = rest.length > 1 ? rest[1] : null;
+      return (
+        visible: true,
+        tableId: tableId,
+        orderId: orderId,
+        allowAddToCart: false
+      );
     }
     return (
       visible: false,
       tableId: tableId,
+      orderId: null,
       allowAddToCart: false
     ); // cart, pay
   }
@@ -106,6 +124,7 @@ class _QrChatbotOverlayState extends ConsumerState<QrChatbotOverlay> {
                     : QrChatbotScreen(
                         key: ValueKey(info.tableId),
                         tableId: info.tableId!,
+                        orderId: info.orderId,
                         allowAddToCart: info.allowAddToCart,
                         onClose: () => setState(() => _open = false),
                       ),

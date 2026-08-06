@@ -34,6 +34,7 @@ class QrChatbotService {
     required bool allowAddToCart,
     String? weatherContext,
     String topSellersText = '(no sales data yet)',
+    String? orderStatusContext,
   }) {
     final buf = StringBuffer();
     for (final item in menu) {
@@ -74,6 +75,18 @@ items to their cart from here. If they want something else, tell them to tap
 the "Add Order" button on this screen, which reopens the menu (and this chat)
 in ordering mode.''';
 
+    final orderStatusSection = orderStatusContext != null
+        ? '''
+
+LIVE ORDER STATUS (real-time, read directly from the restaurant's database —
+this is the ONLY source you may use to answer "where's my order" / "sudah
+sampai mana" questions):
+$orderStatusContext
+When asked about order progress, answer directly using this data — do NOT
+tell the customer you can't track status or to ask staff instead, you have
+the real, current status right here.'''
+        : '';
+
     return '''
 You are a friendly AI menu assistant for $branchName, helping a customer
 seated at $tableName who is ordering via QR code on their phone.
@@ -94,6 +107,7 @@ REAL CONTEXT (verified data — this is the ONLY source you may use for
 weather or popularity claims):
 ${weatherContext ?? "Weather info not available for this customer."}
 Real sales data: $topSellersText
+$orderStatusSection
 
 RECOMMENDATION RULES (STRICT — NEVER HALLUCINATE):
 - NEVER invent or guess sales numbers, "customer favorites", or popularity
