@@ -49,6 +49,9 @@ class AppConfig {
   // (which don't have an origin like web does), and for promotional QR codes on receipts.
   static const String staffAppUrl = 'https://restaurant-staff-topaz.vercel.app';
   static const String customerAppUrl = 'https://restaurant-customer-two.vercel.app';
+  // Only matters for native builds of APP_MODE=qr (kIsWeb builds use the
+  // relative '/api/chat' path instead and never read this).
+  static const String qrAppUrl = 'https://restaurant-qr-code-ten.vercel.app';
 
   // ── Order Number Prefix (per branch code) ─────────────────
   static const String defaultOrderPrefix = 'A';

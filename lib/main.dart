@@ -9,6 +9,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/notification_service.dart';
 import 'shared/widgets/floating_chatbot_overlay.dart';
+import 'features/qr_order/presentation/qr_chatbot_overlay.dart';
 import 'features/payment/midtrans/midtrans_service.dart';
 import 'firebase_options.dart';
 import 'dart:js_interop';
@@ -146,6 +147,16 @@ class RestaurantApp extends ConsumerWidget {
             children: [
               if (child != null) child,
               const FloatingChatbotOverlay(),
+              // Rebuilds whenever GoRouter navigates so the QR menu
+              // assistant can show/hide itself based on the current route
+              // (see QrChatbotOverlay's doc comment for why it needs this
+              // instead of just reading GoRouterState from context).
+              ListenableBuilder(
+                listenable: router.routerDelegate,
+                builder: (context, _) => QrChatbotOverlay(
+                  currentPath: router.routerDelegate.currentConfiguration.uri.path,
+                ),
+              ),
             ],
           ),
         ),
