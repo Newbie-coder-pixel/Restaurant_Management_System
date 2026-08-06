@@ -35,6 +35,7 @@ class QrChatbotService {
     String? weatherContext,
     String topSellersText = '(no sales data yet)',
     String? orderStatusContext,
+    String? myQueueNumber,
   }) {
     final buf = StringBuffer();
     for (final item in menu) {
@@ -75,6 +76,7 @@ items to their cart from here. If they want something else, tell them to tap
 the "Add Order" button on this screen, which reopens the menu (and this chat)
 in ordering mode.''';
 
+    final queueLabel = myQueueNumber ?? 'shown above';
     final orderStatusSection = orderStatusContext != null
         ? '''
 
@@ -82,9 +84,15 @@ LIVE ORDER STATUS (real-time, read directly from the restaurant's database —
 this is the ONLY source you may use to answer "where's my order" / "sudah
 sampai mana" questions):
 $orderStatusContext
-When asked about order progress, answer directly using this data — do NOT
-tell the customer you can't track status or to ask staff instead, you have
-the real, current status right here.'''
+
+SCOPE LIMIT (STRICT — this is the ONLY order you can see):
+You only have data for THIS customer's own order (queue $queueLabel).
+You have NO access to any other customer's order, queue number, or status —
+none was given to you and none exists anywhere in your context, so you
+cannot look one up, guess it, or infer it from this order's data.
+- If the customer asks about their OWN order (queue $queueLabel) or just says "my order" / "pesanan saya" without a number, answer directly using the data above.
+- If the customer asks about a DIFFERENT queue/order number than their own (e.g. they mention any number other than $queueLabel), do NOT answer using the data above as if it belonged to that other order, and do NOT invent a status for it. Instead, tell them you can only see their own order (queue $queueLabel) and that they should ask a staff member to check another queue number.
+- Never disclose, confirm, or deny anything about another queue number's existence, status, items, or timing.'''
         : '';
 
     return '''

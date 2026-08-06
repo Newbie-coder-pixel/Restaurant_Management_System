@@ -41,6 +41,26 @@ const _recommendationKeywords = [
   'paling enak', 'apa yang enak', 'menu apa yang enak', 'menu apa yang cocok',
 ];
 
+// Gates _mentionsAnotherQueue (see below) so plain digits in unrelated
+// sentences ("order 2 fried rice") never false-trigger the block — only
+// digits paired with actual queue/order-tracking language do.
+const _queueTrackingKeywords = [
+  'antrian', 'antrean', 'giliran', 'nomor antrian', 'no antrian',
+  'queue', 'order number', 'order no', 'no order', 'nomor order',
+  'status pesanan', 'status order', 'cek pesanan', 'cek order',
+  'sampai mana', 'sudah sampai', 'udah sampai', 'gimana pesanan',
+  'pesanan nomor', 'order nomor',
+];
+
+/// Strips everything but digits and leading zeros, so "A001", "001", and "1"
+/// all normalize the same way for comparison.
+String? _normalizeQueueToken(String raw) {
+  final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return null;
+  final stripped = digits.replaceFirst(RegExp(r'^0+'), '');
+  return stripped.isEmpty ? '0' : stripped;
+}
+
 /// Menu-recommendation chatbot for the QR ordering flow. Shown while
 /// browsing the menu (with add-to-cart) and while tracking an order
 /// (Q&A only) — never during cart/checkout/payment. See QrChatbotOverlay
@@ -156,6 +176,31 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     return _recommendationKeywords.any((k) => lower.contains(k));
   }
 
+  // ── Cross-queue guard (deterministic — never relies on the LLM) ───
+  /// True when [text] both (a) uses queue/order-tracking language and
+  /// (b) contains a number that doesn't match [myQueue]. Used to hard-block
+  /// the AI from ever being asked "what's the status of queue 002" while
+  /// serving queue 001 — the check (and its fixed reply) happens entirely
+  /// in Dart, before any request reaches the LLM, so there is no prompt for
+  /// the model to misinterpret or get talked out of.
+  bool _mentionsAnotherQueue(String text, String? myQueue) {
+    if (myQueue == null) return false;
+    final lower = text.toLowerCase();
+    final hasTrackingIntent =
+        _queueTrackingKeywords.any((k) => lower.contains(k));
+    if (!hasTrackingIntent) return false;
+
+    final myNormalized = _normalizeQueueToken(myQueue);
+    final tokens = RegExp(r'[A-Za-z]?\d{1,4}\b')
+        .allMatches(text)
+        .map((m) => m.group(0)!);
+    for (final t in tokens) {
+      final n = _normalizeQueueToken(t);
+      if (n != null && n != myNormalized) return true;
+    }
+    return false;
+  }
+
   Future<void> _fetchTopSellersIfNeeded() async {
     if (_topSellersLoaded) return;
     _topSellersLoaded = true;
@@ -181,6 +226,31 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     if (text.isEmpty || _isTyping || _loadingContext) return;
 
     _msgCtrl.clear();
+
+    // Hard block BEFORE anything reaches the LLM: if we're tracking an
+    // order and the customer's message names a different queue/order
+    // number, answer with a fixed, code-generated message instead of ever
+    // letting the model see (and possibly answer) the question. This is
+    // what actually prevents "what's the status of queue 002" from getting
+    // an answer while serving queue 001 — the system-prompt instruction in
+    // QrChatbotService is a second line of defense, not the only one.
+    if (widget.orderId != null) {
+      final orderStatus = _buildOrderStatusContext();
+      if (_mentionsAnotherQueue(text, orderStatus.queue)) {
+        setState(() {
+          _messages.add(_QrChatMessage(role: 'user', content: text));
+        });
+        _scrollToBottom();
+        _addBot(
+          "I can only see your own order"
+          "${orderStatus.queue != null ? ' (queue ${orderStatus.queue})' : ''} "
+          "— I don't have access to any other customer's queue number or "
+          "order status. Please ask a staff member to check that queue for "
+          "you. 🙏",
+        );
+        return;
+      }
+    }
 
     // Treat this message as the answer to the hot/cold fallback question,
     // then resume the recommendation normally — the original request is
@@ -233,9 +303,15 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
   /// realtime-backed provider the tracker screen itself watches — so the AI
   /// always answers "where's my order" with the current DB row, never a
   /// stale snapshot from when the chat panel first opened.
-  String? _buildOrderStatusContext() {
+  ///
+  /// Returns the queue number separately (not just embedded in [text]) so
+  /// the prompt builder can state it explicitly and tell the model to
+  /// refuse questions about any OTHER queue/order number — otherwise nothing
+  /// stops the LLM from answering "how about queue 002?" using this
+  /// customer's own 001 data just because it's the only data in context.
+  ({String? queue, String? text}) _buildOrderStatusContext() {
     final orderId = widget.orderId;
-    if (orderId == null) return null;
+    if (orderId == null) return (queue: null, text: null);
     // read(), not watch(): this is called from an event handler, not build().
     // The tracker screen underneath already keeps this provider's realtime
     // subscription alive via its own watch(), so read() here always reflects
@@ -248,13 +324,17 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
             .join(', ');
         final minutesAgo = DateTime.now().difference(order.createdAt).inMinutes;
         final queue = order.queueNumber ?? order.orderNumber;
-        return 'Queue number $queue, status: "${order.status.label}" '
+        final text = 'Queue number $queue, status: "${order.status.label}" '
             '(placed $minutesAgo minute(s) ago). Items: $itemsText. '
             '${order.billRequested ? "The bill has been requested." : ""}';
+        return (queue: queue, text: text);
       },
-      loading: () => 'Order status is currently loading — tell the customer '
-          'you\'re checking and to give it a moment if they ask again.',
-      error: (e, _) => null,
+      loading: () => (
+        queue: null,
+        text: 'Order status is currently loading — tell the customer '
+            'you\'re checking and to give it a moment if they ask again.'
+      ),
+      error: (e, _) => (queue: null, text: null),
     );
   }
 
@@ -269,6 +349,7 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
                 "\"$_weatherManualAnswer\"."
             : null);
 
+    final orderStatus = _buildOrderStatusContext();
     final systemPrompt = QrChatbotService.buildSystemPrompt(
       branchName: _branchName,
       tableName: _tableName,
@@ -278,7 +359,8 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
       allowAddToCart: widget.allowAddToCart,
       weatherContext: weatherContext,
       topSellersText: _topSellersText,
-      orderStatusContext: _buildOrderStatusContext(),
+      orderStatusContext: orderStatus.text,
+      myQueueNumber: orderStatus.queue,
     );
 
     final recent = _messages.length > 12
