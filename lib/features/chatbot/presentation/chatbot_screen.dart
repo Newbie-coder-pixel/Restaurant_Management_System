@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../shared/models/staff_model.dart';
 import '../../../shared/widgets/app_drawer.dart';
 import '../providers/chat_provider.dart';
 import '../services/chatbot_api.dart';
@@ -52,7 +53,13 @@ const _exportKeywords = [
 
 // ── Screen ─────────────────────────────────────────────────────────────
 class ChatbotScreen extends ConsumerStatefulWidget {
-  const ChatbotScreen({super.key});
+  /// When true, renders as a compact panel (rounded card + slim header with
+  /// a close button) meant to be embedded inside [FloatingChatbotOverlay],
+  /// instead of a full page with its own Scaffold/AppBar/Drawer.
+  final bool embedded;
+  final VoidCallback? onClose;
+
+  const ChatbotScreen({super.key, this.embedded = false, this.onClose});
 
   @override
   ConsumerState<ChatbotScreen> createState() => _ChatbotScreenState();
@@ -102,16 +109,7 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final messages = ref.read(chatProvider).messages;
       if (messages.isEmpty) {
-        _addBot(
-          '👋 Hi! I\'m **Resto Analytics AI**.\n\n'
-          'I can help with:\n'
-          '• 📊 Daily reports\n'
-          '• 🏆 Menu & margin analysis\n'
-          '• 📦 Inventory status\n'
-          '• 🍽️ Menu, allergen & dietary info\n'
-          '• 💡 Business insights\n\n'
-          'Pick an option or type a question below 👇',
-        );
+        _addBot(_welcomeMessage);
       }
     });
   }
@@ -861,6 +859,31 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritize a quick solution. Start by ackno
     final staff = ref.watch(currentStaffProvider);
     final chatState = ref.watch(chatProvider);
 
+    final bodyColumn = Column(
+      children: [
+        if (_lowStockAlert.isNotEmpty) _buildStockAlert(),
+        Expanded(child: _buildMessages(chatState)),
+        _buildQuickActions(),
+        _buildInput(chatState.isTyping),
+      ],
+    );
+
+    if (widget.embedded) {
+      return Material(
+        color: AppColors.background,
+        elevation: 12,
+        shadowColor: Colors.black.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            _buildEmbeddedHeader(staff),
+            Expanded(child: bodyColumn),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
@@ -949,35 +972,124 @@ ${sentiment == 'urgent' ? '- URGENT: Prioritize a quick solution. Start by ackno
           IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
             tooltip: 'Clear Chat History',
-            onPressed: () {
-              ref.read(chatProvider.notifier).clearHistory();
-              _addBot(
-                '👋 Hi! I\'m **Resto Analytics AI**.\n\n'
-                'I can help with:\n'
-                '• 📊 Daily reports\n'
-                '• 🏆 Menu & margin analysis\n'
-                '• 📦 Inventory status\n'
-                '• 🍽️ Menu, allergen & dietary info\n'
-                '• 💡 Business insights\n\n'
-                'Pick an option or type a question below 👇',
-              );
-            },
+            onPressed: _resetChat,
           ),
           const SizedBox(width: 4),
         ],
       ),
-      body: Row(
+      body: bodyColumn,
+    );
+  }
+
+  static const _welcomeMessage =
+      '👋 Hi! I\'m **Resto Analytics AI**.\n\n'
+      'I can help with:\n'
+      '• 📊 Daily reports\n'
+      '• 🏆 Menu & margin analysis\n'
+      '• 📦 Inventory status\n'
+      '• 🍽️ Menu, allergen & dietary info\n'
+      '• 💡 Business insights\n\n'
+      'Pick an option or type a question below 👇';
+
+  void _resetChat() {
+    ref.read(chatProvider.notifier).clearHistory();
+    _addBot(_welcomeMessage);
+  }
+
+  // ── Embedded (floating panel) header ────────────────────────────────
+  Widget _buildEmbeddedHeader(StaffMember? staff) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+      ),
+      child: Row(
         children: [
-          // ── Chat area ─────────────────────────────────────────────
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1A1A2E), Color(0xFFE94560)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: const Icon(Icons.smart_toy_rounded,
+                color: Colors.white, size: 16),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (_lowStockAlert.isNotEmpty) _buildStockAlert(),
-                Expanded(child: _buildMessages(chatState)),
-                _buildQuickActions(),
-                _buildInput(chatState.isTyping),
+                const Text('AI Chatbot',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    )),
+                if (staff != null)
+                  Text(staff.fullName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 10,
+                        color: Colors.white60,
+                      )),
               ],
             ),
+          ),
+          if (_isSuperadmin && _branches.isNotEmpty)
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                dropdownColor: const Color(0xFF1A1A2E),
+                iconEnabledColor: Colors.white60,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('All Branches',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.white70))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                      value: b.id,
+                      child: Text(b.name,
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              color: Colors.white)))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                    _lowStockAlert = [];
+                  });
+                  ref.read(chatProvider.notifier).clearHistory();
+                  _addBot(
+                    '🏢 Switched to branch: ${val == null ? "All Branches" : _branches.firstWhere((b) => b.id == val).name}\n\nGo ahead and ask a question 👇',
+                  );
+                },
+              ),
+            ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, size: 18, color: Colors.white70),
+            tooltip: 'Clear Chat History',
+            onPressed: _resetChat,
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 20, color: Colors.white),
+            tooltip: 'Close',
+            onPressed: widget.onClose,
           ),
         ],
       ),

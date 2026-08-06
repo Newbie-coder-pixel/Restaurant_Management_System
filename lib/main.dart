@@ -8,6 +8,7 @@ import 'core/config/app_config.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/notification_service.dart';
+import 'shared/widgets/floating_chatbot_overlay.dart';
 import 'features/payment/midtrans/midtrans_service.dart';
 import 'firebase_options.dart';
 import 'dart:js_interop';
@@ -133,6 +134,22 @@ class RestaurantApp extends ConsumerWidget {
       ),
       themeMode: ThemeMode.light,
       routerConfig: router,
+      builder: (context, child) => Navigator(
+        // The floating chatbot lives alongside `child` here, outside
+        // GoRouter's own Navigator — so it has no Overlay/Navigator ancestor
+        // of its own. Tooltip (OverlayPortal) and DropdownButton (which pushes
+        // a route) both need one; this nested Navigator supplies it without
+        // touching GoRouter's navigation stack.
+        onGenerateRoute: (settings) => PageRouteBuilder(
+          settings: settings,
+          pageBuilder: (context, animation, secondaryAnimation) => Stack(
+            children: [
+              if (child != null) child,
+              const FloatingChatbotOverlay(),
+            ],
+          ),
+        ),
+      ),
       localizationsDelegates: const [],
       supportedLocales: const [
         Locale('id'),

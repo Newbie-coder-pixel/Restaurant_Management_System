@@ -104,12 +104,6 @@ const _navItems = [
     allowedRoles: {StaffRole.superadmin},
   ),
   _NavItem(
-    label: 'AI Chatbot',
-    icon: Icons.smart_toy_rounded,
-    route: AppRoutes.chatbot,
-    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-  ),
-    _NavItem(
     // Operating Expense is filled in first because Costing & COGS needs the
     // operating expense allocation per portion to calculate accurate COGS.
     label: 'Operating Expense',
