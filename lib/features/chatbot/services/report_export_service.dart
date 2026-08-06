@@ -563,11 +563,10 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
 
   // Custom-range state. Pre-filled from the chat when the staff already
   // named a specific date/range before opening export; otherwise left null
-  // so the staff can pick one manually (date range, a whole month, or a
-  // whole year) once they tap the Custom chip.
+  // so the staff can pick one manually via the date-range calendar once
+  // they tap the Custom chip.
   DateTime? _customStart;
   DateTime? _customEnd;
-  String _customMode = 'range'; // 'range' | 'month' | 'year'
 
   bool get _hasCustomRange =>
       widget.initialCustomStart != null && widget.initialCustomEnd != null;
@@ -727,7 +726,7 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
                 ),
               )
             else
-              _customPicker(),
+              _rangePicker(),
           ],
           const SizedBox(height: 20),
 
@@ -813,96 +812,7 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
     );
   }
 
-  // ── Manual custom-range picker (date range / month / year) ──────────
-  Widget _customPicker() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _customModeChip('range', 'Date range'),
-              const SizedBox(width: 8),
-              _customModeChip('month', 'Month'),
-              const SizedBox(width: 8),
-              _customModeChip('year', 'Year'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (_customMode == 'range') _rangePicker(),
-          if (_customMode == 'month') _monthPicker(),
-          if (_customMode == 'year') _yearPicker(),
-        ],
-      ),
-    );
-  }
-
-  Widget _customModeChip(String mode, String label) {
-    final isSelected = _customMode == mode;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() {
-          _customMode = mode;
-          _customStart = null;
-          _customEnd = null;
-        }),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF1A1A2E) : Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF1A1A2E) : Colors.grey[300]!,
-            ),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : Colors.grey[700],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _pickerButton({required String label, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.calendar_today_rounded, size: 16, color: Colors.grey),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
+  // ── Manual custom-range picker ────────────────────────────────────────
   Widget _rangePicker() {
     final hasRange = _customStart != null && _customEnd != null;
     final label = hasRange
@@ -962,62 +872,6 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
       ),
     );
   }
-
-  Widget _monthPicker() {
-    final label = _customStart != null
-        ? '${_bulanIndoName(_customStart!.month)} ${_customStart!.year}'
-        : 'Pick a month';
-    return _pickerButton(
-      label: label,
-      onTap: () async {
-        final now = DateTime.now();
-        final picked = await showDatePicker(
-          context: context,
-          firstDate: DateTime(now.year - 5),
-          lastDate: now,
-          initialDate: _customStart ?? now,
-          initialDatePickerMode: DatePickerMode.year,
-        );
-        if (picked != null) {
-          setState(() {
-            _customStart = DateTime(picked.year, picked.month, 1);
-            final lastDayOfMonth = DateTime(picked.year, picked.month + 1, 0);
-            _customEnd = lastDayOfMonth.isAfter(now) ? now : lastDayOfMonth;
-          });
-        }
-      },
-    );
-  }
-
-  Widget _yearPicker() {
-    final label = _customStart != null ? '${_customStart!.year}' : 'Pick a year';
-    return _pickerButton(
-      label: label,
-      onTap: () async {
-        final now = DateTime.now();
-        final picked = await showDatePicker(
-          context: context,
-          firstDate: DateTime(now.year - 5),
-          lastDate: now,
-          initialDate: _customStart ?? now,
-          initialDatePickerMode: DatePickerMode.year,
-        );
-        if (picked != null) {
-          setState(() {
-            _customStart = DateTime(picked.year, 1, 1);
-            final lastDayOfYear = DateTime(picked.year, 12, 31);
-            _customEnd = lastDayOfYear.isAfter(now) ? now : lastDayOfYear;
-          });
-        }
-      },
-    );
-  }
-
-  static const _monthNamesIndo = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-  String _bulanIndoName(int month) => _monthNamesIndo[month - 1];
 
   Widget _periodChip(ReportPeriod period, String label) {
     final isSelected = _period == period;
