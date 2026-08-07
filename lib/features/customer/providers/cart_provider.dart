@@ -1,5 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+class CartAddOn {
+  final String name;
+  final double price;
+  const CartAddOn({required this.name, required this.price});
+}
+
 class CartItem {
   final String menuItemId;
   final String name;
@@ -7,6 +13,8 @@ class CartItem {
   final String? imageUrl;
   int quantity;
   String? notes;
+  final String? spiceLevel;
+  final List<CartAddOn> addOns;
 
   CartItem({
     required this.menuItemId,
@@ -15,9 +23,26 @@ class CartItem {
     this.imageUrl,
     this.quantity = 1,
     this.notes,
+    this.spiceLevel,
+    this.addOns = const [],
   });
 
-  double get subtotal => price * quantity;
+  double get addOnsTotal => addOns.fold(0.0, (s, a) => s + a.price);
+
+  /// Per-unit price including any selected add-ons (spice level is free).
+  double get unitPrice => price + addOnsTotal;
+
+  double get subtotal => unitPrice * quantity;
+
+  // Two CartItems only collapse into one cart line (and stack quantity) when
+  // they're the exact same menu item AND the exact same customization —
+  // otherwise "Rendang, Mild" and "Rendang, Pedas" would wrongly merge into
+  // one line. Order-independent on add-ons so re-adding the same combo in a
+  // different tick order still matches.
+  String get lineKey {
+    final sortedAddOns = addOns.map((a) => a.name).toList()..sort();
+    return '$menuItemId::${spiceLevel ?? ''}::${sortedAddOns.join(',')}';
+  }
 
   CartItem copyWith({int? quantity, String? notes}) => CartItem(
     menuItemId: menuItemId,
@@ -26,6 +51,8 @@ class CartItem {
     imageUrl: imageUrl,
     quantity: quantity ?? this.quantity,
     notes: notes ?? this.notes,
+    spiceLevel: spiceLevel,
+    addOns: addOns,
   );
 }
 
@@ -82,11 +109,12 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 
   void addItem(CartItem item) {
-    final existing = state.items.indexWhere((i) => i.menuItemId == item.menuItemId);
+    final existing = state.items.indexWhere((i) => i.lineKey == item.lineKey);
     if (existing >= 0) {
       final updated = List<CartItem>.from(state.items);
       updated[existing] = updated[existing].copyWith(
-        quantity: updated[existing].quantity + 1);
+        quantity: updated[existing].quantity + item.quantity,
+      );
       state = state.copyWith(items: updated);
     } else {
       state = state.copyWith(items: [...state.items, item]);
@@ -94,12 +122,17 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 
   void removeItem(String menuItemId) {
-    final updated = state.items.where((i) => i.menuItemId != menuItemId).toList();
+    final updated = state.items
+        .where((i) => i.menuItemId != menuItemId)
+        .toList();
     state = state.copyWith(items: updated);
   }
 
   void updateQuantity(String menuItemId, int qty) {
-    if (qty <= 0) { removeItem(menuItemId); return; }
+    if (qty <= 0) {
+      removeItem(menuItemId);
+      return;
+    }
     final updated = List<CartItem>.from(state.items);
     final idx = updated.indexWhere((i) => i.menuItemId == menuItemId);
     if (idx >= 0) updated[idx] = updated[idx].copyWith(quantity: qty);
@@ -113,11 +146,13 @@ class CartNotifier extends StateNotifier<CartState> {
     state = state.copyWith(items: updated);
   }
 
-  void setTableNotes(String? notes) => state = state.copyWith(tableNotes: notes);
+  void setTableNotes(String? notes) =>
+      state = state.copyWith(tableNotes: notes);
 
-  void clear() => state = CartState(
-    branchId: state.branchId, branchName: state.branchName);
+  void clear() =>
+      state = CartState(branchId: state.branchId, branchName: state.branchName);
 }
 
 final cartProvider = StateNotifierProvider<CartNotifier, CartState>(
-  (ref) => CartNotifier());
+  (ref) => CartNotifier(),
+);

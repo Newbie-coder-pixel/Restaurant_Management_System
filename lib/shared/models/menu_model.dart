@@ -20,14 +20,28 @@ class MenuCategory {
   });
 
   factory MenuCategory.fromJson(Map<String, dynamic> j) => MenuCategory(
-        id: j['id'],
-        branchId: j['branch_id'],
-        name: j['name'],
-        description: j['description'],
-        imageUrl: j['image_url'],
-        sortOrder: j['sort_order'] ?? 0,
-        isActive: j['is_active'] ?? true,
-      );
+    id: j['id'],
+    branchId: j['branch_id'],
+    name: j['name'],
+    description: j['description'],
+    imageUrl: j['image_url'],
+    sortOrder: j['sort_order'] ?? 0,
+    isActive: j['is_active'] ?? true,
+  );
+}
+
+class MenuAddOn {
+  final String name;
+  final double price;
+
+  const MenuAddOn({required this.name, required this.price});
+
+  factory MenuAddOn.fromJson(Map<String, dynamic> j) => MenuAddOn(
+    name: j['name'] as String? ?? '',
+    price: (j['price'] as num?)?.toDouble() ?? 0,
+  );
+
+  Map<String, dynamic> toJson() => {'name': name, 'price': price};
 }
 
 class MenuItem {
@@ -45,6 +59,8 @@ class MenuItem {
   final String? inventoryItemId;
   final List<String> allergens;
   final List<String> dietaryLabels;
+  final List<String> spiceLevels;
+  final List<MenuAddOn> addOns;
 
   const MenuItem({
     required this.id,
@@ -61,40 +77,48 @@ class MenuItem {
     this.inventoryItemId,
     this.allergens = const [],
     this.dietaryLabels = const [],
+    this.spiceLevels = const [],
+    this.addOns = const [],
   });
 
   factory MenuItem.fromJson(Map<String, dynamic> j) => MenuItem(
-        id: j['id'],
-        branchId: j['branch_id'],
-        categoryId: j['category_id'],
-        name: j['name'],
-        description: j['description'],
-        price: (j['price'] ?? 0).toDouble(),
-        imageUrl: j['image_url'],
-        isAvailable: j['is_available'] ?? true,
-        isSeasonal: j['is_seasonal'] ?? false,
-        preparationTimeMinutes: j['preparation_time_minutes'] ?? 15,
-        sortOrder: j['sort_order'] ?? 0,
-        inventoryItemId: j['inventory_item_id'],
-        allergens: List<String>.from(j['allergens'] ?? []),
-        dietaryLabels: List<String>.from(j['dietary_labels'] ?? []),
-      );
+    id: j['id'],
+    branchId: j['branch_id'],
+    categoryId: j['category_id'],
+    name: j['name'],
+    description: j['description'],
+    price: (j['price'] ?? 0).toDouble(),
+    imageUrl: j['image_url'],
+    isAvailable: j['is_available'] ?? true,
+    isSeasonal: j['is_seasonal'] ?? false,
+    preparationTimeMinutes: j['preparation_time_minutes'] ?? 15,
+    sortOrder: j['sort_order'] ?? 0,
+    inventoryItemId: j['inventory_item_id'],
+    allergens: List<String>.from(j['allergens'] ?? []),
+    dietaryLabels: List<String>.from(j['dietary_labels'] ?? []),
+    spiceLevels: List<String>.from(j['spice_levels'] ?? []),
+    addOns: (j['add_ons'] as List<dynamic>? ?? [])
+        .map((a) => MenuAddOn.fromJson(a as Map<String, dynamic>))
+        .toList(),
+  );
 
   Map<String, dynamic> toInsertMap() => {
-        'branch_id': branchId,
-        'category_id': categoryId,
-        'name': name,
-        'description': description,
-        'price': price,
-        'image_url': imageUrl,
-        'is_available': isAvailable,
-        'is_seasonal': isSeasonal,
-        'preparation_time_minutes': preparationTimeMinutes,
-        'sort_order': sortOrder,
-        'allergens': allergens,
-        'dietary_labels': dietaryLabels,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
+    'branch_id': branchId,
+    'category_id': categoryId,
+    'name': name,
+    'description': description,
+    'price': price,
+    'image_url': imageUrl,
+    'is_available': isAvailable,
+    'is_seasonal': isSeasonal,
+    'preparation_time_minutes': preparationTimeMinutes,
+    'sort_order': sortOrder,
+    'allergens': allergens,
+    'dietary_labels': dietaryLabels,
+    'spice_levels': spiceLevels,
+    'add_ons': addOns.map((a) => a.toJson()).toList(),
+    'updated_at': DateTime.now().toIso8601String(),
+  };
 
   MenuItem copyWith({
     String? id,
@@ -111,24 +135,27 @@ class MenuItem {
     String? inventoryItemId,
     List<String>? allergens,
     List<String>? dietaryLabels,
-  }) =>
-      MenuItem(
-        id: id ?? this.id,
-        branchId: branchId ?? this.branchId,
-        categoryId: categoryId ?? this.categoryId,
-        name: name ?? this.name,
-        description: description ?? this.description,
-        price: price ?? this.price,
-        imageUrl: imageUrl ?? this.imageUrl,
-        isAvailable: isAvailable ?? this.isAvailable,
-        isSeasonal: isSeasonal ?? this.isSeasonal,
-        preparationTimeMinutes:
-            preparationTimeMinutes ?? this.preparationTimeMinutes,
-        sortOrder: sortOrder ?? this.sortOrder,
-        inventoryItemId: inventoryItemId ?? this.inventoryItemId,
-        allergens: allergens ?? this.allergens,
-        dietaryLabels: dietaryLabels ?? this.dietaryLabels,
-      );
+    List<String>? spiceLevels,
+    List<MenuAddOn>? addOns,
+  }) => MenuItem(
+    id: id ?? this.id,
+    branchId: branchId ?? this.branchId,
+    categoryId: categoryId ?? this.categoryId,
+    name: name ?? this.name,
+    description: description ?? this.description,
+    price: price ?? this.price,
+    imageUrl: imageUrl ?? this.imageUrl,
+    isAvailable: isAvailable ?? this.isAvailable,
+    isSeasonal: isSeasonal ?? this.isSeasonal,
+    preparationTimeMinutes:
+        preparationTimeMinutes ?? this.preparationTimeMinutes,
+    sortOrder: sortOrder ?? this.sortOrder,
+    inventoryItemId: inventoryItemId ?? this.inventoryItemId,
+    allergens: allergens ?? this.allergens,
+    dietaryLabels: dietaryLabels ?? this.dietaryLabels,
+    spiceLevels: spiceLevels ?? this.spiceLevels,
+    addOns: addOns ?? this.addOns,
+  );
 }
 
 // ─── MENU INGREDIENT MODEL ────────────────────────────────────────────────────
@@ -153,23 +180,23 @@ class MenuIngredient {
   });
 
   factory MenuIngredient.fromJson(Map<String, dynamic> j) => MenuIngredient(
-        id: j['id'] as String,
-        menuItemId: j['menu_item_id'] as String,
-        inventoryItemId: j['inventory_item_id'] as String,
-        inventoryItemName: j['inventory_item_name'] as String? ?? '',
-        unit: j['unit'] as String? ?? 'pcs',
-        quantity: (j['quantity'] as num).toDouble(),
-        costPerUnit: (j['cost_per_unit'] as num?)?.toDouble() ?? 0,
-      );
+    id: j['id'] as String,
+    menuItemId: j['menu_item_id'] as String,
+    inventoryItemId: j['inventory_item_id'] as String,
+    inventoryItemName: j['inventory_item_name'] as String? ?? '',
+    unit: j['unit'] as String? ?? 'pcs',
+    quantity: (j['quantity'] as num).toDouble(),
+    costPerUnit: (j['cost_per_unit'] as num?)?.toDouble() ?? 0,
+  );
 
   Map<String, dynamic> toInsertMap() => {
-        'menu_item_id': menuItemId,
-        'inventory_item_id': inventoryItemId,
-        'inventory_item_name': inventoryItemName,
-        'unit': unit,
-        'quantity': quantity,
-        'cost_per_unit': costPerUnit,
-      };
+    'menu_item_id': menuItemId,
+    'inventory_item_id': inventoryItemId,
+    'inventory_item_name': inventoryItemName,
+    'unit': unit,
+    'quantity': quantity,
+    'cost_per_unit': costPerUnit,
+  };
 
   MenuIngredient copyWith({
     String? id,
@@ -179,16 +206,15 @@ class MenuIngredient {
     String? unit,
     double? quantity,
     double? costPerUnit,
-  }) =>
-      MenuIngredient(
-        id: id ?? this.id,
-        menuItemId: menuItemId ?? this.menuItemId,
-        inventoryItemId: inventoryItemId ?? this.inventoryItemId,
-        inventoryItemName: inventoryItemName ?? this.inventoryItemName,
-        unit: unit ?? this.unit,
-        quantity: quantity ?? this.quantity,
-        costPerUnit: costPerUnit ?? this.costPerUnit,
-      );
+  }) => MenuIngredient(
+    id: id ?? this.id,
+    menuItemId: menuItemId ?? this.menuItemId,
+    inventoryItemId: inventoryItemId ?? this.inventoryItemId,
+    inventoryItemName: inventoryItemName ?? this.inventoryItemName,
+    unit: unit ?? this.unit,
+    quantity: quantity ?? this.quantity,
+    costPerUnit: costPerUnit ?? this.costPerUnit,
+  );
 }
 
 // ─── MENU INGREDIENT DRAFT ────────────────────────────────────────────────────
@@ -234,13 +260,12 @@ class MenuIngredientDraft {
 
   /// Whether this item has a valid secondary unit
   bool get hasSecondaryUnit =>
-      unitSecondary != null &&
-      unitSecondary!.isNotEmpty &&
-      unitConversion > 1;
+      unitSecondary != null && unitSecondary!.isNotEmpty && unitConversion > 1;
 
   /// Qty shown to the user (in the currently active unit)
-  double get displayQty =>
-      useSecondaryUnit && hasSecondaryUnit ? quantity * unitConversion : quantity;
+  double get displayQty => useSecondaryUnit && hasSecondaryUnit
+      ? quantity * unitConversion
+      : quantity;
 
   /// Unit label shown to the user
   String get displayUnit =>
@@ -258,10 +283,7 @@ class MenuIngredientDraft {
     return inputQty;
   }
 
-  MenuIngredientDraft copyWith({
-    double? quantity,
-    bool? useSecondaryUnit,
-  }) =>
+  MenuIngredientDraft copyWith({double? quantity, bool? useSecondaryUnit}) =>
       MenuIngredientDraft(
         inventoryItemId: inventoryItemId,
         inventoryItemName: inventoryItemName,
@@ -274,12 +296,12 @@ class MenuIngredientDraft {
       );
 
   MenuIngredient toIngredient({required String menuItemId}) => MenuIngredient(
-        id: '',
-        menuItemId: menuItemId,
-        inventoryItemId: inventoryItemId,
-        inventoryItemName: inventoryItemName,
-        unit: unit,
-        quantity: quantity, // already in the primary unit
-        costPerUnit: costPerUnit,
-      );
+    id: '',
+    menuItemId: menuItemId,
+    inventoryItemId: inventoryItemId,
+    inventoryItemName: inventoryItemName,
+    unit: unit,
+    quantity: quantity, // already in the primary unit
+    costPerUnit: costPerUnit,
+  );
 }

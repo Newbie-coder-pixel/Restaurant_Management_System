@@ -16,7 +16,7 @@ class CustomerCheckoutScreen extends ConsumerStatefulWidget {
 
 class _CustomerCheckoutScreenState
     extends ConsumerState<CustomerCheckoutScreen> {
-  final _nameCtrl  = TextEditingController();
+  final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   bool _submitting = false;
@@ -28,19 +28,23 @@ class _CustomerCheckoutScreenState
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _notesCtrl.dispose();
-    for (final c in _itemNotesCtrls.values) { c.dispose(); }
+    for (final c in _itemNotesCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   void _syncItemNotesControllers(List<CartItem> items) {
     for (final item in items) {
       if (!_itemNotesCtrls.containsKey(item.menuItemId)) {
-        _itemNotesCtrls[item.menuItemId] =
-            TextEditingController(text: item.notes ?? '');
+        _itemNotesCtrls[item.menuItemId] = TextEditingController(
+          text: item.notes ?? '',
+        );
       }
     }
     _itemNotesCtrls.removeWhere(
-        (id, _) => !items.any((i) => i.menuItemId == id));
+      (id, _) => !items.any((i) => i.menuItemId == id),
+    );
   }
 
   // Order number is the only lookup key anonymous customers have for
@@ -54,7 +58,28 @@ class _CustomerCheckoutScreenState
   // longer be possible since each call reserves a fresh integer atomically.
   Future<String> _generateOrderNumber(String branchId) async {
     final result = await OrderNumberService.nextSequence(branchId);
-    return OrderNumberService.formatWebOrderNumber(result.seq, result.orderDate);
+    return OrderNumberService.formatWebOrderNumber(
+      result.seq,
+      result.orderDate,
+    );
+  }
+
+  // order_items has one free-text special_requests column and no dedicated
+  // spice-level/add-ons columns, so customization is folded into that same
+  // text field for the kitchen/staff UIs that already render it (e.g.
+  // _OrderStatusCard in customer_landing_screen.dart) to pick up for free.
+  String? _customizationSummary(CartItem item) {
+    final parts = <String>[];
+    if (item.spiceLevel != null && item.spiceLevel!.isNotEmpty) {
+      parts.add('Spice: ${item.spiceLevel}');
+    }
+    if (item.addOns.isNotEmpty) {
+      parts.add('Add-ons: ${item.addOns.map((a) => a.name).join(', ')}');
+    }
+    if (item.notes != null && item.notes!.trim().isNotEmpty) {
+      parts.add(item.notes!.trim());
+    }
+    return parts.isEmpty ? null : parts.join(' • ');
   }
 
   Future<bool> _showConfirmDialog(CartState cart) async {
@@ -71,22 +96,32 @@ class _CustomerCheckoutScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Header ──────────────────────────────────────────────
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.shopping_cart_outlined,
-                      color: Colors.white, size: 18)),
-                const SizedBox(width: 10),
-                const Text('Confirm Order',
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.shopping_cart_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Confirm Order',
                     style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                        color: AppColors.primary)),
-              ]),
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
 
               // ── Info rows ───────────────────────────────────────────
@@ -105,82 +140,110 @@ class _CustomerCheckoutScreenState
                   color: const Color(0xFFFFF0F0),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: AppColors.accent.withValues(alpha: 0.25))),
+                    color: AppColors.accent.withValues(alpha: 0.25),
+                  ),
+                ),
                 child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Icon(Icons.error_outline,
-                          color: AppColors.accent, size: 16),
-                      SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Orders that have been sent to the kitchen cannot be canceled.',
-                          style: TextStyle(
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: AppColors.accent,
+                          size: 16,
+                        ),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Orders that have been sent to the kitchen cannot be canceled.',
+                            style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.accent),
+                              color: AppColors.accent,
+                            ),
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                     SizedBox(height: 6),
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Icon(Icons.check_circle_outline,
-                          color: AppColors.accent, size: 16),
-                      SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Make sure your order is correct before continuing.',
-                          style: TextStyle(
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          color: AppColors.accent,
+                          size: 16,
+                        ),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Make sure your order is correct before continuing.',
+                            style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 11,
-                              color: AppColors.accent),
+                              color: AppColors.accent,
+                            ),
+                          ),
                         ),
-                      ),
-                    ]),
+                      ],
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
 
               // ── Buttons ─────────────────────────────────────────────
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF6B7280),
-                      side: const BorderSide(color: Color(0xFFD1D5DB)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      minimumSize: const Size(0, 44)),
-                    child: const Text('Check Again',
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF6B7280),
+                        side: const BorderSide(color: Color(0xFFD1D5DB)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        minimumSize: const Size(0, 44),
+                      ),
+                      child: const Text(
+                        'Check Again',
                         style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13)),
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      minimumSize: const Size(0, 44),
-                      elevation: 0),
-                    child: const Text('Order Now',
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        minimumSize: const Size(0, 44),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Order Now',
                         style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13)),
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ]),
+                ],
+              ),
             ],
           ),
         ),
@@ -194,37 +257,47 @@ class _CustomerCheckoutScreenState
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: Color(0xFF6B7280))),
-        Text(value,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primary,
+          ),
+        ),
       ],
     ),
   );
-
-
 
   Future<void> _placeOrder() async {
     final cart = ref.read(cartProvider);
 
     if (cart.isEmpty || cart.branchId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Cart is empty, please add a menu item first.'),
-        backgroundColor: Colors.orange));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cart is empty, please add a menu item first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 
     if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Name is required'),
-        backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Name is required'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
@@ -232,17 +305,23 @@ class _CustomerCheckoutScreenState
     if (phone.isNotEmpty) {
       final phoneRegex = RegExp(r'^08[0-9]{8,11}$');
       if (!phoneRegex.hasMatch(phone)) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Invalid phone number format. Example: 08123456789'),
-          backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid phone number format. Example: 08123456789'),
+            backgroundColor: Colors.red,
+          ),
+        );
         return;
       }
     }
 
     for (final entry in _itemNotesCtrls.entries) {
-      ref.read(cartProvider.notifier).updateNotes(
-          entry.key,
-          entry.value.text.trim().isEmpty ? null : entry.value.text.trim());
+      ref
+          .read(cartProvider.notifier)
+          .updateNotes(
+            entry.key,
+            entry.value.text.trim().isEmpty ? null : entry.value.text.trim(),
+          );
     }
 
     final confirmed = await _showConfirmDialog(cart);
@@ -260,30 +339,30 @@ class _CustomerCheckoutScreenState
       const maxAttempts = 3;
       for (var attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-          await Supabase.instance.client
-              .from('orders')
-              .insert({
-                'id':               orderId,
-                'branch_id':        cart.branchId,
-                'order_number':     orderNumber,
-                'status':           'new',
-                'source':           'takeaway',
-                'order_type':       'takeaway',
-                'customer_name':    _nameCtrl.text.trim(),
-                'customer_phone':   _phoneCtrl.text.trim().isEmpty
-                    ? null : _phoneCtrl.text.trim(),
-                'customer_email':   user?.email,
-                'customer_user_id': user?.id,
-                'table_id':         null,
-                'table_name':       null,
-                'discount_amount':  0,
-                'subtotal':         cart.subtotal,
-                'tax_amount':       cart.pb1Amount,
-                'total_amount':     cart.total,
-                'payment_status':   'unpaid',
-                'notes':            _notesCtrl.text.trim().isEmpty
-                    ? null : _notesCtrl.text.trim(),
-              });
+          await Supabase.instance.client.from('orders').insert({
+            'id': orderId,
+            'branch_id': cart.branchId,
+            'order_number': orderNumber,
+            'status': 'new',
+            'source': 'takeaway',
+            'order_type': 'takeaway',
+            'customer_name': _nameCtrl.text.trim(),
+            'customer_phone': _phoneCtrl.text.trim().isEmpty
+                ? null
+                : _phoneCtrl.text.trim(),
+            'customer_email': user?.email,
+            'customer_user_id': user?.id,
+            'table_id': null,
+            'table_name': null,
+            'discount_amount': 0,
+            'subtotal': cart.subtotal,
+            'tax_amount': cart.pb1Amount,
+            'total_amount': cart.total,
+            'payment_status': 'unpaid',
+            'notes': _notesCtrl.text.trim().isEmpty
+                ? null
+                : _notesCtrl.text.trim(),
+          });
           break;
         } on PostgrestException catch (e) {
           final isConflict = e.code == '23505';
@@ -294,17 +373,28 @@ class _CustomerCheckoutScreenState
         }
       }
 
-      final orderItems = ref.read(cartProvider).items.map((item) => {
-        'order_id':        orderId,
-        'menu_item_id':    item.menuItemId,
-        'menu_item_name':  item.name,
-        'quantity':        item.quantity,
-        'unit_price':      item.price,
-        // subtotal is not inserted because it's a generated column in Supabase
-        'status':          'pending',
-        if (item.notes != null && item.notes!.isNotEmpty)
-          'special_requests': item.notes,
-      }).where((i) => (i['menu_item_id'] as String).isNotEmpty).toList();
+      final orderItems = ref
+          .read(cartProvider)
+          .items
+          .map(
+            (item) => {
+              'order_id': orderId,
+              'menu_item_id': item.menuItemId,
+              'menu_item_name': item.name,
+              'quantity': item.quantity,
+              // Includes add-ons so unit_price * quantity matches the subtotal the
+              // customer saw at checkout (order_items has no separate columns for
+              // spice level/add-ons — see _customizationSummary for how they're
+              // surfaced to kitchen/staff instead).
+              'unit_price': item.unitPrice,
+              // subtotal is not inserted because it's a generated column in Supabase
+              'status': 'pending',
+              if (_customizationSummary(item) != null)
+                'special_requests': _customizationSummary(item),
+            },
+          )
+          .where((i) => (i['menu_item_id'] as String).isNotEmpty)
+          .toList();
 
       if (orderItems.isEmpty) throw Exception('No valid items in cart.');
 
@@ -317,9 +407,12 @@ class _CustomerCheckoutScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to place order: $e'),
-          backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to place order: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
         setState(() => _submitting = false);
       }
     }
@@ -338,37 +431,67 @@ class _CustomerCheckoutScreenState
           foregroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-            onPressed: () => context.canPop() ? context.pop() : context.go('/customer?tab=0')),
-          title: const Text('Checkout',
-              style: TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+            onPressed: () => context.canPop()
+                ? context.pop()
+                : context.go('/customer?tab=0'),
+          ),
+          title: const Text(
+            'Checkout',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
         body: Center(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            const Text('Your cart is empty',
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.shopping_cart_outlined,
+                size: 64,
+                color: Colors.grey,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Your cart is empty',
                 style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary)),
-            const SizedBox(height: 8),
-            const Text('Add a menu item first',
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Add a menu item first',
                 style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 13, color: Colors.grey)),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => context.go('/customer'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12))),
-              child: const Text('View Menu',
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => context.go('/customer'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'View Menu',
                   style: TextStyle(
-                      fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
-          ])),
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -379,27 +502,42 @@ class _CustomerCheckoutScreenState
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/customer?tab=0')),
-        title: const Text('Checkout',
-            style: TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/customer?tab=0'),
+        ),
+        title: const Text(
+          'Checkout',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+        ),
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: AppColors.accent,
-              borderRadius: BorderRadius.circular(12)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 14),
-              const SizedBox(width: 4),
-              Text('${cart.itemCount}',
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.shopping_cart_outlined,
+                  color: Colors.white,
+                  size: 14,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${cart.itemCount}',
                   style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
-            ])),
+                    fontFamily: 'Poppins',
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
       body: ListView(
@@ -412,33 +550,51 @@ class _CustomerCheckoutScreenState
                 color: AppColors.accent.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.3))),
-              child: Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(8)),
-                  child: const Icon(Icons.shopping_bag_outlined,
-                    color: Colors.white, size: 18)),
-                const SizedBox(width: 12),
-                const Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Takeaway',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: AppColors.primary)),
-                    SizedBox(height: 2),
-                    Text('Pick up your order at the restaurant',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        color: Color(0xFF9CA3AF))),
-                  ])),
-              ]),
+                  color: AppColors.accent.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.shopping_bag_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Takeaway',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Pick up your order at the restaurant',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ]),
           const SizedBox(height: 16),
@@ -448,8 +604,12 @@ class _CustomerCheckoutScreenState
             const SizedBox(height: 10),
             _phoneField(),
             const SizedBox(height: 10),
-            _field('General order notes', _notesCtrl,
-                Icons.notes_outlined, maxLines: 2),
+            _field(
+              'General order notes',
+              _notesCtrl,
+              Icons.notes_outlined,
+              maxLines: 2,
+            ),
           ]),
           const SizedBox(height: 16),
 
@@ -466,29 +626,41 @@ class _CustomerCheckoutScreenState
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(10)),
-              child: Row(children: [
-                const Text('Total',
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    'Total',
                     style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
-                        color: AppColors.primary)),
-                const Spacer(),
-                Text('Rp ${_fmt(cart.total)}',
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Rp ${_fmt(cart.total)}',
                     style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: AppColors.accent)),
-              ]),
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
-            const Text("💡 You'll pay online on the next step",
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: Color(0xFF9CA3AF))),
+            const Text(
+              "💡 You'll pay online on the next step",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: Color(0xFF9CA3AF),
+              ),
+            ),
           ]),
           const SizedBox(height: 24),
 
@@ -501,18 +673,27 @@ class _CustomerCheckoutScreenState
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(52),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                elevation: 0),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
               child: _submitting
                   ? const SizedBox(
-                      width: 20, height: 20,
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : const Text('Order Now 🛒',
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text(
+                      'Order Now 🛒',
                       style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15)),
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 32),
@@ -527,54 +708,98 @@ class _CustomerCheckoutScreenState
     final notesCtrl = _itemNotesCtrls[item.menuItemId];
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 28, height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(6)),
-            child: Text('${item.quantity}',
-                style: const TextStyle(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${item.quantity}',
+                  style: const TextStyle(
                     fontFamily: 'Poppins',
                     color: AppColors.accent,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(item.name,
-              style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: AppColors.primary))),
-          Text('Rp ${_fmt(item.subtotal)}',
-              style: const TextStyle(
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  item.name,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              Text(
+                'Rp ${_fmt(item.subtotal)}',
+                style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w600,
-                  fontSize: 13)),
-        ]),
-        if (notesCtrl != null) ...[
-          const SizedBox(height: 6),
-          TextField(
-            controller: notesCtrl,
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 11),
-            decoration: InputDecoration(
-              hintText: 'Notes for this item (e.g. not spicy...)',
-              hintStyle: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11, color: Colors.grey),
-              prefixIcon: const Icon(Icons.edit_note, size: 16, color: Colors.grey),
-              filled: true,
-              fillColor: const Color(0xFFF3F4F6),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
-              isDense: true),
+                  fontSize: 13,
+                ),
+              ),
+            ],
           ),
+          if (item.spiceLevel != null || item.addOns.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 38, top: 4),
+              child: Text(
+                [
+                  if (item.spiceLevel != null) item.spiceLevel!,
+                  ...item.addOns.map((a) => '+ ${a.name}'),
+                ].join('  •  '),
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: Color(0xFF9CA3AF),
+                ),
+              ),
+            ),
+          if (notesCtrl != null) ...[
+            const SizedBox(height: 6),
+            TextField(
+              controller: notesCtrl,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 11),
+              decoration: InputDecoration(
+                hintText: 'Notes for this item (e.g. not spicy...)',
+                hintStyle: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: Colors.grey,
+                ),
+                prefixIcon: const Icon(
+                  Icons.edit_note,
+                  size: 16,
+                  color: Colors.grey,
+                ),
+                filled: true,
+                fillColor: const Color(0xFFF3F4F6),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                isDense: true,
+              ),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 
@@ -583,18 +808,27 @@ class _CustomerCheckoutScreenState
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
-      boxShadow: [BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)]),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title,
+      boxShadow: [
+        BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
           style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-              color: AppColors.primary)),
-      const SizedBox(height: 12),
-      ...children,
-    ]));
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...children,
+      ],
+    ),
+  );
 
   Widget _phoneField() {
     return Column(
@@ -608,8 +842,15 @@ class _CustomerCheckoutScreenState
           decoration: InputDecoration(
             hintText: 'Example: 08123456789',
             hintStyle: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
-            prefixIcon: const Icon(Icons.phone_outlined, size: 18, color: Colors.grey),
+              fontFamily: 'Poppins',
+              fontSize: 13,
+              color: Colors.grey,
+            ),
+            prefixIcon: const Icon(
+              Icons.phone_outlined,
+              size: 18,
+              color: Colors.grey,
+            ),
             suffixIcon: _phoneCtrl.text.trim().isNotEmpty
                 ? Icon(
                     _isValidPhone(_phoneCtrl.text.trim())
@@ -624,16 +865,22 @@ class _CustomerCheckoutScreenState
             filled: true,
             fillColor: const Color(0xFFF9F9F9),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: _phoneCtrl.text.trim().isNotEmpty &&
-                        !_isValidPhone(_phoneCtrl.text.trim())
-                    ? const BorderSide(color: Colors.red, width: 1.5)
-                    : BorderSide.none),
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  _phoneCtrl.text.trim().isNotEmpty &&
+                      !_isValidPhone(_phoneCtrl.text.trim())
+                  ? const BorderSide(color: Colors.red, width: 1.5)
+                  : BorderSide.none,
+            ),
             contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 10)),
+              horizontal: 12,
+              vertical: 10,
+            ),
+          ),
         ),
         if (_phoneCtrl.text.trim().isNotEmpty &&
             !_isValidPhone(_phoneCtrl.text.trim())) ...[
@@ -643,7 +890,10 @@ class _CustomerCheckoutScreenState
             child: Text(
               'Format: 08xxxxxxxxxx (10–13 digits)',
               style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11, color: Colors.red),
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: Colors.red,
+              ),
             ),
           ),
         ],
@@ -655,36 +905,56 @@ class _CustomerCheckoutScreenState
     return RegExp(r'^08[0-9]{8,11}$').hasMatch(phone);
   }
 
-  Widget _field(String hint, TextEditingController ctrl, IconData icon,
-      {int maxLines = 1, TextInputType? keyboardType}) =>
-      TextField(
-        controller: ctrl,
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(
-              fontFamily: 'Poppins', fontSize: 13, color: Colors.grey),
-          prefixIcon: Icon(icon, size: 18, color: Colors.grey),
-          filled: true,
-          fillColor: const Color(0xFFF9F9F9),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 10)));
+  Widget _field(
+    String hint,
+    TextEditingController ctrl,
+    IconData icon, {
+    int maxLines = 1,
+    TextInputType? keyboardType,
+  }) => TextField(
+    controller: ctrl,
+    maxLines: maxLines,
+    keyboardType: keyboardType,
+    style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(
+        fontFamily: 'Poppins',
+        fontSize: 13,
+        color: Colors.grey,
+      ),
+      prefixIcon: Icon(icon, size: 18, color: Colors.grey),
+      filled: true,
+      fillColor: const Color(0xFFF9F9F9),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    ),
+  );
 
   Widget _row(String label, String value) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Text(label,
-          style: const TextStyle(
-              fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF6B7280))),
-      Text('Rp $value',
-          style: const TextStyle(
-              fontFamily: 'Poppins', fontSize: 13, color: AppColors.primary)),
-    ]);
+      Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 13,
+          color: Color(0xFF6B7280),
+        ),
+      ),
+      Text(
+        'Rp $value',
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 13,
+          color: AppColors.primary,
+        ),
+      ),
+    ],
+  );
 
   String _fmt(double v) {
     final s = v.toStringAsFixed(0);
