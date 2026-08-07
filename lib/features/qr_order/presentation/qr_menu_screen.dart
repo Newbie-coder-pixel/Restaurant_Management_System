@@ -10,6 +10,7 @@ import '../models/qr_order_model.dart';
 import '../services/qr_device_id_service.dart';
 import '../../../shared/models/table_model.dart';
 import '../../../shared/utils/branch_hours.dart';
+import '../../../core/theme/app_theme.dart';
 
 final _menuDataProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
   (ref, branchId) async => ref.read(qrOrderRepositoryProvider).fetchMenuByBranch(branchId),
@@ -209,8 +210,12 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
     );
 
     return tableInfoAsync.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      ),
       error: (e, _) => Scaffold(
+        backgroundColor: AppColors.background,
         body: Center(child: Text('Error loading table: $e')),
       ),
       data: (tableData) {
@@ -218,6 +223,7 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
 
         if (branchId.isEmpty) {
           return const Scaffold(
+            backgroundColor: AppColors.background,
             body: Center(child: Text('Branch ID not found for this table')),
           );
         }
@@ -272,7 +278,6 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
           tableId: widget.tableId,
           tableName: tableName,
           branchId: branchId,
-          branchName: branchName,
           parseItems: _parseItems,
           groupByCategory: _groupByCategory,
           fabAnimCtrl: _fabAnimCtrl,
@@ -305,11 +310,10 @@ class _BranchClosedScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final hasHours = openingTime != null && closingTime != null;
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -321,22 +325,23 @@ class _BranchClosedScreen extends ConsumerWidget {
                   width: 88,
                   height: 88,
                   decoration: BoxDecoration(
-                    color: colorScheme.error.withValues(alpha: 0.12),
+                    color: AppColors.accent.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.nights_stay_outlined, color: colorScheme.error, size: 40),
+                  child: const Icon(Icons.nights_stay_outlined, color: AppColors.accent, size: 40),
                 ),
                 const SizedBox(height: 24),
                 Text(
                   branchName,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                      color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 8),
-                Text(
+                const Text(
                   "We're currently closed",
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 22,
+                      color: AppColors.textPrimary, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -345,13 +350,16 @@ class _BranchClosedScreen extends ConsumerWidget {
                         'WIB. Please come back during operating hours.'
                       : 'Please come back during our operating hours.',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                      color: AppColors.textSecondary, height: 1.5),
                 ),
                 const SizedBox(height: 32),
                 TextButton.icon(
                   onPressed: () => ref.invalidate(_tableInfoProvider(tableId)),
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Check again'),
+                  icon: const Icon(Icons.refresh_rounded, size: 18, color: AppColors.primary),
+                  label: const Text('Check again',
+                      style: TextStyle(fontFamily: 'Poppins', color: AppColors.primary,
+                          fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -397,7 +405,7 @@ class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
         setState(() => _reporting = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Failed to notify staff: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.accent,
         ));
       }
     }
@@ -405,11 +413,10 @@ class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final color = widget.status.color;
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -433,14 +440,15 @@ class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
                 const SizedBox(height: 24),
                 Text(
                   'Table ${widget.tableName}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                      color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   _isCleaning ? 'This table is still being cleaned' : 'This table is reserved',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 22,
+                      color: AppColors.textPrimary, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -450,7 +458,8 @@ class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
                       : 'This table is reserved for another booking. If this is your reservation, '
                         'please let our staff know so they can seat you.',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                      color: AppColors.textSecondary, height: 1.5),
                 ),
                 const SizedBox(height: 32),
                 if (_reported)
@@ -469,7 +478,8 @@ class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
                         Flexible(
                           child: Text(
                             'Staff notified — thanks!',
-                            style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w600),
+                            style: TextStyle(fontFamily: 'Poppins',
+                                color: Colors.green.shade700, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -485,11 +495,12 @@ class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
                               width: 16, height: 16,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                           : const Icon(Icons.campaign_outlined),
-                      label: Text(_reporting ? 'Notifying...' : 'Notify Staff'),
+                      label: Text(_reporting ? 'Notifying...' : 'Notify Staff',
+                          style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: colorScheme.primary,
-                        foregroundColor: colorScheme.onPrimary,
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                     ),
@@ -499,8 +510,10 @@ class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
                   onPressed: () {
                     ref.invalidate(_tableInfoProvider(widget.tableId));
                   },
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Check again'),
+                  icon: const Icon(Icons.refresh_rounded, size: 18, color: AppColors.primary),
+                  label: const Text('Check again',
+                      style: TextStyle(fontFamily: 'Poppins', color: AppColors.primary,
+                          fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -513,7 +526,7 @@ class _TableNotReadyScreenState extends ConsumerState<_TableNotReadyScreen> {
 
 // ─── Menu Body (Responsive) ───────────────────────────────────────────────────
 class _MenuBody extends ConsumerWidget {
-  final String tableId, tableName, branchId, branchName;
+  final String tableId, tableName, branchId;
   final List<MenuItem> Function(List<Map<String, dynamic>>) parseItems;
   final Map<String, List<MenuItem>> Function(List<MenuItem>) groupByCategory;
   final AnimationController fabAnimCtrl;
@@ -523,7 +536,6 @@ class _MenuBody extends ConsumerWidget {
     required this.tableId,
     required this.tableName,
     required this.branchId,
-    required this.branchName,
     required this.parseItems,
     required this.groupByCategory,
     required this.fabAnimCtrl,
@@ -544,96 +556,101 @@ class _MenuBody extends ConsumerWidget {
     final addMode = ref.watch(addOrderModeProvider);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      body: Column(
-        children: [
-          _QrMenuHeader(
-            tableName: tableName,
-            branchName: branchName,
-            searchCtrl: searchCtrl,
-            onSearchChanged: (q) => ref.read(_searchQueryProvider.notifier).state = q,
-            addOrderQueueNumber: addMode?.queueNumber,
-          ),
-          Expanded(
-            child: menuAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.wifi_off_outlined, size: 48),
-                  const SizedBox(height: 12),
-                  Text('Failed to load menu: $e'),
-                  ElevatedButton(
-                    onPressed: () => ref.invalidate(_menuDataProvider(branchId)),
-                    child: const Text('Try Again'),
-                  ),
-                ]),
-              ),
-              data: (rawItems) {
-                final allItems = parseItems(rawItems);
-                final grouped = groupByCategory(allItems);
-                final categories = grouped.keys.toList();
-
-                var displayItems = selectedCat == null
-                    ? allItems
-                    : (grouped[selectedCat] ?? []);
-
-                if (searchQuery.isNotEmpty) {
-                  final q = searchQuery.toLowerCase();
-                  displayItems = displayItems
-                      .where((i) => i.name.toLowerCase().contains(q) ||
-                          i.description.toLowerCase().contains(q))
-                      .toList();
-                }
-
-                if (isWideScreen) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _CategorySidebar(
-                        categories: categories,
-                        selected: selectedCat,
-                        onSelect: (cat) => ref.read(_selectedCategoryProvider.notifier).state = cat,
-                      ),
-                      Expanded(
-                        child: _MenuContent(
-                          displayItems: displayItems,
-                          tableId: tableId,
-                          tableName: tableName,
-                        ),
-                      ),
-                    ],
-                  );
-                } else {
-                  return Column(
-                    children: [
-                      _CategorySelector(
-                        categories: categories,
-                        selected: selectedCat,
-                        onSelect: (cat) => ref.read(_selectedCategoryProvider.notifier).state = cat,
-                      ),
-                      Expanded(
-                        child: _MenuContent(
-                          displayItems: displayItems,
-                          tableId: tableId,
-                          tableName: tableName,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-              },
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _QrMenuTopBar(
+              tableName: tableName,
+              searchCtrl: searchCtrl,
+              onSearchChanged: (q) => ref.read(_searchQueryProvider.notifier).state = q,
+              addOrderQueueNumber: addMode?.queueNumber,
             ),
-          ),
-        ],
+            Expanded(
+              child: menuAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                error: (e, _) => Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.wifi_off_outlined, size: 48, color: AppColors.textHint),
+                    const SizedBox(height: 12),
+                    Text('Failed to load menu: $e',
+                        style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () => ref.invalidate(_menuDataProvider(branchId)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      child: const Text('Try Again', style: TextStyle(fontFamily: 'Poppins')),
+                    ),
+                  ]),
+                ),
+                data: (rawItems) {
+                  final allItems = parseItems(rawItems);
+                  final grouped = groupByCategory(allItems);
+                  final categories = grouped.keys.toList();
+
+                  var displayItems = selectedCat == null
+                      ? allItems
+                      : (grouped[selectedCat] ?? []);
+
+                  if (searchQuery.isNotEmpty) {
+                    final q = searchQuery.toLowerCase();
+                    displayItems = displayItems
+                        .where((i) => i.name.toLowerCase().contains(q) ||
+                            i.description.toLowerCase().contains(q))
+                        .toList();
+                  }
+
+                  if (isWideScreen) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _CategorySidebar(
+                          categories: categories,
+                          selected: selectedCat,
+                          onSelect: (cat) => ref.read(_selectedCategoryProvider.notifier).state = cat,
+                        ),
+                        Expanded(
+                          child: _MenuContent(
+                            displayItems: displayItems,
+                            categoryLabel: selectedCat,
+                            showHero: searchQuery.isEmpty,
+                          ),
+                        ),
+                      ],
+                    );
+                  } else {
+                    return Column(
+                      children: [
+                        _CategorySelector(
+                          categories: categories,
+                          selected: selectedCat,
+                          onSelect: (cat) => ref.read(_selectedCategoryProvider.notifier).state = cat,
+                        ),
+                        Expanded(
+                          child: _MenuContent(
+                            displayItems: displayItems,
+                            categoryLabel: selectedCat,
+                            showHero: searchQuery.isEmpty,
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
       ),
-      floatingActionButton: cart.isEmpty
+      bottomNavigationBar: cart.isEmpty
           ? null
-          : ScaleTransition(
-              scale: CurvedAnimation(parent: fabAnimCtrl, curve: Curves.elasticOut),
-              child: _CartFab(
+          : SlideTransition(
+              position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+                  .animate(CurvedAnimation(parent: fabAnimCtrl, curve: Curves.easeOut)),
+              child: _CartBar(
                 cart: cart,
                 tableId: tableId,
-                tableName: tableName,
                 isAddMode: addMode != null,
               ),
             ),
@@ -651,21 +668,21 @@ class _CategorySidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final all = ['All', ...categories];
 
     return Container(
       width: 180,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(2, 0))],
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(right: BorderSide(color: AppColors.border)),
       ),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Text('CATEGORIES', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Text('CATEGORIES', style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
           ),
           ...all.map((label) {
             final isActive = selected == (label == 'All' ? null : label);
@@ -676,15 +693,16 @@ class _CategorySidebar extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isActive ? cs.primary : Colors.transparent,
+                  color: isActive ? AppColors.primary : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   label,
                   style: TextStyle(
+                    fontFamily: 'Poppins',
                     fontSize: 14,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                    color: isActive ? cs.onPrimary : cs.onSurface,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: isActive ? Colors.white : AppColors.textPrimary,
                   ),
                 ),
               ),
@@ -707,11 +725,10 @@ class _CategorySelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final allCategories = ['All', ...categories];
-    final cs = Theme.of(context).colorScheme;
 
     return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      height: 52,
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: allCategories.length,
@@ -720,15 +737,25 @@ class _CategorySelector extends StatelessWidget {
           final isActive = selected == (label == 'All' ? null : label);
           return Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              selected: isActive,
-              label: Text(label),
-              onSelected: (_) => onSelect(label == 'All' ? null : label),
-              backgroundColor: cs.surfaceContainer,
-              selectedColor: cs.primary,
-              labelStyle: TextStyle(
-                color: isActive ? cs.onPrimary : cs.onSurface,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            child: GestureDetector(
+              onTap: () => onSelect(label == 'All' ? null : label),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.primary : AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: isActive ? Colors.white : AppColors.textPrimary,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           );
@@ -741,10 +768,10 @@ class _CategorySelector extends StatelessWidget {
 // ─── Menu Content ─────────────────────────────────────────────────────────────
 class _MenuContent extends StatelessWidget {
   final List<MenuItem> displayItems;
-  final String tableId;
-  final String tableName;
+  final String? categoryLabel;
+  final bool showHero;
 
-  const _MenuContent({required this.displayItems, required this.tableId, required this.tableName});
+  const _MenuContent({required this.displayItems, required this.categoryLabel, required this.showHero});
 
   @override
   Widget build(BuildContext context) {
@@ -753,57 +780,122 @@ class _MenuContent extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off, size: 48, color: Colors.grey),
+            Icon(Icons.search_off, size: 48, color: AppColors.textHint),
             SizedBox(height: 12),
-            Text('No menu items found'),
+            Text('No menu items found',
+                style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
           ],
         ),
       );
     }
-    return _MenuList(items: displayItems, tableId: tableId, tableName: tableName);
+    return _MenuGridSection(
+      items: displayItems,
+      categoryLabel: categoryLabel,
+      showHero: showHero,
+    );
   }
 }
 
-// ─── Menu List ────────────────────────────────────────────────────────────────
-class _MenuList extends ConsumerWidget {
+// ─── Menu Grid Section (Chef's Special hero + 2-column grid) ─────────────────
+class _MenuGridSection extends ConsumerWidget {
   final List<MenuItem> items;
-  final String tableId, tableName;
+  final String? categoryLabel;
+  final bool showHero;
 
-  const _MenuList({required this.items, required this.tableId, required this.tableName});
+  const _MenuGridSection({required this.items, required this.categoryLabel, required this.showHero});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(activeQrCartProvider);
     final notifier = ref.read(activeQrCartNotifierProvider);
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (_, i) {
-        final item = items[i];
-        final qty = cart.items
-            .where((c) => c.menuItem.id == item.id)
-            .fold(0, (s, c) => s + c.quantity);
+    int qtyOf(MenuItem item) => cart.items
+        .where((c) => c.menuItem.id == item.id)
+        .fold(0, (s, c) => s + c.quantity);
 
-        return _MenuItemTile(
-          item: item,
-          quantity: qty,
-          onAdd: () => notifier.addItem(item),
-          onRemove: () => notifier.removeItem(item.id),
-        );
-      },
+    final hero = showHero ? items.first : null;
+    final gridItems = hero == null ? items : items.sublist(1);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+      children: [
+        if (hero != null) ...[
+          const _SectionLabel("Chef's Special"),
+          const SizedBox(height: 12),
+          _HeroCard(
+            item: hero,
+            quantity: qtyOf(hero),
+            onAdd: () => notifier.addItem(hero),
+            onRemove: () => notifier.removeItem(hero.id),
+          ),
+          const SizedBox(height: 24),
+          const _SectionDivider(),
+          const SizedBox(height: 24),
+        ],
+        if (gridItems.isNotEmpty) ...[
+          _SectionLabel(categoryLabel ?? 'All Items'),
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 210,
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 18,
+              childAspectRatio: 0.68,
+            ),
+            itemCount: gridItems.length,
+            itemBuilder: (_, i) {
+              final item = gridItems[i];
+              return _MenuGridCard(
+                item: item,
+                quantity: qtyOf(item),
+                onAdd: () => notifier.addItem(item),
+                onRemove: () => notifier.removeItem(item.id),
+              );
+            },
+          ),
+        ],
+      ],
     );
   }
 }
 
-// ─── Menu Item Tile ───────────────────────────────────────────────────────────
-class _MenuItemTile extends StatelessWidget {
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  const _SectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(label,
+        style: const TextStyle(fontFamily: 'Poppins', fontSize: 18,
+            fontWeight: FontWeight.w800, color: AppColors.primary));
+  }
+}
+
+class _SectionDivider extends StatelessWidget {
+  const _SectionDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(children: [
+      Expanded(child: Divider(color: AppColors.border, thickness: 1)),
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: 12),
+        child: Icon(Icons.eco_outlined, size: 16, color: AppColors.primary),
+      ),
+      Expanded(child: Divider(color: AppColors.border, thickness: 1)),
+    ]);
+  }
+}
+
+// ─── Chef's Special hero card ─────────────────────────────────────────────────
+class _HeroCard extends StatelessWidget {
   final MenuItem item;
   final int quantity;
   final VoidCallback onAdd, onRemove;
 
-  const _MenuItemTile({
+  const _HeroCard({
     required this.item,
     required this.quantity,
     required this.onAdd,
@@ -812,133 +904,181 @@ class _MenuItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final unavailable = !item.isAvailable;
+    const imageHeight = 200.0;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: imageHeight,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _MenuImage(imageUrl: item.imageUrl),
+                    if (unavailable)
+                      Container(
+                        color: Colors.black.withValues(alpha: 0.52),
+                        child: const Center(
+                          child: Text('Sold Out',
+                              style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
+                                  fontSize: 13, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                      ),
+                      child: const Text('FEATURED',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                              fontWeight: FontWeight.w700, color: AppColors.textSecondary,
+                              letterSpacing: 0.5)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(item.name,
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                            fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                    if (item.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(item.description,
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                              color: AppColors.textSecondary, height: 1.4)),
+                    ],
+                    const SizedBox(height: 8),
+                    _MenuItemBadges(item: item),
+                    const SizedBox(height: 8),
+                    Text(_fmt(item.price),
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                            fontWeight: FontWeight.w800, color: AppColors.primary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (!unavailable)
+          Positioned(
+            right: 16,
+            top: imageHeight - 24,
+            child: _AddControl(
+              quantity: quantity,
+              onAdd: onAdd,
+              onRemove: onRemove,
+              large: true,
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+}
+
+// ─── Menu grid card (2-column) ─────────────────────────────────────────────────
+class _MenuGridCard extends StatelessWidget {
+  final MenuItem item;
+  final int quantity;
+  final VoidCallback onAdd, onRemove;
+
+  const _MenuGridCard({
+    required this.item,
+    required this.quantity,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final inCart = quantity > 0;
     final unavailable = !item.isAvailable;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+    return Container(
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: inCart ? cs.primary : cs.outlineVariant.withValues(alpha: 0.5),
-          width: inCart ? 1.5 : 0.8,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: inCart
-                ? cs.primary.withValues(alpha: 0.07)
-                : Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: inCart ? AppColors.primary : AppColors.border,
+            width: inCart ? 1.5 : 1),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.horizontal(left: Radius.circular(15)),
-            child: SizedBox(
-              width: 90,
-              height: 90,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _MenuImage(imageUrl: item.imageUrl, cs: cs),
-                  if (unavailable)
-                    Container(
-                      color: Colors.black.withValues(alpha: 0.52),
-                      child: const Center(
-                        child: Text('Sold Out', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                      ),
+          AspectRatio(
+            aspectRatio: 1.15,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _MenuImage(imageUrl: item.imageUrl),
+                if (unavailable)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.52),
+                    child: const Center(
+                      child: Text('Sold Out',
+                          style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
+                              fontSize: 11, fontWeight: FontWeight.w700)),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    item.name,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(item.name,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                          fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                   if (item.description.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(
-                      item.description,
-                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, height: 1.3),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text(item.description,
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                            color: AppColors.textSecondary, height: 1.3),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
-                  const SizedBox(height: 6),
-                  Text(
-                    _fmt(item.price),
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.primary),
+                  const SizedBox(height: 4),
+                  _MenuItemBadges(item: item, compact: true),
+                  const Spacer(),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(_fmt(item.price),
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                                fontWeight: FontWeight.w800, color: AppColors.primary),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      if (!unavailable)
+                        _AddControl(quantity: quantity, onAdd: onAdd, onRemove: onRemove),
+                    ],
                   ),
-                  const SizedBox(height: 5),
-                  _MenuItemBadges(item: item, cs: cs),
                 ],
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: unavailable
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text('Sold Out', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
-                  )
-                : inCart
-                    ? Container(
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: cs.primary.withValues(alpha: 0.2), width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _QtyBtn(icon: Icons.remove, onTap: onRemove, cs: cs),
-                            SizedBox(
-                              width: 28,
-                              child: Center(child: Text('$quantity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: cs.primary))),
-                            ),
-                            _QtyBtn(icon: Icons.add, onTap: onAdd, cs: cs),
-                          ],
-                        ),
-                      )
-                    : GestureDetector(
-                        onTap: onAdd,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.add, size: 14, color: cs.onPrimary),
-                              const SizedBox(width: 4),
-                              Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.onPrimary)),
-                            ],
-                          ),
-                        ),
-                      ),
           ),
         ],
       ),
@@ -948,18 +1088,285 @@ class _MenuItemTile extends StatelessWidget {
   String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
 
+// ─── Add / stepper control (shared by hero + grid cards) ──────────────────────
+class _AddControl extends StatelessWidget {
+  final int quantity;
+  final VoidCallback onAdd, onRemove;
+  final bool large;
+
+  const _AddControl({
+    required this.quantity,
+    required this.onAdd,
+    required this.onRemove,
+    this.large = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = large ? 44.0 : 28.0;
+
+    if (quantity == 0) {
+      return GestureDetector(
+        onTap: onAdd,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            shape: BoxShape.circle,
+            boxShadow: large
+                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 10, offset: const Offset(0, 3))]
+                : null,
+          ),
+          child: Icon(Icons.add, color: Colors.white, size: large ? 24 : 16),
+        ),
+      );
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: large ? 4 : 2),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(size),
+        boxShadow: large
+            ? [BoxShadow(color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 10, offset: const Offset(0, 3))]
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _stepBtn(Icons.remove, onRemove, size),
+          SizedBox(
+            width: large ? 24 : 18,
+            child: Center(
+              child: Text('$quantity',
+                  style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
+                      fontSize: large ? 15 : 12, fontWeight: FontWeight.w800)),
+            ),
+          ),
+          _stepBtn(Icons.add, onAdd, size),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepBtn(IconData icon, VoidCallback onTap, double size) => GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: size * 0.68,
+          height: size,
+          child: Icon(icon, size: large ? 16 : 12, color: Colors.white),
+        ),
+      );
+}
+
+class _MenuImage extends StatelessWidget {
+  final String? imageUrl;
+
+  const _MenuImage({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.trim().isEmpty) return _placeholder();
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl!,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => Container(
+        color: AppColors.surfaceVariant,
+        child: const Center(
+            child: SizedBox(width: 16, height: 16,
+                child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.primary))),
+      ),
+      errorWidget: (_, __, ___) => _placeholder(),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: AppColors.surfaceVariant,
+        child: const Center(child: Icon(Icons.fastfood_outlined, size: 28, color: AppColors.textHint)),
+      );
+}
+
+// ─── Top bar: utensils icon, table badge, search toggle ───────────────────────
+class _QrMenuTopBar extends StatefulWidget {
+  final String tableName;
+  final TextEditingController searchCtrl;
+  final ValueChanged<String> onSearchChanged;
+  final String? addOrderQueueNumber;
+
+  const _QrMenuTopBar({
+    required this.tableName,
+    required this.searchCtrl,
+    required this.onSearchChanged,
+    this.addOrderQueueNumber,
+  });
+
+  @override
+  State<_QrMenuTopBar> createState() => _QrMenuTopBarState();
+}
+
+class _QrMenuTopBarState extends State<_QrMenuTopBar> {
+  bool _searchOpen = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.background,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.restaurant, color: AppColors.textPrimary, size: 22),
+              Expanded(
+                child: Text('Table ${widget.tableName}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 17,
+                        fontWeight: FontWeight.w800, color: AppColors.primary)),
+              ),
+              GestureDetector(
+                onTap: () => setState(() {
+                  _searchOpen = !_searchOpen;
+                  if (!_searchOpen) {
+                    widget.searchCtrl.clear();
+                    widget.onSearchChanged('');
+                  }
+                }),
+                child: Icon(_searchOpen ? Icons.close_rounded : Icons.search_rounded,
+                    color: AppColors.textPrimary, size: 22),
+              ),
+            ],
+          ),
+          if (widget.addOrderQueueNumber != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.add_circle_outline, size: 14, color: AppColors.primary),
+                const SizedBox(width: 6),
+                Text('Add to order #${widget.addOrderQueueNumber}',
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                        fontWeight: FontWeight.w600, color: AppColors.primary)),
+              ]),
+            ),
+          ],
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            child: _searchOpen
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: TextField(
+                      controller: widget.searchCtrl,
+                      onChanged: widget.onSearchChanged,
+                      autofocus: true,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Search for food or drinks...',
+                        hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                            color: AppColors.textHint),
+                        prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textHint),
+                        filled: true,
+                        fillColor: AppColors.surfaceVariant,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                            borderSide: BorderSide.none),
+                        isDense: true,
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Full-width floating cart bar ──────────────────────────────────────────────
+class _CartBar extends StatelessWidget {
+  final QrOrderSession cart;
+  final String tableId;
+  final bool isAddMode;
+
+  const _CartBar({
+    required this.cart,
+    required this.tableId,
+    required this.isAddMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: GestureDetector(
+          onTap: () => context.push('/qr/$tableId/cart'),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 16, offset: const Offset(0, 6))],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Text('${cart.totalItems}',
+                    style: const TextStyle(fontFamily: 'Poppins', color: Colors.white,
+                        fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(width: 4),
+                Text(cart.totalItems == 1 ? 'Item' : 'Items',
+                    style: const TextStyle(fontFamily: 'Poppins', color: Colors.white70, fontSize: 12)),
+                const Spacer(),
+                Text(
+                  'View Cart • ${_fmt(isAddMode ? cart.subtotal : cart.totalAmount)}',
+                  style: const TextStyle(fontFamily: 'Poppins', color: Colors.white,
+                      fontSize: 14, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
+}
+
 // ─── Menu Item Badges (prep time, dietary, allergen) ─────────────────────────
+// Allergen/dietary info is safety-relevant, not decorative — kept visible on
+// every card, just sized down ("compact") to fit the 2-column grid cells.
 class _MenuItemBadges extends StatelessWidget {
   final MenuItem item;
-  final ColorScheme cs;
+  final bool compact;
 
-  const _MenuItemBadges({required this.item, required this.cs});
+  const _MenuItemBadges({required this.item, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     final hasInfo = item.dietaryTags.isNotEmpty ||
         item.allergens.isNotEmpty ||
-        item.preparationTimeMinutes > 0;
+        (!compact && item.preparationTimeMinutes > 0);
 
     if (!hasInfo) return const SizedBox.shrink();
 
@@ -967,30 +1374,30 @@ class _MenuItemBadges extends StatelessWidget {
       spacing: 4,
       runSpacing: 3,
       children: [
-        // Prep time
-        if (item.preparationTimeMinutes > 0)
+        // Prep time — skipped in compact (grid) cards to save vertical space.
+        if (!compact && item.preparationTimeMinutes > 0)
           _Badge(
             label: '~${item.preparationTimeMinutes} min',
             icon: Icons.schedule_outlined,
-            color: cs.onSurfaceVariant,
-            bg: cs.surfaceContainerHighest,
+            color: AppColors.textSecondary,
+            bg: AppColors.surfaceVariant,
           ),
         // Dietary tags (green)
-        ...item.dietaryTags.map((tag) => _Badge(
+        ...item.dietaryTags.take(compact ? 1 : item.dietaryTags.length).map((tag) => _Badge(
               label: tag,
               color: Colors.green[700]!,
               bg: Colors.green.withValues(alpha: 0.10),
             )),
-        // Allergens (orange) — max 2, rest as "+N"
-        ...item.allergens.take(2).map((a) => _Badge(
+        // Allergens (orange) — capped, rest as "+N"
+        ...item.allergens.take(compact ? 1 : 2).map((a) => _Badge(
               label: a,
               icon: Icons.warning_amber_rounded,
               color: Colors.orange[800]!,
               bg: Colors.orange.withValues(alpha: 0.10),
             )),
-        if (item.allergens.length > 2)
+        if (item.allergens.length > (compact ? 1 : 2))
           _Badge(
-            label: '+${item.allergens.length - 2} allergen',
+            label: '+${item.allergens.length - (compact ? 1 : 2)} allergen',
             color: Colors.orange[800]!,
             bg: Colors.orange.withValues(alpha: 0.10),
           ),
@@ -1022,215 +1429,10 @@ class _Badge extends StatelessWidget {
             Icon(icon, size: 10, color: color),
             const SizedBox(width: 2),
           ],
-          Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
+              color: color, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
-}
-
-class _QtyBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final ColorScheme cs;
-
-  const _QtyBtn({required this.icon, required this.onTap, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(width: 32, height: 32, child: Icon(icon, size: 16, color: cs.primary)),
-    );
-  }
-}
-
-class _MenuImage extends StatelessWidget {
-  final String? imageUrl;
-  final ColorScheme cs;
-
-  const _MenuImage({required this.imageUrl, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    if (imageUrl == null || imageUrl!.trim().isEmpty) return _placeholder();
-
-    return CachedNetworkImage(
-      imageUrl: imageUrl!,
-      fit: BoxFit.cover,
-      placeholder: (_, __) => Container(
-        color: cs.surfaceContainerHighest,
-        child: const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 1.5))),
-      ),
-      errorWidget: (_, __, ___) => _placeholder(),
-    );
-  }
-
-  Widget _placeholder() => Container(
-        color: cs.surfaceContainerHighest,
-        child: const Center(child: Icon(Icons.fastfood_outlined, size: 28, color: Colors.grey)),
-      );
-}
-
-class _QrMenuHeader extends StatelessWidget {
-  final String tableName, branchName;
-  final TextEditingController searchCtrl;
-  final ValueChanged<String> onSearchChanged;
-  final String? addOrderQueueNumber;
-
-  const _QrMenuHeader({
-    required this.tableName,
-    required this.branchName,
-    required this.searchCtrl,
-    required this.onSearchChanged,
-    this.addOrderQueueNumber,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.primary,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Icon(Icons.restaurant, color: cs.onPrimary, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(branchName, style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary.withValues(alpha: 0.85)), overflow: TextOverflow.ellipsis),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(color: cs.onPrimary.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.table_restaurant, size: 14, color: cs.onPrimary),
-                    const SizedBox(width: 4),
-                    Text(tableName, style: theme.textTheme.labelMedium?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
-                  ]),
-                ),
-              ]),
-              const SizedBox(height: 8),
-              if (addOrderQueueNumber != null) ...[
-                // Add-to-order banner
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.add_circle_outline, size: 14, color: cs.onPrimary),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Add to order #$addOrderQueueNumber',
-                      style: TextStyle(
-                        color: cs.onPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ]),
-                ),
-                const SizedBox(height: 6),
-              ],
-              Text(
-                addOrderQueueNumber != null
-                    ? 'Select the items you want to add'
-                    : 'Choose your favorite menu',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                    color: cs.onPrimary, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: searchCtrl,
-                onChanged: onSearchChanged,
-                style: theme.textTheme.bodyMedium,
-                decoration: InputDecoration(
-                  hintText: 'Search for food or drinks...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  suffixIcon: searchCtrl.text.isNotEmpty
-                      ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () { searchCtrl.clear(); onSearchChanged(''); })
-                      : null,
-                  filled: true,
-                  fillColor: cs.surface,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  isDense: true,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CartFab extends StatelessWidget {
-  final QrOrderSession cart;
-  final String tableId, tableName;
-  final bool isAddMode;
-
-  const _CartFab({
-    required this.cart,
-    required this.tableId,
-    required this.tableName,
-    required this.isAddMode,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    return GestureDetector(
-      onTap: () => context.push('/qr/$tableId/cart'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          color: cs.primary,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: cs.primary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))],
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Stack(children: [
-            Icon(Icons.shopping_cart_outlined, color: cs.onPrimary, size: 22),
-            if (cart.totalItems > 0)
-              Positioned(
-                top: -2,
-                right: -2,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
-                  constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                  child: Text('${cart.totalItems}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                ),
-              ),
-          ]),
-          const SizedBox(width: 10),
-          Text('Cart', style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold)),
-          const SizedBox(width: 8),
-          Container(width: 1, height: 16, color: cs.onPrimary.withValues(alpha: 0.4)),
-          const SizedBox(width: 8),
-          // In add mode: show only the new items' subtotal (not total+tax)
-          Text(
-            isAddMode ? _fmt(cart.subtotal) : _fmt(cart.totalAmount),
-            style: theme.textTheme.labelLarge?.copyWith(color: cs.onPrimary, fontWeight: FontWeight.bold),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  String _fmt(double p) => 'Rp ${p.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 }
