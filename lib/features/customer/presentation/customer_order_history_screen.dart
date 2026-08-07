@@ -68,10 +68,10 @@ class _CustomerOrderHistoryScreenState
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.replay_outlined, color: AppColors.accent, size: 24),
+              child: const Icon(Icons.replay_outlined, color: AppColors.primary, size: 24),
             ),
             const SizedBox(width: 12),
             const Text('Reorder?',
@@ -86,7 +86,7 @@ class _CustomerOrderHistoryScreenState
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
+              color: AppColors.surfaceVariant,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(children: [
@@ -96,14 +96,14 @@ class _CustomerOrderHistoryScreenState
                   Container(
                     width: 6, height: 6,
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.5),
+                      color: AppColors.primary.withValues(alpha: 0.5),
                       shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 10),
                   Text(
                     '${i['quantity']}x ${(i['menu_items'] as Map)['name']}',
                     style: const TextStyle(
-                        fontFamily: 'Poppins', fontSize: 12, color: Color(0xFF374151)),
+                        fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
                   ),
                 ]))),
               if (validItems.length > 3)
@@ -113,7 +113,7 @@ class _CustomerOrderHistoryScreenState
                       style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 11,
-                          color: Colors.grey)),
+                          color: AppColors.textHint)),
                 ),
             ]),
           )
@@ -126,11 +126,11 @@ class _CustomerOrderHistoryScreenState
             ),
             child: const Text('Cancel',
                 style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 14, color: Colors.grey))),
+                    fontFamily: 'Poppins', fontSize: 14, color: AppColors.textSecondary))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               shape: RoundedRectangleBorder(
@@ -191,189 +191,228 @@ class _CustomerOrderHistoryScreenState
     router.go('/customer/checkout');
   }
 
+  // ── TOP BAR (Pusaka header, shared visual language with other customer screens) ──
+  Widget _buildTopBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => context.go('/customer'),
+            child: const Text(
+              'Pusaka',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 28),
+          Expanded(
+            child: Row(
+              children: [
+                _NavLink(label: 'Menu', onTap: () => context.go('/customer')),
+                const SizedBox(width: 24),
+                _NavLink(label: 'Locations', onTap: () => context.go('/customer')),
+                const SizedBox(width: 24),
+                _NavLink(label: 'Our Story', onTap: () => context.go('/customer')),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => context.go('/customer/checkout'),
+            child: const Icon(
+              Icons.shopping_cart_outlined,
+              color: AppColors.textPrimary,
+              size: 24,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final historyAsync = ref.watch(_orderHistoryProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.primary,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-          onPressed: () => context.go('/customer')),
-        title: const Text('Order History',
-            style: TextStyle(
-                fontFamily: 'Poppins', 
-                fontWeight: FontWeight.w700,
-                fontSize: 20)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(_orderHistoryProvider)),
-        ],
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildTopBar(),
+            Expanded(
+              child: historyAsync.when(
+                loading: () => const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: AppColors.primary),
+                      SizedBox(height: 16),
+                      Text('Loading history...',
+                          style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                error: (e, _) => Center(
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.statusClosed.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.error_outline, size: 48, color: AppColors.accent),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text('Failed to load history',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    Text('$e',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            color: AppColors.textSecondary),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () => ref.invalidate(_orderHistoryProvider),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Try Again'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+                      )),
+                  ])),
+                data: (orders) {
+                  if (orders.isEmpty) return _emptyState(context);
+                  return _buildContent(orders);
+                },
+              ),
+            ),
+          ],
+        ),
       ),
-      body: historyAsync.when(
-        loading: () => Center(
+    );
+  }
+
+  Widget _buildContent(List<Map<String, dynamic>> orders) {
+    final filtered = _filter == 'all'
+        ? orders
+        : orders.where((o) => o['status'] == _filter).toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const CircularProgressIndicator(color: AppColors.accent),
-              const SizedBox(height: 16),
-              Text('Loading history...',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Colors.grey.shade600)),
+              const Text(
+                'Order History',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 34,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Review your past culinary journeys.',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 15, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 24),
+              _filterRow(),
+              const SizedBox(height: 24),
+              if (filtered.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 60),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        const Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textHint),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No orders with status "$_filter"',
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ...filtered.map(
+                  (order) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _OrderHistoryCard(
+                      order: order,
+                      onReorder: () => _reorder(context, order),
+                      onTrack: () => context.go('/customer/track/${order['order_number']}'),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
-        error: (e, _) => Center(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-            ),
-            const SizedBox(height: 20),
-            Text('Failed to load history',
-                style: TextStyle(
-                    fontFamily: 'Poppins', 
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade800),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            Text('$e',
-                style: TextStyle(
-                    fontFamily: 'Poppins', 
-                    fontSize: 13, 
-                    color: Colors.grey.shade600),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => ref.invalidate(_orderHistoryProvider),
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Try Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              )),
-          ])),
-        data: (orders) {
-          if (orders.isEmpty) return _emptyState(context);
+      ),
+    );
+  }
 
-          // Filter
-          final filtered = _filter == 'all'
-              ? orders
-              : orders
-                  .where((o) => o['status'] == _filter)
-                  .toList();
-
-          return Column(children: [
-            // Filter chips
-            Container(
-              color: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(children: [
-                  for (final f in [
-                    ('all', 'All'),
-                    ('paid', 'Paid'),
-                    ('new', 'New'),
-                    ('preparing', 'Cooking'),
-                    ('served', 'Served'),
-                    ('cancelled', 'Cancelled'),
-                  ])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(f.$2,
-                            style: TextStyle(
-                                fontFamily: 'Poppins', 
-                                fontSize: 13,
-                                fontWeight: _filter == f.$1 ? FontWeight.w600 : FontWeight.normal)),
-                        selected: _filter == f.$1,
-                        onSelected: (_) =>
-                            setState(() => _filter = f.$1),
-                        backgroundColor: Colors.grey.shade50,
-                        selectedColor:
-                            AppColors.accent.withValues(alpha: 0.1),
-                        checkmarkColor: AppColors.accent,
-                        side: BorderSide(
-                          color: _filter == f.$1 ? AppColors.accent : Colors.grey.shade300,
-                          width: 1,
-                        ))),
-                ])),
-            ),
-
-            // Count
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              child: Row(children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    filtered.isEmpty
-                        ? 'No orders'
-                        : '${filtered.length} order(s)',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.accent),
+  Widget _filterRow() {
+    const filters = [
+      ('all', 'All'),
+      ('paid', 'Paid'),
+      ('new', 'New'),
+      ('preparing', 'Cooking'),
+      ('served', 'Served'),
+      ('cancelled', 'Cancelled'),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: filters.map((f) {
+          final selected = _filter == f.$1;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => setState(() => _filter = f.$1),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.primary : AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                  border: Border.all(color: selected ? AppColors.primary : AppColors.border),
+                ),
+                child: Text(
+                  f.$2,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? Colors.white : AppColors.textSecondary,
                   ),
                 ),
-              ])),
-              
-            const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
-
-            // List
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.receipt_long_outlined,
-                              size: 64, color: Colors.grey.shade400),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No orders with status "$_filter"',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 14,
-                                color: Colors.grey.shade600),
-                            textAlign: TextAlign.center),
-                        ]))
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (_, i) => _OrderHistoryCard(
-                        order: filtered[i],
-                        onReorder: () =>
-                            _reorder(context, filtered[i]),
-                        onTrack: () => context.go(
-                            '/customer/track/${filtered[i]['order_number']}'),
-                      )),
+              ),
             ),
-          ]);
-        },
+          );
+        }).toList(),
       ),
     );
   }
@@ -385,17 +424,17 @@ class _CustomerOrderHistoryScreenState
         Container(
           width: 100, height: 100,
           decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.08),
+            color: AppColors.primary.withValues(alpha: 0.08),
             shape: BoxShape.circle),
           child: const Icon(Icons.receipt_long_outlined,
-              color: AppColors.accent, size: 48)),
+              color: AppColors.primary, size: 48)),
         const SizedBox(height: 24),
         const Text('No Orders Yet',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primary)),
+                color: AppColors.textPrimary)),
         const SizedBox(height: 12),
         const Text(
           'Start ordering your favorite food now!',
@@ -403,7 +442,7 @@ class _CustomerOrderHistoryScreenState
           style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
-              color: Colors.grey)),
+              color: AppColors.textSecondary)),
         const SizedBox(height: 32),
         ElevatedButton.icon(
           onPressed: () => context.go('/customer'),
@@ -417,8 +456,30 @@ class _CustomerOrderHistoryScreenState
             padding: const EdgeInsets.symmetric(
                 horizontal: 32, vertical: 14),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)))),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd)))),
       ])));
+}
+
+class _NavLink extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _NavLink({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
 }
 
 // ── Order History Card ─────────────────────────────────────────────
@@ -436,10 +497,10 @@ class _OrderHistoryCard extends StatelessWidget {
   static const _statusColors = {
     'new':       Color(0xFF3B82F6),
     'preparing': Color(0xFFF59E0B),
-    'ready':     Color(0xFF10B981),
-    'served':    Color(0xFF6366F1),
-    'paid':      Color(0xFF10B981),
-    'cancelled': Color(0xFFEF4444),
+    'ready':     AppColors.available,
+    'served':    AppColors.primary,
+    'paid':      AppColors.available,
+    'cancelled': AppColors.accent,
   };
   static const _statusLabels = {
     'new':       'New',
@@ -453,8 +514,8 @@ class _OrderHistoryCard extends StatelessWidget {
     'new':       Icons.fiber_new_outlined,
     'preparing': Icons.soup_kitchen_outlined,
     'ready':     Icons.check_circle_outline,
-    'served':    Icons.room_service_outlined,
-    'paid':      Icons.payment_outlined,
+    'served':    Icons.check_circle_outline,
+    'paid':      Icons.check_circle_outline,
     'cancelled': Icons.cancel_outlined,
   };
 
@@ -473,12 +534,12 @@ class _OrderHistoryCard extends StatelessWidget {
     final dt = DateTime.tryParse(iso)?.toLocal();
     if (dt == null) return '-';
     const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      '', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
     ];
-    return '${dt.day} ${months[dt.month]} ${dt.year}, '
-        '${dt.hour.toString().padLeft(2, '0')}:'
+    final time = '${dt.hour.toString().padLeft(2, '0')}:'
         '${dt.minute.toString().padLeft(2, '0')}';
+    return '${months[dt.month]} ${dt.day.toString().padLeft(2, '0')}, ${dt.year} • $time';
   }
 
   String _fmt(double v) {
@@ -499,189 +560,176 @@ class _OrderHistoryCard extends StatelessWidget {
     final statusIcon  = _statusIcons[status] ?? Icons.receipt_outlined;
     final total       = (order['total_amount'] as num?)?.toDouble() ?? 0;
     final rawItems    = order['order_items'] as List? ?? [];
-    final itemCount   = rawItems.fold<int>(
-        0, (s, i) => s + ((i as Map)['quantity'] as int? ?? 0));
+    // Reorder — for all statuses except an unpaid cancelled order (nothing
+    // was ever actually charged/served in that case).
+    final showReorder = !(!_isPaid && status == 'cancelled') || _isPaid;
 
     return Container(
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(
-          color: Colors.black.withValues(alpha: 0.04),
-          blurRadius: 12, offset: const Offset(0, 4))]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.08),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20))),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(statusIcon, color: statusColor, size: 16),
-            ),
-            const SizedBox(width: 10),
-            Text(statusLabel,
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: statusColor)),
-            const Spacer(),
-            // Live badge for active orders
-            if (_isActive)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  AnimatedContainer(
-                    duration: const Duration(seconds: 1),
-                    width: 6, height: 6,
-                    decoration: BoxDecoration(
-                        color: statusColor, shape: BoxShape.circle),
-                  ),
-                  const SizedBox(width: 6),
-                  Text('Active',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: statusColor)),
-                ])),
-          ])),
-
-        // Body
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            Row(children: [
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Expanded(
-                child: Text(
-                  order['order_number'] as String? ?? '-',
-                  style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: Color(0xFF1F2937))),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text('Rp ${_fmt(total)}',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: AppColors.accent)),
-              ),
-            ]),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(Icons.shopping_bag_outlined, size: 12, color: Colors.grey.shade500),
-                const SizedBox(width: 4),
-                Text(
-                  '$itemCount item(s)',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: Colors.grey.shade600)),
-                const SizedBox(width: 8),
-                Icon(Icons.access_time, size: 12, color: Colors.grey.shade500),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    _fmtDate(order['created_at'] as String?),
-                    style: TextStyle(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _fmtDate(order['created_at'] as String?),
+                      style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
-                        color: Colors.grey.shade600)),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      order['order_number'] as String? ?? '-',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-
-            // Preview items
-            if (rawItems.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  rawItems.take(2).map((i) {
-                    final m = (i as Map);
-                    return '${m['quantity']}x ${(m['menu_items'] as Map?)?['name'] ?? '-'}';
-                  }).join(' • ') + (rawItems.length > 2 ? ' • +${rawItems.length - 2}' : ''),
-                  style: TextStyle(
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Rp ${_fmt(total)}',
+                    style: const TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 12,
-                      color: Colors.grey.shade700),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 14, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusLabel,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: statusColor,
+                        ),
+                      ),
+                      if (_isActive) ...[
+                        const SizedBox(width: 6),
+                        AnimatedContainer(
+                          duration: const Duration(seconds: 1),
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
             ],
-
-            const SizedBox(height: 16),
-            // Action buttons
-            Row(children: [
-              // Track — for active orders
-              if (_isActive)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onTrack,
-                    icon: const Icon(Icons.location_on_outlined,
-                        size: 16),
-                    label: const Text('Track',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600)),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      side: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
-                      foregroundColor: const Color(0xFF6366F1),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12))),
-                  )),
-              if (_isActive) const SizedBox(width: 12),
-              // Reorder — for all statuses except cancelled
-              if (!(_isPaid == false && status == 'cancelled') ||
-                  _isPaid)
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: onReorder,
-                    icon: const Icon(Icons.replay_outlined, size: 16),
-                    label: const Text('Reorder',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      backgroundColor: AppColors.accent,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12))),
-                  )),
-            ]),
-          ])),
-      ]));
+          ),
+          const SizedBox(height: 16),
+          const Divider(color: AppColors.border, height: 1),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: rawItems.map((i) {
+                    final m = i as Map;
+                    final name = (m['menu_items'] as Map?)?['name'] ?? '-';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.eco_outlined, size: 14, color: AppColors.accent),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${m['quantity']}x $name',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 130,
+                child: Column(
+                  children: [
+                    if (_isActive) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: onTrack,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            side: const BorderSide(color: AppColors.border),
+                            foregroundColor: AppColors.textPrimary,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+                          ),
+                          child: const Text('Track',
+                              style: TextStyle(
+                                  fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (showReorder)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: onReorder,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+                          ),
+                          child: const Text('Reorder',
+                              style: TextStyle(
+                                  fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
