@@ -213,7 +213,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AppColors.accent, AppColors.primaryLight]),
+                    colors: [AppColors.accent, AppColors.primary]),
                   borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.lock_reset_outlined,
                     color: Colors.white, size: 22)),
@@ -255,14 +255,14 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                     decoration: InputDecoration(
                       labelText: 'Email Address',
                       labelStyle: const TextStyle(fontFamily: 'Poppins',
-                          fontSize: 12, color: Color(0xFF6B7280)),
+                          fontSize: 12, color: AppColors.textSecondary),
                       hintText: 'example: name@email.com',
                       hintStyle: const TextStyle(fontFamily: 'Poppins',
-                          fontSize: 13, color: Colors.grey),
+                          fontSize: 13, color: AppColors.textHint),
                       prefixIcon: const Icon(Icons.email_outlined,
-                          size: 20, color: AppColors.primaryLight),
+                          size: 20, color: AppColors.primary),
                       filled: true,
-                      fillColor: const Color(0xFFF9FAFB),
+                      fillColor: AppColors.surfaceVariant,
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none),
@@ -271,7 +271,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                           borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2)),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 2)),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 16)),
                   ),
@@ -284,7 +284,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 ),
                 child: const Text('Cancel',
                     style: TextStyle(fontFamily: 'Poppins',
-                        fontSize: 14, color: Color(0xFF6B7280)))),
+                        fontSize: 14, color: AppColors.textSecondary))),
               ElevatedButton(
                 onPressed: sending
                     ? null
@@ -331,7 +331,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                         }
                       },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryLight,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -395,174 +395,59 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   // ─── BUILD ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    if (w >= 900) return _buildDesktop();
-    if (w >= 600) return _buildTablet();
-    return _buildMobile();
-  }
-
-  Widget _buildDesktop() => Scaffold(
-    backgroundColor: Colors.white,
-    body: Row(children: [
-      Expanded(flex: 5, child: Container(
-        decoration: const BoxDecoration(gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [AppColors.accent, AppColors.primary, AppColors.primaryLight])),
-        child: Stack(children: [
-          Positioned.fill(child: CustomPaint(painter: _DotPatternPainter())),
-          Positioned(
-            top: 40,
-            right: 40,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.language, color: Colors.white70, size: 16),
-                  SizedBox(width: 8),
-                  Text('EN', style: TextStyle(fontFamily: 'Poppins', color: Colors.white70)),
-                ],
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Stack(
+        children: [
+          Positioned.fill(child: CustomPaint(painter: _StripeBackgroundPainter())),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(32, 40, 32, 32),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: _buildForm(),
+                  ),
+                ),
               ),
             ),
           ),
-          Padding(padding: const EdgeInsets.all(60),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(width: 52, height: 52,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.accent, AppColors.primaryLight]),
-                    borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Icons.restaurant, color: Colors.white, size: 28)),
-                const SizedBox(width: 14),
-                const Text('RestaurantOS', style: TextStyle(fontFamily: 'Poppins',
-                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
-              ]),
-              const Spacer(),
-              const Text('Reservations &\nOnline Ordering',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
-                  fontSize: 54, fontWeight: FontWeight.w800, height: 1.1,
-                  letterSpacing: -0.5)),
-              const SizedBox(height: 24),
-              const Text(
-                'Enjoy the convenience of ordering food\n'
-                'and reserving your favorite table\n'
-                'anytime, anywhere.',
-                style: TextStyle(fontFamily: 'Poppins',
-                  color: Colors.white70, fontSize: 16, height: 1.7)),
-              const SizedBox(height: 48),
-              Wrap(spacing: 12, runSpacing: 12, children: [
-                _pill('🍽️ Full menu'), _pill('📅 Easy reservations'),
-                _pill('📦 Track orders'), _pill('🤖 AI Chatbot'),
-                _pill('💳 Digital payments'),
-              ]),
-              const Spacer(),
-              const Text('© 2026 RestaurantOS', style: TextStyle(
-                fontFamily: 'Poppins', color: Colors.white24, fontSize: 12)),
-            ])),
-        ]))),
-      Expanded(flex: 4, child: Container(
-        color: const Color(0xFFF8F9FA),
-        child: Center(child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 56, vertical: 40),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: _buildForm()))))),
-    ]));
-
-  Widget _pill(String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.2))),
-    child: Text(label, style: const TextStyle(fontFamily: 'Poppins',
-      color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)));
-
-  Widget _buildTablet() => Scaffold(
-    backgroundColor: const Color(0xFFF0F2F5),
-    body: Center(child: SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-      child: Container(
-        width: 560, padding: const EdgeInsets.all(48),
-        decoration: BoxDecoration(color: Colors.white,
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 60, offset: const Offset(0, 12))]),
-        child: Column(children: [
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.accent, AppColors.primaryLight]),
-              borderRadius: BorderRadius.circular(16)),
-            child: const Icon(Icons.restaurant, color: Colors.white, size: 28)),
-          const SizedBox(height: 20),
-          const Text('RestaurantOS', style: TextStyle(fontFamily: 'Poppins',
-            fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
-          const SizedBox(height: 32),
-          _buildForm(),
-        ])))));
-
-  Widget _buildMobile() => Scaffold(
-    backgroundColor: const Color(0xFFF8F9FA),
-    body: SafeArea(child: SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 40, 20, 32),
-      child: Column(children: [
-        Container(
-          width: 72, height: 72,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.accent, AppColors.primaryLight]),
-            borderRadius: BorderRadius.circular(20)),
-          child: const Icon(Icons.restaurant, color: Colors.white, size: 34)),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            )],
-          ),
-          child: _buildForm(),
-        ),
-      ]))));
+        ],
+      ),
+    );
+  }
 
   Widget _buildForm() => Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const Text('Welcome', textAlign: TextAlign.center,
-        style: TextStyle(fontFamily: 'Poppins', fontSize: 28,
-          fontWeight: FontWeight.w800, color: AppColors.primary, letterSpacing: -0.5)),
-      const SizedBox(height: 8),
-      const Text('Log in to continue to your account',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
-          color: Color(0xFF6B7280), height: 1.5)),
+      Stack(
+        alignment: Alignment.topRight,
+        children: [
+          Column(
+            children: [
+              const Text('Pusaka', textAlign: TextAlign.center,
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 40,
+                  fontWeight: FontWeight.w800, color: AppColors.primary,
+                  letterSpacing: -0.5)),
+              const SizedBox(height: 6),
+              Text(_isSignUp ? 'Create your account' : 'Modern Indonesian Heritage',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                  fontStyle: FontStyle.italic, color: AppColors.textSecondary)),
+            ],
+          ),
+          const Icon(Icons.star_rounded, color: AppColors.border, size: 22),
+        ],
+      ),
       const SizedBox(height: 32),
-      _socialBtn(
-        icon: SizedBox(width: 22, height: 22,
-          child: CustomPaint(painter: _GoogleIconPainter())),
-        label: 'Continue with Google', onTap: _signInGoogle),
-      const SizedBox(height: 28),
-      const Row(children: [
-        Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
-        Padding(padding: EdgeInsets.symmetric(horizontal: 14),
-          child: Text('or', style: TextStyle(fontFamily: 'Poppins',
-            fontSize: 13, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500))),
-        Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
-      ]),
-      const SizedBox(height: 28),
       _emailForm(),
     ]);
 
@@ -571,45 +456,62 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       if (_isSignUp) ...[
-        _field(ctrl: _nameCtrl, hint: 'Full name', icon: Icons.person_outline),
-        const SizedBox(height: 14),
-        _phoneField(),
-        const SizedBox(height: 14),
+        _field(ctrl: _nameCtrl, label: 'Full Name', hint: 'Enter your full name'),
+        const SizedBox(height: 20),
+        _field(ctrl: _phoneCtrl, label: 'Phone Number', hint: 'Example: 08123456789',
+          type: TextInputType.phone),
+        const SizedBox(height: 20),
       ],
-      _field(ctrl: _emailCtrl, hint: 'Email Address',
-        icon: Icons.email_outlined, type: TextInputType.emailAddress),
-      const SizedBox(height: 14),
-      _field(ctrl: _passCtrl, hint: 'Password',
-        icon: Icons.lock_outline, obscure: _obscure,
+      _field(ctrl: _emailCtrl, label: 'Email Address', hint: 'Enter your email',
+        type: TextInputType.emailAddress),
+      const SizedBox(height: 20),
+      _field(ctrl: _passCtrl, label: 'Password', hint: 'Enter your password',
+        obscure: _obscure,
         suffix: IconButton(
           icon: Icon(_obscure
             ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-            size: 20, color: const Color(0xFF9CA3AF)),
+            size: 20, color: AppColors.textHint),
           onPressed: () => setState(() => _obscure = !_obscure))),
-      const SizedBox(height: 24),
-      _primaryBtn(
-        label: _isSignUp ? 'Create Account' : 'Log In', onTap: _submitEmail),
-      const SizedBox(height: 16),
-      // Forgot password — only shown in login mode
-      if (!_isSignUp)
-        Center(
+      if (!_isSignUp) ...[
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
           child: TextButton(
             onPressed: _forgotPassword,
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: const Text('Forgot password?',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
-                color: AppColors.accent, fontWeight: FontWeight.w600))),
+                color: AppColors.textSecondary, fontWeight: FontWeight.w500))),
         ),
-      const SizedBox(height: 8),
+      ],
+      const SizedBox(height: 28),
+      _primaryBtn(
+        label: _isSignUp ? 'Create Account' : 'Sign In', onTap: _submitEmail),
+      const SizedBox(height: 24),
+      const Row(children: [
+        Expanded(child: Divider(color: AppColors.border, thickness: 1)),
+        Padding(padding: EdgeInsets.symmetric(horizontal: 14),
+          child: Text('or', style: TextStyle(fontFamily: 'Poppins',
+            fontSize: 13, color: AppColors.textHint, fontWeight: FontWeight.w500))),
+        Expanded(child: Divider(color: AppColors.border, thickness: 1)),
+      ]),
+      const SizedBox(height: 24),
+      _outlineBtn(
+        icon: SizedBox(width: 20, height: 20,
+          child: CustomPaint(painter: _GoogleIconPainter())),
+        label: 'Continue with Google', onTap: _signInGoogle),
+      const SizedBox(height: 24),
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            _isSignUp ? 'Already have an account?' : "Don't have an account?",
+            _isSignUp ? 'Already have an account?' : 'New to Pusaka?',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
-              color: Color(0xFF6B7280))),
+              color: AppColors.textSecondary)),
           TextButton(
             onPressed: () => setState(() {
               _isSignUp = !_isSignUp;
@@ -620,86 +522,48 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
               minimumSize: Size.zero,
             ),
             child: Text(
-              _isSignUp ? 'Log In' : 'Sign Up',
+              _isSignUp ? 'Sign In' : 'Create an account',
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
-                color: AppColors.primaryLight, fontWeight: FontWeight.w700))),
+                color: AppColors.primary, fontWeight: FontWeight.w700))),
         ],
       ),
     ]);
 
-  Widget _phoneField() => TextField(
-    controller: _phoneCtrl,
-    keyboardType: TextInputType.phone,
-    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-    decoration: InputDecoration(
-      labelText: 'Phone Number',
-      labelStyle: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 12, color: Color(0xFF6B7280)),
-      hintText: 'Example: 08123456789',
-      hintStyle: const TextStyle(
-          fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF9CA3AF)),
-      prefixIcon: const Icon(Icons.phone_outlined,
-          size: 20, color: AppColors.primaryLight),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5)),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2)),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 16)));
-
-  Widget _socialBtn({
-    required Widget icon, required String label, required VoidCallback onTap,
-  }) => GestureDetector(
-    onTap: _loading ? null : onTap,
-    child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
-          blurRadius: 8, offset: const Offset(0, 2))]),
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        icon, const SizedBox(width: 12),
-        Text(label, style: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
-      ])));
-
   Widget _field({
-    required TextEditingController ctrl, required String hint,
-    required IconData icon, TextInputType type = TextInputType.text,
-    bool obscure = false, bool enabled = true, Widget? suffix,
-  }) => TextField(
-    controller: ctrl, keyboardType: type,
-    obscureText: obscure, enabled: enabled,
-    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-    decoration: InputDecoration(
-      labelText: hint,
-      labelStyle: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 12, color: Color(0xFF6B7280)),
-      prefixIcon: Icon(icon, size: 20, color: AppColors.primaryLight),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: enabled ? Colors.white : const Color(0xFFF9FAFB),
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5)),
-      enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2)),
-      disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16)));
+    required TextEditingController ctrl, required String label, required String hint,
+    TextInputType type = TextInputType.text,
+    bool obscure = false, Widget? suffix,
+  }) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+        fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      TextField(
+        controller: ctrl, keyboardType: type,
+        obscureText: obscure,
+        style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+          color: AppColors.textPrimary),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+            color: AppColors.textHint),
+          suffixIcon: suffix,
+          filled: true,
+          fillColor: AppColors.surfaceVariant,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: AppColors.border, width: 1.5)),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: AppColors.border, width: 1.5)),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+        ),
+      ),
+    ]);
 
   Widget _primaryBtn({required String label, required VoidCallback onTap}) =>
     GestureDetector(
@@ -707,31 +571,39 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.primary, AppColors.primaryLight]),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(
-            color: AppColors.primaryLight.withValues(alpha: 0.3),
-            blurRadius: 16, offset: const Offset(0, 6))]),
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(4),
+        ),
         child: Center(child: _loading
-          ? const SizedBox(width: 24, height: 24,
+          ? const SizedBox(width: 22, height: 22,
               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
           : Text(label, style: const TextStyle(fontFamily: 'Poppins',
-              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700,
-              letterSpacing: 0.5)))));
+              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)))));
+
+  Widget _outlineBtn({
+    required Widget icon, required String label, required VoidCallback onTap,
+  }) => GestureDetector(
+    onTap: _loading ? null : onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 15),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.border, width: 1.5)),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        icon, const SizedBox(width: 12),
+        Text(label, style: const TextStyle(fontFamily: 'Poppins',
+          fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+      ])));
 }
 
-class _DotPatternPainter extends CustomPainter {
+class _StripeBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.04)
-      ..style = PaintingStyle.fill;
-    const spacing = 32.0;
-    for (double x = 0; x < size.width; x += spacing) {
-      for (double y = 0; y < size.height; y += spacing) {
-        canvas.drawCircle(Offset(x, y), 2, paint);
-      }
+    final paint = Paint()..color = AppColors.footerBackground.withValues(alpha: 0.35);
+    const stripeHeight = 6.0;
+    const gap = 20.0;
+    for (double y = 0; y < size.height; y += stripeHeight + gap) {
+      canvas.drawRect(Rect.fromLTWH(0, y, size.width, stripeHeight), paint);
     }
   }
   @override bool shouldRepaint(_) => false;
