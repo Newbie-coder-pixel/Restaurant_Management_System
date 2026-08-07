@@ -101,327 +101,452 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
     return items;
   }
 
+  void _addItem(Map<String, dynamic> item) {
+    ref.read(cartProvider.notifier).addItem(CartItem(
+          menuItemId: item['id'],
+          name: item['name'],
+          price: (item['price'] as num).toDouble(),
+          imageUrl: item['image_url'],
+        ));
+  }
+
+  void _removeItem(Map<String, dynamic> item, int currentQty) {
+    ref
+        .read(cartProvider.notifier)
+        .updateQuantity(item['id'], currentQty - 1);
+  }
+
+  int _qtyOf(CartState cart, dynamic itemId) => cart.items
+      .where((c) => c.menuItemId == itemId)
+      .fold(0, (s, c) => s + c.quantity);
+
+  String _categorySectionTitle() {
+    if (_selectedCategoryId == null) return 'Full Menu';
+    final match = _categories
+        .where((c) => c['id'] == _selectedCategoryId)
+        .toList();
+    final name = match.isNotEmpty ? match.first['name'] as String? : null;
+    return '${name ?? 'Menu'} Selection';
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
+    final featured =
+        _search.isEmpty && _menuItems.isNotEmpty ? _menuItems.first : null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          _buildSliverHeader(),
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                _buildSearchBar(),
-                _buildCategoryChips(),
-              ],
-            ),
-          ),
-          _loading
-              ? const SliverFillRemaining(
-                  child: Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.accent)))
-              : _filteredItems.isEmpty
-                  ? SliverFillRemaining(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.restaurant_menu_outlined,
-                                size: 80, color: Colors.grey.shade300),
-                            const SizedBox(height: 16),
-                            Text('No menu items found',
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 16,
-                                    color: Colors.grey.shade600,
-                                    fontWeight: FontWeight.w500)),
-                            const SizedBox(height: 8),
-                            Text(
-                                'Try a different keyword or choose another category',
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 13,
-                                    color: Colors.grey.shade400)),
-                          ],
-                        ),
-                      ))
-                  : SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                          16, 8, 16, cart.isEmpty ? 100 : 140),
-                      sliver: SliverGrid(
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 180,
-                                childAspectRatio: 0.68,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 16),
-                        delegate: SliverChildBuilderDelegate(
-                          (_, i) {
-                            final item = _filteredItems[i];
-                            final qty = cart.items
-                                .where((c) => c.menuItemId == item['id'])
-                                .fold(0, (s, c) => s + c.quantity);
-                            return _MenuCard(
-                              item: item,
-                              cartQty: qty,
-                              onAdd: () {
-                                // ✅ setBranch was already called in initState,
-                                // no need to call it again here
-                                ref.read(cartProvider.notifier).addItem(
-                                    CartItem(
-                                      menuItemId: item['id'],
-                                      name: item['name'],
-                                      price:
-                                          (item['price'] as num).toDouble(),
-                                      imageUrl: item['image_url'],
-                                    ));
-                              },
-                              onRemove: () {
-                                final currentQty = cart.items
-                                    .where((c) => c.menuItemId == item['id'])
-                                    .fold(0, (s, c) => s + c.quantity);
-                                ref
-                                    .read(cartProvider.notifier)
-                                    .updateQuantity(
-                                        item['id'], currentQty - 1);
-                              },
-                            );
-                          },
-                          childCount: _filteredItems.length,
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            SliverToBoxAdapter(child: _buildTopNav(cart)),
+            SliverToBoxAdapter(child: _buildSearchBar()),
+            SliverToBoxAdapter(child: _buildCategoryTabs()),
+            if (featured != null)
+              SliverToBoxAdapter(
+                  child: _buildFeatured(featured, cart)),
+            if (!_loading && _filteredItems.isNotEmpty)
+              SliverToBoxAdapter(child: _buildSectionHeader()),
+            _loading
+                ? const SliverFillRemaining(
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary)))
+                : _filteredItems.isEmpty
+                    ? const SliverFillRemaining(
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.restaurant_menu_outlined,
+                                  size: 80, color: AppColors.border),
+                              SizedBox(height: 16),
+                              Text('No menu items found',
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 16,
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w500)),
+                              SizedBox(height: 8),
+                              Text(
+                                  'Try a different keyword or choose another category',
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 13,
+                                      color: AppColors.textHint)),
+                            ],
+                          ),
+                        ))
+                    : SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 220,
+                                  childAspectRatio: 0.72,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 20),
+                          delegate: SliverChildBuilderDelegate(
+                            (_, i) {
+                              final item = _filteredItems[i];
+                              final qty = _qtyOf(cart, item['id']);
+                              return _MenuCard(
+                                item: item,
+                                cartQty: qty,
+                                onAdd: () => _addItem(item),
+                                onRemove: () => _removeItem(item, qty),
+                              );
+                            },
+                            childCount: _filteredItems.length,
+                          ),
                         ),
                       ),
-                    ),
-        ],
+          ],
+        ),
       ),
-      floatingActionButton: cart.isEmpty
-          ? null
-          : _CartFab(
-              cart: cart,
-              onCheckout: () => context.go('/customer/checkout'),
-            ),
     );
   }
 
-  Widget _buildSliverHeader() => SliverAppBar(
-        expandedHeight: 120,
-        pinned: true,
-        floating: true,
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        flexibleSpace: FlexibleSpaceBar(
-          // ✅ Show the branch name in the header
-          title: Text(
-            _branchName.isNotEmpty ? _branchName : 'Restaurant Menu',
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600,
-                fontSize: 18),
+  // ── TOP NAV ──────────────────────────────────────────────────
+  Widget _buildTopNav(CartState cart) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () =>
+                context.canPop() ? context.pop() : context.go('/customer'),
+            child: const Text('Pusaka',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary)),
           ),
-          centerTitle: true,
-          background: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.primary,
-                    AppColors.primaryLight,
-                    AppColors.primaryLight
-                  ]),
-            ),
+          const SizedBox(width: 28),
+          Expanded(
+            child: Row(children: [
+              _NavLink(
+                  label: 'Menu',
+                  active: true,
+                  onTap: () => _scrollController.animateTo(0,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeInOutCubic)),
+              const SizedBox(width: 24),
+              _NavLink(label: 'Locations', onTap: () => context.go('/customer')),
+              const SizedBox(width: 24),
+              _NavLink(label: 'Our Story', onTap: () => context.go('/customer')),
+            ]),
           ),
-        ),
-        leading: IconButton(
-          icon:
-              const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go('/customer?tab=0'),
-        ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            child: IconButton(
-              icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.calendar_today_outlined,
-                      color: Colors.white, size: 18)),
-              tooltip: 'Book a table',
-              onPressed: () =>
-                  context.push('/customer/booking/${widget.branchId}'),
-            ),
+          GestureDetector(
+            onTap: cart.isEmpty
+                ? null
+                : () => context.go('/customer/checkout'),
+            child: Stack(clipBehavior: Clip.none, children: [
+              const Icon(Icons.shopping_cart_outlined,
+                  color: AppColors.textPrimary, size: 24),
+              if (!cart.isEmpty)
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    decoration: const BoxDecoration(
+                        color: AppColors.accent, shape: BoxShape.circle),
+                    child: Text('${cart.itemCount}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ),
+                ),
+            ]),
           ),
         ],
-      );
+      ),
+    );
+  }
 
-  Widget _buildSearchBar() => Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+  Widget _buildSearchBar() => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: TextField(
           onChanged: (v) => setState(() => _search = v),
           decoration: InputDecoration(
             hintText: 'Search for your favorite menu...',
             hintStyle: const TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 14,
-                color: Color(0xFF9CA3AF)),
+                fontSize: 13,
+                color: AppColors.textHint),
             prefixIcon: const Icon(Icons.search_rounded,
-                color: Color(0xFF9CA3AF), size: 20),
+                color: AppColors.textHint, size: 18),
             suffixIcon: _search.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
+                    icon: const Icon(Icons.clear,
+                        size: 16, color: AppColors.textHint),
                     onPressed: () => setState(() => _search = ''),
                   )
                 : null,
+            isDense: true,
             filled: true,
-            fillColor: Colors.white,
+            fillColor: AppColors.surfaceVariant,
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(10),
                 borderSide:
-                    const BorderSide(color: AppColors.accent, width: 2)),
-            contentPadding: const EdgeInsets.symmetric(vertical: 14)),
-          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)));
+                    const BorderSide(color: AppColors.primary, width: 1.5)),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 13,
+              color: AppColors.textPrimary)));
 
-  Widget _buildCategoryChips() => SizedBox(
-      height: 56,
+  Widget _buildCategoryTabs() => SizedBox(
+      height: 48,
       child: ListView.separated(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
           itemCount: _categories.length + 1,
-          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          separatorBuilder: (_, __) => const SizedBox(width: 22),
           itemBuilder: (_, i) {
             if (i == 0) {
-              return _chip('All Menu', _selectedCategoryId == null,
-                  () => setState(() => _selectedCategoryId = null));
+              return _NavLink(
+                  label: 'All Menu',
+                  active: _selectedCategoryId == null,
+                  onTap: () => setState(() => _selectedCategoryId = null));
             }
             final cat = _categories[i - 1];
-            return _chip(cat['name'], _selectedCategoryId == cat['id'],
-                () => setState(() => _selectedCategoryId = cat['id']));
+            return _NavLink(
+                label: cat['name'] as String,
+                active: _selectedCategoryId == cat['id'],
+                onTap: () =>
+                    setState(() => _selectedCategoryId = cat['id']));
           }));
 
-  Widget _chip(String label, bool selected, VoidCallback onTap) =>
-      GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.accent : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: selected
-                        ? Colors.transparent
-                        : const Color(0xFFE5E7EB),
-                    width: 1.5),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                            color: AppColors.accent
-                                .withValues(alpha: 0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 2))
-                      ]
-                    : const [],
-              ),
-              child: Text(label,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: selected
-                          ? Colors.white
-                          : const Color(0xFF4B5563)))));
-}
+  // ── FEATURED ─────────────────────────────────────────────────
+  Widget _buildFeatured(Map<String, dynamic> item, CartState cart) {
+    final price = (item['price'] as num).toDouble();
+    final name = item['name'] as String;
+    final desc = item['description'] as String? ?? '';
+    final qty = _qtyOf(cart, item['id']);
 
-// ── Cart FAB ──────────────────────────────────────────────────────
-class _CartFab extends StatelessWidget {
-  final CartState cart;
-  final VoidCallback onCheckout;
-  const _CartFab({required this.cart, required this.onCheckout});
+    Widget placeholder() => Container(
+        color: AppColors.surfaceVariant,
+        alignment: Alignment.center,
+        child: Text(_emojiFor(item['category_id']),
+            style: const TextStyle(fontSize: 48)));
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onCheckout,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                  color:
-                      AppColors.primary.withValues(alpha: 0.35),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4))
-            ]),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Stack(children: [
-            const Icon(Icons.shopping_cart_outlined,
-                color: Colors.white, size: 22),
-            Positioned(
-              top: -2,
-              right: -2,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                    color: AppColors.accent, shape: BoxShape.circle),
-                constraints: const BoxConstraints(
-                    minWidth: 14, minHeight: 14),
-                child: Text('${cart.itemCount}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ]),
-          const SizedBox(width: 10),
-          const Text('Cart',
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: AspectRatio(
+        aspectRatio: 1.5,
+        child: item['image_url'] != null
+            ? Image.network(item['image_url'],
+                fit: BoxFit.cover, errorBuilder: (_, __, ___) => placeholder())
+            : placeholder(),
+      ),
+    );
+
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+              color: AppColors.badgeDark,
+              borderRadius: BorderRadius.circular(4)),
+          child: const Text('DISH OF THE MONTH',
               style: TextStyle(
                   fontFamily: 'Poppins',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14)),
-          const SizedBox(width: 8),
-          Container(
-              width: 1,
-              height: 16,
-              color: Colors.white.withValues(alpha: 0.4)),
-          const SizedBox(width: 8),
-          Text(_fmt(cart.total),
+                  letterSpacing: 0.5)),
+        ),
+        const SizedBox(height: 14),
+        Text(name,
+            style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary)),
+        if (desc.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(desc,
               style: const TextStyle(
                   fontFamily: 'Poppins',
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14)),
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.6)),
+        ],
+        const SizedBox(height: 18),
+        Row(children: [
+          Text('Rp${_fmtPrice(price)}',
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary)),
+          const Spacer(),
+          if (qty == 0)
+            ElevatedButton.icon(
+              onPressed: () => _addItem(item),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add to Basket'),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  textStyle: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13),
+                  elevation: 0),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(8)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                _iconStepBtn(Icons.remove, () => _removeItem(item, qty)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('$qty',
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: Colors.white)),
+                ),
+                _iconStepBtn(Icons.add, () => _addItem(item)),
+              ]),
+            ),
         ]),
-      ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 640;
+        final content = isWide
+            ? Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                Expanded(flex: 5, child: image),
+                const SizedBox(width: 28),
+                Expanded(flex: 5, child: details),
+              ])
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [image, const SizedBox(height: 16), details],
+              );
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(16)),
+          child: content,
+        );
+      }),
     );
   }
 
-  String _fmt(double v) {
+  Widget _iconStepBtn(IconData icon, VoidCallback onTap) => GestureDetector(
+      onTap: onTap,
+      child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, color: Colors.white, size: 16)));
+
+  Widget _buildSectionHeader() => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(_categorySectionTitle(),
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary)),
+            Row(
+              children: List.generate(
+                  3,
+                  (i) => Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                          color: AppColors.textHint, shape: BoxShape.circle))),
+            ),
+          ],
+        ),
+      );
+
+  String _fmtPrice(double v) {
     final s = v.toStringAsFixed(0);
     final buffer = StringBuffer();
     for (int i = 0; i < s.length; i++) {
       if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
       buffer.write(s[i]);
     }
-    return 'Rp $buffer';
+    return buffer.toString();
+  }
+
+  String _emojiFor(String? catId) {
+    if (catId == null) return '🍽️';
+    const emojis = ['🍜', '🍛', '🥗', '🍲', '☕', '🧃', '🍰', '🥤'];
+    return emojis[catId.hashCode.abs() % emojis.length];
+  }
+}
+
+// ── Top nav / category text link ─────────────────────────────────
+class _NavLink extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _NavLink(
+      {required this.label, this.active = false, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.only(bottom: 4),
+        decoration: active
+            ? const BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: AppColors.primary, width: 2)))
+            : null,
+        child: Text(label,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color:
+                    active ? AppColors.primary : AppColors.textSecondary)),
+      ),
+    );
   }
 }
 
@@ -443,143 +568,120 @@ class _MenuCard extends StatelessWidget {
     final name = item['name'] as String;
     final desc = item['description'] as String? ?? '';
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+    return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: cartQty > 0
-              ? AppColors.accent
-              : const Color(0xFFE5E7EB),
+          color: cartQty > 0 ? AppColors.accent : AppColors.border,
           width: cartQty > 0 ? 1.5 : 1.0,
         ),
-        boxShadow: [
-          BoxShadow(
-              color: cartQty > 0
-                  ? AppColors.accent.withValues(alpha: 0.12)
-                  : Colors.black.withValues(alpha: 0.06),
-              blurRadius: cartQty > 0 ? 14 : 12,
-              offset: const Offset(0, 4)),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              Container(
-                height: 120,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF3F4F6),
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: item['image_url'] != null
-                    ? ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(20)),
-                        child: Image.network(
-                          item['image_url'],
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
-                        ))
-                    : _buildPlaceholder(),
-              ),
-              if (cartQty > 0)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text('$cartQty',
-                        style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: AppColors.primary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                if (desc.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(desc,
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 10,
-                          color: Color(0xFF9CA3AF)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ],
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text('Rp${_fmt(price)}',
-                          style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                              color: AppColors.accent)),
-                    ),
-                    if (cartQty == 0)
-                      GestureDetector(
-                        onTap: onAdd,
-                        child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: AppColors.accent,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(Icons.add,
-                                color: Colors.white, size: 18)),
-                      ),
-                  ],
-                ),
-              ],
+          Container(
+            height: 120,
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
             ),
+            clipBehavior: Clip.antiAlias,
+            child: item['image_url'] != null
+                ? Image.network(
+                    item['image_url'],
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                  )
+                : _buildPlaceholder(),
           ),
-          if (cartQty > 0) ...[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Row(
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _iqBtn(Icons.remove, onRemove),
-                  Expanded(
-                      child: Text('$cartQty',
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(name,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: AppColors.textPrimary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('Rp${_fmt(price)}',
                           style: const TextStyle(
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: AppColors.primary),
-                          textAlign: TextAlign.center)),
-                  _iqBtn(Icons.add, onAdd),
+                              fontSize: 11,
+                              color: AppColors.primary)),
+                    ],
+                  ),
+                  if (desc.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(desc,
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                            height: 1.3),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                  const Spacer(),
+                  const SizedBox(height: 8),
+                  cartQty == 0
+                      ? SizedBox(
+                          width: double.infinity,
+                          child: GestureDetector(
+                            onTap: onAdd,
+                            child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 9),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text('Add',
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12))),
+                          ),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.accent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              _iqBtn(Icons.remove, onRemove),
+                              Expanded(
+                                  child: Text('$cartQty',
+                                      style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: Colors.white),
+                                      textAlign: TextAlign.center)),
+                              _iqBtn(Icons.add, onAdd),
+                            ],
+                          ),
+                        ),
                 ],
               ),
             ),
-          ] else
-            const SizedBox(height: 12),
+          ),
         ],
       ),
     );
@@ -597,7 +699,7 @@ class _MenuCard extends StatelessWidget {
               style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 10,
-                  color: Color(0xFF9CA3AF)),
+                  color: AppColors.textHint),
               maxLines: 1,
               overflow: TextOverflow.ellipsis),
         ],
@@ -616,14 +718,9 @@ class _MenuCard extends StatelessWidget {
 
   Widget _iqBtn(IconData icon, VoidCallback onTap) => GestureDetector(
       onTap: onTap,
-      child: Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: AppColors.accent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: Colors.white, size: 16)));
+      child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+          child: Icon(icon, color: Colors.white, size: 15)));
 
   String _fmt(double v) {
     final s = v.toStringAsFixed(0);
