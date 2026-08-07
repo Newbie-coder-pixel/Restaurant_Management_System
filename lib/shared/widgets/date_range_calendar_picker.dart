@@ -7,9 +7,9 @@
 // sets the end (swapping if picked before the start).
 
 import 'package:flutter/material.dart';
+import '../../core/theme/app_theme.dart';
 
-const _navy = Color(0xFF1A1A2E);
-const _rangeBg = Color(0xFFE8EAF6);
+const _rangeBg = Color(0xFFF3E6C8); // warm tint of AppColors.primary
 
 const _monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -156,7 +156,7 @@ class _DateRangeDialogState extends State<_DateRangeDialog> {
     final rightMonth = DateTime(_baseMonth.year, _baseMonth.month + 1, 1);
 
     return Dialog(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
@@ -251,7 +251,7 @@ class _DateRangeDialogState extends State<_DateRangeDialog> {
                             ? () => Navigator.pop(context, DateTimeRange(start: _start!, end: _end!))
                             : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _navy,
+                          backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
@@ -395,7 +395,7 @@ class _DateRangeDialogState extends State<_DateRangeDialog> {
           height: 28,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: (isStart || isEnd) ? _navy : null,
+            color: (isStart || isEnd) ? AppColors.primary : null,
           ),
           alignment: Alignment.center,
           child: Text(

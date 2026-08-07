@@ -656,7 +656,7 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
     final o = _order!;
     final payColor = o.paymentStatus == 'paid'
         ? const Color(0xFF4CAF50)
-        : const Color(0xFFE94560);
+        : AppColors.accent;
     final payLabel = o.paymentStatus == 'paid' ? 'Paid' : 'Unpaid';
     final orderTime =
         '${o.createdAt.hour.toString().padLeft(2, '0')}:${o.createdAt.minute.toString().padLeft(2, '0')} WIB';

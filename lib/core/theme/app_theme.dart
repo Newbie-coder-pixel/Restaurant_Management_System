@@ -1,33 +1,57 @@
 // lib/core/theme/app_theme.dart
+//
+// Color/type tokens follow DESIGN.md ("Pusaka" design system) — keep the two
+// in sync when either changes.
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const primary        = Color(0xFF1A1A2E);
-  static const primaryLight   = Color(0xFF16213E);
-  static const accent         = Color(0xFFE94560);
-  static const accentOrange   = Color(0xFFFF6B35);
+  static const primary        = Color(0xFFC08A17); // gold/mustard
+  static const primaryLight   = Color(0xFFD9A53F);
+  static const accent         = Color(0xFFA6491F); // terracotta/rust
+  static const accentOrange   = Color(0xFFD97706);
 
   static const available      = Color(0xFF4CAF50);
-  static const occupied       = Color(0xFFE94560);
-  static const reserved       = Color(0xFFFF9800);
+  static const occupied       = Color(0xFFA6491F);
+  static const reserved       = Color(0xFFD97706);
   static const cleaning       = Color(0xFF2196F3);
 
   static const orderNew       = Color(0xFF9C27B0);
-  static const orderPreparing = Color(0xFFFF9800);
+  static const orderPreparing = Color(0xFFD97706);
   static const orderReady     = Color(0xFF4CAF50);
   static const orderServed    = Color(0xFF607D8B);
 
-  static const background     = Color(0xFFF8F9FA);
-  static const surface        = Colors.white;
-  static const surfaceVariant = Color(0xFFF1F3F4);
-  static const border         = Color(0xFFE8EAED);
-  static const textPrimary    = Color(0xFF1A1A2E);
-  static const textSecondary  = Color(0xFF6B7280);
-  static const textHint       = Color(0xFF9CA3AF);
+  // Status tokens (bookings / order tracking badges)
+  static const statusConfirmed  = primary;
+  static const statusWaitlist   = Color(0xFFD97706);
+  static const statusCompleted  = Color(0xFF9C9690);
+  static const statusClosed     = Color(0xFFE8A0A0);
+  static const badgeDark        = Color(0xFF22284A);
+
+  static const background     = Color(0xFFFAF6ED);
+  static const surface        = Color(0xFFFDFBF5);
+  static const surfaceVariant = Color(0xFFF1EDE2);
+  static const footerBackground = Color(0xFFE2DED4);
+  static const border         = Color(0xFFE4DFD2);
+  static const textPrimary    = Color(0xFF221F1B);
+  static const textSecondary  = Color(0xFF6E6A63);
+  static const textHint       = Color(0xFF9C9690);
 
   static const darkBackground    = Color(0xFF0F0F1A);
   static const darkSurface       = Color(0xFF1A1A2E);
   static const darkSurfaceVariant = Color(0xFF16213E);
+}
+
+class AppSpacing {
+  static const xs = 8.0;
+  static const sm = 16.0;
+  static const md = 24.0;
+  static const lg = 32.0;
+  static const xl = 48.0;
+
+  static const radiusSm = 8.0;
+  static const radiusMd = 12.0;
+  static const radiusLg = 16.0;
+  static const radiusPill = 999.0;
 }
 
 class AppTheme {
@@ -59,7 +83,7 @@ class AppTheme {
         color: AppColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           side: const BorderSide(color: AppColors.border, width: 1),
         ),
       ),
@@ -69,7 +93,7 @@ class AppTheme {
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
           ),
           textStyle: const TextStyle(
             fontFamily: 'Poppins',
@@ -82,21 +106,21 @@ class AppTheme {
         filled: true,
         fillColor: AppColors.surfaceVariant,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
           borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.border,

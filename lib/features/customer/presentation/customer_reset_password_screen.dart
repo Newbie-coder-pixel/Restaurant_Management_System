@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/theme/app_theme.dart';
 
 class CustomerResetPasswordScreen extends StatefulWidget {
   const CustomerResetPasswordScreen({super.key});
@@ -101,7 +102,7 @@ class _CustomerResetPasswordScreenState
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1A1A2E),
+        foregroundColor: AppColors.primary,
         elevation: 0,
         title: const Text('Reset Password',
             style: TextStyle(
@@ -168,7 +169,7 @@ class _CustomerResetPasswordScreenState
               fontFamily: 'Poppins',
               fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF1A1A2E),
+              color: AppColors.primary,
               letterSpacing: -0.5)),
       const SizedBox(height: 16),
       Container(
@@ -193,7 +194,7 @@ class _CustomerResetPasswordScreenState
         child: ElevatedButton(
           onPressed: () => context.go('/customer'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE94560),
+            backgroundColor: AppColors.accent,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
@@ -222,13 +223,13 @@ class _CustomerResetPasswordScreenState
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF0F3460).withValues(alpha: 0.08),
-              const Color(0xFF1A1A2E).withValues(alpha: 0.04),
+              AppColors.primaryLight.withValues(alpha: 0.08),
+              AppColors.primary.withValues(alpha: 0.04),
             ],
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: const Color(0xFF0F3460).withValues(alpha: 0.1),
+            color: AppColors.primaryLight.withValues(alpha: 0.1),
             width: 1,
           ),
         ),
@@ -239,12 +240,12 @@ class _CustomerResetPasswordScreenState
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                colors: [AppColors.primary, AppColors.primaryLight],
               ),
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0F3460).withValues(alpha: 0.2),
+                  color: AppColors.primaryLight.withValues(alpha: 0.2),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -261,7 +262,7 @@ class _CustomerResetPasswordScreenState
                       fontFamily: 'Poppins',
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A2E),
+                      color: AppColors.primary,
                       letterSpacing: -0.3)),
               SizedBox(height: 4),
               Text('Enter your new password below.',
@@ -346,13 +347,13 @@ class _CustomerResetPasswordScreenState
         child: ElevatedButton(
           onPressed: _loading ? null : _submit,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE94560),
+            backgroundColor: AppColors.accent,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14)),
             elevation: 0,
-            disabledBackgroundColor: const Color(0xFFE94560).withValues(alpha: 0.5),
+            disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.5),
           ),
           child: _loading
               ? const SizedBox(
@@ -445,7 +446,7 @@ class _CustomerResetPasswordScreenState
               borderSide: BorderSide.none),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFE94560), width: 1.5)),
+              borderSide: const BorderSide(color: AppColors.accent, width: 1.5)),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         ),

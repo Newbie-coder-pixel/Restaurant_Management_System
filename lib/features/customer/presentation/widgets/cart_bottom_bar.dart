@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../customer/providers/cart_provider.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class CartBottomBar extends StatelessWidget {
   final CartState cart;
@@ -13,7 +14,7 @@ class CartBottomBar extends StatelessWidget {
     return Container(
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
     decoration: BoxDecoration(
-      color: const Color(0xFF1A1A2E),
+      color: AppColors.primary,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       boxShadow: [BoxShadow(
         color: Colors.black.withValues(alpha: 0.15),
@@ -22,7 +23,7 @@ class CartBottomBar extends StatelessWidget {
       Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: const Color(0xFFE94560),
+          color: AppColors.accent,
           borderRadius: BorderRadius.circular(10)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 18),
@@ -43,7 +44,7 @@ class CartBottomBar extends StatelessWidget {
       ElevatedButton(
         onPressed: onCheckout,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFE94560),
+          backgroundColor: AppColors.accent,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),

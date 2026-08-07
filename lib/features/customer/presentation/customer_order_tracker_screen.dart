@@ -6,6 +6,7 @@ import '../providers/cart_provider.dart';
 import '../../../core/services/prep_time_service.dart';
 import '../../../shared/models/order_model.dart';
 import '../../payment/services/receipt_service.dart';
+import '../../../core/theme/app_theme.dart';
 
 // ── Order Success Screen ───────────────────────────────────────────
 class CustomerOrderSuccessScreen extends StatelessWidget {
@@ -52,7 +53,7 @@ class CustomerOrderSuccessScreen extends StatelessWidget {
                 fontFamily: 'Poppins',
                 fontSize: 26,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF1A1A2E),
+                color: AppColors.primary,
                 letterSpacing: -0.5,
               ),
               textAlign: TextAlign.center,
@@ -73,7 +74,7 @@ class CustomerOrderSuccessScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A1A2E),
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 16, offset: const Offset(0, 8))
@@ -110,7 +111,7 @@ class CustomerOrderSuccessScreen extends StatelessWidget {
             ElevatedButton(
               onPressed: () => context.go('/customer/track/$orderNumber'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE94560),
+                backgroundColor: AppColors.accent,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(220, 52),
                 elevation: 0,
@@ -161,13 +162,13 @@ class CustomerBookingSuccessScreen extends StatelessWidget {
                   height: 110,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [const Color(0xFF0F3460), const Color(0xFF0F3460).withValues(alpha: 0.7)],
+                      colors: [AppColors.primaryLight, AppColors.primaryLight.withValues(alpha: 0.7)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFF0F3460).withValues(alpha: 0.3), blurRadius: 20, spreadRadius: 2)
+                      BoxShadow(color: AppColors.primaryLight.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: 2)
                     ],
                   ),
                   child: const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 52),
@@ -181,7 +182,7 @@ class CustomerBookingSuccessScreen extends StatelessWidget {
                 fontFamily: 'Poppins',
                 fontSize: 26,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF1A1A2E),
+                color: AppColors.primary,
                 letterSpacing: -0.5,
               ),
               textAlign: TextAlign.center,
@@ -201,7 +202,7 @@ class CustomerBookingSuccessScreen extends StatelessWidget {
             ElevatedButton(
               onPressed: () => context.go('/customer'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F3460),
+                backgroundColor: AppColors.primaryLight,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(220, 52),
                 elevation: 0,
@@ -453,7 +454,7 @@ class _CustomerOrderTrackerScreenState
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE94560),
+              backgroundColor: AppColors.accent,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12))),
@@ -511,7 +512,7 @@ class _CustomerOrderTrackerScreenState
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF9F9FB),
     appBar: AppBar(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       elevation: 0,
       leading: IconButton(
@@ -571,7 +572,7 @@ class _CustomerOrderTrackerScreenState
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
-                  color: Color(0xFF1A1A2E),
+                  color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: 4),
@@ -613,7 +614,7 @@ class _CustomerOrderTrackerScreenState
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: Color(0xFFE94560), width: 1.5),
+                          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
                         ),
                       ),
                     ),
@@ -622,7 +623,7 @@ class _CustomerOrderTrackerScreenState
                   ElevatedButton(
                     onPressed: _loading ? null : _search,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE94560),
+                      backgroundColor: AppColors.accent,
                       foregroundColor: Colors.white,
                       minimumSize: const Size(56, 56),
                       elevation: 0,
@@ -655,7 +656,7 @@ class _CustomerOrderTrackerScreenState
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline, color: Color(0xFFE94560), size: 22),
+                const Icon(Icons.error_outline, color: AppColors.accent, size: 22),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -695,22 +696,22 @@ class _CustomerOrderTrackerScreenState
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Color(0xFFE94560)),
+                                strokeWidth: 2, color: AppColors.accent),
                           )
                         : const Icon(Icons.receipt_long_outlined,
-                            size: 20, color: Color(0xFFE94560)),
+                            size: 20, color: AppColors.accent),
                     label: const Text(
                       'Receipt',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
-                        color: Color(0xFFE94560),
+                        color: AppColors.accent,
                       ),
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: Color(0xFFE94560), width: 1.5),
+                      side: const BorderSide(color: AppColors.accent, width: 1.5),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
@@ -719,19 +720,19 @@ class _CustomerOrderTrackerScreenState
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _reorder,
-                    icon: const Icon(Icons.replay_outlined, size: 20, color: Color(0xFFE94560)),
+                    icon: const Icon(Icons.replay_outlined, size: 20, color: AppColors.accent),
                     label: const Text(
                       'Reorder',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
-                        color: Color(0xFFE94560),
+                        color: AppColors.accent,
                       ),
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: Color(0xFFE94560), width: 1.5),
+                      side: const BorderSide(color: AppColors.accent, width: 1.5),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
@@ -784,9 +785,9 @@ class _OrderStatusCard extends StatelessWidget {
     'new':       Color(0xFF6B7280),
     'preparing': Color(0xFFD97706),
     'ready':     Color(0xFF1D9E75),
-    'served':    Color(0xFF0F3460),
+    'served':    AppColors.primaryLight,
     'paid':      Color(0xFF1D9E75),
-    'cancelled': Color(0xFFE94560),
+    'cancelled': AppColors.accent,
   };
   static const _statusMessages = {
     'new':       '⏳ Your order is waiting for kitchen confirmation.',
@@ -844,7 +845,7 @@ class _OrderStatusCard extends StatelessWidget {
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
-                        color: Color(0xFF1A1A2E),
+                        color: AppColors.primary,
                       ),
                     ),
                     if (customerName != null)
@@ -933,7 +934,7 @@ class _OrderStatusCard extends StatelessWidget {
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w700,
               fontSize: 15,
-              color: Color(0xFF1A1A2E),
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 12),
@@ -970,7 +971,7 @@ class _OrderStatusCard extends StatelessWidget {
                           style: const TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 14,
-                            color: Color(0xFF1A1A2E),
+                            color: AppColors.primary,
                           ),
                         ),
                       ),
@@ -980,7 +981,7 @@ class _OrderStatusCard extends StatelessWidget {
                           fontFamily: 'Poppins',
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFFE94560),
+                          color: AppColors.accent,
                         ),
                       ),
                     ],
@@ -1151,7 +1152,7 @@ class _OrderStatusCard extends StatelessWidget {
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
-                  color: Color(0xFF1A1A2E),
+                  color: AppColors.primary,
                 ),
               ),
               Text(
@@ -1160,7 +1161,7 @@ class _OrderStatusCard extends StatelessWidget {
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: Color(0xFFE94560),
+                  color: AppColors.accent,
                 ),
               ),
             ],
@@ -1277,7 +1278,7 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
                   height: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFF0F3460),
+                    color: AppColors.primaryLight,
                   ),
                 ),
                 SizedBox(width: 12),
@@ -1286,7 +1287,7 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 13,
-                    color: Color(0xFF0F3460),
+                    color: AppColors.primaryLight,
                   ),
                 ),
               ],
@@ -1419,14 +1420,14 @@ class _StatusProgress extends StatelessWidget {
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.cancel_outlined, color: Color(0xFFE94560), size: 20),
+            Icon(Icons.cancel_outlined, color: AppColors.accent, size: 20),
             SizedBox(width: 8),
             Text(
               'Order cancelled',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 13,
-                color: Color(0xFFE94560),
+                color: AppColors.accent,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1464,10 +1465,10 @@ class _StatusProgress extends StatelessWidget {
                       width: isCurrent ? 28 : 22,
                       height: isCurrent ? 28 : 22,
                       decoration: BoxDecoration(
-                        color: isActive ? const Color(0xFFE94560) : const Color(0xFFE9ECF0),
+                        color: isActive ? AppColors.accent : const Color(0xFFE9ECF0),
                         shape: BoxShape.circle,
                         boxShadow: isCurrent
-                            ? [BoxShadow(color: const Color(0xFFE94560).withValues(alpha: 0.4), blurRadius: 12)]
+                            ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.4), blurRadius: 12)]
                             : [],
                       ),
                       child: Center(
@@ -1483,7 +1484,7 @@ class _StatusProgress extends StatelessWidget {
                         fontFamily: 'Poppins',
                         fontSize: 10,
                         fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                        color: isActive ? const Color(0xFFE94560) : Colors.grey.shade500,
+                        color: isActive ? AppColors.accent : Colors.grey.shade500,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -1496,7 +1497,7 @@ class _StatusProgress extends StatelessWidget {
                     duration: const Duration(milliseconds: 400),
                     height: 3,
                     color: (activeFlags[idx] && activeFlags[idx + 1])
-                        ? const Color(0xFFE94560)
+                        ? AppColors.accent
                         : const Color(0xFFE9ECF0),
                   ),
                 ),

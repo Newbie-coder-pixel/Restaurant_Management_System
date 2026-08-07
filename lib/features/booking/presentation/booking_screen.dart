@@ -596,7 +596,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   Color _historyStatusColor(String? s) {
     switch (s) {
       case 'completed': return const Color(0xFF4CAF50);
-      case 'cancelled': return const Color(0xFFE94560);
+      case 'cancelled': return AppColors.accent;
       case 'no_show':   return Colors.orange;
       case 'confirmed': return AppColors.available;
       case 'pending':   return AppColors.reserved;
@@ -662,7 +662,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: const Color(0xFF1A1A2E),
+                dropdownColor: AppColors.primary,
                 iconEnabledColor: Colors.white60,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(
@@ -943,7 +943,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       // ── Left sidebar ──────────────────────────────────
       Container(
         width: 110,
-        color: const Color(0xFF1A1A2E),
+        color: AppColors.primary,
         child: Column(children: [
           const SizedBox(height: 16),
           for (final f in [

@@ -745,7 +745,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: const Color(0xFF1A1A2E),
+                dropdownColor: AppColors.primary,
                 iconEnabledColor: Colors.white60,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(
@@ -861,7 +861,7 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
                           fontFamily: 'Poppins',
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
-                          color: Color(0xFF1A1A2E))),
+                          color: AppColors.primary)),
                   Text(
                     orders.length == 1
                         ? '1 customer waiting for the bill'
@@ -941,7 +941,7 @@ class _BillRequestSheetState extends State<_BillRequestSheet> {
                                   fontFamily: 'Poppins',
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
-                                  color: Color(0xFF1A1A2E))),
+                                  color: AppColors.primary)),
                           const SizedBox(height: 2),
                           Row(children: [
                             if (o.customerName != null && o.tableNumber != null) ...[

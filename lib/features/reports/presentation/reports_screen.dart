@@ -45,7 +45,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               child: DropdownButton<String?>(
                 value: s.selectedBranchId,
                 isDense: true,
-                dropdownColor: const Color(0xFF1A1A2E),
+                dropdownColor: AppColors.primary,
                 iconEnabledColor: Colors.white60,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(

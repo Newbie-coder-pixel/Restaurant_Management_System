@@ -382,7 +382,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: const Color(0xFF1A1A2E),
+                dropdownColor: AppColors.darkSurface,
                 iconEnabledColor: colorScheme.onSurface.withValues(alpha: 0.5),
                 icon: Icon(Icons.keyboard_arrow_down,
                     size: 16, color: colorScheme.onSurface.withValues(alpha: 0.6)),

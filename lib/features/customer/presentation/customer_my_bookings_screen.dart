@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/theme/app_theme.dart';
 
 // ── User's bookings provider — JOIN branches ───────────────────────
 final _refreshTriggerProvider = StateProvider<int>((ref) => 0);
@@ -147,7 +148,7 @@ class _CustomerMyBookingsScreenState
                 child: ElevatedButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE94560),
+                    backgroundColor: AppColors.accent,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -290,9 +291,9 @@ class _CustomerMyBookingsScreenState
                 fontFamily: 'Poppins',
                 fontSize: 14,
               ),
-              labelColor: const Color(0xFFE94560),
+              labelColor: AppColors.accent,
               unselectedLabelColor: const Color(0xFF64748B),
-              indicatorColor: const Color(0xFFE94560),
+              indicatorColor: AppColors.accent,
               indicatorWeight: 3,
               indicatorSize: TabBarIndicatorSize.label,
               tabs: const [
@@ -411,7 +412,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: Color(0xFFE94560),
+            primary: AppColors.accent,
             onPrimary: Colors.white,
             surface: Colors.white,
             onSurface: Color(0xFF1E293B),
@@ -456,7 +457,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: Color(0xFFE94560),
+            primary: AppColors.accent,
             onPrimary: Colors.white,
             surface: Colors.white,
             onSurface: Color(0xFF1E293B),
@@ -726,7 +727,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE94560),
+                  backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -844,7 +845,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 
     return branchesAsync.when(
       loading: () => const Center(
-        child: CircularProgressIndicator(color: Color(0xFFE94560)),
+        child: CircularProgressIndicator(color: AppColors.accent),
       ),
       error: (e, _) => Center(
         child: Column(
@@ -958,7 +959,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             ElevatedButton(
               onPressed: _submitting ? null : () => _submit(branches),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE94560),
+                backgroundColor: AppColors.accent,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1048,7 +1049,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     padding: const EdgeInsets.only(bottom: 10),
     child: Row(
       children: [
-        Icon(icon, size: 18, color: const Color(0xFFE94560)),
+        Icon(icon, size: 18, color: AppColors.accent),
         const SizedBox(width: 8),
         Text(
           label,
@@ -1070,16 +1071,16 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          const Color(0xFFE94560).withValues(alpha: 0.1),
-          const Color(0xFFE94560).withValues(alpha: 0.05),
+          AppColors.accent.withValues(alpha: 0.1),
+          AppColors.accent.withValues(alpha: 0.05),
         ],
       ),
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFE94560).withValues(alpha: 0.2)),
+      border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
     ),
     child: Row(
       children: [
-        Icon(icon, size: 20, color: const Color(0xFFE94560)),
+        Icon(icon, size: 20, color: AppColors.accent),
         const SizedBox(width: 12),
         Text(
           label,
@@ -1087,7 +1088,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             fontFamily: 'Poppins',
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Color(0xFFE94560),
+            color: AppColors.accent,
           ),
         ),
       ],
@@ -1143,7 +1144,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: _selectedDate != null
-                  ? const Color(0xFFE94560)
+                  ? AppColors.accent
                   : const Color(0xFFE2E8F0),
               width: _selectedDate != null ? 2 : 1,
             ),
@@ -1154,7 +1155,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 Icons.calendar_today_outlined,
                 size: 20,
                 color: _selectedDate != null
-                    ? const Color(0xFFE94560)
+                    ? AppColors.accent
                     : const Color(0xFF94A3B8),
               ),
               const SizedBox(width: 12),
@@ -1191,7 +1192,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: _selectedTime != null
-                  ? const Color(0xFFE94560)
+                  ? AppColors.accent
                   : const Color(0xFFE2E8F0),
               width: _selectedTime != null ? 2 : 1,
             ),
@@ -1202,7 +1203,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                 Icons.access_time_outlined,
                 size: 20,
                 color: _selectedTime != null
-                    ? const Color(0xFFE94560)
+                    ? AppColors.accent
                     : const Color(0xFF94A3B8),
               ),
               const SizedBox(width: 12),
@@ -1285,7 +1286,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: const Color(0xFFE94560),
+        color: AppColors.accent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(icon, color: Colors.white, size: 22),
@@ -1352,7 +1353,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Color(0xFFE94560), width: 2),
+            borderSide: const BorderSide(color: AppColors.accent, width: 2),
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
@@ -1394,7 +1395,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Color(0xFFE94560), width: 2),
+      borderSide: const BorderSide(color: AppColors.accent, width: 2),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
   );
@@ -1484,7 +1485,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
 
     return bookingsAsync.when(
       loading: () => const Center(
-        child: CircularProgressIndicator(color: Color(0xFFE94560)),
+        child: CircularProgressIndicator(color: AppColors.accent),
       ),
       error: (e, _) => Center(
         child: Column(
@@ -1644,7 +1645,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
       'active' => const Color(0xFF10B981),
       'done' => const Color(0xFF3B82F6),
       'cancelled' => const Color(0xFFEF4444),
-      _ => const Color(0xFFE94560),
+      _ => AppColors.accent,
     };
     return Center(
       child: Column(

@@ -152,7 +152,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
       case StaffRole.manager:    return const Color(0xFF2196F3);
       case StaffRole.cashier:    return const Color(0xFF4CAF50);
       case StaffRole.waiter:     return const Color(0xFFFF9800);
-      case StaffRole.kitchen:    return const Color(0xFFE94560);
+      case StaffRole.kitchen:    return AppColors.accent;
       case StaffRole.host:       return const Color(0xFF00BCD4);
     }
   }
@@ -1163,7 +1163,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen>
               child: DropdownButton<String?>(
                 value: _selectedFilterBranchId,
                 isDense: true,
-                dropdownColor: const Color(0xFF1A1A2E),
+                dropdownColor: AppColors.primary,
                 iconEnabledColor: Colors.white60,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(

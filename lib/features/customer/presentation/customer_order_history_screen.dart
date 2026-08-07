@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/cart_provider.dart';
+import '../../../core/theme/app_theme.dart';
 
 // ── User's order history provider ─────────────────────────────────
 final _orderHistoryProvider =
@@ -67,10 +68,10 @@ class _CustomerOrderHistoryScreenState
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                color: AppColors.accent.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.replay_outlined, color: Color(0xFFE94560), size: 24),
+              child: const Icon(Icons.replay_outlined, color: AppColors.accent, size: 24),
             ),
             const SizedBox(width: 12),
             const Text('Reorder?',
@@ -95,7 +96,7 @@ class _CustomerOrderHistoryScreenState
                   Container(
                     width: 6, height: 6,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE94560).withValues(alpha: 0.5),
+                      color: AppColors.accent.withValues(alpha: 0.5),
                       shape: BoxShape.circle),
                   ),
                   const SizedBox(width: 10),
@@ -129,7 +130,7 @@ class _CustomerOrderHistoryScreenState
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE94560),
+              backgroundColor: AppColors.accent,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               shape: RoundedRectangleBorder(
@@ -198,7 +199,7 @@ class _CustomerOrderHistoryScreenState
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1A1A2E),
+        foregroundColor: AppColors.primary,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 18),
@@ -219,7 +220,7 @@ class _CustomerOrderHistoryScreenState
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const CircularProgressIndicator(color: Color(0xFFE94560)),
+              const CircularProgressIndicator(color: AppColors.accent),
               const SizedBox(height: 16),
               Text('Loading history...',
                   style: TextStyle(
@@ -259,7 +260,7 @@ class _CustomerOrderHistoryScreenState
               icon: const Icon(Icons.refresh, size: 18),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE94560),
+                backgroundColor: AppColors.accent,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -305,10 +306,10 @@ class _CustomerOrderHistoryScreenState
                             setState(() => _filter = f.$1),
                         backgroundColor: Colors.grey.shade50,
                         selectedColor:
-                            const Color(0xFFE94560).withValues(alpha: 0.1),
-                        checkmarkColor: const Color(0xFFE94560),
+                            AppColors.accent.withValues(alpha: 0.1),
+                        checkmarkColor: AppColors.accent,
                         side: BorderSide(
-                          color: _filter == f.$1 ? const Color(0xFFE94560) : Colors.grey.shade300,
+                          color: _filter == f.$1 ? AppColors.accent : Colors.grey.shade300,
                           width: 1,
                         ))),
                 ])),
@@ -322,7 +323,7 @@ class _CustomerOrderHistoryScreenState
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                    color: AppColors.accent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -333,7 +334,7 @@ class _CustomerOrderHistoryScreenState
                         fontFamily: 'Poppins',
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFFE94560)),
+                        color: AppColors.accent),
                   ),
                 ),
               ])),
@@ -384,17 +385,17 @@ class _CustomerOrderHistoryScreenState
         Container(
           width: 100, height: 100,
           decoration: BoxDecoration(
-            color: const Color(0xFFE94560).withValues(alpha: 0.08),
+            color: AppColors.accent.withValues(alpha: 0.08),
             shape: BoxShape.circle),
           child: const Icon(Icons.receipt_long_outlined,
-              color: Color(0xFFE94560), size: 48)),
+              color: AppColors.accent, size: 48)),
         const SizedBox(height: 24),
         const Text('No Orders Yet',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A2E))),
+                color: AppColors.primary)),
         const SizedBox(height: 12),
         const Text(
           'Start ordering your favorite food now!',
@@ -411,7 +412,7 @@ class _CustomerOrderHistoryScreenState
               style: TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 15)),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE94560),
+            backgroundColor: AppColors.accent,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(
                 horizontal: 32, vertical: 14),
@@ -577,7 +578,7 @@ class _OrderHistoryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE94560).withValues(alpha: 0.1),
+                  color: AppColors.accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text('Rp ${_fmt(total)}',
@@ -585,7 +586,7 @@ class _OrderHistoryCard extends StatelessWidget {
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
-                        color: Color(0xFFE94560))),
+                        color: AppColors.accent)),
               ),
             ]),
             const SizedBox(height: 6),
@@ -673,7 +674,7 @@ class _OrderHistoryCard extends StatelessWidget {
                             fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      backgroundColor: const Color(0xFFE94560),
+                      backgroundColor: AppColors.accent,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_theme.dart';
 
 enum TableStatus { available, occupied, reserved, cleaning }
 enum TableShape { round, square, rectangle }
@@ -14,10 +15,10 @@ extension TableStatusExt on TableStatus {
   }
   Color get color {
     switch (this) {
-      case TableStatus.available: return const Color(0xFF4CAF50);
-      case TableStatus.occupied:  return const Color(0xFFE94560);
-      case TableStatus.reserved:  return const Color(0xFFFF9800);
-      case TableStatus.cleaning:  return const Color(0xFF2196F3);
+      case TableStatus.available: return AppColors.available;
+      case TableStatus.occupied:  return AppColors.occupied;
+      case TableStatus.reserved:  return AppColors.reserved;
+      case TableStatus.cleaning:  return AppColors.cleaning;
     }
   }
   static TableStatus fromString(String s) =>

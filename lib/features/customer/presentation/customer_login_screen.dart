@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/theme/app_theme.dart';
 
 class CustomerLoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -212,7 +213,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
+                    colors: [AppColors.accent, AppColors.primaryLight]),
                   borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.lock_reset_outlined,
                     color: Colors.white, size: 22)),
@@ -259,7 +260,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                       hintStyle: const TextStyle(fontFamily: 'Poppins',
                           fontSize: 13, color: Colors.grey),
                       prefixIcon: const Icon(Icons.email_outlined,
-                          size: 20, color: Color(0xFF0F3460)),
+                          size: 20, color: AppColors.primaryLight),
                       filled: true,
                       fillColor: const Color(0xFFF9FAFB),
                       border: OutlineInputBorder(
@@ -270,7 +271,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                           borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFF0F3460), width: 2)),
+                          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2)),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 16)),
                   ),
@@ -296,7 +297,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                             SnackBar(
                               content: const Text('Enter a valid email.',
                                   style: TextStyle(fontFamily: 'Poppins')),
-                              backgroundColor: const Color(0xFFE94560),
+                              backgroundColor: AppColors.accent,
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10)),
@@ -330,7 +331,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                         }
                       },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F3460),
+                  backgroundColor: AppColors.primaryLight,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -365,7 +366,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         Expanded(child: Text(m, style: const TextStyle(
           fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w500))),
       ]),
-      backgroundColor: const Color(0xFFE94560),
+      backgroundColor: AppColors.accent,
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 5),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -406,7 +407,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       Expanded(flex: 5, child: Container(
         decoration: const BoxDecoration(gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [Color(0xFF0D1B2A), Color(0xFF1A1A2E), Color(0xFF0F3460)])),
+          colors: [AppColors.accent, AppColors.primary, AppColors.primaryLight])),
         child: Stack(children: [
           Positioned.fill(child: CustomPaint(painter: _DotPatternPainter())),
           Positioned(
@@ -435,7 +436,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 Container(width: 52, height: 52,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
+                      colors: [AppColors.accent, AppColors.primaryLight]),
                     borderRadius: BorderRadius.circular(16)),
                   child: const Icon(Icons.restaurant, color: Colors.white, size: 28)),
                 const SizedBox(width: 14),
@@ -498,12 +499,12 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
             width: 56, height: 56,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
+                colors: [AppColors.accent, AppColors.primaryLight]),
               borderRadius: BorderRadius.circular(16)),
             child: const Icon(Icons.restaurant, color: Colors.white, size: 28)),
           const SizedBox(height: 20),
           const Text('RestaurantOS', style: TextStyle(fontFamily: 'Poppins',
-            fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+            fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
           const SizedBox(height: 32),
           _buildForm(),
         ])))));
@@ -517,7 +518,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
           width: 72, height: 72,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFFE94560), Color(0xFFFF6B6B)]),
+              colors: [AppColors.accent, AppColors.primaryLight]),
             borderRadius: BorderRadius.circular(20)),
           child: const Icon(Icons.restaurant, color: Colors.white, size: 34)),
         const SizedBox(height: 24),
@@ -542,7 +543,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     children: [
       const Text('Welcome', textAlign: TextAlign.center,
         style: TextStyle(fontFamily: 'Poppins', fontSize: 28,
-          fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E), letterSpacing: -0.5)),
+          fontWeight: FontWeight.w800, color: AppColors.primary, letterSpacing: -0.5)),
       const SizedBox(height: 8),
       const Text('Log in to continue to your account',
         textAlign: TextAlign.center,
@@ -599,7 +600,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
             ),
             child: const Text('Forgot password?',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
-                color: Color(0xFFE94560), fontWeight: FontWeight.w600))),
+                color: AppColors.accent, fontWeight: FontWeight.w600))),
         ),
       const SizedBox(height: 8),
       Row(
@@ -621,7 +622,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
             child: Text(
               _isSignUp ? 'Log In' : 'Sign Up',
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
-                color: Color(0xFF0F3460), fontWeight: FontWeight.w700))),
+                color: AppColors.primaryLight, fontWeight: FontWeight.w700))),
         ],
       ),
     ]);
@@ -638,7 +639,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       hintStyle: const TextStyle(
           fontFamily: 'Poppins', fontSize: 13, color: Color(0xFF9CA3AF)),
       prefixIcon: const Icon(Icons.phone_outlined,
-          size: 20, color: Color(0xFF0F3460)),
+          size: 20, color: AppColors.primaryLight),
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
@@ -649,7 +650,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
           borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5)),
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF0F3460), width: 2)),
+          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2)),
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 16)));
 
@@ -667,7 +668,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         icon, const SizedBox(width: 12),
         Text(label, style: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E))),
+          fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary)),
       ])));
 
   Widget _field({
@@ -682,7 +683,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
       labelText: hint,
       labelStyle: const TextStyle(fontFamily: 'Poppins',
           fontSize: 12, color: Color(0xFF6B7280)),
-      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF0F3460)),
+      prefixIcon: Icon(icon, size: 20, color: AppColors.primaryLight),
       suffixIcon: suffix,
       filled: true,
       fillColor: enabled ? Colors.white : const Color(0xFFF9FAFB),
@@ -694,7 +695,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
           borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5)),
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF0F3460), width: 2)),
+          borderSide: const BorderSide(color: AppColors.primaryLight, width: 2)),
       disabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5)),
@@ -707,10 +708,10 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)]),
+            colors: [AppColors.primary, AppColors.primaryLight]),
           borderRadius: BorderRadius.circular(14),
           boxShadow: [BoxShadow(
-            color: const Color(0xFF0F3460).withValues(alpha: 0.3),
+            color: AppColors.primaryLight.withValues(alpha: 0.3),
             blurRadius: 16, offset: const Offset(0, 6))]),
         child: Center(child: _loading
           ? const SizedBox(width: 24, height: 24,

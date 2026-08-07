@@ -317,7 +317,7 @@ class BookingCard extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(children: [
-          Icon(Icons.cancel_outlined, color: Color(0xFFE94560), size: 20),
+          Icon(Icons.cancel_outlined, color: AppColors.accent, size: 20),
           SizedBox(width: 8),
           Text('Cancel Reservation',
               style: TextStyle(
@@ -361,7 +361,7 @@ class BookingCard extends StatelessWidget {
           StatefulBuilder(
             builder: (ctx2, setLocal) => ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE94560),
+                backgroundColor: AppColors.accent,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),

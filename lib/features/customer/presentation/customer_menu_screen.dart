@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/cart_provider.dart';
+import '../../../core/theme/app_theme.dart';
 
 class CustomerMenuScreen extends ConsumerStatefulWidget {
   final String branchId;
@@ -122,7 +123,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
               ? const SliverFillRemaining(
                   child: Center(
                       child: CircularProgressIndicator(
-                          color: Color(0xFFE94560))))
+                          color: AppColors.accent)))
               : _filteredItems.isEmpty
                   ? SliverFillRemaining(
                       child: Center(
@@ -209,7 +210,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
         expandedHeight: 120,
         pinned: true,
         floating: true,
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         flexibleSpace: FlexibleSpaceBar(
@@ -228,9 +229,9 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFF1A1A2E),
-                    Color(0xFF0F3460),
-                    Color(0xFF16213E)
+                    AppColors.primary,
+                    AppColors.primaryLight,
+                    AppColors.primaryLight
                   ]),
             ),
           ),
@@ -289,7 +290,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide:
-                    const BorderSide(color: Color(0xFFE94560), width: 2)),
+                    const BorderSide(color: AppColors.accent, width: 2)),
             contentPadding: const EdgeInsets.symmetric(vertical: 14)),
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 14)));
 
@@ -318,7 +319,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFFE94560) : Colors.white,
+                color: selected ? AppColors.accent : Colors.white,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
                     color: selected
@@ -328,7 +329,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                 boxShadow: selected
                     ? [
                         BoxShadow(
-                            color: const Color(0xFFE94560)
+                            color: AppColors.accent
                                 .withValues(alpha: 0.3),
                             blurRadius: 12,
                             offset: const Offset(0, 2))
@@ -359,12 +360,12 @@ class _CartFab extends StatelessWidget {
         padding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: AppColors.primary,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
                   color:
-                      const Color(0xFF1A1A2E).withValues(alpha: 0.35),
+                      AppColors.primary.withValues(alpha: 0.35),
                   blurRadius: 12,
                   offset: const Offset(0, 4))
             ]),
@@ -378,7 +379,7 @@ class _CartFab extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(2),
                 decoration: const BoxDecoration(
-                    color: Color(0xFFE94560), shape: BoxShape.circle),
+                    color: AppColors.accent, shape: BoxShape.circle),
                 constraints: const BoxConstraints(
                     minWidth: 14, minHeight: 14),
                 child: Text('${cart.itemCount}',
@@ -449,14 +450,14 @@ class _MenuCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: cartQty > 0
-              ? const Color(0xFFE94560)
+              ? AppColors.accent
               : const Color(0xFFE5E7EB),
           width: cartQty > 0 ? 1.5 : 1.0,
         ),
         boxShadow: [
           BoxShadow(
               color: cartQty > 0
-                  ? const Color(0xFFE94560).withValues(alpha: 0.12)
+                  ? AppColors.accent.withValues(alpha: 0.12)
                   : Colors.black.withValues(alpha: 0.06),
               blurRadius: cartQty > 0 ? 14 : 12,
               offset: const Offset(0, 4)),
@@ -493,7 +494,7 @@ class _MenuCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE94560),
+                      color: AppColors.accent,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text('$cartQty',
@@ -516,7 +517,7 @@ class _MenuCard extends StatelessWidget {
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
-                        color: Color(0xFF1A1A2E)),
+                        color: AppColors.primary),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 if (desc.isNotEmpty) ...[
@@ -539,7 +540,7 @@ class _MenuCard extends StatelessWidget {
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
-                              color: Color(0xFFE94560))),
+                              color: AppColors.accent)),
                     ),
                     if (cartQty == 0)
                       GestureDetector(
@@ -547,7 +548,7 @@ class _MenuCard extends StatelessWidget {
                         child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE94560),
+                              color: AppColors.accent,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(Icons.add,
@@ -571,7 +572,7 @@ class _MenuCard extends StatelessWidget {
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
-                              color: Color(0xFF1A1A2E)),
+                              color: AppColors.primary),
                           textAlign: TextAlign.center)),
                   _iqBtn(Icons.add, onAdd),
                 ],
@@ -619,7 +620,7 @@ class _MenuCard extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: const Color(0xFFE94560),
+            color: AppColors.accent,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: Colors.white, size: 16)));

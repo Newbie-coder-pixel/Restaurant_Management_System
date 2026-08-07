@@ -492,7 +492,7 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
       case StaffRole.manager:    return const Color(0xFF2196F3);
       case StaffRole.cashier:    return const Color(0xFF4CAF50);
       case StaffRole.waiter:     return const Color(0xFFFF9800);
-      case StaffRole.kitchen:    return const Color(0xFFE94560);
+      case StaffRole.kitchen:    return AppColors.accent;
       case StaffRole.host:       return const Color(0xFF00BCD4);
     }
   }

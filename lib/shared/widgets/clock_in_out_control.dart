@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import '../../core/services/location_service.dart';
+import '../../core/theme/app_theme.dart';
 import '../../features/customer/presentation/widgets/location_permission_sheet.dart';
 import '../../features/staff/presentation/staff_attendance_screen.dart' show AttendanceRecord;
 import '../../features/staff/providers/attendance_clock_provider.dart';
@@ -135,7 +136,7 @@ class _ClockButtonState extends ConsumerState<_ClockButton> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: isError ? Colors.red : const Color(0xFF4CAF50),
+      backgroundColor: isError ? Colors.red : AppColors.available,
     ));
   }
 

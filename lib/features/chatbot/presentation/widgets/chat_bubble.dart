@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/chatbot_api.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class ChatBubble extends StatelessWidget {
   final ChatMessage message;
@@ -31,7 +32,7 @@ class ChatBubble extends StatelessWidget {
     width: 32, height: 32,
     decoration: BoxDecoration(
       gradient: const LinearGradient(
-        colors: [Color(0xFF1A1A2E), Color(0xFFE94560)],
+        colors: [AppColors.primary, AppColors.accent],
         begin: Alignment.topLeft, end: Alignment.bottomRight),
       borderRadius: BorderRadius.circular(16)),
     child: const Icon(Icons.restaurant, color: Colors.white, size: 16),
@@ -40,7 +41,7 @@ class ChatBubble extends StatelessWidget {
   Widget _userAvatar() => Container(
     width: 32, height: 32,
     decoration: BoxDecoration(
-      color: const Color(0xFF0F3460),
+      color: AppColors.textPrimary,
       borderRadius: BorderRadius.circular(16)),
     child: const Icon(Icons.person, color: Colors.white, size: 16),
   );
@@ -65,10 +66,10 @@ class ChatBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: isUser
-              ? const Color(0xFF1A1A2E)
+              ? AppColors.accent
               : isBookingConfirmed
                   ? const Color(0xFFE8F5E9)
-                  : const Color(0xFFF0F2F5),
+                  : AppColors.surfaceVariant,
           borderRadius: BorderRadius.only(
             topLeft:     const Radius.circular(16),
             topRight:    const Radius.circular(16),
@@ -76,7 +77,7 @@ class ChatBubble extends StatelessWidget {
             bottomRight: Radius.circular(isUser ? 4 : 16),
           ),
           border: isBookingConfirmed
-              ? Border.all(color: const Color(0xFF4CAF50), width: 1.5)
+              ? Border.all(color: AppColors.available, width: 1.5)
               : null,
         ),
         child: Column(
@@ -86,12 +87,12 @@ class ChatBubble extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(bottom: 6),
                 child: Row(children: [
-                  Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 16),
+                  Icon(Icons.check_circle, color: AppColors.available, size: 16),
                   SizedBox(width: 4),
                   Text('Booking Confirmed',
                     style: TextStyle(
                       fontFamily: 'Poppins', fontSize: 11,
-                      fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
+                      fontWeight: FontWeight.w700, color: AppColors.available)),
                 ]),
               ),
             _buildFormattedText(message.content),
@@ -101,8 +102,8 @@ class ChatBubble extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'Poppins', fontSize: 10,
                 color: isUser
-                    ? Colors.white38
-                    : const Color(0xFF9CA3AF)),
+                    ? Colors.white70
+                    : AppColors.textHint),
             ),
           ],
         ),
@@ -121,7 +122,7 @@ class ChatBubble extends StatelessWidget {
           fontFamily: 'Poppins',
           fontWeight: i.isOdd ? FontWeight.w700 : FontWeight.normal,
           fontSize: 14,
-          color: isUser ? Colors.white : const Color(0xFF1F2937),
+          color: isUser ? Colors.white : AppColors.textPrimary,
           height: 1.5,
         ),
       ));
@@ -183,7 +184,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
         width: 32, height: 32,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF1A1A2E), Color(0xFFE94560)]),
+            colors: [AppColors.primary, AppColors.accent]),
           borderRadius: BorderRadius.circular(16)),
         child: const Icon(Icons.restaurant, color: Colors.white, size: 16),
       ),
@@ -191,7 +192,7 @@ class _TypingIndicatorState extends State<TypingIndicator>
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0F2F5),
+          color: AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(16)),
         child: Row(
           mainAxisSize: MainAxisSize.min,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math';
+import '../../../../core/theme/app_theme.dart';
 
 class AddBookingDialog extends StatefulWidget {
   final String branchId;
@@ -187,7 +188,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
               Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A2E),
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.event_available,
                     color: Colors.white, size: 20),
@@ -252,7 +253,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                           border: Border.all(color: const Color(0xFFE8EAED))),
                       child: Row(children: [
                         const Icon(Icons.people_outline,
-                            color: Color(0xFF1A1A2E), size: 20),
+                            color: AppColors.primary, size: 20),
                         const SizedBox(width: 8),
                         const Flexible(
                           child: Text('Guest Count',
@@ -266,7 +267,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           icon: const Icon(Icons.remove_circle_outline, size: 26),
-                          color: const Color(0xFFE94560),
+                          color: AppColors.accent,
                           onPressed: () {
                             if (_guests > 1) {
                               setState(() {
@@ -283,7 +284,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                                 fontFamily: 'Poppins',
                                 fontWeight: FontWeight.w700,
                                 fontSize: 22,
-                                color: Color(0xFF1A1A2E))),
+                                color: AppColors.primary)),
                         const SizedBox(width: 8),
                         IconButton(
                           padding: EdgeInsets.zero,
@@ -367,7 +368,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                             ? null
                             : _findAvailableTable,
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1A1A2E),
+                            backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             padding:
                                 const EdgeInsets.symmetric(vertical: 14),
@@ -453,17 +454,17 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                             color: const Color(0xFFFFEBEE),
                             borderRadius: BorderRadius.circular(12),
                             border:
-                                Border.all(color: const Color(0xFFE94560))),
+                                Border.all(color: AppColors.accent)),
                         child: Row(children: [
                           const Icon(Icons.warning_amber_rounded,
-                              color: Color(0xFFE94560), size: 24),
+                              color: AppColors.accent, size: 24),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(_assignError!,
                                 style: const TextStyle(
                                     fontFamily: 'Poppins',
                                     fontSize: 13,
-                                    color: Color(0xFFE94560))),
+                                    color: AppColors.accent)),
                           ),
                         ]),
                       ),
@@ -545,7 +546,7 @@ class _AddBookingDialogState extends State<AddBookingDialog> {
                 onPressed:
                     _assignedTable == null ? null : _submitBooking,
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A1A2E),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: const Color(0xFFE0E0E0),
                     padding: const EdgeInsets.symmetric(

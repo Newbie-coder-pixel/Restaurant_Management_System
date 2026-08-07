@@ -20,6 +20,7 @@ import '../providers/customer_auth_provider.dart';
 import '../providers/cart_provider.dart';
 import 'widgets/cart_bottom_bar.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../core/theme/app_theme.dart';
 
 // ── Active branches provider ─────────────────────────────────────────
 final _customerBranchesProvider =
@@ -208,7 +209,7 @@ class _CustomerLandingScreenState
       return const Scaffold(
         backgroundColor: Color(0xFFF8F9FA),
         body: Center(
-          child: CircularProgressIndicator(color: Color(0xFFE94560)),
+          child: CircularProgressIndicator(color: AppColors.accent),
         ),
       );
     }
@@ -282,7 +283,7 @@ class _CustomerLandingScreenState
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+          colors: [AppColors.primary, AppColors.primaryLight],
         ),
       ),
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
@@ -296,7 +297,7 @@ class _CustomerLandingScreenState
             ),
             child: CircleAvatar(
               radius: 18,
-              backgroundColor: const Color(0xFFE94560),
+              backgroundColor: AppColors.accent,
               backgroundImage:
                   avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
               onBackgroundImageError:
@@ -372,7 +373,7 @@ class _CustomerLandingScreenState
             child: const Text('Log Out',
                 style: TextStyle(
                     fontFamily: 'Poppins',
-                    color: Color(0xFFE94560),
+                    color: AppColors.accent,
                     fontWeight: FontWeight.w700)),
           ),
         ],
@@ -445,7 +446,7 @@ class _CustomerLandingScreenState
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
                       color: active
-                          ? const Color(0xFFE94560).withValues(alpha: 0.1)
+                          ? AppColors.accent.withValues(alpha: 0.1)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -458,7 +459,7 @@ class _CustomerLandingScreenState
                             active ? filled : outline,
                             key: ValueKey(active),
                             color: active
-                                ? const Color(0xFFE94560)
+                                ? AppColors.accent
                                 : const Color(0xFF9CA3AF),
                             size: 24,
                           ),
@@ -473,7 +474,7 @@ class _CustomerLandingScreenState
                                 ? FontWeight.w700
                                 : FontWeight.w500,
                             color: active
-                                ? const Color(0xFFE94560)
+                                ? AppColors.accent
                                 : const Color(0xFF9CA3AF),
                           ),
                         ),
@@ -535,9 +536,9 @@ class _OrderTabState extends State<_OrderTab>
               fontWeight: FontWeight.w500,
               fontSize: 13,
             ),
-            labelColor: const Color(0xFFE94560),
+            labelColor: AppColors.accent,
             unselectedLabelColor: const Color(0xFF9CA3AF),
-            indicatorColor: const Color(0xFFE94560),
+            indicatorColor: AppColors.accent,
             indicatorWeight: 3,
             tabs: const [
               Tab(text: 'History'),
@@ -766,7 +767,7 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
               child: ElevatedButton(
                 onPressed: _loading ? null : _search,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE94560),
+                  backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(52, 52),
                   shape: RoundedRectangleBorder(
@@ -898,13 +899,13 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                  colors: [AppColors.primary, AppColors.primaryLight],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0F3460).withValues(alpha: 0.2),
+                    color: AppColors.primaryLight.withValues(alpha: 0.2),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   )
@@ -962,7 +963,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
-                        color: Color(0xFF1A1A2E))),
+                        color: AppColors.primary)),
                 TextButton(
                   onPressed: _scrollToBranches,
                   style: TextButton.styleFrom(
@@ -972,7 +973,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                       style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 12,
-                          color: Color(0xFFE94560),
+                          color: AppColors.accent,
                           fontWeight: FontWeight.w600)),
                 ),
               ],
@@ -984,7 +985,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   icon: Icons.restaurant_menu_rounded,
                   label: 'Order Food',
                   subtitle: 'View menu & order',
-                  color: const Color(0xFFE94560),
+                  color: AppColors.accent,
                   onTap: _scrollToBranches)),
             ]),
             const SizedBox(height: 14),
@@ -994,7 +995,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   icon: Icons.calendar_today_rounded,
                   label: 'Table Booking',
                   subtitle: 'Reserve now',
-                  color: const Color(0xFF0F3460),
+                  color: AppColors.primaryLight,
                   onTap: () => onSwitchTab(1))),
               const SizedBox(width: 14),
               Expanded(
@@ -1015,7 +1016,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
                       fontSize: 18,
-                      color: Color(0xFF1A1A2E)))),
+                      color: AppColors.primary))),
             const SizedBox(height: 6),
             const Text('Choose a branch to view the menu & order',
                 style: TextStyle(
@@ -1029,7 +1030,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 child: Padding(
                   padding: EdgeInsets.all(32),
                   child: CircularProgressIndicator(
-                      color: Color(0xFFE94560)))),
+                      color: AppColors.accent))),
               error: (e, _) => Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -1173,7 +1174,7 @@ class _PromptCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0F3460).withValues(alpha: 0.08),
+              color: AppColors.primaryLight.withValues(alpha: 0.08),
               blurRadius: 8,
               offset: const Offset(0, 2),
             )
@@ -1184,7 +1185,7 @@ class _PromptCard extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                colors: [AppColors.primary, AppColors.primaryLight],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1201,7 +1202,7 @@ class _PromptCard extends StatelessWidget {
                       fontFamily: 'Poppins',
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A2E))),
+                      color: AppColors.primary)),
               SizedBox(height: 4),
               Text('Tap to enable location',
                   style: TextStyle(
@@ -1210,7 +1211,7 @@ class _PromptCard extends StatelessWidget {
                       color: Color(0xFF6B7280))),
             ])),
           const Icon(Icons.chevron_right,
-              color: Color(0xFF0F3460), size: 24),
+              color: AppColors.primaryLight, size: 24),
         ]),
       ),
     );
@@ -1238,14 +1239,14 @@ class _LoadingCard extends StatelessWidget {
           child: CircularProgressIndicator(
               strokeWidth: 2.5,
               valueColor:
-                  AlwaysStoppedAnimation(Color(0xFF0F3460)))),
+                  AlwaysStoppedAnimation(AppColors.primaryLight))),
         SizedBox(width: 14),
         Text('Finding the nearest branch...',
             style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF0F3460))),
+                color: AppColors.primaryLight)),
       ]),
     );
   }
@@ -1312,7 +1313,7 @@ class _ResultCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0F3460).withValues(alpha: 0.08),
+              color: AppColors.primaryLight.withValues(alpha: 0.08),
               blurRadius: 8,
               offset: const Offset(0, 2),
             )
@@ -1323,7 +1324,7 @@ class _ResultCard extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                colors: [AppColors.primary, AppColors.primaryLight],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(12)),
@@ -1341,7 +1342,7 @@ class _ResultCard extends StatelessWidget {
                           fontFamily: 'Poppins',
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1A1A2E)),
+                          color: AppColors.primary),
                       overflow: TextOverflow.ellipsis)),
                 const SizedBox(width: 8),
                 Container(
@@ -1365,14 +1366,14 @@ class _ResultCard extends StatelessWidget {
               const SizedBox(height: 6),
               Row(children: [
                 const Icon(Icons.location_on_outlined,
-                    size: 14, color: Color(0xFF0F3460)),
+                    size: 14, color: AppColors.primaryLight),
                 const SizedBox(width: 4),
                 Text(_formatDist(distanceKm),
                     style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF0F3460))),
+                        color: AppColors.primaryLight)),
                 if (address.isNotEmpty) ...[
                   const SizedBox(width: 6),
                   const Text('•',
@@ -1391,7 +1392,7 @@ class _ResultCard extends StatelessWidget {
           const SizedBox(width: 8),
           Column(children: [
             const Icon(Icons.chevron_right,
-                color: Color(0xFF0F3460), size: 22),
+                color: AppColors.primaryLight, size: 22),
             const SizedBox(height: 6),
             GestureDetector(
               onTap: onRefresh,
@@ -1434,14 +1435,14 @@ class _ErrorCard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F3460).withValues(alpha: 0.1),
+              color: AppColors.primaryLight.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text('Try Again',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
-                    color: Color(0xFF0F3460),
+                    color: AppColors.primaryLight,
                     fontWeight: FontWeight.w600))),
         ),
       ]),
@@ -1533,7 +1534,7 @@ class _LocationPermissionSheet extends StatelessWidget {
             height: 80,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                colors: [AppColors.primary, AppColors.primaryLight],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1546,7 +1547,7 @@ class _LocationPermissionSheet extends StatelessWidget {
                   fontFamily: 'Poppins',
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1A2E))),
+                  color: AppColors.primary)),
           const SizedBox(height: 10),
           Text(
             'We use your location to\nshow the nearest restaurant branch.',
@@ -1570,7 +1571,7 @@ class _LocationPermissionSheet extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () => _handleAllow(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A1A2E),
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
@@ -1618,7 +1619,7 @@ class _LocationPermissionSheet extends StatelessWidget {
         height: 34,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+            colors: [AppColors.primary, AppColors.primaryLight],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -1695,7 +1696,7 @@ class _BranchCard extends StatelessWidget {
                 height: 54,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF1A1A2E), Color(0xFF0F3460)],
+                    colors: [AppColors.primary, AppColors.primaryLight],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight),
                   borderRadius: BorderRadius.circular(14)),
@@ -1713,7 +1714,7 @@ class _BranchCard extends StatelessWidget {
                                   fontFamily: 'Poppins',
                                   fontWeight: FontWeight.w700,
                                   fontSize: 16,
-                                  color: Color(0xFF1A1A2E)),
+                                  color: AppColors.primary),
                               overflow: TextOverflow.ellipsis)),
                         const SizedBox(width: 8),
                         Container(
@@ -1766,7 +1767,7 @@ class _BranchCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
                 color: isOpen
-                    ? const Color(0xFFE94560)
+                    ? AppColors.accent
                     : const Color(0xFFE5E7EB),
                 borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(20))),
@@ -1875,9 +1876,9 @@ class _OrderStatusCard extends StatelessWidget {
     'new': Color(0xFF6B7280),
     'preparing': Color(0xFFD97706),
     'ready': Color(0xFF1D9E75),
-    'served': Color(0xFF0F3460),
+    'served': AppColors.primaryLight,
     'paid': Color(0xFF1D9E75),
-    'cancelled': Color(0xFFE94560),
+    'cancelled': AppColors.accent,
   };
   static const _statusMessages = {
     'new': '⏳ Your order is waiting for kitchen confirmation.',
@@ -1982,7 +1983,7 @@ class _OrderStatusCard extends StatelessWidget {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE94560)
+                        color: AppColors.accent
                             .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -1990,7 +1991,7 @@ class _OrderStatusCard extends StatelessWidget {
                         child: Text('${qty}x',
                             style: const TextStyle(
                                 fontFamily: 'Poppins',
-                                color: Color(0xFFE94560),
+                                color: AppColors.accent,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 12)),
                       ),
@@ -2057,7 +2058,7 @@ class _OrderStatusCard extends StatelessWidget {
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w800,
                       fontSize: 18,
-                      color: Color(0xFFE94560))),
+                      color: AppColors.accent)),
             ]),
         if (paymentStatus != 'paid' && status != 'cancelled') ...[
           const SizedBox(height: 12),
@@ -2069,14 +2070,14 @@ class _OrderStatusCard extends StatelessWidget {
             ),
             child: const Row(children: [
               Icon(Icons.info_outline,
-                  size: 14, color: Color(0xFF0F3460)),
+                  size: 14, color: AppColors.primaryLight),
               SizedBox(width: 8),
               Expanded(
                 child: Text('💡 Pay at the cashier when the order is ready.',
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
-                        color: Color(0xFF0F3460))),
+                        color: AppColors.primaryLight)),
               ),
             ]),
           ),
@@ -2119,18 +2120,18 @@ class _StatusProgress extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFFE94560).withValues(alpha: 0.1),
+              color: AppColors.accent.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.cancel_outlined,
-                color: Color(0xFFE94560), size: 20),
+                color: AppColors.accent, size: 20),
           ),
           const SizedBox(width: 10),
           const Text('Order cancelled',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 13,
-                  color: Color(0xFFE94560),
+                  color: AppColors.accent,
                   fontWeight: FontWeight.w700)),
         ]));
     }
@@ -2153,7 +2154,7 @@ class _StatusProgress extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: isActive
                         ? const LinearGradient(
-                            colors: [Color(0xFFE94560), Color(0xFFC93550)],
+                            colors: [AppColors.accent, Color(0xFFC93550)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )
@@ -2163,7 +2164,7 @@ class _StatusProgress extends StatelessWidget {
                     boxShadow: isCurrent
                         ? [
                             BoxShadow(
-                                color: const Color(0xFFE94560)
+                                color: AppColors.accent
                                     .withValues(alpha: 0.4),
                                 blurRadius: 10,
                                 offset: const Offset(0, 2))
@@ -2182,7 +2183,7 @@ class _StatusProgress extends StatelessWidget {
                             ? FontWeight.w700
                             : FontWeight.w500,
                         color: isActive
-                            ? const Color(0xFFE94560)
+                            ? AppColors.accent
                             : Colors.grey[400]),
                     textAlign: TextAlign.center),
               ])),
@@ -2194,7 +2195,7 @@ class _StatusProgress extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: idx < currentIdx
                         ? const LinearGradient(
-                            colors: [Color(0xFFE94560), Color(0xFFC93550)],
+                            colors: [AppColors.accent, Color(0xFFC93550)],
                           )
                         : null,
                     color: idx < currentIdx ? null : const Color(0xFFE5E7EB),

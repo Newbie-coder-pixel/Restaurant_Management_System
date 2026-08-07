@@ -429,7 +429,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
     switch (s) {
       case 'paid':      return const Color(0xFF4CAF50);
       case 'served':    return const Color(0xFF4CAF50);
-      case 'cancelled': return const Color(0xFFE94560);
+      case 'cancelled': return AppColors.accent;
       default:          return AppColors.textHint;
     }
   }
@@ -479,7 +479,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                       child: DropdownButton<String?>(
                         value: _selectedBranchId,
                         isDense: true,
-                        dropdownColor: const Color(0xFF1A1A2E),
+                        dropdownColor: AppColors.primary,
                         iconEnabledColor: Colors.white60,
                         icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                         style: const TextStyle(

@@ -130,7 +130,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
       case 'manager':    return const Color(0xFF2196F3);
       case 'cashier':    return const Color(0xFF4CAF50);
       case 'waiter':     return const Color(0xFFFF9800);
-      case 'kitchen':    return const Color(0xFFE94560);
+      case 'kitchen':    return AppColors.accent;
       case 'host':       return const Color(0xFF00BCD4);
       default:           return Colors.grey;
     }
@@ -386,7 +386,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Color(0xFFE94560), size: 48),
+            const Icon(Icons.error_outline, color: AppColors.accent, size: 48),
             const SizedBox(height: 12),
             Text('Failed to load data:\n$_error',
                 textAlign: TextAlign.center,

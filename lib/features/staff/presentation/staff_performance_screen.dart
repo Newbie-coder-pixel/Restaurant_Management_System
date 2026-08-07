@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../core/theme/app_theme.dart';
 
 // ─────────────────────────────────────────────
 // Model
@@ -247,9 +248,9 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppColors.primary,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         title: const Text('Staff Performance'),
         centerTitle: false,
@@ -260,7 +261,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: const Color(0xFF1A1A2E),
+                dropdownColor: AppColors.primary,
                 iconEnabledColor: Colors.white60,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(
@@ -325,7 +326,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
 
   Widget _buildFilters() {
     return Container(
-      color: const Color(0xFF16213E),
+      color: AppColors.primaryLight,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
@@ -335,7 +336,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F3460),
+                color: AppColors.primaryLight,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -369,8 +370,8 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
                         ),
                       ),
                       selected: selected,
-                      selectedColor: const Color(0xFFE94560),
-                      backgroundColor: const Color(0xFF0F3460),
+                      selectedColor: AppColors.accent,
+                      backgroundColor: AppColors.primaryLight,
                       onSelected: (_) => setState(() => _selectedRole = role),
                     ),
                   );
@@ -406,7 +407,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Color(0xFFE94560), size: 48),
+            const Icon(Icons.error_outline, color: AppColors.accent, size: 48),
             const SizedBox(height: 12),
             Text(
               'Failed to load data:\n$_error',
@@ -438,7 +439,7 @@ class _StaffCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: AppColors.primaryLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white10),
       ),
@@ -515,7 +516,7 @@ class _StaffCard extends StatelessWidget {
                   label: 'Cancelled',
                   value: '${staff.cancelledOrdersWaiter}',
                   icon: Icons.cancel_outlined,
-                  color: const Color(0xFFE94560),
+                  color: AppColors.accent,
                 ),
                 _MetricTile(
                   label: 'Completion',
@@ -571,7 +572,7 @@ class _StaffCard extends StatelessWidget {
                 label: 'Absent',
                 value: '${staff.daysAlpha}',
                 icon: Icons.cancel,
-                color: const Color(0xFFE94560),
+                color: AppColors.accent,
               ),
               _MetricTile(
                 label: 'Permission',
@@ -625,7 +626,7 @@ class _StaffCard extends StatelessWidget {
                 label: 'Late',
                 value: '${staff.totalShiftsScheduled - staff.onTimeShifts}',
                 icon: Icons.alarm_off,
-                color: const Color(0xFFE94560),
+                color: AppColors.accent,
               ),
               const Expanded(child: SizedBox()),
             ]),
@@ -668,7 +669,7 @@ class _GradeBadge extends StatelessWidget {
       'A': const Color(0xFF4CAF50),
       'B': const Color(0xFF64B5F6),
       'C': const Color(0xFFFFB74D),
-      'D': const Color(0xFFE94560),
+      'D': AppColors.accent,
     };
     final color = colors[grade] ?? Colors.white38;
     return Container(
@@ -718,7 +719,7 @@ class _ScoreSummaryRow extends StatelessWidget {
           _Divider(),
           _ScoreItem(label: 'Punctuality', value: staff.punctualityScore, color: const Color(0xFFFFB74D)),
           _Divider(),
-          _ScoreItem(label: 'Final', value: staff.finalScore, color: const Color(0xFFE94560), isBold: true),
+          _ScoreItem(label: 'Final', value: staff.finalScore, color: AppColors.accent, isBold: true),
         ],
       ),
     );
@@ -924,7 +925,7 @@ class _AttendanceBar extends StatelessWidget {
         ? const Color(0xFF4CAF50)
         : pct >= 60
             ? const Color(0xFFFFB74D)
-            : const Color(0xFFE94560);
+            : AppColors.accent;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -965,7 +966,7 @@ class _PunctualityBar extends StatelessWidget {
         ? const Color(0xFF4CAF50)
         : pct >= 60
             ? const Color(0xFFFFB74D)
-            : const Color(0xFFE94560);
+            : AppColors.accent;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

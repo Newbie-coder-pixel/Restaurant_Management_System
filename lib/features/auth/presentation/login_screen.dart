@@ -280,7 +280,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     // Already logged in but staff still loading → show splash
     if (authState.isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF1A1A2E),
+        backgroundColor: AppColors.primary,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,

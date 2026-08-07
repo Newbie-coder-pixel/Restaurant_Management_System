@@ -2,6 +2,7 @@
 
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_theme.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -798,7 +799,7 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A1A2E),
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
@@ -844,7 +845,7 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
         decoration: BoxDecoration(
           color: hasRange ? const Color(0xFFEEF0FB) : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: hasRange ? const Color(0xFF1A1A2E) : Colors.grey[300]!),
+          border: Border.all(color: hasRange ? AppColors.primary : Colors.grey[300]!),
         ),
         child: Row(
           children: [
@@ -883,12 +884,12 @@ class _ReportExportSheetState extends State<ReportExportSheet> {
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF1A1A2E)
+                ? AppColors.primary
                 : Colors.grey[100],
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFF1A1A2E)
+                  ? AppColors.primary
                   : Colors.grey[300]!,
             ),
           ),
