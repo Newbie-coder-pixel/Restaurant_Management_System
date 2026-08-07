@@ -21,6 +21,7 @@ import '../providers/cart_provider.dart';
 import 'widgets/cart_bottom_bar.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/responsive_layout.dart';
 
 // ── Active branches provider ─────────────────────────────────────────
 final _customerBranchesProvider =
@@ -158,6 +159,8 @@ class _CustomerLandingScreenState
   late int _tab;
   late final ValueNotifier<int> _tabNotifier;
   User? _cachedUser;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _homeTabKey = GlobalKey<_HomeTabState>();
 
   @override
   void initState() {
@@ -207,9 +210,9 @@ class _CustomerLandingScreenState
 
     if (user == null && userAsync.isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF8F9FA),
+        backgroundColor: AppColors.background,
         body: Center(
-          child: CircularProgressIndicator(color: AppColors.accent),
+          child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }
@@ -220,26 +223,23 @@ class _CustomerLandingScreenState
 
     final cart = ref.watch(cartProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      key: _scaffoldKey,
+      backgroundColor: AppColors.background,
+      endDrawer: _buildDrawer(user),
       body: SafeArea(
         child: Column(
           children: [
-            _buildTopBar(user),
+            _buildTopNav(user, cart),
             Expanded(child: _buildBody()),
           ],
         ),
       ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!cart.isEmpty && _tab == 0)
-            CartBottomBar(
+      bottomNavigationBar: (!cart.isEmpty && _tab == 0)
+          ? CartBottomBar(
               cart: cart,
               onCheckout: () => context.go('/customer/checkout'),
-            ),
-          _buildBottomNav(),
-        ],
-      ),
+            )
+          : null,
     );
   }
 
@@ -268,80 +268,181 @@ class _CustomerLandingScreenState
     return '';
   }
 
-  // ── TOP BAR ──────────────────────────────────────────────────
-  Widget _buildTopBar(User user) {
-    // ← CHANGED 'Track Order' → 'Orders'
-    const titles = ['Home', 'Table Booking', 'Orders', 'AI Chat'];
-    final displayName = _displayName(user);
-    final firstName = displayName.split(' ').first;
-    final initial =
-        firstName.isNotEmpty ? firstName[0].toUpperCase() : 'P';
-    final avatarUrl = _avatarUrl(user);
-
+  // ── TOP NAV ──────────────────────────────────────────────────
+  Widget _buildTopNav(User user, CartState cart) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primaryLight],
-        ),
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3), width: 2),
-            ),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.accent,
-              backgroundImage:
-                  avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-              onBackgroundImageError:
-                  avatarUrl.isNotEmpty ? (_, __) {} : null,
-              child: avatarUrl.isEmpty
-                  ? Text(initial,
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700))
-                  : null,
-            ),
+          GestureDetector(
+            onTap: () {
+              switchTab(0);
+              _homeTabKey.currentState?.scrollToTop();
+            },
+            child: const Text('Pusaka',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary)),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 28),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titles[_tab.clamp(0, titles.length - 1)],
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700),
-                ),
-                Text(
-                  'Hi, $firstName 👋',
-                  style: const TextStyle(
-                      color: Colors.white70, fontSize: 11),
-                ),
-              ],
-            ),
+            child: _tab == 0
+                ? Row(children: [
+                    _NavLink(
+                        label: 'Menu',
+                        onTap: () =>
+                            _homeTabKey.currentState?.scrollToLocations()),
+                    const SizedBox(width: 24),
+                    _NavLink(
+                        label: 'Locations',
+                        active: true,
+                        onTap: () =>
+                            _homeTabKey.currentState?.scrollToLocations()),
+                    const SizedBox(width: 24),
+                    _NavLink(
+                        label: 'Our Story',
+                        onTap: () =>
+                            _homeTabKey.currentState?.scrollToTop()),
+                  ])
+                : const SizedBox.shrink(),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.logout_rounded,
-                  color: Colors.white70, size: 20),
-              onPressed: _confirmLogout,
-              padding: const EdgeInsets.all(8),
-            ),
+          GestureDetector(
+            onTap: cart.isEmpty
+                ? null
+                : () => context.go('/customer/checkout'),
+            child: Stack(clipBehavior: Clip.none, children: [
+              const Icon(Icons.shopping_cart_outlined,
+                  color: AppColors.textPrimary, size: 24),
+              if (!cart.isEmpty)
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    decoration: const BoxDecoration(
+                        color: AppColors.accent, shape: BoxShape.circle),
+                    child: Text('${cart.itemCount}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ),
+                ),
+            ]),
+          ),
+          const SizedBox(width: 20),
+          GestureDetector(
+            onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+            child: const Icon(Icons.menu_rounded,
+                color: AppColors.textPrimary, size: 24),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── DRAWER ───────────────────────────────────────────────────
+  Widget _buildDrawer(User user) {
+    final displayName = _displayName(user);
+    final firstName = displayName.split(' ').first;
+    final initial = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'P';
+    final avatarUrl = _avatarUrl(user);
+
+    Widget item(IconData icon, String label, int tabIndex) {
+      final active = _tab == tabIndex;
+      return ListTile(
+        leading: Icon(icon,
+            color: active ? AppColors.accent : AppColors.textSecondary),
+        title: Text(label,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? AppColors.accent : AppColors.textPrimary)),
+        selected: active,
+        selectedTileColor: AppColors.accent.withValues(alpha: 0.08),
+        onTap: () {
+          switchTab(tabIndex);
+          Navigator.of(context).pop();
+        },
+      );
+    }
+
+    return Drawer(
+      backgroundColor: AppColors.surface,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryLight],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundColor: AppColors.accent,
+                    backgroundImage:
+                        avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                    onBackgroundImageError:
+                        avatarUrl.isNotEmpty ? (_, __) {} : null,
+                    child: avatarUrl.isEmpty
+                        ? Text(initial,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 18))
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(displayName,
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            item(Icons.home_rounded, 'Home', 0),
+            item(Icons.calendar_today_rounded, 'Table Booking', 1),
+            item(Icons.receipt_long_rounded, 'Orders', 2),
+            item(Icons.smart_toy_rounded, 'AI Chat', 3),
+            const Spacer(),
+            const Divider(height: 1, color: AppColors.border),
+            ListTile(
+              leading:
+                  const Icon(Icons.logout_rounded, color: AppColors.accent),
+              title: const Text('Log Out',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accent)),
+              onTap: () {
+                Navigator.of(context).pop();
+                _confirmLogout();
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }
@@ -388,7 +489,7 @@ class _CustomerLandingScreenState
         Visibility(
           visible: _tab == 0,
           maintainState: true,
-          child: _HomeTab(onSwitchTab: switchTab),
+          child: _HomeTab(key: _homeTabKey),
         ),
         Visibility(
           visible: _tab == 1,
@@ -410,82 +511,34 @@ class _CustomerLandingScreenState
     );
   }
 
-  // ── BOTTOM NAV ───────────────────────────────────────────────
-  Widget _buildBottomNav() {
-    const items = [
-      (Icons.home_outlined, Icons.home_rounded, 'Home'),
-      (Icons.calendar_today_outlined, Icons.calendar_today_rounded, 'Booking'),
-      (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Orders'),
-      (Icons.smart_toy_outlined, Icons.smart_toy_rounded, 'AI Chat'),
-    ];
+}
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, -4))
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-          child: Row(
-            children: List.generate(items.length, (i) {
-              final (outline, filled, label) = items[i];
-              final active = _tab == i;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _tab = i),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: active
-                          ? AppColors.accent.withValues(alpha: 0.1)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: Icon(
-                            active ? filled : outline,
-                            key: ValueKey(active),
-                            color: active
-                                ? AppColors.accent
-                                : const Color(0xFF9CA3AF),
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          label,
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            fontWeight: active
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: active
-                                ? AppColors.accent
-                                : const Color(0xFF9CA3AF),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
+// ── Top nav text link ───────────────────────────────────────────────
+class _NavLink extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _NavLink(
+      {required this.label, this.active = false, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.only(bottom: 4),
+        decoration: active
+            ? const BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: AppColors.primary, width: 2)))
+            : null,
+        child: Text(label,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color:
+                    active ? AppColors.primary : AppColors.textSecondary)),
       ),
     );
   }
@@ -843,8 +896,7 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
 // HOME TAB
 // ════════════════════════════════════════════
 class _HomeTab extends ConsumerStatefulWidget {
-  final void Function(int) onSwitchTab;
-  const _HomeTab({required this.onSwitchTab});
+  const _HomeTab({super.key});
 
   @override
   ConsumerState<_HomeTab> createState() => _HomeTabState();
@@ -854,15 +906,13 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
   final branchSectionKey = GlobalKey();
   final _scrollController = ScrollController();
 
-  void Function(int) get onSwitchTab => widget.onSwitchTab;
-
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _scrollToBranches() {
+  void scrollToLocations() {
     final ctx = branchSectionKey.currentContext;
     if (ctx != null) {
       Scrollable.ensureVisible(
@@ -879,62 +929,46 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
     }
   }
 
+  void scrollToTop() {
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final userAsync = ref.watch(customerUserProvider);
-    final user = userAsync.valueOrNull;
     final branchesAsync = ref.watch(_customerBranchesProvider);
     final nearestState = ref.watch(_nearestBranchProvider);
-    final displayName = _safeName(user);
 
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.all(20),
-      child: Column(
+      child: ResponsiveLayout(
+        maxWidth: 1200,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Welcome banner
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryLight],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryLight.withValues(alpha: 0.2),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  )
-                ]),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Welcome,',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 14)),
-                    const SizedBox(height: 6),
-                    Text(displayName,
-                        style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 10),
-                    const Text('What would you like to do today?',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.white70,
-                            fontSize: 13)),
-                  ])),
+            _buildHero(),
+            const SizedBox(height: 64),
+
+            Row(
+              key: branchSectionKey,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Text('Our Locations',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary)),
+                Icon(Icons.storefront_outlined,
+                    color: AppColors.textHint, size: 22),
+              ],
+            ),
             const SizedBox(height: 20),
 
-            // ── Nearest Branch Banner
             branchesAsync.maybeWhen(
               data: (branches) => _NearestBranchBanner(
                 nearestState: nearestState,
@@ -952,90 +986,19 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               ),
               orElse: () => const SizedBox.shrink(),
             ),
-            const SizedBox(height: 24),
-
-            // ── Quick Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Quick Actions',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        color: AppColors.primary)),
-                TextButton(
-                  onPressed: _scrollToBranches,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  child: const Text('View All',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 12,
-                          color: AppColors.accent,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.restaurant_menu_rounded,
-                  label: 'Order Food',
-                  subtitle: 'View menu & order',
-                  color: AppColors.accent,
-                  onTap: _scrollToBranches)),
-            ]),
-            const SizedBox(height: 14),
-            Row(children: [
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.calendar_today_rounded,
-                  label: 'Table Booking',
-                  subtitle: 'Reserve now',
-                  color: AppColors.primaryLight,
-                  onTap: () => onSwitchTab(1))),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.receipt_long_rounded,
-                  label: 'Track Order',
-                  subtitle: 'Status & history',
-                  color: const Color(0xFF1D9E75),
-                  onTap: () => onSwitchTab(2))),
-            ]),
-            const SizedBox(height: 28),
-
-            // ── Our Branches
-            Container(
-              key: branchSectionKey,
-              child: const Text('Our Branches',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
-                      color: AppColors.primary))),
-            const SizedBox(height: 6),
-            const Text('Choose a branch to view the menu & order',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    color: Color(0xFF9CA3AF))),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             branchesAsync.when(
               loading: () => const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(
-                      color: AppColors.accent))),
+                  child:
+                      CircularProgressIndicator(color: AppColors.primary))),
               error: (e, _) => Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.red.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   border:
                       Border.all(color: Colors.red.withValues(alpha: 0.2))),
                 child: const Row(children: [
@@ -1054,39 +1017,127 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                       padding: EdgeInsets.all(32),
                       child: Text('No active branches yet',
                           style: TextStyle(
-                              fontFamily: 'Poppins', color: Colors.grey)),
+                              fontFamily: 'Poppins',
+                              color: AppColors.textSecondary)),
                     ));
                 }
-                return Column(
-                  children: branches
-                      .map((b) => Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: _BranchCard(branch: b),
-                      ))
-                      .toList());
+                return _LocationsGrid(
+                    branches: branches, nearestState: nearestState);
               },
             ),
             const SizedBox(height: 12),
-          ]),
+          ],
+        ),
+      ),
     );
   }
 
-  static String _safeName(User? user) {
-    if (user == null) return 'Customer';
-    final meta = user.userMetadata;
-    if (meta != null) {
-      final fullName = meta['full_name'];
-      if (fullName is String && fullName.isNotEmpty) {
-        return fullName.split(' ').first;
+  Widget _buildHero() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth > 760;
+
+      final title = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Pusaka',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 44,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                  height: 1.05)),
+          const SizedBox(height: 16),
+          const Text(
+              'Honest flavors from the archipelago. Bridging ancestral '
+              'craft with contemporary culinary refinement.',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 15,
+                  color: AppColors.textSecondary,
+                  height: 1.6)),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: scrollToLocations,
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                elevation: 0),
+            child: const Text('Explore Menu',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ],
+      );
+
+      final image = Container(
+        height: isWide ? 420 : 220,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: const LinearGradient(
+              colors: [AppColors.primary, AppColors.accent],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight),
+        ),
+        alignment: Alignment.center,
+        child: Icon(Icons.restaurant_rounded,
+            size: isWide ? 96 : 64, color: Colors.white.withValues(alpha: 0.85)),
+      );
+
+      if (isWide) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: title),
+            const SizedBox(width: 40),
+            Expanded(child: image),
+          ],
+        );
       }
-      final name = meta['name'];
-      if (name is String && name.isNotEmpty) {
-        return name.split(' ').first;
-      }
-    }
-    final email = user.email;
-    if (email != null && email.isNotEmpty) return email.split('@').first;
-    return 'Customer';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [title, const SizedBox(height: 24), image],
+      );
+    });
+  }
+}
+
+// ── Locations grid ───────────────────────────────────────────────
+class _LocationsGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> branches;
+  final _NearestState nearestState;
+  const _LocationsGrid({required this.branches, required this.nearestState});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      final columns = width > 900 ? 3 : (width > 600 ? 2 : 1);
+      const gap = 20.0;
+      final itemWidth = (width - gap * (columns - 1)) / columns;
+
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: branches.map((b) {
+          double? distanceKm;
+          if (nearestState is _NearestLoaded) {
+            final loaded = nearestState as _NearestLoaded;
+            if (loaded.branch['id'] == b['id']) distanceKm = loaded.distanceKm;
+          }
+          return SizedBox(
+            width: columns == 1 ? width : itemWidth,
+            child: _BranchCard(branch: b, distanceKm: distanceKm),
+          );
+        }).toList(),
+      );
+    });
   }
 }
 
@@ -1165,20 +1216,10 @@ class _PromptCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFF0F4FF), Color(0xFFE8EEFF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          border: Border.all(color: const Color(0xFFBFD0FF), width: 1.5),
+          color: AppColors.surfaceVariant,
+          border: Border.all(color: AppColors.border, width: 1),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryLight.withValues(alpha: 0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            )
-          ]),
+        ),
         child: Row(children: [
           Container(
             width: 44,
@@ -1226,11 +1267,8 @@ class _LoadingCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF0F4FF), Color(0xFFE8EEFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.surfaceVariant,
+        border: Border.all(color: AppColors.border, width: 1),
         borderRadius: BorderRadius.circular(16)),
       child: const Row(children: [
         SizedBox(
@@ -1304,20 +1342,10 @@ class _ResultCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFF0F4FF), Color(0xFFE8EEFF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          border: Border.all(color: const Color(0xFFBFD0FF), width: 1.5),
+          color: AppColors.surfaceVariant,
+          border: Border.all(color: AppColors.border, width: 1),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryLight.withValues(alpha: 0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            )
-          ]),
+        ),
         child: Row(children: [
           Container(
             width: 44,
@@ -1515,7 +1543,7 @@ class _LocationPermissionSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       padding: EdgeInsets.fromLTRB(
           24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
@@ -1639,7 +1667,8 @@ class _LocationPermissionSheet extends StatelessWidget {
 // ── Branch Card ───────────────────────────────────────────────────
 class _BranchCard extends StatelessWidget {
   final Map<String, dynamic> branch;
-  const _BranchCard({required this.branch});
+  final double? distanceKm;
+  const _BranchCard({required this.branch, this.distanceKm});
 
   bool _isOpen() {
     final openStr = branch['opening_time'] as String?;
@@ -1664,196 +1693,83 @@ class _BranchCard extends StatelessWidget {
     }
   }
 
+  String _statusText(bool isOpen) {
+    final open = (branch['opening_time'] as String?)?.substring(0, 5) ?? '10:00';
+    final close = (branch['closing_time'] as String?)?.substring(0, 5) ?? '22:00';
+    return isOpen ? 'Open until $close' : 'Closed • Opens $open';
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = branch['name'] as String? ?? 'Branch';
     final address = branch['address'] as String? ?? '';
-    final open =
-        (branch['opening_time'] as String?)?.substring(0, 5) ?? '10:00';
-    final close =
-        (branch['closing_time'] as String?)?.substring(0, 5) ?? '22:00';
     final isOpen = _isOpen();
+    final distanceLabel = distanceKm != null
+        ? (distanceKm! < 1
+            ? '${(distanceKm! * 1000).round()} m away'
+            : '${distanceKm!.toStringAsFixed(1)} km away')
+        : address;
 
     return GestureDetector(
       onTap: () => context.go('/customer/menu/${branch['id']}'),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 4))
-          ]),
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-            child: Row(children: [
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border, width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(name,
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 10),
+            if (distanceLabel.isNotEmpty)
+              Row(children: [
+                const Icon(Icons.location_on_outlined,
+                    size: 15, color: AppColors.textSecondary),
+                const SizedBox(width: 6),
+                Expanded(
+                    child: Text(distanceLabel,
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            color: AppColors.textSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis)),
+              ]),
+            const SizedBox(height: 10),
+            Row(children: [
               Container(
-                width: 54,
-                height: 54,
+                width: 7,
+                height: 7,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primary, AppColors.primaryLight],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight),
-                  borderRadius: BorderRadius.circular(14)),
-                child: const Icon(Icons.store_rounded,
-                    color: Colors.white, size: 26)),
-              const SizedBox(width: 16),
+                    color: isOpen
+                        ? AppColors.primary
+                        : AppColors.statusClosed,
+                    shape: BoxShape.circle)),
+              const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Flexible(
-                          child: Text(name,
-                              style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                  color: AppColors.primary),
-                              overflow: TextOverflow.ellipsis)),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: isOpen
-                                ? const Color(0xFFE8F5E9)
-                                : const Color(0xFFFCE4EC),
-                            borderRadius: BorderRadius.circular(6)),
-                          child: Text(
-                            isOpen ? 'Open' : 'Closed',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: isOpen
-                                    ? const Color(0xFF2E7D32)
-                                    : const Color(0xFFC62828)))),
-                      ]),
-                      if (address.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(address,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Color(0xFF9CA3AF)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        const Icon(Icons.access_time_outlined,
-                            size: 14, color: Color(0xFF6B7280)),
-                        const SizedBox(width: 6),
-                        Text('$open – $close WIB',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Color(0xFF6B7280))),
-                      ]),
-                    ])),
-            ])),
-          GestureDetector(
-            onTap: isOpen
-                ? () => context.go('/customer/menu/${branch['id']}')
-                : null,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: isOpen
-                    ? AppColors.accent
-                    : const Color(0xFFE5E7EB),
-                borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(20))),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isOpen
-                        ? Icons.restaurant_menu_rounded
-                        : Icons.do_not_disturb_alt_outlined,
-                    color:
-                        isOpen ? Colors.white : const Color(0xFF9CA3AF),
-                    size: 18),
-                  const SizedBox(width: 10),
-                  Text(
-                    isOpen ? '🍽️ Order Now' : 'Currently Closed',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: isOpen
-                            ? Colors.white
-                            : const Color(0xFF9CA3AF))),
-                ])),
-          ),
-        ])));
+                  child: Text(_statusText(isOpen),
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          color: isOpen
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary))),
+            ]),
+          ],
+        ),
+      ),
+    );
   }
-}
-
-// ── Action Card ───────────────────────────────────────────────────
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-  const _ActionCard(
-      {required this.icon,
-      required this.label,
-      required this.subtitle,
-      required this.color,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [color, color.withValues(alpha: 0.85)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: color.withValues(alpha: 0.35),
-              blurRadius: 12,
-              offset: const Offset(0, 6))
-        ]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.25),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: Colors.white, size: 24),
-        ),
-        const SizedBox(height: 14),
-        Text(label,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 15)),
-        const SizedBox(height: 4),
-        Text(subtitle,
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Colors.white.withValues(alpha: 0.85),
-                fontSize: 11)),
-      ])),
-  );
 }
 
 // ════════════════════════════════════════════
