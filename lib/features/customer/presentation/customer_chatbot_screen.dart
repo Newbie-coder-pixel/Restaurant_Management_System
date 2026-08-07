@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/theme/app_theme.dart';
 import '../providers/cart_provider.dart';
 import '../providers/customer_auth_provider.dart';
 import '../services/sentiment_escalation_service.dart';
@@ -36,19 +37,21 @@ class _ChatMessage {
 
 // ── Quick Actions ──────────────────────────────────────────────────────
 const _quickActions = [
-  ('✨ Recommendation', 'Recommend a menu for me'),
-  ('🍽️ View Menu', 'What menu items are available?'),
-  ('🛒 Order Food', 'I want to order food'),
-  ('📅 Table Reservation', 'I want to reserve a table'),
-  ('🌿 Vegetarian', 'What vegetarian menu items do you have?'),
-  ('⚠️ Allergen Info', 'I have allergies, can you help check the menu?'),
-  ('⏰ Opening Hours', 'What time does the restaurant open and close?'),
+  ('Recommend a dish', 'Recommend a menu for me'),
+  ("Where's my order?", 'Where can I check my order status?'),
+  ('Book a table', 'I want to reserve a table'),
+  ('View Menu', 'What menu items are available?'),
+  ('Order Food', 'I want to order food'),
+  ('Vegetarian Options', 'What vegetarian menu items do you have?'),
+  ('Allergen Info', 'I have allergies, can you help check the menu?'),
+  ('Opening Hours', 'What time does the restaurant open and close?'),
 ];
 
 // ── Screen ─────────────────────────────────────────────────────────────
 class CustomerChatbotScreen extends ConsumerStatefulWidget {
   final String? branchId;
-  const CustomerChatbotScreen({super.key, this.branchId});
+  final VoidCallback onClose;
+  const CustomerChatbotScreen({super.key, this.branchId, required this.onClose});
 
   @override
   ConsumerState<CustomerChatbotScreen> createState() =>
@@ -112,14 +115,7 @@ class _CustomerChatbotScreenState
     super.initState();
     // Welcome the customer — same for all modes
     _addBot(
-      'Hello! 👋 Welcome to our customer support service.\n\n'
-      'I can help you with:\n'
-      '• 🍽️ Menu & ingredient information\n'
-      '• 🛒 Food ordering\n'
-      '• ⚠️ Allergen & special diet info\n'
-      '• 📅 Table reservations\n'
-      '• ⏰ Operating hours\n\n'
-      'Please choose a topic below or type your question 👇',
+      'Welcome to Pusaka. How can I assist you in exploring our heritage menu today?',
     );
     _loadBranchData();
   }
@@ -604,6 +600,7 @@ IMPORTANT:
       // Short delay so the message can be read, then navigate
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) {
+        widget.onClose();
         context.push('/customer/checkout');
       }
 
@@ -994,158 +991,156 @@ IMPORTANT:
   // ── Build ──────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Customer Support',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+    String? subtitle;
+    if (_cachedBranchName != null) {
+      subtitle = _cachedBranchName;
+    } else if (_selectedBranchId == null && widget.branchId == null) {
+      subtitle = 'Choose a branch to start';
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 32,
+              offset: const Offset(0, 12),
             ),
-            if (_cachedBranchName != null)
-              Text(
-                _cachedBranchName!,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.green[100],
-                  fontWeight: FontWeight.normal,
-                ),
-              )
-            else if (_selectedBranchId == null && widget.branchId == null)
-              Text(
-                'Choose a branch to start',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.green[200],
-                  fontWeight: FontWeight.normal,
-                ),
-              ),
           ],
         ),
-        centerTitle: false,
-        elevation: 0,
-        backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
-        actions: [
-          // Cart badge if there are items
-          Consumer(
-            builder: (context, ref, _) {
-              final cartCount = ref.watch(cartProvider).itemCount;
-              if (cartCount == 0) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Stack(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.shopping_cart_outlined, size: 22),
-                      tooltip: 'View Cart',
-                      onPressed: () => context.push('/customer/checkout'),
-                    ),
-                    Positioned(
-                      right: 6,
-                      top: 6,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '$cartCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 20),
-            tooltip: 'New Chat',
-            onPressed: () {
-              setState(() {
-                _messages.clear();
-                _sessionId = null;
-                // Reset branch selection if in the mode without a branchId
-                if (widget.branchId == null) {
-                  _selectedBranchId = null;
-                  _showBranchPicker = false;
-                  _cachedMenuText = null;
-                  _cachedBranchName = null;
-                  _cachedOpeningTime = null;
-                  _cachedClosingTime = null;
-                  _cachedRecommendations = null;
-                  _menuItems = [];
-                }
-              });
-              _addBot('Hi again! 👋 How can I help you?');
-            },
-          ),
-          const SizedBox(width: 4),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.green[600]),
+        child: Column(
+          children: [
+            _buildHeader(subtitle),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(painter: _DiamondPatternPainter()),
+                  ),
+                  _buildMessages(),
+                ],
+              ),
+            ),
+            if (_needsBranchSelection) _buildBranchPicker(),
+            _buildInput(),
+          ],
         ),
-      ),
-      body: Column(
-        children: [
-          Expanded(child: _buildMessages()),
-          // Picker only appears when the user triggers an action that needs a branch
-          if (_needsBranchSelection) _buildBranchPicker(),
-          _buildQuickActions(),
-          _buildInput(),
-        ],
       ),
     );
   }
 
-  // ── Branch Picker UI ───────────────────────────────────────────────
-  Widget _buildBranchPicker() => Container(
-        color: Colors.white,
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
+  // ── Header ─────────────────────────────────────────────────────────
+  Widget _buildHeader(String? subtitle) => Container(
+        padding: const EdgeInsets.fromLTRB(18, 16, 8, 16),
+        decoration: const BoxDecoration(
+          color: AppColors.primary,
+          borderRadius:
+              BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Pusaka Guide',
+                      style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
+                          fontSize: 17, fontWeight: FontWeight.w800)),
+                  if (subtitle != null)
+                    Text(subtitle,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontFamily: 'Poppins',
+                            color: Colors.white70, fontSize: 11)),
+                ],
+              ),
+            ),
+            Consumer(builder: (context, ref, _) {
+              final cartCount = ref.watch(cartProvider).itemCount;
+              if (cartCount == 0) return const SizedBox.shrink();
+              return Stack(clipBehavior: Clip.none, children: [
+                IconButton(
+                  icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 20),
+                  tooltip: 'View Cart',
+                  onPressed: () {
+                    widget.onClose();
+                    context.push('/customer/checkout');
+                  },
+                ),
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                    decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+                    child: Text('$cartCount', textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 8,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ]);
+            }),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+              tooltip: 'New Chat',
+              onPressed: () {
+                setState(() {
+                  _messages.clear();
+                  _sessionId = null;
+                  if (widget.branchId == null) {
+                    _selectedBranchId = null;
+                    _showBranchPicker = false;
+                    _cachedMenuText = null;
+                    _cachedBranchName = null;
+                    _cachedOpeningTime = null;
+                    _cachedClosingTime = null;
+                    _cachedRecommendations = null;
+                    _menuItems = [];
+                  }
+                });
+                _addBot('Welcome back! How can I help you?');
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+              tooltip: 'Close',
+              onPressed: widget.onClose,
             ),
           ],
+        ),
+      );
+
+  // ── Branch Picker UI ───────────────────────────────────────────────
+  Widget _buildBranchPicker() => Container(
+        color: AppColors.surface,
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                '🏠 Choose a Branch',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[700],
-                ),
-              ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('Choose a Branch',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                      fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
             ),
             if (_allBranches.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(8),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  child: SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
                 ),
               )
             else
@@ -1161,29 +1156,20 @@ IMPORTANT:
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.green[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green[300]!),
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            name,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green[800],
-                            ),
-                          ),
+                          Text(name,
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                                  fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                           const SizedBox(height: 2),
-                          Text(
-                            '⏰ $open - $close WIB',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.green[600],
-                            ),
-                          ),
+                          Text('$open - $close WIB',
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                                  color: AppColors.textSecondary)),
                         ],
                       ),
                     ),
@@ -1196,7 +1182,7 @@ IMPORTANT:
 
   Widget _buildMessages() => ListView.builder(
         controller: _scrollCtrl,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
         itemCount: _messages.length + (_isTyping ? 1 : 0),
         itemBuilder: (_, i) {
           if (i == _messages.length) return _buildTypingIndicator();
@@ -1205,76 +1191,82 @@ IMPORTANT:
 
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment:
-                  isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!isUser) ...[
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.green[50],
-                    child: Icon(Icons.support_agent,
-                        size: 18, color: Colors.green[700]),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isUser ? Colors.green[700] : Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(16),
-                        topRight: const Radius.circular(16),
-                        bottomLeft: isUser
-                            ? const Radius.circular(16)
-                            : const Radius.circular(4),
-                        bottomRight: isUser
-                            ? const Radius.circular(4)
-                            : const Radius.circular(16),
+                Row(
+                  mainAxisAlignment:
+                      isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (!isUser) ...[
+                      const CircleAvatar(
+                        radius: 15,
+                        backgroundColor: AppColors.surfaceVariant,
+                        child: Icon(Icons.restaurant, size: 15, color: AppColors.primary),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          m.content,
-                          style: TextStyle(
-                            color: isUser ? Colors.white : Colors.grey[800],
-                            fontSize: 14,
-                            height: 1.5,
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isUser ? AppColors.primary : AppColors.surface,
+                          border: isUser ? null : Border.all(color: AppColors.border),
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(16),
+                            topRight: const Radius.circular(16),
+                            bottomLeft: isUser
+                                ? const Radius.circular(16)
+                                : const Radius.circular(4),
+                            bottomRight: isUser
+                                ? const Radius.circular(4)
+                                : const Radius.circular(16),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _formatTime(m.timestamp),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isUser
-                                ? Colors.green[200]
-                                : Colors.grey[400],
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(m.content,
+                                style: TextStyle(
+                                    color: isUser ? Colors.white : AppColors.textPrimary,
+                                    fontFamily: 'Poppins',
+                                    fontSize: 13.5,
+                                    height: 1.5)),
+                            const SizedBox(height: 4),
+                            Text(_formatTime(m.timestamp),
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 10,
+                                    color: isUser
+                                        ? Colors.white.withValues(alpha: 0.7)
+                                        : AppColors.textHint)),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                    if (isUser) ...[
+                      const SizedBox(width: 8),
+                      const CircleAvatar(
+                        radius: 15,
+                        backgroundColor: AppColors.accent,
+                        child: Icon(Icons.person, size: 15, color: Colors.white),
+                      ),
+                    ],
+                  ],
                 ),
-                if (isUser) ...[
-                  const SizedBox(width: 8),
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.green[100],
-                    child: Icon(Icons.person,
-                        size: 18, color: Colors.green[700]),
+                // Quick-reply chips ride along with the welcome message only.
+                if (!isUser && i == 0) ...[
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 38),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _quickActions
+                          .map((e) => _quickChip(e.$1, e.$2))
+                          .toList(),
+                    ),
                   ),
                 ],
               ],
@@ -1283,35 +1275,42 @@ IMPORTANT:
         },
       );
 
+  Widget _quickChip(String label, String query) => GestureDetector(
+        onTap: () => _send(query),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Text(label,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                  fontWeight: FontWeight.w600, color: AppColors.primary)),
+        ),
+      );
+
   Widget _buildTypingIndicator() => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.green[50],
-              child: Icon(Icons.support_agent,
-                  size: 18, color: Colors.green[700]),
+            const CircleAvatar(
+              radius: 15,
+              backgroundColor: AppColors.surfaceVariant,
+              child: Icon(Icons.restaurant, size: 15, color: AppColors.primary),
             ),
             const SizedBox(width: 8),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.surface,
+                border: Border.all(color: AppColors.border),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
                   bottomRight: Radius.circular(16),
                   bottomLeft: Radius.circular(4),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1336,100 +1335,49 @@ IMPORTANT:
           child: Container(
             width: 8,
             height: 8,
-            decoration: BoxDecoration(
-              color: Colors.green[400],
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-      );
-
-  Widget _buildQuickActions() => Container(
-        color: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _quickActions
-                .map(
-                  (e) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onTap: () => _send(e.$2),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.green[50],
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.green[200]!),
-                        ),
-                        child: Text(
-                          e.$1,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.green[800],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
+            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
           ),
         ),
       );
 
   Widget _buildInput() => Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
+        padding: const EdgeInsets.fromLTRB(16, 8, 12, 14),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey[200]!),
-                ),
-                child: TextField(
-                  controller: _msgCtrl,
-                  onSubmitted: (_) => _send(),
-                  textInputAction: TextInputAction.send,
-                  decoration: InputDecoration(
-                    hintText: 'Type a message...',
-                    hintStyle:
-                        TextStyle(color: Colors.grey[400], fontSize: 14),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
+              child: TextField(
+                controller: _msgCtrl,
+                onSubmitted: (_) => _send(),
+                textInputAction: TextInputAction.send,
+                maxLines: 4,
+                minLines: 1,
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                    color: AppColors.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: 'Type your message...',
+                  hintStyle: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                      color: AppColors.textHint),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 10),
+                  enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.border)),
+                  focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primary, width: 2)),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              decoration: BoxDecoration(
-                color: _isTyping ? Colors.green[300] : Colors.green[700],
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.send_rounded,
-                    color: Colors.white, size: 20),
-                onPressed: _isTyping ? null : _send,
-                padding: const EdgeInsets.all(12),
-              ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: _isTyping
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                  : const Icon(Icons.send_rounded, color: AppColors.primary, size: 22),
+              onPressed: _isTyping ? null : () => _send(),
             ),
           ],
         ),
@@ -1447,4 +1395,29 @@ IMPORTANT:
         '${time.hour.toString().padLeft(2, '0')}:'
         '${time.minute.toString().padLeft(2, '0')}';
   }
+}
+
+class _DiamondPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.border.withValues(alpha: 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    const spacing = 28.0;
+    for (double y = -spacing; y < size.height + spacing; y += spacing) {
+      for (double x = -spacing; x < size.width + spacing; x += spacing) {
+        final path = Path()
+          ..moveTo(x, y - spacing / 2)
+          ..lineTo(x + spacing / 2, y)
+          ..lineTo(x, y + spacing / 2)
+          ..lineTo(x - spacing / 2, y)
+          ..close();
+        canvas.drawPath(path, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_) => false;
 }
