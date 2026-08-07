@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
@@ -266,19 +267,14 @@ class _CustomerMyBookingsScreenState
     final isDesktop = screenW > 700;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
+          _buildTopBar(),
           Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: TabBar(
               controller: _tabCtrl,
@@ -291,9 +287,9 @@ class _CustomerMyBookingsScreenState
                 fontFamily: 'Poppins',
                 fontSize: 14,
               ),
-              labelColor: AppColors.accent,
-              unselectedLabelColor: const Color(0xFF64748B),
-              indicatorColor: AppColors.accent,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primary,
               indicatorWeight: 3,
               indicatorSize: TabBarIndicatorSize.label,
               tabs: const [
@@ -324,6 +320,81 @@ class _CustomerMyBookingsScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── TOP BAR (Pusaka header, shared visual language with other customer screens) ──
+  Widget _buildTopBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => context.go('/customer'),
+            child: const Text(
+              'Pusaka',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 28),
+          Expanded(
+            child: Row(
+              children: [
+                _NavLink(label: 'Menu', onTap: () => context.go('/customer')),
+                const SizedBox(width: 24),
+                _NavLink(
+                  label: 'Locations',
+                  onTap: () => context.go('/customer'),
+                ),
+                const SizedBox(width: 24),
+                _NavLink(
+                  label: 'Our Story',
+                  onTap: () => context.go('/customer'),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => context.go('/customer/checkout'),
+            child: const Icon(
+              Icons.shopping_cart_outlined,
+              color: AppColors.textPrimary,
+              size: 24,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavLink extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _NavLink({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textSecondary,
+        ),
       ),
     );
   }
@@ -412,7 +483,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: AppColors.accent,
+            primary: AppColors.primary,
             onPrimary: Colors.white,
             surface: Colors.white,
             onSurface: Color(0xFF1E293B),
@@ -422,111 +493,51 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       ),
     );
     if (picked != null && mounted) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        // A previously chosen time may no longer be valid for the new date
+        // (e.g. it was only valid because "today" was further along) — the
+        // time slot grid recomputes availability from _selectedDate, so drop
+        // a stale selection rather than silently keep an invalid one.
+        _selectedTime = null;
+      });
     }
   }
 
-  Future<void> _pickTime(String open, String close) async {
-    final openParts = open.split(':');
-    final closeParts = close.split(':');
-    final openHour = int.tryParse(openParts[0]) ?? 10;
-    final closeHour = int.tryParse(closeParts[0]) ?? 22;
+  // Hours the branch is open, expanded into whole-hour slots. Handles the
+  // closing-past-midnight case (e.g. open 18:00, close 01:00) the same way
+  // the old showTimePicker validation did.
+  List<int> _availableHours(String open, String close) {
+    final openHour = int.tryParse(open.split(':')[0]) ?? 10;
+    final closeHour = int.tryParse(close.split(':')[0]) ?? 22;
+    final closesAfterMidnight = closeHour < openHour;
+    final hours = <int>[];
+    if (closesAfterMidnight) {
+      for (var h = openHour; h <= 23; h++) {
+        hours.add(h);
+      }
+      for (var h = 0; h <= closeHour; h++) {
+        hours.add(h);
+      }
+    } else {
+      for (var h = openHour; h < closeHour; h++) {
+        hours.add(h);
+      }
+    }
+    return hours;
+  }
 
-    // Use local time (WIB) — not UTC
+  // Earliest bookable hour today (null when a future date is selected, since
+  // the "already passed" constraint only applies to today).
+  int? _minHourToday() {
     final now = DateTime.now().toLocal();
     final selectedOrToday = _selectedDate ?? now;
     final isToday =
         selectedOrToday.year == now.year &&
         selectedOrToday.month == now.month &&
         selectedOrToday.day == now.day;
-    final minHour = isToday ? now.hour + (now.minute > 0 ? 1 : 0) : openHour;
-
-    // Handle closing time crossing midnight (e.g. closing at 01:00)
-    // A small closeHour (0-4) is treated as past midnight = valid until early morning
-    final bool closesAfterMidnight = closeHour < openHour;
-
-    final initialHour =
-        (_selectedTime != null && _selectedTime!.hour >= minHour)
-        ? _selectedTime!.hour
-        : (minHour <= (closesAfterMidnight ? 23 : closeHour - 1) ? minHour : openHour);
-
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: initialHour, minute: 0),
-      initialEntryMode: TimePickerEntryMode.dial,
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.accent,
-            onPrimary: Colors.white,
-            surface: Colors.white,
-            onSurface: Color(0xFF1E293B),
-          ),
-        ),
-        child: child!,
-      ),
-    );
-
-    if (picked == null || !mounted) return;
-
-    // Validation: time cannot be before minHour (today only)
-    if (isToday && picked.hour < minHour) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(
-                Icons.lock_clock_outlined,
-                color: Colors.white,
-                size: 18,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Time ${picked.hour.toString().padLeft(2, '0')}:00 has already passed. Choose ${minHour.toString().padLeft(2, '0')}:00 or later.',
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    // Validation: time must be within operating hours
-    // If closing past midnight (e.g. 01:00), valid: >= openHour OR <= closeHour
-    // If closing before midnight, valid: >= openHour AND < closeHour
-    final bool outOfRange = closesAfterMidnight
-        ? (picked.hour < openHour && picked.hour > closeHour)
-        : (picked.hour < openHour || picked.hour >= closeHour);
-
-    if (outOfRange) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Time must be between $open – $close WIB',
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-          ),
-          backgroundColor: const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _selectedTime = picked);
+    if (!isToday) return null;
+    return now.hour + (now.minute > 0 ? 1 : 0);
   }
 
   Future<void> _submit(List<Map<String, dynamic>> branches) async {
@@ -727,7 +738,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -845,7 +856,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 
     return branchesAsync.when(
       loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.accent),
+        child: CircularProgressIndicator(color: AppColors.primary),
       ),
       error: (e, _) => Center(
         child: Column(
@@ -884,520 +895,468 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             (selectedBranch?['closing_time'] as String?)?.substring(0, 5) ??
             '22:00';
 
-        Widget formContent = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        final heroIntro = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 8),
-            _sectionLabel('Choose Branch', Icons.store_outlined),
-            if (branches.length == 1)
-              _infoChip(Icons.store, branches[0]['name'] as String)
-            else
-              _dropdown(
-                value: _selectedBranchId,
-                hint: 'Choose a branch',
-                items: branches
-                    .map(
-                      (b) => DropdownMenuItem<String>(
-                        value: b['id'] as String,
-                        child: Text(
-                          b['name'] as String,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedBranchId = v),
-              ),
-            const SizedBox(height: 24),
-            if (widget.isDesktop)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _dateField(openTime, closeTime)),
-                  const SizedBox(width: 16),
-                  Expanded(child: _timeField(openTime, closeTime)),
-                ],
-              )
-            else ...[
-              _dateField(openTime, closeTime),
-              const SizedBox(height: 20),
-              _timeField(openTime, closeTime),
-            ],
-            const SizedBox(height: 24),
-            _sectionLabel('Number of Guests', Icons.people_outline),
-            _guestPicker(),
-            const SizedBox(height: 24),
-            if (widget.isDesktop)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _nameField()),
-                  const SizedBox(width: 16),
-                  Expanded(child: _phoneField()),
-                ],
-              )
-            else ...[
-              _nameField(),
-              const SizedBox(height: 16),
-              _phoneField(),
-            ],
-            const SizedBox(height: 24),
-            _sectionLabel('Special Notes', Icons.note_add_outlined),
-            TextField(
-              controller: _notesCtrl,
-              maxLines: 3,
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-              decoration: _inputDeco(
-                'Example: nut allergy, high chair for baby...',
-                null,
+            const Text(
+              'Reserve a Table',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
               ),
             ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _submitting ? null : () => _submit(branches),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+            const SizedBox(height: 16),
+            const Text(
+              'Experience the warmth of Modern Indonesian Heritage. Please '
+              'provide your details below to secure your dining experience '
+              'at Pusaka.',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 15,
+                color: AppColors.textSecondary,
+                height: 1.6,
+              ),
+            ),
+            const SizedBox(height: 24),
+            AspectRatio(
+              aspectRatio: 0.95,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
-                textStyle: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.restaurant_outlined,
+                  size: 64,
+                  color: AppColors.textHint,
                 ),
               ),
-              child: _submitting
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
-                      ),
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.calendar_today, size: 20),
-                        SizedBox(width: 10),
-                        Text('Create Reservation'),
-                      ],
-                    ),
             ),
-            const SizedBox(height: 32),
           ],
         );
 
-        if (widget.isDesktop) {
-          return Container(
-            color: const Color(0xFFF8FAFC),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(40),
-              child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 40,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+        final formCard = Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _sectionHeader('Location'),
+              _branchList(branches),
+              const SizedBox(height: 28),
+              _sectionHeader('Date'),
+              _dateField(),
+              const SizedBox(height: 28),
+              _sectionHeader('Time'),
+              _timeSlotGrid(openTime, closeTime),
+              const SizedBox(height: 28),
+              _sectionHeader('Party Size'),
+              _guestPicker(),
+              const SizedBox(height: 28),
+              _sectionHeader('Your Details'),
+              if (widget.isDesktop)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _nameField()),
+                    const SizedBox(width: 16),
+                    Expanded(child: _phoneField()),
+                  ],
+                )
+              else ...[
+                _nameField(),
+                const SizedBox(height: 16),
+                _phoneField(),
+              ],
+              const SizedBox(height: 28),
+              _sectionHeader('Special Requests'),
+              TextField(
+                controller: _notesCtrl,
+                maxLines: 3,
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Allergies, dietary requirements, or special occasions...',
+                  hintStyle: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: AppColors.textHint,
                   ),
-                  child: formContent,
+                  filled: true,
+                  fillColor: AppColors.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.all(14),
                 ),
               ),
-            ),
-          );
-        }
-        return Container(
-          color: const Color(0xFFF8FAFC),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _submitting ? null : () => _submit(branches),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    ),
+                    textStyle: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ],
+                  child: _submitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const Text('Confirm Reservation'),
+                ),
               ),
-              child: formContent,
-            ),
+            ],
+          ),
+        );
+
+        return Container(
+          color: AppColors.background,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(widget.isDesktop ? 40 : 20),
+            child: widget.isDesktop
+                ? Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 5, child: heroIntro),
+                            const SizedBox(width: 48),
+                            Expanded(flex: 6, child: formCard),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : formCard,
           ),
         );
       },
     );
   }
 
-  Widget _sectionLabel(String label, IconData icon) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Row(
+  Widget _sectionHeader(String title) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: AppColors.accent),
-        const SizedBox(width: 8),
         Text(
-          label,
+          title,
           style: const TextStyle(
             fontFamily: 'Poppins',
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF1E293B),
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+            color: AppColors.primary,
           ),
         ),
+        const SizedBox(height: 10),
+        const Divider(color: AppColors.border, height: 1),
       ],
     ),
   );
 
-  Widget _infoChip(IconData icon, String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          AppColors.accent.withValues(alpha: 0.1),
-          AppColors.accent.withValues(alpha: 0.05),
+  Widget _radioRow({
+    required String label,
+    required bool selected,
+    required VoidCallback? onTap,
+    bool enabled = true,
+  }) => InkWell(
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? AppColors.primary : AppColors.border,
+                width: 2,
+              ),
+            ),
+            child: selected
+                ? Center(
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: enabled ? AppColors.textPrimary : AppColors.textHint,
+              ),
+            ),
+          ),
         ],
       ),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
-    ),
-    child: Row(
-      children: [
-        Icon(icon, size: 20, color: AppColors.accent),
-        const SizedBox(width: 12),
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.accent,
-          ),
-        ),
-      ],
     ),
   );
 
-  Widget _dropdown({
-    required String? value,
-    required String hint,
-    required List<DropdownMenuItem<String>> items,
-    required void Function(String?) onChanged,
-  }) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF8FAFC),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFE2E8F0)),
-    ),
-    child: DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: value,
-        isExpanded: true,
-        hint: Text(
-          hint,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-            color: Color(0xFF94A3B8),
-          ),
+  Widget _branchList(List<Map<String, dynamic>> branches) => Column(
+    children: [
+      for (int i = 0; i < branches.length; i++) ...[
+        _radioRow(
+          label: branches[i]['name'] as String,
+          selected: _selectedBranchId == branches[i]['id'],
+          onTap: () =>
+              setState(() => _selectedBranchId = branches[i]['id'] as String),
         ),
-        items: items,
-        onChanged: onChanged,
+        if (i != branches.length - 1)
+          const Divider(color: AppColors.border, height: 1),
+      ],
+    ],
+  );
+
+  Widget _dateField() => GestureDetector(
+    onTap: _pickDate,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _selectedDate != null
+                  ? _formatDate(_selectedDate!)
+                  : 'mm/dd/yyyy',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: _selectedDate != null
+                    ? AppColors.textPrimary
+                    : AppColors.textHint,
+              ),
+            ),
+          ),
+          const Icon(
+            Icons.calendar_today_outlined,
+            size: 18,
+            color: AppColors.textSecondary,
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _timeSlotGrid(String open, String close) {
+    final hours = _availableHours(open, close);
+    final minHour = _minHourToday();
+
+    Widget slot(int hour) {
+      final passed = minHour != null && hour < minHour;
+      final label = '${hour.toString().padLeft(2, '0')}:00';
+      return _radioRow(
+        label: passed ? '$label (Passed)' : label,
+        selected: _selectedTime?.hour == hour,
+        enabled: !passed,
+        onTap: passed
+            ? null
+            : () => setState(() => _selectedTime = TimeOfDay(hour: hour, minute: 0)),
+      );
+    }
+
+    final left = <int>[];
+    final right = <int>[];
+    for (var i = 0; i < hours.length; i++) {
+      (i.isEven ? left : right).add(hours[i]);
+    }
+
+    Widget column(List<int> col) => Column(
+      children: [
+        for (int i = 0; i < col.length; i++) ...[
+          slot(col[i]),
+          if (i != col.length - 1)
+            const Divider(color: AppColors.border, height: 1),
+        ],
+      ],
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: column(left)),
+        const SizedBox(width: 24),
+        Expanded(child: column(right)),
+      ],
+    );
+  }
+
+  Widget _guestPicker() => Row(
+    children: [
+      _counterBtn(Icons.remove, () {
+        if (_guestCount > 1) setState(() => _guestCount--);
+      }),
+      const SizedBox(width: 20),
+      Text(
+        '$_guestCount',
         style: const TextStyle(
           fontFamily: 'Poppins',
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      const SizedBox(width: 20),
+      _counterBtn(Icons.add, () {
+        if (_guestCount < 20) setState(() => _guestCount++);
+      }),
+      const SizedBox(width: 16),
+      const Text(
+        'Guests',
+        style: TextStyle(
+          fontFamily: 'Poppins',
           fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: Color(0xFF1E293B),
-        ),
-      ),
-    ),
-  );
-
-  Widget _dateField(String open, String close) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _sectionLabel('Arrival Date', Icons.calendar_today_outlined),
-      GestureDetector(
-        onTap: _pickDate,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _selectedDate != null
-                  ? AppColors.accent
-                  : const Color(0xFFE2E8F0),
-              width: _selectedDate != null ? 2 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 20,
-                color: _selectedDate != null
-                    ? AppColors.accent
-                    : const Color(0xFF94A3B8),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                _selectedDate != null
-                    ? _formatDate(_selectedDate!)
-                    : 'Select date',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: _selectedDate != null
-                      ? const Color(0xFF1E293B)
-                      : const Color(0xFF94A3B8),
-                ),
-              ),
-            ],
-          ),
+          color: AppColors.textSecondary,
         ),
       ),
     ],
-  );
-
-  Widget _timeField(String open, String close) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _sectionLabel('Arrival Time', Icons.access_time_outlined),
-      GestureDetector(
-        onTap: () => _pickTime(open, close),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _selectedTime != null
-                  ? AppColors.accent
-                  : const Color(0xFFE2E8F0),
-              width: _selectedTime != null ? 2 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.access_time_outlined,
-                size: 20,
-                color: _selectedTime != null
-                    ? AppColors.accent
-                    : const Color(0xFF94A3B8),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _selectedTime != null
-                      ? '${_formatTime(_selectedTime!)} WIB'
-                      : 'Select time',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: _selectedTime != null
-                        ? const Color(0xFF1E293B)
-                        : const Color(0xFF94A3B8),
-                  ),
-                ),
-              ),
-              Text(
-                '$open – $close',
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 12,
-                  color: Color(0xFF94A3B8),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ],
-  );
-
-  Widget _guestPicker() => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF8FAFC),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFE2E8F0)),
-    ),
-    child: Row(
-      children: [
-        _counterBtn(Icons.remove, () {
-          if (_guestCount > 1) setState(() => _guestCount--);
-        }),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.people_outline,
-                size: 20,
-                color: Color(0xFF64748B),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '$_guestCount guest(s)',
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        _counterBtn(Icons.add, () {
-          if (_guestCount < 20) setState(() => _guestCount++);
-        }),
-      ],
-    ),
   );
 
   Widget _counterBtn(IconData icon, VoidCallback onTap) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 44,
-      height: 44,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
-        color: AppColors.accent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.border),
       ),
-      child: Icon(icon, color: Colors.white, size: 22),
+      child: Icon(icon, color: AppColors.textPrimary, size: 18),
+    ),
+  );
+
+  Widget _underlineField({
+    required TextEditingController ctrl,
+    required String hint,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+    ValueChanged<String>? onChanged,
+    VoidCallback? onEditingComplete,
+    String? errorText,
+  }) => TextField(
+    controller: ctrl,
+    keyboardType: keyboardType,
+    inputFormatters: inputFormatters,
+    onChanged: onChanged,
+    onEditingComplete: onEditingComplete,
+    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(
+        fontFamily: 'Poppins',
+        fontSize: 14,
+        color: AppColors.textHint,
+      ),
+      errorText: errorText,
+      errorStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 11),
+      isDense: true,
+      border: const UnderlineInputBorder(
+        borderSide: BorderSide(color: AppColors.border),
+      ),
+      enabledBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: AppColors.primary, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 10),
     ),
   );
 
   Widget _nameField() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Full Name', Icons.person_outline),
-      TextField(
-        controller: _nameCtrl,
-        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-        decoration: _inputDeco(
-          'Name as on your ID',
-          const Icon(Icons.person_outline, size: 20, color: Color(0xFF94A3B8)),
+      const Padding(
+        padding: EdgeInsets.only(bottom: 6),
+        child: Text(
+          'Full name',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
         ),
       ),
+      _underlineField(ctrl: _nameCtrl, hint: 'Name as on your ID'),
     ],
   );
 
   Widget _phoneField() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _sectionLabel('Phone Number', Icons.phone_outlined),
-      TextField(
-        controller: _phoneCtrl,
-        keyboardType: TextInputType.phone,
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'[\d+\s\-]')),
-        ],
-        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-        onChanged: (v) => setState(() => _phoneError = null),
-        onEditingComplete: () {
-          setState(() => _phoneError = _validatePhone(_phoneCtrl.text.trim()));
-        },
-        decoration: InputDecoration(
-          hintText: '081234567890',
-          hintStyle: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 13,
-            color: Color(0xFF94A3B8),
-          ),
-          prefixIcon: const Icon(
-            Icons.phone_outlined,
-            size: 20,
-            color: Color(0xFF94A3B8),
-          ),
-          errorText: _phoneError,
-          errorStyle: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 11,
-            color: Color(0xFFEF4444),
-          ),
-          filled: true,
-          fillColor: const Color(0xFFF8FAFC),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.accent, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
-        ),
-      ),
       const Padding(
-        padding: EdgeInsets.only(top: 8, left: 4),
+        padding: EdgeInsets.only(bottom: 6),
         child: Text(
-          'Format: 08xxxxxxxxxx (10–13 digits)',
+          'Phone number',
           style: TextStyle(
             fontFamily: 'Poppins',
-            fontSize: 11,
-            color: Color(0xFF94A3B8),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
           ),
         ),
       ),
+      _underlineField(
+        ctrl: _phoneCtrl,
+        hint: '081234567890',
+        keyboardType: TextInputType.phone,
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d+\s\-]'))],
+        onChanged: (_) => setState(() => _phoneError = null),
+        onEditingComplete: () =>
+            setState(() => _phoneError = _validatePhone(_phoneCtrl.text.trim())),
+        errorText: _phoneError,
+      ),
     ],
-  );
-
-  InputDecoration _inputDeco(String hint, Widget? prefix) => InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(
-      fontFamily: 'Poppins',
-      fontSize: 13,
-      color: Color(0xFF94A3B8),
-    ),
-    prefixIcon: prefix,
-    filled: true,
-    fillColor: const Color(0xFFF8FAFC),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide.none,
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide.none,
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: AppColors.accent, width: 2),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
   );
 }
 
