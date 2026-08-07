@@ -9,6 +9,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/notification_service.dart';
 import 'shared/widgets/floating_chatbot_overlay.dart';
+import 'shared/widgets/order_notification_overlay.dart';
 import 'features/qr_order/presentation/qr_chatbot_overlay.dart';
 import 'features/payment/midtrans/midtrans_service.dart';
 import 'firebase_options.dart';
@@ -154,6 +155,14 @@ class RestaurantApp extends ConsumerWidget {
               ListenableBuilder(
                 listenable: router.routerDelegate,
                 builder: (context, _) => QrChatbotOverlay(
+                  currentPath: router.routerDelegate.currentConfiguration.uri.path,
+                ),
+              ),
+              // Global order-progress banner (staff/customer/qr) — see
+              // OrderNotificationOverlay's doc comment.
+              ListenableBuilder(
+                listenable: router.routerDelegate,
+                builder: (context, _) => OrderNotificationOverlay(
                   currentPath: router.routerDelegate.currentConfiguration.uri.path,
                 ),
               ),

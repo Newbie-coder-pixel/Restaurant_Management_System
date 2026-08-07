@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/order_model.dart';
+import '../../../shared/models/order_event_model.dart';
+import '../../../shared/providers/order_events_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/app_drawer.dart';
@@ -17,6 +19,7 @@ class KDSScreen extends ConsumerStatefulWidget {
 class _KDSScreenState extends ConsumerState<KDSScreen> {
   List<OrderModel> _orders = [];
   int _readyCount = 0;
+  int _newOrderCount = 0;
   List<Map<String, dynamic>> _lowStockItems = [];
   bool _isLoading = true;
   String? _branchId;       // branch belonging to the logged-in staff
@@ -50,6 +53,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       if (_isMultiBranchRole) _fetchBranches();
       _load();
       _subscribeRealtime();
+      _subscribeOrderEvents();
     } else {
       _initialized = true;
       ref.listenManual(currentStaffProvider, (_, next) {
@@ -61,9 +65,28 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
           if (_isMultiBranchRole) _fetchBranches();
           _load();
           _subscribeRealtime();
+          _subscribeOrderEvents();
         }
       });
     }
+  }
+
+  /// Feeds the "N new orders" banner below — a lightweight second
+  /// subscription alongside _subscribeRealtime()'s existing full-grid
+  /// refetch, sourced from order_events (see order_events_provider.dart)
+  /// rather than reinventing another raw orders/order_items channel here.
+  void _subscribeOrderEvents() {
+    final branchId = _branchId;
+    if (branchId == null) return;
+    ref.listenManual(orderEventsForBranchProvider(branchId), (prev, next) {
+      next.whenData((event) {
+        final isNewOrder = event.eventType == OrderEventType.statusChanged &&
+            event.oldValue == null;
+        if (isNewOrder && mounted) {
+          setState(() => _newOrderCount++);
+        }
+      });
+    });
   }
 
   Future<void> _fetchBranches() async {
@@ -432,6 +455,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
         ],
       ),
       body: Column(children: [
+            if (_newOrderCount > 0) _buildNewOrderBanner(colorScheme),
             if (_readyCount > 0) _buildReadyBanner(colorScheme),
             if (_lowStockItems.isNotEmpty) _buildLowStockBanner(),
             Expanded(
@@ -455,6 +479,33 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
                         ),
             ),
           ]),
+    );
+  }
+
+  Widget _buildNewOrderBanner(ColorScheme colorScheme) {
+    return InkWell(
+      onTap: () => setState(() => _newOrderCount = 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        color: colorScheme.primary,
+        child: Row(children: [
+          const Icon(Icons.notifications_active_rounded,
+              color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _newOrderCount == 1
+                  ? '1 new order came in'
+                  : '$_newOrderCount new orders came in',
+              style: const TextStyle(
+                fontFamily: 'Poppins', color: Colors.white,
+                fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+          const Icon(Icons.close_rounded, color: Colors.white70, size: 16),
+        ]),
+      ),
     );
   }
 
