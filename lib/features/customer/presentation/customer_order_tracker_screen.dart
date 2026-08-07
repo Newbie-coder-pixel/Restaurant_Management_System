@@ -508,60 +508,127 @@ class _CustomerOrderTrackerScreenState
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF9F9FB),
-    appBar: AppBar(
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-        onPressed: () => context.go('/customer')),
-      title: const Text('Track Order',
-          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
-      centerTitle: false,
-      actions: [
-        if (_order != null)
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
+  // ── TOP BAR (Pusaka header, shared visual language with other customer screens) ──
+  Widget _buildTopBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => context.go('/customer'),
+            child: const Text(
+              'Pusaka',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 28),
+          Expanded(
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 500),
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1D9E75),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Text('Live',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF1D9E75))),
+                _NavLink(label: 'Menu', onTap: () => context.go('/customer')),
+                const SizedBox(width: 24),
+                _NavLink(label: 'Locations', onTap: () => context.go('/customer')),
+                const SizedBox(width: 24),
+                _NavLink(label: 'Our Story', onTap: () => context.go('/customer')),
               ],
             ),
           ),
-      ],
-    ),
-    body: ListView(
-      padding: const EdgeInsets.all(20),
-      physics: const BouncingScrollPhysics(),
+          GestureDetector(
+            onTap: () => context.go('/customer/checkout'),
+            child: const Icon(
+              Icons.shopping_cart_outlined,
+              color: AppColors.textPrimary,
+              size: 24,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildTopBar(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1200),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          onTap: () => context.go('/customer?tab=2'),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.arrow_back, size: 16, color: AppColors.textPrimary),
+                              SizedBox(width: 8),
+                              Text(
+                                'Back to Current Orders',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        if (_order != null)
+                          _buildOrderView(context)
+                        else
+                          _buildSearchView(context),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── SEARCH / EMPTY / ERROR STATE ─────────────────────────────────────
+  Widget _buildSearchView(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Search box
+        const Text(
+          'Track Order',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 24),
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4)),
-            ],
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,16 +639,16 @@ class _CustomerOrderTrackerScreenState
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
-                  color: AppColors.primary,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
+              const Text(
                 'The order number is on your receipt or confirmation screen.',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 12,
-                  color: Colors.grey.shade500,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const SizedBox(height: 16),
@@ -600,21 +667,21 @@ class _CustomerOrderTrackerScreenState
                       ),
                       decoration: InputDecoration(
                         hintText: 'Example: WEB-20260327-1234',
-                        hintStyle: TextStyle(
+                        hintStyle: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 13,
-                          color: Colors.grey.shade400,
+                          color: AppColors.textHint,
                         ),
                         filled: true,
-                        fillColor: const Color(0xFFF5F7FA),
+                        fillColor: AppColors.surfaceVariant,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                           borderSide: BorderSide.none,
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                         ),
                       ),
                     ),
@@ -627,7 +694,7 @@ class _CustomerOrderTrackerScreenState
                       foregroundColor: Colors.white,
                       minimumSize: const Size(56, 56),
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
                     ),
                     child: _loading
                         ? const SizedBox(
@@ -644,15 +711,14 @@ class _CustomerOrderTrackerScreenState
           ),
         ),
 
-        // Error message
         if (_error != null) ...[
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF1F0),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFFFC4C0), width: 1),
+              color: AppColors.statusClosed.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(color: AppColors.statusClosed),
             ),
             child: Row(
               children: [
@@ -664,7 +730,7 @@ class _CustomerOrderTrackerScreenState
                     style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 13,
-                      color: Color(0xFFB91C1C),
+                      color: AppColors.accent,
                       height: 1.4,
                     ),
                   ),
@@ -674,164 +740,205 @@ class _CustomerOrderTrackerScreenState
           ),
         ],
 
-        // Order card
-        if (_order != null) ...[
-          const SizedBox(height: 24),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOutCubic,
-            child: _OrderStatusCard(order: _order!, items: _items),
-          ),
-          // payment_status, not status — a paid-up-front order's status may
-          // never literally reach 'paid' (see midtrans-webhook/index.ts).
-          if (_order!['payment_status'] == 'paid') ...[
-            const SizedBox(height: 16),
-            Row(
+        if (_order == null && _error == null && !_loading) ...[
+          const SizedBox(height: 60),
+const Center(
+            child: Column(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _printingReceipt ? null : _printReceipt,
-                    icon: _printingReceipt
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AppColors.accent),
-                          )
-                        : const Icon(Icons.receipt_long_outlined,
-                            size: 20, color: AppColors.accent),
-                    label: const Text(
-                      'Receipt',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: AppColors.accent,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: AppColors.accent, width: 1.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
+                Icon(Icons.receipt_long_outlined, size: 72, color: AppColors.textHint),
+                SizedBox(height: 16),
+                Text(
+                  'Enter your order number above\nto see its status.',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                    height: 1.5,
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _reorder,
-                    icon: const Icon(Icons.replay_outlined, size: 20, color: AppColors.accent),
-                    label: const Text(
-                      'Reorder',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: AppColors.accent,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: AppColors.accent, width: 1.5),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                  ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
-          ],
-        ],
-
-        // Empty state
-        if (_order == null && _error == null && !_loading) ...[
-          const SizedBox(height: 60),
-          Column(
-            children: [
-              Icon(Icons.receipt_long_outlined, size: 72, color: Colors.grey.shade300),
-              const SizedBox(height: 16),
-              Text(
-                'Enter your order number above\nto see its status.',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  color: Colors.grey.shade500,
-                  height: 1.5,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
           ),
         ],
       ],
+    );
+  }
+
+  // ── LOADED ORDER VIEW ─────────────────────────────────────────────────
+  Widget _buildOrderView(BuildContext context) {
+    final order = _order!;
+    final tableName = order['table_name'] as String?;
+    final orderType = order['order_type'] as String?;
+    final typeLabel = tableName != null
+        ? 'Table $tableName • Dine In'
+        : switch (orderType) {
+            'qr_order' => 'Dine In',
+            _ => 'Takeaway',
+          };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                'Order #${order['order_number'] ?? ''}',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 34,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _LiveDot(),
+                  SizedBox(width: 6),
+                  Text(
+                    'Live',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1D9E75),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          typeLabel,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 15,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 24),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 860;
+            final mainColumn = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _TrackerStatusCard(order: order, items: _items),
+                const SizedBox(height: 16),
+                _TrackerItemsCard(order: order, items: _items),
+              ],
+            );
+            final sidebar = _TrackerSidebar(
+              order: order,
+              items: _items,
+              printing: _printingReceipt,
+              onPrintReceipt: _printReceipt,
+              onReorder: _reorder,
+            );
+
+            if (isWide) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: mainColumn),
+                  const SizedBox(width: 24),
+                  SizedBox(width: 320, child: sidebar),
+                ],
+              );
+            }
+            return Column(
+              children: [mainColumn, const SizedBox(height: 16), sidebar],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _LiveDot extends StatelessWidget {
+  const _LiveDot();
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: 8,
+    height: 8,
+    child: DecoratedBox(
+      decoration: BoxDecoration(color: Color(0xFF1D9E75), shape: BoxShape.circle),
     ),
   );
 }
 
-// ── Order Status Card ──────────────────────────────────────────────
-class _OrderStatusCard extends StatelessWidget {
+class _NavLink extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _NavLink({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Status header card (title + est. time + stepper) ────────────────────
+class _TrackerStatusCard extends StatelessWidget {
   final Map<String, dynamic> order;
   final List<Map<String, dynamic>> items;
-  const _OrderStatusCard({required this.order, required this.items});
+  const _TrackerStatusCard({required this.order, required this.items});
 
-  static const _statusLabels = {
-    'new':       '🆕 New Order',
-    'preparing': '👨‍🍳 Preparing',
-    'ready':     '✅ Ready to Serve',
-    'served':    '🍽️ Served',
-    'paid':      '💳 Paid',
-    'cancelled': '❌ Cancelled',
+  static const _titles = {
+    'new': 'Order Received',
+    'preparing': 'Preparing',
+    'ready': 'Ready to Serve',
+    'served': 'Served',
+    'paid': 'Paid',
+    'cancelled': 'Cancelled',
   };
-  static const _statusColors = {
-    'new':       Color(0xFF6B7280),
-    'preparing': Color(0xFFD97706),
-    'ready':     Color(0xFF1D9E75),
-    'served':    AppColors.primaryLight,
-    'paid':      Color(0xFF1D9E75),
-    'cancelled': AppColors.accent,
-  };
-  static const _statusMessages = {
-    'new':       '⏳ Your order is waiting for kitchen confirmation.',
-    'preparing': '🔥 The kitchen is preparing your order, almost there!',
-    'ready':     '🎉 Your order is ready! A server will bring it to you shortly.',
-    'served':    '😊 Your order has been served. Enjoy your meal!',
-    'paid':      '✅ Payment complete. Thank you for visiting!',
-    'cancelled': '❌ This order was cancelled.',
+  static const _subtitles = {
+    'new': 'Your order is waiting for kitchen confirmation.',
+    'preparing': 'Your food is being crafted in the kitchen.',
+    'ready': 'Your order is ready! A server will bring it to you shortly.',
+    'served': 'Your order has been served. Enjoy your meal!',
+    'paid': 'Payment complete. Thank you for visiting!',
+    'cancelled': 'This order was cancelled.',
   };
 
   @override
   Widget build(BuildContext context) {
-    final status        = order['status'] as String? ?? 'new';
+    final status = order['status'] as String? ?? 'new';
     final paymentStatus = order['payment_status'] as String?;
-    final statusLabel = _statusLabels[status] ?? status;
-    final statusColor = _statusColors[status] ?? Colors.grey;
-    final statusMsg   = _statusMessages[status] ?? '';
-    // Calculate subtotal from items (not from order['total_amount'] which can be 0/null)
-    final subtotal     = items.fold<double>(0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
-    final discount     = (order['discount_amount'] as num?)?.toDouble() ?? 0;
-    final serviceCharge = subtotal * 0.03;
-    // PB1 is computed from subtotal only, matching the formula the customer
-    // actually confirmed at checkout (see cart_provider.dart pb1Amount) —
-    // this used to be (subtotal + serviceCharge) * 0.10 here, which showed a
-    // different total post-order than what was agreed to at checkout.
-    final pb1Amount    = subtotal * 0.10;
-    final total        = subtotal + serviceCharge + pb1Amount - discount;
-    final customerName = order['customer_name'] as String?;
-    final notes        = order['notes'] as String?;
+    final title = _titles[status] ?? status;
+    final subtitle = _subtitles[status] ?? '';
+    final showEstimate = status == 'new' || status == 'preparing';
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 6)),
-        ],
-        border: Border.all(color: Colors.grey.shade100, width: 1),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -840,355 +947,174 @@ class _OrderStatusCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      order['order_number'] as String? ?? '',
+                      title,
                       style: const TextStyle(
                         fontFamily: 'Poppins',
+                        fontSize: 24,
                         fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        color: AppColors.primary,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    if (customerName != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Under the name: $customerName',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 13,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          if (statusMsg.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, size: 18, color: statusColor),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      statusMsg,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        color: statusColor,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          const Divider(height: 28, thickness: 1, color: Color(0xFFEEEEEE)),
-
-          // Progress indicator
-          _StatusProgress(
-            status: status,
-            paymentStatus: paymentStatus,
-          ),
-
-          // ── ML Time Estimate (only when new / preparing) ────────────
-          if (status == 'new' || status == 'preparing') ...[
-            const SizedBox(height: 16),
-            _CustomerPrepTimeCard(order: order, items: items),
-          ],
-
-          const SizedBox(height: 24),
-
-          // Items list
-          const Text(
-            'Order Items',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...items.map((item) {
-            final name    = (item['menu_items'] as Map?)?['name'] as String?
-                          ?? item['menu_item_name'] as String? // fallback to the order_items column
-                          ?? '-';
-            final qty     = item['quantity'] as int? ?? 1;
-            final sub     = (item['subtotal'] as num?)?.toDouble() ?? 0;
-            final special = item['special_requests'] as String?;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '${qty}x',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Colors.grey.shade500,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          name,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 14,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 6),
                       Text(
-                        'Rp ${_fmt(sub)}',
+                        subtitle,
                         style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.accent,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
-                  ),
-                  if (special != null && special.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 32, top: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.edit_note, size: 14, color: Color(0xFFD97706)),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              special,
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Color(0xFFD97706),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            );
-          }),
-
-          if (notes != null && notes.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FC),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.note_add_rounded, size: 18, color: Colors.grey),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      notes,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          const Divider(height: 24, thickness: 1, color: Color(0xFFEEEEEE)),
-
-          // Subtotal
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Subtotal',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
+                  ],
                 ),
               ),
-              Text(
-                'Rp ${_fmt(subtotal)}',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // Service Charge & PB1
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Service Charge (3%)',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              Text(
-                'Rp ${_fmt(serviceCharge)}',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'PB1 (10%)',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              Text(
-                'Rp ${_fmt(pb1Amount)}',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-            ],
-          ),
-
-          // Discount (only shown if present)
-          if (discount > 0) ...[
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Discount',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                Text(
-                  '- Rp ${_fmt(discount)}',
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    color: Color(0xFF1D9E75),
-                  ),
-                ),
+              if (showEstimate) ...[
+                const SizedBox(width: 16),
+                _CustomerPrepTimeCard(order: order, items: items),
               ],
-            ),
-          ],
-
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 10),
-            child: Divider(thickness: 1, color: Color(0xFFEEEEEE)),
+            ],
           ),
+          const SizedBox(height: 28),
+          _StatusProgress(status: status, paymentStatus: paymentStatus),
+        ],
+      ),
+    );
+  }
+}
 
-          // Total
+// ── Items card ────────────────────────────────────────────────────────
+class _TrackerItemsCard extends StatelessWidget {
+  final Map<String, dynamic> order;
+  final List<Map<String, dynamic>> items;
+  const _TrackerItemsCard({required this.order, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = order['status'] as String? ?? 'new';
+    final title = status == 'preparing' ? 'Items in Preparation' : 'Order Items';
+    final notes = order['notes'] as String?;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Total',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: AppColors.primary,
-                ),
-              ),
+              const Icon(Icons.restaurant_outlined, size: 18, color: AppColors.accent),
+              const SizedBox(width: 10),
               Text(
-                'Rp ${_fmt(total)}',
+                title,
                 style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: AppColors.accent,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
           ),
-
-          // `status` tracks kitchen progress and (for orders paid up front,
-          // e.g. the customer app) may never literally become 'paid' at all
-          // — payment_status is the real signal for whether this still needs
-          // paying, independent of how far the kitchen has got.
-          if (paymentStatus != 'paid' && status != 'cancelled') ...[
+          const SizedBox(height: 16),
+          const Divider(color: AppColors.border, height: 1),
+          ...items.map((item) {
+            final name = (item['menu_items'] as Map?)?['name'] as String?
+                ?? item['menu_item_name'] as String?
+                ?? '-';
+            final qty = item['quantity'] as int? ?? 1;
+            final sub = (item['subtotal'] as num?)?.toDouble() ?? 0;
+            final special = item['special_requests'] as String?;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${qty}x',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        if (special != null && special.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            special,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Rp ${_fmt(sub)}',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          if (notes != null && notes.isNotEmpty) ...[
+            const Divider(color: AppColors.border, height: 1),
             const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF7E0),
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               ),
-              child: const Row(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFB45309)),
-                  SizedBox(width: 8),
-                  Text(
-                    '💡 Pay at the cashier when the order is ready.',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: Color(0xFFB45309),
+                  const Icon(Icons.note_add_rounded, size: 18, color: AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      notes,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -1211,7 +1137,206 @@ class _OrderStatusCard extends StatelessWidget {
   }
 }
 
+// ── Sidebar: order summary + actions ─────────────────────────────────
+class _TrackerSidebar extends StatelessWidget {
+  final Map<String, dynamic> order;
+  final List<Map<String, dynamic>> items;
+  final bool printing;
+  final VoidCallback onPrintReceipt;
+  final VoidCallback onReorder;
+  const _TrackerSidebar({
+    required this.order,
+    required this.items,
+    required this.printing,
+    required this.onPrintReceipt,
+    required this.onReorder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final status = order['status'] as String? ?? 'new';
+    final paymentStatus = order['payment_status'] as String?;
+    // Calculate subtotal from items (not from order['total_amount'] which can be 0/null)
+    final subtotal = items.fold<double>(0, (sum, item) => sum + ((item['subtotal'] as num?)?.toDouble() ?? 0));
+    final discount = (order['discount_amount'] as num?)?.toDouble() ?? 0;
+    final serviceCharge = subtotal * 0.03;
+    // PB1 is computed from subtotal only, matching the formula the customer
+    // actually confirmed at checkout (see cart_provider.dart pb1Amount).
+    final pb1Amount = subtotal * 0.10;
+    final total = subtotal + serviceCharge + pb1Amount - discount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'ORDER SUMMARY',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: AppColors.border, height: 1),
+              const SizedBox(height: 14),
+              _summaryRow('Subtotal', subtotal),
+              const SizedBox(height: 10),
+              _summaryRow('Service Charge (3%)', serviceCharge),
+              const SizedBox(height: 10),
+              _summaryRow('PB1 (10%)', pb1Amount),
+              if (discount > 0) ...[
+                const SizedBox(height: 10),
+                _summaryRow('Discount', -discount, isDiscount: true),
+              ],
+              const SizedBox(height: 14),
+              const Divider(color: AppColors.border, height: 1),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Total',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    'Rp ${_fmt(total)}',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // `status` tracks kitchen progress and (for orders paid up front, e.g.
+        // the customer app) may never literally become 'paid' at all —
+        // payment_status is the real signal for whether this still needs
+        // paying, independent of how far the kitchen has got.
+        if (paymentStatus == 'paid') ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onReorder,
+              icon: const Icon(Icons.replay_outlined, size: 18),
+              label: const Text('Reorder'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+                textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: printing ? null : onPrintReceipt,
+              icon: printing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textPrimary),
+                    )
+                  : const Icon(Icons.receipt_long_outlined, size: 18),
+              label: const Text('Receipt'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.border),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+                textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+            ),
+          ),
+        ] else if (status != 'cancelled') ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.statusWaitlist.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline_rounded, size: 16, color: AppColors.statusWaitlist),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Pay at the cashier when the order is ready.',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      color: AppColors.statusWaitlist,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _summaryRow(String label, double amount, {bool isDiscount = false}) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary),
+      ),
+      Text(
+        isDiscount ? '- Rp ${_fmt(amount.abs())}' : 'Rp ${_fmt(amount)}',
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: isDiscount ? AppColors.available : AppColors.textPrimary,
+        ),
+      ),
+    ],
+  );
+
+  String _fmt(double v) {
+    final s = v.toStringAsFixed(0);
+    final buffer = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(s[i]);
+    }
+    return buffer.toString();
+  }
+}
+
 // ── ML Prep Time Card (Customer) ─────────────────────────────────
+// Renders as the "EST. TIME REMAINING" badge in the status header. Fetch
+// logic (ML prediction + offline fallback) is unchanged from before — only
+// how the result is displayed has moved (used to be its own block below the
+// header; now it's the badge in the header's top-right, matching the design).
 class _CustomerPrepTimeCard extends StatefulWidget {
   final Map<String, dynamic> order;
   final List<Map<String, dynamic>> items;
@@ -1265,133 +1390,54 @@ class _CustomerPrepTimeCardState extends State<_CustomerPrepTimeCard> {
       future: _future,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0F4FF),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Row(
-              children: [
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primaryLight,
-                  ),
-                ),
-                SizedBox(width: 12),
-                Text(
-                  'Calculating cooking time estimate...',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    color: AppColors.primaryLight,
-                  ),
-                ),
-              ],
-            ),
+          return const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
           );
         }
 
         final result = snap.data;
         // Server unreachable (e.g. down/timeout) → show a rough estimate
         // (sum of menu prep times, without ML/buffer) rather than have this
-        // card disappear entirely with no information at all.
+        // badge disappear entirely with no information at all.
         final isFallback = snap.hasError || result == null;
         final displayMinutes = isFallback
             ? PrepTimeService.rawFallbackEstimate(_requestItems)
             : result.estimatedMinutes;
         if (isFallback && displayMinutes <= 0) return const SizedBox.shrink();
 
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFF7ED), Color(0xFFFFF1DC)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              isFallback ? 'ROUGH ESTIMATE' : 'EST. TIME REMAINING',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: AppColors.textSecondary,
+              ),
             ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD97706).withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                    isFallback
-                        ? Icons.access_time_outlined
-                        : Icons.soup_kitchen_outlined,
-                    color: const Color(0xFFD97706),
-                    size: 22),
+            const SizedBox(height: 4),
+            Text(
+              PrepTimeService.formatEstimate(displayMinutes),
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.accent,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isFallback ? 'Rough Estimate (offline)' : 'Cooking Time Estimate',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        color: Color(0xFFB45309),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      PrepTimeService.formatEstimate(displayMinutes),
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFFD97706),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD97706).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: const Color(0xFFD97706).withValues(alpha: 0.3)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.smart_toy_outlined,
-                        size: 11, color: Color(0xFFD97706)),
-                    SizedBox(width: 3),
-                    Text(
-                      'AI',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFD97706),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
   }
 }
 
-// ── Progress Bar ──────────────────────────────────────────────────
+// ── Progress Stepper (kitchen-ticket style) ──────────────────────────
 class _StatusProgress extends StatelessWidget {
   final String status;
   final String? paymentStatus;
@@ -1400,7 +1446,7 @@ class _StatusProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const steps  = ['new', 'preparing', 'ready', 'served', 'paid'];
-    const labels = ['New', 'Cooking', 'Ready', 'Served', 'Paid'];
+    const labels = ['Received', 'Preparing', 'Ready', 'Served', 'Paid'];
     final currentIdx  = steps.indexOf(status);
     final isCancelled = status == 'cancelled';
     // Orders paid up front (customer app: pay before the kitchen even sees
@@ -1414,8 +1460,8 @@ class _StatusProgress extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF1F0),
-          borderRadius: BorderRadius.circular(20),
+          color: AppColors.statusClosed.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         ),
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1462,29 +1508,25 @@ class _StatusProgress extends StatelessWidget {
                   children: [
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 400),
-                      width: isCurrent ? 28 : 22,
-                      height: isCurrent ? 28 : 22,
+                      width: isCurrent ? 26 : 16,
+                      height: isCurrent ? 26 : 16,
                       decoration: BoxDecoration(
-                        color: isActive ? AppColors.accent : const Color(0xFFE9ECF0),
+                        color: isActive ? AppColors.primary : AppColors.surfaceVariant,
                         shape: BoxShape.circle,
+                        border: isActive ? null : Border.all(color: AppColors.border),
                         boxShadow: isCurrent
-                            ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.4), blurRadius: 12)]
+                            ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 10)]
                             : [],
                       ),
-                      child: Center(
-                        child: isActive
-                            ? const Icon(Icons.check, color: Colors.white, size: 14)
-                            : null,
-                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Text(
                       labels[idx],
                       style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                        color: isActive ? AppColors.accent : Colors.grey.shade500,
+                        color: isActive ? AppColors.textPrimary : AppColors.textHint,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -1495,10 +1537,11 @@ class _StatusProgress extends StatelessWidget {
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 400),
-                    height: 3,
+                    height: 2,
+                    margin: const EdgeInsets.only(bottom: 22),
                     color: (activeFlags[idx] && activeFlags[idx + 1])
-                        ? AppColors.accent
-                        : const Color(0xFFE9ECF0),
+                        ? AppColors.primary
+                        : AppColors.border,
                   ),
                 ),
             ],
