@@ -13,6 +13,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/models/order_model.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/services/prep_time_service.dart';
 import '../../payment/midtrans/midtrans_provider.dart';
 import '../../payment/models/midtrans_model.dart' show MidtransPaymentStatus, MidtransPaymentMethod;
 
@@ -506,80 +508,169 @@ class _PaySuccessSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.5,
+      initialChildSize: 0.9,
+      minChildSize: 0.6,
       maxChildSize: 0.95,
       expand: false,
-      builder: (context, scrollController) => SingleChildScrollView(
-        controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 36, height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
-          ),
-          Container(
-            width: 72, height: 72,
-            decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.check_circle_rounded, size: 44, color: Colors.green),
-          ),
-          const SizedBox(height: 14),
-          const Text('Payment Successful!',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text('Thank you — your order is on its way to the kitchen.',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey.shade600),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outlineVariant, width: 0.8),
+      builder: (context, scrollController) => Container(
+        color: AppColors.background,
+        child: SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 36, height: 4,
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
             ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Order #${order.orderNumber}',
-                    style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                  child: const Text('PAID',
-                      style: TextStyle(
-                          fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800, color: Colors.green)),
-                ),
-              ]),
-              const SizedBox(height: 2),
-              Text('Paid via $paymentMethodLabel · ${_fmtDateTime(paidAt)}',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: cs.onSurfaceVariant)),
-            ]),
-          ),
-          const SizedBox(height: 12),
-          _BreakdownCard(order: order, total: total),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: onDone,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                minimumSize: const Size(0, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.border),
               ),
-              child: const Text('Track My Order', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+              child: const Icon(Icons.check_circle_outline, size: 32, color: AppColors.primary),
             ),
-          ),
-        ]),
+            const SizedBox(height: 18),
+            const Text('Terima Kasih',
+                style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.primary)),
+            const SizedBox(height: 8),
+            const Text('Your order is being prepared with care and precision.',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textSecondary),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(children: [
+                const Text('ORDER CONFIRMED',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                Text('#${order.orderNumber}',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 16),
+                const Divider(color: AppColors.border, height: 1),
+                const SizedBox(height: 14),
+                ...order.items.map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('${item.quantity}× ${item.menuItemName}',
+                                style: const TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary)),
+                            if (item.specialRequests != null && item.specialRequests!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(item.specialRequests!,
+                                  style: const TextStyle(
+                                      fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                            ],
+                          ]),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(_fmtRp(item.subtotal),
+                            style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary)),
+                      ]),
+                    )),
+                const Divider(color: AppColors.border, height: 1),
+                const SizedBox(height: 14),
+                _summaryRow('Subtotal', order.subtotal),
+                const SizedBox(height: 8),
+                _summaryRow('Service Charge (3%)', order.serviceChargeAmount),
+                const SizedBox(height: 8),
+                _summaryRow('PB1 (10%)', order.pb1Amount),
+                const SizedBox(height: 14),
+                const Divider(color: AppColors.border, height: 1),
+                const SizedBox(height: 14),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  const Text('Total',
+                      style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                  Text(_fmtRp(total),
+                      style: const TextStyle(
+                          fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.accent)),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            Text('Paid via $paymentMethodLabel · ${_fmtDateTime(paidAt)}',
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
+            if (order.estimatedPrepMinutes != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.access_time_rounded, size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Estimated preparation: ${PrepTimeService.formatEstimate(order.estimatedPrepMinutes!)}',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  ),
+                ]),
+              ),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onDone,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+                  elevation: 0,
+                ),
+                child: const Text('Track Order',
+                    style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15)),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
+
+  Widget _summaryRow(String label, double amount) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+          Text(_fmtRp(amount),
+              style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+        ],
+      );
 }
 
 // ─── Pending Sheet ────────────────────────────────────────────────────────────
