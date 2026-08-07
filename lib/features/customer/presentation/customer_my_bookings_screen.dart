@@ -595,10 +595,11 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             'source': 'app',
             if (notes.isNotEmpty) 'special_requests': notes,
           })
-          .select('id')
+          .select('id, confirmation_code')
           .single();
 
       final bookingId = bookingRes['id'] as String;
+      final confirmationCode = bookingRes['confirmation_code'] as String?;
 
       final result =
           await Supabase.instance.client.rpc(
@@ -619,7 +620,16 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       final tableNumber = result['table_number'] as String?;
 
       if (success) {
-        _showSuccess(tableNumber: tableNumber);
+        final branch = branches
+            .where((b) => b['id'] == _selectedBranchId)
+            .cast<Map<String, dynamic>?>()
+            .firstOrNull;
+        _showSuccess(
+          tableNumber: tableNumber,
+          confirmationCode: confirmationCode,
+          branchName: branch?['name'] as String?,
+          branchAddress: branch?['address'] as String?,
+        );
       } else {
         _showWaitlisted();
       }
@@ -645,125 +655,294 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     );
   }
 
-  void _showSuccess({String? tableNumber}) {
+  String _fmtFullDateTime(DateTime date, TimeOfDay time) {
+    const weekdays = [
+      '',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final hour12 = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '${weekdays[date.weekday]}, ${months[date.month]} '
+        '${date.day.toString().padLeft(2, '0')} at $hour12:$minute $period';
+  }
+
+  // Booking duration isn't user-selectable in this form (DB defaults to
+  // 120 min — see assign_table_to_booking / other booking flows), so the
+  // calendar event end time assumes the same default.
+  Uri _googleCalendarUrl({
+    required String title,
+    required String details,
+    required String location,
+    required DateTime startWib,
+  }) {
+    final startUtc = startWib.subtract(const Duration(hours: 7));
+    final endUtc = startUtc.add(const Duration(minutes: 120));
+    String fmt(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}${d.month.toString().padLeft(2, '0')}'
+        '${d.day.toString().padLeft(2, '0')}T${d.hour.toString().padLeft(2, '0')}'
+        '${d.minute.toString().padLeft(2, '0')}00Z';
+    return Uri.https('www.google.com', '/calendar/render', {
+      'action': 'TEMPLATE',
+      'text': title,
+      'dates': '${fmt(startUtc)}/${fmt(endUtc)}',
+      'details': details,
+      if (location.isNotEmpty) 'location': location,
+    });
+  }
+
+  void _showSuccess({
+    String? tableNumber,
+    String? confirmationCode,
+    String? branchName,
+    String? branchAddress,
+  }) {
+    final date = _selectedDate!;
+    final time = _selectedTime!;
+    final dateTimeLabel = _fmtFullDateTime(date, time);
+    final startWib = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD1FAE5),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                    blurRadius: 12,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.check_circle,
-                color: Color(0xFF10B981),
-                size: 40,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Reservation Successful!',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (tableNumber != null) ...[
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD1FAE5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.table_restaurant,
-                      size: 20,
-                      color: Color(0xFF059669),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Table $tableNumber is ready',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF059669),
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880, maxHeight: 640),
+          child: Material(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            clipBehavior: Clip.antiAlias,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 600;
+
+                final content = SingleChildScrollView(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.primary, width: 1.5),
+                        ),
+                        child: const Icon(Icons.check, color: AppColors.primary, size: 20),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const Text(
-              'Your reservation has been confirmed.\nCheck the "My Reservations" tab for details.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: Color(0xFF64748B),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Terima Kasih',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Your reservation is confirmed. We look forward to welcoming you.',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 15,
+                          color: AppColors.textSecondary,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                        ),
+                        child: Column(
+                          children: [
+                            _successRow(
+                              Icons.calendar_today_outlined,
+                              'DATE & TIME',
+                              dateTimeLabel,
+                            ),
+                            const Divider(color: AppColors.border, height: 1),
+                            _successRow(
+                              Icons.people_outline,
+                              'PARTY SIZE',
+                              '$_guestCount Guests',
+                            ),
+                            if (tableNumber != null) ...[
+                              const Divider(color: AppColors.border, height: 1),
+                              _successRow(
+                                Icons.table_restaurant_outlined,
+                                'TABLE',
+                                tableNumber,
+                              ),
+                            ],
+                            if (confirmationCode != null && confirmationCode.isNotEmpty) ...[
+                              const Divider(color: AppColors.border, height: 1),
+                              _successRow(
+                                Icons.tag,
+                                'CONFIRMATION NUMBER',
+                                confirmationCode,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => launchUrl(
+                                _googleCalendarUrl(
+                                  title: 'Reservation at Pusaka'
+                                      '${branchName != null ? ' – $branchName' : ''}',
+                                  details: 'Table for $_guestCount guest(s).'
+                                      '${confirmationCode != null ? ' Confirmation #$confirmationCode.' : ''}',
+                                  location: branchAddress ?? branchName ?? '',
+                                  startWib: startWib,
+                                ),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                              icon: const Icon(Icons.calendar_today, size: 16),
+                              label: const Text('Add to Calendar'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(dialogCtx).pop();
+                                ref.read(_refreshTriggerProvider.notifier).state++;
+                                context.go('/customer');
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.accent,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              child: const Text('Back to Home'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: () {
-                  Navigator.of(dialogCtx).pop();
-                  widget.onSuccess();
-                },
-                child: const Text(
-                  'OK',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
+                );
+
+                if (!isWide) return content;
+
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Container(
+                          color: AppColors.surfaceVariant,
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.restaurant_outlined,
+                            size: 64,
+                            color: AppColors.textHint,
+                          ),
+                        ),
+                      ),
+                      Expanded(flex: 2, child: content),
+                    ],
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _successRow(IconData icon, String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    child: Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.accent),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 
   void _showWaitlisted() {
     showDialog(
