@@ -26,6 +26,7 @@ class AppColors {
   static const statusCompleted  = Color(0xFF9C9690);
   static const statusClosed     = Color(0xFFE8A0A0);
   static const badgeDark        = Color(0xFF22284A);
+  static const iconAccentBlue   = Color(0xFF4C5FD5);
 
   static const background     = Color(0xFFFAF6ED);
   static const surface        = Color(0xFFFDFBF5);

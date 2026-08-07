@@ -1361,7 +1361,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// BOOKING HISTORY
+// BOOKING HISTORY ("My Bookings")
 // ─────────────────────────────────────────────────────────────────
 class _BookingHistory extends ConsumerStatefulWidget {
   final bool isDesktop;
@@ -1372,8 +1372,8 @@ class _BookingHistory extends ConsumerStatefulWidget {
 }
 
 class _BookingHistoryState extends ConsumerState<_BookingHistory> {
-  // 'all' | 'active' | 'done' | 'cancelled'
-  String _filter = 'active';
+  // 'all' | 'upcoming' | 'past'
+  String _filter = 'all';
 
   static const _activeStatuses = {
     'pending',
@@ -1400,43 +1400,20 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
     }
   }
 
-  List<Map<String, dynamic>> _applyFilter(List<Map<String, dynamic>> all) {
-    final visible = all.where(_isVisible).toList();
-    switch (_filter) {
-      case 'active':
-        return visible
-            .where((b) => _activeStatuses.contains(b['status']))
-            .toList();
-      case 'done':
-        return visible
-            .where((b) => _doneStatuses.contains(b['status']))
-            .toList();
-      case 'cancelled':
-        return visible
-            .where((b) => _cancelledStatuses.contains(b['status']))
-            .toList();
-      default:
-        return visible;
-    }
-  }
+  List<Map<String, dynamic>> _upcomingOf(List<Map<String, dynamic>> all) =>
+      all
+          .where(_isVisible)
+          .where((b) => _activeStatuses.contains(b['status']))
+          .toList();
 
-  int _count(List<Map<String, dynamic>> all, String filter) {
-    final visible = all.where(_isVisible).toList();
-    switch (filter) {
-      case 'active':
-        return visible
-            .where((b) => _activeStatuses.contains(b['status']))
-            .length;
-      case 'done':
-        return visible.where((b) => _doneStatuses.contains(b['status'])).length;
-      case 'cancelled':
-        return visible
-            .where((b) => _cancelledStatuses.contains(b['status']))
-            .length;
-      default:
-        return visible.length;
-    }
-  }
+  List<Map<String, dynamic>> _pastOf(List<Map<String, dynamic>> all) => all
+      .where(_isVisible)
+      .where(
+        (b) =>
+            _doneStatuses.contains(b['status']) ||
+            _cancelledStatuses.contains(b['status']),
+      )
+      .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -1444,7 +1421,7 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
 
     return bookingsAsync.when(
       loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.accent),
+        child: CircularProgressIndicator(color: AppColors.primary),
       ),
       error: (e, _) => Center(
         child: Column(
@@ -1463,273 +1440,629 @@ class _BookingHistoryState extends ConsumerState<_BookingHistory> {
         ),
       ),
       data: (bookings) {
-        final filtered = _applyFilter(bookings);
+        final upcoming = _upcomingOf(bookings);
+        final past = _pastOf(bookings);
 
-        return Column(
-          children: [
-            // ── Filter chips ──────────────────────────────────────
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
+        return Container(
+          color: AppColors.background,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(widget.isDesktop ? 40 : 20),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _FilterChip(
-                      label: 'Active',
-                      icon: Icons.radio_button_checked,
-                      color: const Color(0xFF10B981),
-                      count: _count(bookings, 'active'),
-                      selected: _filter == 'active',
-                      onTap: () => setState(() => _filter = 'active'),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'Done',
-                      icon: Icons.done_all,
-                      color: const Color(0xFF3B82F6),
-                      count: _count(bookings, 'done'),
-                      selected: _filter == 'done',
-                      onTap: () => setState(() => _filter = 'done'),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'Cancelled',
-                      icon: Icons.cancel_outlined,
-                      color: const Color(0xFFEF4444),
-                      count: _count(bookings, 'cancelled'),
-                      selected: _filter == 'cancelled',
-                      onTap: () => setState(() => _filter = 'cancelled'),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                      label: 'All',
-                      icon: Icons.list_alt_outlined,
-                      color: const Color(0xFF64748B),
-                      count: _count(bookings, 'all'),
-                      selected: _filter == 'all',
-                      onTap: () => setState(() => _filter = 'all'),
-                    ),
+                    _header(),
+                    const SizedBox(height: 32),
+                    widget.isDesktop
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(width: 200, child: _sidebar()),
+                              const SizedBox(width: 40),
+                              Expanded(child: _sections(upcoming, past)),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _sidebar(),
+                              const SizedBox(height: 24),
+                              _sections(upcoming, past),
+                            ],
+                          ),
                   ],
                 ),
               ),
             ),
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-
-            // ── Info banner for done/cancelled filters ─────────────
-            if (_filter == 'done' || _filter == 'cancelled' || _filter == 'all')
-              Container(
-                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 14,
-                      color: Color(0xFF94A3B8),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'History older than 30 days is hidden automatically',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 11,
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // ── List ─────────────────────────────────────────────
-            Expanded(
-              child: filtered.isEmpty
-                  ? _emptyState(_filter)
-                  : widget.isDesktop
-                  ? Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 720),
-                        child: _buildList(filtered),
-                      ),
-                    )
-                  : _buildList(filtered),
-            ),
-          ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildList(List<Map<String, dynamic>> items) => ListView.builder(
-    padding: const EdgeInsets.all(16),
-    itemCount: items.length,
-    itemBuilder: (_, i) =>
-        _BookingCard(booking: items[i], isDesktop: widget.isDesktop),
+  Widget _header() => const Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'My Bookings',
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 34,
+          fontWeight: FontWeight.w800,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      SizedBox(height: 12),
+      Text(
+        'Review your upcoming culinary journeys and past dining experiences '
+        'with us.',
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 15,
+          color: AppColors.textSecondary,
+          height: 1.6,
+        ),
+      ),
+    ],
   );
 
-  Widget _emptyState(String filter) {
-    final (icon, title, subtitle) = switch (filter) {
-      'active' => (
-        Icons.calendar_today_outlined,
-        'No Active Bookings',
-        'Create a new reservation in the "New Reservation" tab.',
+  Widget _sidebar() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'STATUS',
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+          color: AppColors.textHint,
+        ),
       ),
-      'done' => (
-        Icons.done_all,
-        'No Completed History Yet',
-        'Completed booking history will appear here.',
-      ),
-      'cancelled' => (
-        Icons.cancel_outlined,
-        'Nothing Cancelled',
-        'Great, no bookings have been cancelled 😊',
-      ),
-      _ => (
-        Icons.calendar_today_outlined,
-        'No Reservations Yet',
-        'Create a reservation in the "New Reservation" tab.',
-      ),
-    };
-    final color = switch (filter) {
-      'active' => const Color(0xFF10B981),
-      'done' => const Color(0xFF3B82F6),
-      'cancelled' => const Color(0xFFEF4444),
-      _ => AppColors.accent,
-    };
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      const SizedBox(height: 16),
+      _sidebarItem('All Bookings', 'all'),
+      const SizedBox(height: 12),
+      _sidebarItem('Upcoming', 'upcoming'),
+      const SizedBox(height: 12),
+      _sidebarItem('Past', 'past'),
+    ],
+  );
+
+  Widget _sidebarItem(String label, String value) {
+    final selected = _filter == value;
+    return GestureDetector(
+      onTap: () => setState(() => _filter = value),
+      child: Row(
         children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  color.withValues(alpha: 0.12),
-                  color.withValues(alpha: 0.05),
-                ],
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 44),
+          SizedBox(
+            width: 14,
+            child: selected
+                ? Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  )
+                : null,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(width: 8),
           Text(
-            title,
-            style: const TextStyle(
+            label,
+            style: TextStyle(
               fontFamily: 'Poppins',
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF1E293B),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: Color(0xFF64748B),
-              ),
+              fontSize: 14,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _sections(
+    List<Map<String, dynamic>> upcoming,
+    List<Map<String, dynamic>> past,
+  ) {
+    final showUpcoming = _filter != 'past';
+    final showPast = _filter != 'upcoming';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showUpcoming) ...[
+          _sectionHeader('Upcoming'),
+          if (upcoming.isEmpty)
+            _emptySection(
+              'No upcoming reservations. Create one in the "New Reservation" tab.',
+            )
+          else
+            ...upcoming.map((b) => _BookingListCard(booking: b)),
+          const SizedBox(height: 32),
+        ],
+        if (showPast) ...[
+          _sectionHeader('Past Bookings'),
+          if (past.isEmpty)
+            _emptySection(
+              'Your completed and cancelled bookings will appear here.',
+            )
+          else
+            ...past.map((b) => _BookingListCard(booking: b)),
+        ],
+      ],
+    );
+  }
+
+  Widget _sectionHeader(String title) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Divider(color: AppColors.border, height: 1),
+      ],
+    ),
+  );
+
+  Widget _emptySection(String msg) => Padding(
+    padding: const EdgeInsets.only(bottom: 24),
+    child: Text(
+      msg,
+      style: const TextStyle(
+        fontFamily: 'Poppins',
+        fontSize: 13,
+        color: AppColors.textHint,
+      ),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────
-// FILTER CHIP WIDGET
+// BOOKING CARD (compact list row + detail sheet)
 // ─────────────────────────────────────────────────────────────────
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
+String _fmtBookingDateShort(String? raw) {
+  if (raw == null) return '-';
+  try {
+    final d = DateTime.parse(raw);
+    const wd = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${wd[d.weekday]}, ${months[d.month]} ${d.day.toString().padLeft(2, '0')}';
+  } catch (_) {
+    return raw;
+  }
+}
 
-  const _FilterChip({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
+String _fmtBookingDateLong(String? raw) {
+  if (raw == null) return '-';
+  try {
+    final d = DateTime.parse(raw);
+    const months = [
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  } catch (_) {
+    return raw;
+  }
+}
+
+(Color, String) _bookingStatusMeta(String status) => switch (status) {
+  'confirmed' => (AppColors.statusConfirmed, 'Confirmed'),
+  'pending' => (AppColors.statusWaitlist, 'Pending'),
+  'waitlisted' => (AppColors.statusWaitlist, 'Waitlist'),
+  'seated' => (AppColors.iconAccentBlue, 'Dining'),
+  'completed' => (AppColors.statusCompleted, 'Completed'),
+  'cancelled' => (AppColors.statusClosed, 'Cancelled'),
+  'no_show' => (AppColors.statusClosed, 'No Show'),
+  _ => (AppColors.statusCompleted, status),
+};
+
+bool _bookingIsActive(String status) =>
+    status == 'pending' ||
+    status == 'confirmed' ||
+    status == 'waitlisted' ||
+    status == 'seated';
+
+Future<void> _contactStaffAbout(
+  BuildContext context,
+  Map<String, dynamic> booking,
+  String? phone,
+) async {
+  if (phone == null || phone.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Branch contact number not available. Please contact us directly.',
+          style: TextStyle(fontFamily: 'Poppins'),
+        ),
+        backgroundColor: const Color(0xFF3B82F6),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+    return;
+  }
+
+  final cleaned = phone
+      .replaceAll(RegExp(r'[^\d+]'), '')
+      .replaceFirst(RegExp(r'^0'), '62');
+
+  final date = _fmtBookingDateLong(booking['booking_date'] as String?);
+  final time = (booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
+  final guests = booking['guest_count'] ?? 1;
+  final name = booking['customer_name'] as String? ?? '';
+
+  final msg = Uri.encodeComponent(
+    'Hello, I would like to reach out about my reservation:\n\n'
+    '👤 Name: $name\n'
+    '📅 Date: $date\n'
+    '🕐 Time: $time WIB\n'
+    '👥 Guests: $guests\n\n'
+    'Thank you for your help 🙏',
+  );
+
+  final waUrl = Uri.parse('https://wa.me/$cleaned?text=$msg');
+  final telUrl = Uri.parse('tel:$phone');
+
+  if (await canLaunchUrl(waUrl)) {
+    await launchUrl(waUrl, mode: LaunchMode.externalApplication);
+  } else if (await canLaunchUrl(telUrl)) {
+    await launchUrl(telUrl);
+  } else {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open WhatsApp. Number: $phone',
+            style: const TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _BookingListCard extends StatelessWidget {
+  final Map<String, dynamic> booking;
+  const _BookingListCard({required this.booking});
+
+  String get _status => booking['status'] as String? ?? 'pending';
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? color : Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(
-            color: selected ? color : const Color(0xFFE2E8F0),
-            width: selected ? 2 : 1,
-          ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : [],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: selected ? Colors.white : color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : const Color(0xFF334155),
-              ),
+    final branchData = booking['branches'] as Map<String, dynamic>?;
+    final branchName = branchData?['name'] as String? ?? 'Restaurant';
+    final date = _fmtBookingDateShort(booking['booking_date'] as String?);
+    final time = (booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
+    final guests = booking['guest_count'] ?? 1;
+    final (color, label) = _bookingStatusMeta(_status);
+    final isActive = _bookingIsActive(_status);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Stack(
+        children: [
+          const Positioned(
+            top: 0,
+            right: 0,
+            child: Icon(
+              Icons.auto_awesome,
+              size: 16,
+              color: AppColors.border,
             ),
-            if (count > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Colors.white.withValues(alpha: 0.3)
-                      : color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          label.toUpperCase(),
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      branchName,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 4,
+                      children: [
+                        _metaItem(Icons.calendar_today_outlined, date),
+                        _metaItem(Icons.access_time_outlined, time),
+                        _metaItem(Icons.people_outline, 'Table for $guests'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              OutlinedButton(
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  builder: (_) => _BookingDetailSheet(booking: booking),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                 ),
                 child: Text(
-                  '$count',
+                  isActive ? 'Manage' : 'View Details',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metaItem(IconData icon, String text) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 14, color: AppColors.textSecondary),
+      const SizedBox(width: 5),
+      Text(
+        text,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 13,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    ],
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BOOKING DETAIL SHEET
+// ─────────────────────────────────────────────────────────────────
+class _BookingDetailSheet extends StatelessWidget {
+  final Map<String, dynamic> booking;
+  const _BookingDetailSheet({required this.booking});
+
+  String get _status => booking['status'] as String? ?? 'pending';
+
+  @override
+  Widget build(BuildContext context) {
+    final branchData = booking['branches'] as Map<String, dynamic>?;
+    final branchName = branchData?['name'] as String? ?? 'Restaurant';
+    final branchPhone = branchData?['phone'] as String?;
+    final date = _fmtBookingDateLong(booking['booking_date'] as String?);
+    final time = (booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
+    final guests = booking['guest_count'] ?? 1;
+    final tableId = booking['table_id'] as String?;
+    final notes = booking['special_requests'] as String?;
+    final (color, label) = _bookingStatusMeta(_status);
+    final isActive = _bookingIsActive(_status);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label.toUpperCase(),
                   style: TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: selected ? Colors.white : color,
+                    letterSpacing: 0.6,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              branchName,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            _detailRow(Icons.calendar_today_outlined, 'Date', date),
+            const SizedBox(height: 12),
+            _detailRow(Icons.access_time_outlined, 'Time', '$time WIB'),
+            const SizedBox(height: 12),
+            _detailRow(Icons.people_outline, 'Guests', '$guests'),
+            if (notes != null && notes.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _detailRow(Icons.note_outlined, 'Notes', notes),
+            ],
+            if (tableId != null && _status == 'confirmed') ...[
+              const SizedBox(height: 16),
+              _detailBanner(
+                icon: Icons.table_restaurant,
+                text:
+                    'Table ${booking['restaurant_tables']?['table_number'] ?? ''} is ready',
+                color: AppColors.statusConfirmed,
+              ),
+            ],
+            if (_status == 'waitlisted') ...[
+              const SizedBox(height: 16),
+              _detailBanner(
+                icon: Icons.hourglass_top_outlined,
+                text:
+                    'You are on the waitlist. Staff will contact you if a table becomes available.\nWill be contacted via: ${booking['customer_phone']}',
+                color: AppColors.statusWaitlist,
+              ),
+            ],
+            if (isActive) ...[
+              const SizedBox(height: 20),
+              const Divider(color: AppColors.border, height: 1),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.statusWaitlist.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: AppColors.statusWaitlist,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Want to change or cancel? Contact our staff.',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.statusWaitlist,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _contactStaffAbout(context, booking, branchPhone),
+                  icon: const Icon(
+                    Icons.chat_rounded,
+                    size: 20,
+                    color: Color(0xFF25D366),
+                  ),
+                  label: const Text(
+                    'Contact Us via WhatsApp',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: AppColors.border, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                    ),
                   ),
                 ),
               ),
@@ -1739,414 +2072,21 @@ class _FilterChip extends StatelessWidget {
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────
-// BOOKING CARD
-// ─────────────────────────────────────────────────────────────────
-class _BookingCard extends StatefulWidget {
-  final Map<String, dynamic> booking;
-  final bool isDesktop;
-  const _BookingCard({required this.booking, required this.isDesktop});
-
-  @override
-  State<_BookingCard> createState() => _BookingCardState();
-}
-
-class _BookingCardState extends State<_BookingCard> {
-  Map<String, dynamic> get booking => widget.booking;
-  bool get isDesktop => widget.isDesktop;
-
-  String get _status => booking['status'] as String? ?? 'pending';
-
-  Color get _color => switch (_status) {
-    'confirmed' => const Color(0xFF10B981),
-    'cancelled' => const Color(0xFFEF4444),
-    'completed' => const Color(0xFF3B82F6),
-    'no_show' => const Color(0xFFF59E0B),
-    'waitlisted' => const Color(0xFF8B5CF6),
-    'seated' => const Color(0xFF06B6D4),
-    _ => const Color(0xFFF59E0B),
-  };
-
-  String get _label => switch (_status) {
-    'confirmed' => 'Confirmed',
-    'cancelled' => 'Cancelled',
-    'completed' => 'Completed',
-    'no_show' => 'No Show',
-    'waitlisted' => 'Waitlisted',
-    'seated' => 'Dining',
-    _ => 'Pending',
-  };
-
-  IconData get _icon => switch (_status) {
-    'confirmed' => Icons.check_circle_outline,
-    'cancelled' => Icons.cancel_outlined,
-    'completed' => Icons.done_all,
-    'no_show' => Icons.person_off_outlined,
-    'waitlisted' => Icons.hourglass_top_outlined,
-    'seated' => Icons.restaurant_outlined,
-    _ => Icons.schedule,
-  };
-
-  bool get _isActive =>
-      _status == 'pending' ||
-      _status == 'confirmed' ||
-      _status == 'waitlisted' ||
-      _status == 'seated';
-
-  String _fmtDate(String? raw) {
-    if (raw == null) return '-';
-    try {
-      final d = DateTime.parse(raw);
-      const months = [
-        '',
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      return '${d.day} ${months[d.month]} ${d.year}';
-    } catch (_) {
-      return raw;
-    }
-  }
-
-  Future<void> _contactStaff(BuildContext context, String? phone) async {
-    if (phone == null || phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Branch contact number not available. Please contact us directly.',
-            style: TextStyle(fontFamily: 'Poppins'),
-          ),
-          backgroundColor: const Color(0xFF3B82F6),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-      return;
-    }
-
-    final cleaned = phone
-        .replaceAll(RegExp(r'[^\d+]'), '')
-        .replaceFirst(RegExp(r'^0'), '62');
-
-    final date = _fmtDate(booking['booking_date'] as String?);
-    final time = (booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
-    final guests = booking['guest_count'] ?? 1;
-    final name = booking['customer_name'] as String? ?? '';
-
-    final msg = Uri.encodeComponent(
-      'Hello, I would like to reach out about my reservation:\n\n'
-      '👤 Name: $name\n'
-      '📅 Date: $date\n'
-      '🕐 Time: $time WIB\n'
-      '👥 Guests: $guests\n\n'
-      'Thank you for your help 🙏',
-    );
-
-    final waUrl = Uri.parse('https://wa.me/$cleaned?text=$msg');
-    final telUrl = Uri.parse('tel:$phone');
-
-    if (await canLaunchUrl(waUrl)) {
-      await launchUrl(waUrl, mode: LaunchMode.externalApplication);
-    } else if (await canLaunchUrl(telUrl)) {
-      await launchUrl(telUrl);
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not open WhatsApp. Number: $phone',
-              style: const TextStyle(fontFamily: 'Poppins'),
-            ),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final branchData = booking['branches'] as Map<String, dynamic>?;
-    final branchName = branchData?['name'] as String? ?? 'Restaurant';
-    final branchPhone = branchData?['phone'] as String?;
-
-    final tableId = booking['table_id'] as String?;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-            decoration: BoxDecoration(
-              color: _color.withValues(alpha: 0.08),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(_icon, color: _color, size: 20),
-                const SizedBox(width: 10),
-                Text(
-                  _label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: _color,
-                  ),
-                ),
-                const Spacer(),
-                if (_isActive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: _color,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Live',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: _color,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.store_outlined,
-                        size: 18,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        branchName,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                if (isDesktop)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _infoGrid()),
-                      const SizedBox(width: 24),
-                      Expanded(child: _infoGrid2()),
-                    ],
-                  )
-                else
-                  _infoGrid(),
-                if (tableId != null && _status == 'confirmed') ...[
-                  const SizedBox(height: 16),
-                  _infoBanner(
-                    icon: Icons.table_restaurant,
-                    text:
-                        'Table ${booking['restaurant_tables']?['table_number'] ?? ''} is ready',
-                    color: const Color(0xFF10B981),
-                    bgColor: const Color(0xFFD1FAE5),
-                  ),
-                ],
-                if (_status == 'waitlisted') ...[
-                  const SizedBox(height: 16),
-                  _infoBanner(
-                    icon: Icons.hourglass_top_outlined,
-                    text:
-                        'You are on the waitlist. Staff will contact you if a table becomes available.\nWill be contacted via: ${booking['customer_phone']}',
-                    color: const Color(0xFF8B5CF6),
-                    bgColor: const Color(0xFFF3E8FF),
-                  ),
-                ],
-
-                // ──────────────────────────────────────────
-                if (_isActive) ...[
-                  const SizedBox(height: 20),
-                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 16,
-                          color: Color(0xFFD97706),
-                        ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Want to change or cancel? Contact our staff.',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFFD97706),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _contactStaff(context, branchPhone),
-                      icon: const Icon(
-                        Icons.chat_rounded,
-                        size: 20,
-                        color: Color(0xFF25D366),
-                      ),
-                      label: const Text(
-                        'Contact Us via WhatsApp',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(
-                          color: Color(0xFFE2E8F0),
-                          width: 1.5,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoGrid() {
-    final date = _fmtDate(widget.booking['booking_date'] as String?);
-    final time =
-        (widget.booking['booking_time'] as String?)?.substring(0, 5) ?? '-';
-    final guests = widget.booking['guest_count'] ?? 1;
-    return Column(
-      children: [
-        _infoRow(Icons.calendar_today_outlined, 'Date', date),
-        const SizedBox(height: 12),
-        _infoRow(Icons.access_time_outlined, 'Time', '$time WIB'),
-        const SizedBox(height: 12),
-        _infoRow(Icons.people_outline, 'Guests', '$guests'),
-      ],
-    );
-  }
-
-  Widget _infoGrid2() => Column(
-    children: [
-      if (widget.booking['special_requests'] != null &&
-          widget.booking['special_requests'].toString().isNotEmpty) ...[
-        _infoRow(
-          Icons.note_outlined,
-          'Notes',
-          widget.booking['special_requests'].toString(),
-        ),
-      ],
-    ],
-  );
-
-  Widget _infoRow(IconData icon, String label, String value) => Row(
+  Widget _detailRow(IconData icon, String label, String value) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Icon(icon, size: 18, color: const Color(0xFF94A3B8)),
+      Icon(icon, size: 18, color: AppColors.textSecondary),
       const SizedBox(width: 12),
       SizedBox(
-        width: 70,
+        width: 60,
         child: Text(
           '$label:',
           style: const TextStyle(
             fontFamily: 'Poppins',
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF64748B),
+            color: AppColors.textSecondary,
           ),
         ),
       ),
@@ -2158,23 +2098,22 @@ class _BookingCardState extends State<_BookingCard> {
             fontFamily: 'Poppins',
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF1E293B),
+            color: AppColors.textPrimary,
           ),
         ),
       ),
     ],
   );
 
-  Widget _infoBanner({
+  Widget _detailBanner({
     required IconData icon,
     required String text,
     required Color color,
-    required Color bgColor,
   }) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(
-      color: bgColor,
-      borderRadius: BorderRadius.circular(12),
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: Row(
