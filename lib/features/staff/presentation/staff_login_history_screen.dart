@@ -143,13 +143,19 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: AppColors.textPrimary,
         title: const Text('Login History',
-            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: AppColors.border),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
             onPressed: _load,
             tooltip: 'Refresh',
           ),
@@ -160,7 +166,10 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
           // Staff info header
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
             child: Row(children: [
               CircleAvatar(
                 radius: 24,
@@ -184,8 +193,9 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
                       Text(widget.staff.fullName,
                           style: const TextStyle(
                               fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15)),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: AppColors.textPrimary)),
                       Text(widget.staff.email,
                           style: const TextStyle(
                               fontFamily: 'Poppins',
@@ -200,7 +210,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
                       horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                   ),
                   child: Column(children: [
                     Text('${_records.length}',
@@ -222,7 +232,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.grey.shade50,
+            color: AppColors.surfaceVariant,
             child: const Text(
               'Showing the last $_limitMonths months',
               style: TextStyle(
@@ -234,7 +244,7 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
           // Content
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                 : _error != null
                     ? _buildError()
                     : _records.isEmpty
@@ -287,7 +297,20 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
               ]),
             ),
             // Records for this date
-            ...dayRecords.map((r) => _buildRecordTile(r)),
+            Container(
+              margin: const EdgeInsets.only(left: 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: Column(children: [
+                for (int r = 0; r < dayRecords.length; r++) ...[
+                  if (r > 0) const Divider(height: 1, color: AppColors.border),
+                  _buildRecordTile(dayRecords[r]),
+                ],
+              ]),
+            ),
             const SizedBox(height: 8),
           ],
         );
@@ -298,18 +321,8 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
   Widget _buildRecordTile(LoginHistoryRecord r) {
     final isRecent = DateTime.now().difference(r.loggedInAt).inHours < 1;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8, left: 16),
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isRecent
-              ? AppColors.primary.withValues(alpha: 0.3)
-              : Colors.grey.shade200,
-        ),
-      ),
       child: Row(children: [
         Icon(
           Icons.login_outlined,

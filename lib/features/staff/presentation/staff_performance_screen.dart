@@ -144,6 +144,9 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
   String _selectedRole = 'all';
   static const _roles = ['all', 'waiter', 'cashier', 'manager', 'kitchen', 'host'];
 
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
   // ── Branch filter ──────────────────────────────────────
   List<Map<String, dynamic>> _branches = [];
   String? _selectedBranchId;
@@ -158,6 +161,15 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
     _selectedBranchId = (widget.branchId == null || widget.branchId!.isEmpty)
         ? null
         : widget.branchId;
+    _searchCtrl.addListener(() {
+      setState(() => _searchQuery = _searchCtrl.text.toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -241,19 +253,33 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
   }
 
   List<StaffPerformance> get _filtered {
-    if (_selectedRole == 'all') return _data;
-    return _data.where((s) => s.role == _selectedRole).toList();
+    var list = _selectedRole == 'all'
+        ? _data
+        : _data.where((s) => s.role == _selectedRole).toList();
+    if (_searchQuery.isNotEmpty) {
+      list = list.where((s) =>
+          s.fullName.toLowerCase().contains(_searchQuery) ||
+          s.role.toLowerCase().contains(_searchQuery)).toList();
+    }
+    return list;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: const Text('Staff Performance'),
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: AppColors.textPrimary,
+        title: const Text('Staff Performance',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         centerTitle: false,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: AppColors.border),
+        ),
         actions: [
           // ── Branch filter dropdown (superadmin only) ──
           if (_isSuperAdmin && _branches.isNotEmpty)
@@ -261,22 +287,22 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: AppColors.primary,
-                iconEnabledColor: Colors.white60,
+                dropdownColor: AppColors.surface,
+                iconEnabledColor: AppColors.textSecondary,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                  fontFamily: 'Poppins', fontSize: 11, color: AppColors.textPrimary),
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
                     child: Text('All Branches',
                       style: TextStyle(
-                        fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
+                        fontFamily: 'Poppins', fontSize: 11, color: AppColors.textPrimary))),
                   ..._branches.map((b) => DropdownMenuItem<String?>(
                     value: b['id'] as String,
                     child: Text(b['name'] as String,
                       style: const TextStyle(
-                        fontFamily: 'Poppins', fontSize: 11, color: Colors.white)))),
+                        fontFamily: 'Poppins', fontSize: 11, color: AppColors.textPrimary)))),
                 ],
                 onChanged: (val) {
                   setState(() {
@@ -289,7 +315,7 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
             ),
           const SizedBox(width: 4),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
             onPressed: _loadData,
             tooltip: 'Refresh',
           ),
@@ -300,14 +326,14 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
           _buildFilters(),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
                 : _error != null
                     ? _buildError()
                     : _filtered.isEmpty
                         ? const Center(
                             child: Text(
                               'No staff data available.',
-                              style: TextStyle(color: Colors.white54),
+                              style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary),
                             ),
                           )
                         : ListView.separated(
@@ -326,57 +352,86 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
 
   Widget _buildFilters() {
     return Container(
-      color: AppColors.primaryLight,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
+      color: AppColors.surface,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
         children: [
-          // Month picker
-          GestureDetector(
-            onTap: _pickMonth,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_month, size: 16, color: Colors.white70),
-                  const SizedBox(width: 6),
-                  Text(
-                    DateFormat('MMM yyyy', 'id_ID').format(_selectedMonth),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Role filter
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _roles.map((role) {
-                  final selected = _selectedRole == role;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      label: Text(
-                        role == 'all' ? 'All' : role,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: selected ? Colors.white : Colors.white60,
-                        ),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: TextField(
+                    controller: _searchCtrl,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Search staff by name or role...',
+                      hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
+                      prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                      filled: true,
+                      fillColor: AppColors.surfaceVariant,
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                        borderSide: BorderSide.none,
                       ),
-                      selected: selected,
-                      selectedColor: AppColors.accent,
-                      backgroundColor: AppColors.primaryLight,
-                      onSelected: (_) => setState(() => _selectedRole = role),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
-                  );
-                }).toList(),
+                  ),
+                ),
               ),
+              const SizedBox(width: 10),
+              // Month picker
+              GestureDetector(
+                onTap: _pickMonth,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_month, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        DateFormat('MMM yyyy', 'id_ID').format(_selectedMonth),
+                        style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Role filter
+          SizedBox(
+            height: 32,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: _roles.map((role) {
+                final selected = _selectedRole == role;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(
+                      role == 'all' ? 'All Roles' : role,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: selected ? Colors.white : AppColors.textSecondary,
+                      ),
+                    ),
+                    selected: selected,
+                    selectedColor: AppColors.primary,
+                    backgroundColor: AppColors.surfaceVariant,
+                    side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
+                    onSelected: (_) => setState(() => _selectedRole = role),
+                  ),
+                );
+              }).toList(),
             ),
           ),
         ],
@@ -412,12 +467,13 @@ class _StaffPerformanceScreenState extends ConsumerState<StaffPerformanceScreen>
             Text(
               'Failed to load data:\n$_error',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white54, fontSize: 13),
+              style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
               onPressed: _loadData,
-              child: const Text('Try Again'),
+              child: const Text('Try Again', style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
         ),
@@ -439,17 +495,19 @@ class _StaffCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.primaryLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          iconColor: AppColors.textSecondary,
+          collapsedIconColor: AppColors.textSecondary,
           leading: CircleAvatar(
-            backgroundColor: _roleColor(staff.role).withValues(alpha: 0.2),
+            backgroundColor: _roleColor(staff.role).withValues(alpha: 0.15),
             child: Text(
               staff.fullName.isNotEmpty ? staff.fullName[0].toUpperCase() : '?',
               style: TextStyle(
@@ -461,8 +519,9 @@ class _StaffCard extends StatelessWidget {
           title: Text(
             staff.fullName,
             style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
+              fontFamily: 'Poppins',
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
             ),
           ),
           subtitle: Row(
@@ -471,7 +530,7 @@ class _StaffCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 '${staff.totalOrdersCombined} orders',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 12),
               ),
             ],
           ),
@@ -484,12 +543,12 @@ class _StaffCard extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 '${staff.finalScore.toStringAsFixed(1)} pts',
-                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textHint, fontSize: 11),
               ),
             ],
           ),
           children: [
-            const Divider(color: Colors.white10),
+            const Divider(color: AppColors.border),
             const SizedBox(height: 8),
 
             // ── Score Summary ──
@@ -651,7 +710,7 @@ class _StaffCard extends StatelessWidget {
       case 'host':
         return const Color(0xFFBA68C8);
       default:
-        return Colors.white54;
+        return AppColors.textSecondary;
     }
   }
 }
@@ -671,7 +730,7 @@ class _GradeBadge extends StatelessWidget {
       'C': const Color(0xFFFFB74D),
       'D': AppColors.accent,
     };
-    final color = colors[grade] ?? Colors.white38;
+    final color = colors[grade] ?? AppColors.textHint;
     return Container(
       width: 32,
       height: 32,
@@ -706,18 +765,18 @@ class _ScoreSummaryRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _ScoreItem(label: 'Attendance', value: staff.attendanceScore, color: const Color(0xFF4CAF50)),
           _Divider(),
-          _ScoreItem(label: 'Order', value: staff.orderScore, color: const Color(0xFF64B5F6)),
+          _ScoreItem(label: 'Order', value: staff.orderScore, color: const Color(0xFF2196F3)),
           _Divider(),
-          _ScoreItem(label: 'Punctuality', value: staff.punctualityScore, color: const Color(0xFFFFB74D)),
+          _ScoreItem(label: 'Punctuality', value: staff.punctualityScore, color: const Color(0xFFD97706)),
           _Divider(),
           _ScoreItem(label: 'Final', value: staff.finalScore, color: AppColors.accent, isBold: true),
         ],
@@ -729,7 +788,7 @@ class _ScoreSummaryRow extends StatelessWidget {
 class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(width: 1, height: 32, color: Colors.white10);
+    return Container(width: 1, height: 32, color: AppColors.border);
   }
 }
 
@@ -753,6 +812,7 @@ class _ScoreItem extends StatelessWidget {
         Text(
           value.toStringAsFixed(1),
           style: TextStyle(
+            fontFamily: 'Poppins',
             color: color,
             fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
             fontSize: isBold ? 16 : 14,
@@ -761,7 +821,7 @@ class _ScoreItem extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: Colors.white38, fontSize: 10),
+          style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textHint, fontSize: 10),
         ),
       ],
     );
@@ -784,7 +844,7 @@ class _RoleBadge extends StatelessWidget {
       'kitchen': const Color(0xFFFF8A65),
       'host': const Color(0xFFBA68C8),
     };
-    final color = colors[role] ?? Colors.white38;
+    final color = colors[role] ?? AppColors.textHint;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -794,7 +854,7 @@ class _RoleBadge extends StatelessWidget {
       ),
       child: Text(
         role,
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
+        style: TextStyle(fontFamily: 'Poppins', color: color, fontSize: 10, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -809,12 +869,13 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: Colors.white38),
+        Icon(icon, size: 14, color: AppColors.textHint),
         const SizedBox(width: 6),
         Text(
           title,
           style: const TextStyle(
-            color: Colors.white54,
+            fontFamily: 'Poppins',
+            color: AppColors.textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
@@ -847,7 +908,7 @@ class _MetricTile extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
-    this.color = Colors.white70,
+    this.color = AppColors.textSecondary,
   });
 
   @override
@@ -856,7 +917,7 @@ class _MetricTile extends StatelessWidget {
       margin: const EdgeInsets.only(right: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -866,6 +927,7 @@ class _MetricTile extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
+              fontFamily: 'Poppins',
               color: color,
               fontWeight: FontWeight.bold,
               fontSize: 15,
@@ -873,7 +935,7 @@ class _MetricTile extends StatelessWidget {
           ),
           Text(
             label,
-            style: const TextStyle(color: Colors.white38, fontSize: 10),
+            style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textHint, fontSize: 10),
             textAlign: TextAlign.center,
           ),
         ],
@@ -900,10 +962,11 @@ class _RevenueTile extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          Text(label, style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 12)),
           Text(
             value,
             style: const TextStyle(
+              fontFamily: 'Poppins',
               color: Color(0xFF4CAF50),
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -934,10 +997,10 @@ class _AttendanceBar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text('Attendance Rate',
-                style: TextStyle(color: Colors.white54, fontSize: 12)),
+                style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 12)),
             Text(
               '${pct.toStringAsFixed(1)}%',
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+              style: TextStyle(fontFamily: 'Poppins', color: color, fontWeight: FontWeight.bold, fontSize: 12),
             ),
           ],
         ),
@@ -946,7 +1009,7 @@ class _AttendanceBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: (pct / 100).clamp(0.0, 1.0),
-            backgroundColor: Colors.white10,
+            backgroundColor: AppColors.border,
             valueColor: AlwaysStoppedAnimation(color),
             minHeight: 6,
           ),
@@ -975,10 +1038,10 @@ class _PunctualityBar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text('Punctuality Rate',
-                style: TextStyle(color: Colors.white54, fontSize: 12)),
+                style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 12)),
             Text(
               '${pct.toStringAsFixed(1)}%',
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
+              style: TextStyle(fontFamily: 'Poppins', color: color, fontWeight: FontWeight.bold, fontSize: 12),
             ),
           ],
         ),
@@ -987,7 +1050,7 @@ class _PunctualityBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: (pct / 100).clamp(0.0, 1.0),
-            backgroundColor: Colors.white10,
+            backgroundColor: AppColors.border,
             valueColor: AlwaysStoppedAnimation(color),
             minHeight: 6,
           ),

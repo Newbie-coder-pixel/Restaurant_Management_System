@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/staff_model.dart';
-import '../../../core/models/staff_role.dart';
 import '../../../core/theme/app_theme.dart';
 
 // Local model for a shift
@@ -476,6 +475,21 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
     }
   }
 
+  // ── slot classification (matches the Morning/Afternoon/Evening legend) ──
+  static const int _slotMorning = 0;
+  static const int _slotAfternoon = 1;
+  static const int _slotEvening = 2;
+
+  int _slotFor(StaffShift s) {
+    final start = _toMinutes(s.startTime);
+    if (start >= 6 * 60 && start < 14 * 60) return _slotMorning;
+    if (start >= 14 * 60 && start < 22 * 60) return _slotAfternoon;
+    return _slotEvening;
+  }
+
+  List<StaffShift> _shiftsInSlot(int day, int slot) =>
+      (_shifts[day] ?? []).where((s) => _slotFor(s) == slot).toList();
+
   double get _totalWeeklyHours {
     double total = 0;
     for (final dayShifts in _shifts.values) {
@@ -486,40 +500,36 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
     return total;
   }
 
-  Color _roleColor(StaffRole r) {
-    switch (r) {
-      case StaffRole.superadmin: return const Color(0xFF9C27B0);
-      case StaffRole.manager:    return const Color(0xFF2196F3);
-      case StaffRole.cashier:    return const Color(0xFF4CAF50);
-      case StaffRole.waiter:     return const Color(0xFFFF9800);
-      case StaffRole.kitchen:    return AppColors.accent;
-      case StaffRole.host:       return const Color(0xFF00BCD4);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final roleColor = _roleColor(widget.staff.role);
     final totalHours = _totalWeeklyHours;
     final daysWorking = _shifts.values.where((d) => d.isNotEmpty).length;
+
+    const slotColors = [AppColors.primary, AppColors.accent, AppColors.badgeDark];
+    const slotLabels = ['Morning (06:00 - 14:00)', 'Afternoon (14:00 - 22:00)', 'Evening (22:00 - 06:00)'];
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         elevation: 0,
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: AppColors.textPrimary,
         title: Text('Shift Schedule — ${widget.staff.fullName}',
             style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w700)),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+                fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         centerTitle: false,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: AppColors.border),
+        ),
         actions: [
           if (_dirtyDays.isNotEmpty)
             Container(
               margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Colors.orange.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
@@ -544,19 +554,19 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                   child: SizedBox(
                       width: 20, height: 20,
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2)))
+                          color: AppColors.primary, strokeWidth: 2)))
               : Container(
                   margin: const EdgeInsets.only(right: 8),
                   child: ElevatedButton.icon(
                     onPressed: _saveAll,
-                    icon: const Icon(Icons.save_outlined, color: AppColors.primary, size: 18),
+                    icon: const Icon(Icons.save_outlined, color: Colors.white, size: 18),
                     label: const Text('Save',
                         style: TextStyle(
-                            color: AppColors.primary, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                            color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
+                      backgroundColor: AppColors.primary,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
                     ),
                   ),
                 ),
@@ -565,283 +575,214 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(children: [
-                // Staff header card
-                Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white,
-                        roleColor.withValues(alpha: 0.05),
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Legend + weekly totals
+                    Wrap(
+                      spacing: 20, runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        for (int i = 0; i < slotLabels.length; i++)
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            Container(width: 12, height: 12,
+                                decoration: BoxDecoration(color: slotColors[i], borderRadius: BorderRadius.circular(3))),
+                            const SizedBox(width: 6),
+                            Text(slotLabels[i],
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                          ]),
+                        Text('$daysWorking active days · ${totalHours.toStringAsFixed(1)} hrs/week',
+                            style: const TextStyle(
+                                fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 12, offset: const Offset(0, 4))
-                    ],
-                  ),
-                  child: Row(children: [
+                    const SizedBox(height: 16),
+
+                    // Grid
                     Container(
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: roleColor.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          )
-                        ],
+                        color: AppColors.surface,
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                       ),
-                      child: CircleAvatar(
-                          radius: 30,
-                          backgroundColor: roleColor.withValues(alpha: 0.15),
-                          child: Text(widget.staff.fullName[0].toUpperCase(),
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 24,
-                                  color: roleColor))),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(widget.staff.fullName,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
+                      child: Column(children: [
+                        // header row
                         Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: roleColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
+                          decoration: const BoxDecoration(
+                            color: AppColors.surfaceVariant,
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusMd)),
                           ),
-                          child: Text(widget.staff.role.displayName,
-                              style: TextStyle(
-                                  fontFamily: 'Poppins', fontSize: 11, color: roleColor, fontWeight: FontWeight.w600)),
-                        ),
-                      ]),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text('$daysWorking',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins', fontSize: 18,
-                                fontWeight: FontWeight.w700, color: AppColors.primary)),
-                        const Text('Active days',
-                            style: TextStyle(
-                                fontFamily: 'Poppins', fontSize: 10,
-                                color: AppColors.textSecondary)),
-                        const SizedBox(height: 4),
-                        Text(totalHours.toStringAsFixed(1),
-                            style: const TextStyle(
-                                fontFamily: 'Poppins', fontSize: 18,
-                                fontWeight: FontWeight.w700, color: AppColors.primary)),
-                        const Text('Total hours',
-                            style: TextStyle(
-                                fontFamily: 'Poppins', fontSize: 10,
-                                color: AppColors.textSecondary)),
-                      ]),
-                    ),
-                  ]),
-                ),
-
-                // Weekly grid
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-                    itemCount: 7,
-                    itemBuilder: (_, day) {
-                      final dayShifts = _shifts[day] ?? [];
-                      final isToday = day == DateTime.now().weekday - 1;
-
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: isToday
-                              ? Border.all(color: AppColors.primary, width: 2)
-                              : null,
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 8, offset: const Offset(0, 2))
-                          ],
-                        ),
-                        child: Column(children: [
-                          // day header
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                            child: Row(children: [
-                              // day badge
-                              Container(
-                                width: 50, height: 50,
-                                decoration: BoxDecoration(
-                                  gradient: isToday
-                                      ? const LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [AppColors.primary, Color(0xFF3949AB)])
-                                      : dayShifts.isNotEmpty
-                                          ? LinearGradient(
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                              colors: [AppColors.primary.withValues(alpha: 0.1), AppColors.primary.withValues(alpha: 0.05)])
-                                          : null,
-                                  color: !isToday && dayShifts.isEmpty ? Colors.grey.shade100 : null,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(_dayShort[day],
-                                        style: TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700,
-                                            color: isToday
-                                                ? Colors.white
-                                                : dayShifts.isNotEmpty
-                                                    ? AppColors.primary
-                                                    : Colors.grey.shade600)),
-                                    if (isToday)
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 2),
-                                        width: 4,
-                                        height: 4,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
+                          child: Row(children: [
+                            const SizedBox(width: 96, child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              child: Text('DAY', style: AppTextStyles.label))),
+                            for (int slot = 0; slot < 3; slot++)
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(_days[day],
-                                        style: TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 15,
-                                            color: isToday
-                                                ? AppColors.primary
-                                                : AppColors.textPrimary)),
-                                    if (dayShifts.isNotEmpty)
-                                      Text(
-                                        '${dayShifts.length} shift · '
-                                        '${dayShifts.fold(0.0, (s, sh) => s + sh.durationHours).toStringAsFixed(1)} hrs',
-                                        style: const TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontSize: 11,
-                                            color: AppColors.textSecondary))
-                                    else
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 2),
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade100,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: const Text('Day Off',
-                                            style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 10,
-                                                color: AppColors.textHint)),
-                                      ),
-                                  ],
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Text(['MORNING', 'AFTERNOON', 'EVENING'][slot], style: AppTextStyles.label),
                                 ),
                               ),
-                              // action buttons
-                              if (_dirtyDays.contains(day))
-                                Container(
-                                  margin: const EdgeInsets.only(right: 4),
-                                  child: const Icon(Icons.fiber_manual_record, size: 10, color: Colors.orange)),
-                              // copy from another day
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: IconButton(
-                                  icon: const Icon(Icons.copy_outlined,
-                                      size: 18, color: AppColors.textSecondary),
-                                  tooltip: 'Copy from another day',
-                                  onPressed: () => _copyFromDayDialog(day),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              // add shift
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: dayShifts.isNotEmpty ? AppColors.primary.withValues(alpha: 0.1) : Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: IconButton(
-                                  icon: Icon(Icons.add_circle_outline,
-                                      size: 20,
-                                      color: dayShifts.isNotEmpty
-                                          ? AppColors.primary
-                                          : Colors.grey),
-                                  tooltip: 'Add shift',
-                                  onPressed: () => _addShiftDialog(day),
-                                ),
-                              ),
-                            ]),
+                          ]),
+                        ),
+                        const Divider(height: 1, color: AppColors.border),
+                        // day rows
+                        for (int day = 0; day < 7; day++) ...[
+                          if (day > 0) const Divider(height: 1, color: AppColors.border),
+                          _ShiftDayRow(
+                            dayShort: _dayShort[day],
+                            dayFull: _days[day],
+                            isToday: day == DateTime.now().weekday - 1,
+                            isDirty: _dirtyDays.contains(day),
+                            slotColors: slotColors,
+                            slotShifts: [
+                              _shiftsInSlot(day, _slotMorning),
+                              _shiftsInSlot(day, _slotAfternoon),
+                              _shiftsInSlot(day, _slotEvening),
+                            ],
+                            onAddToSlot: (_) => _addShiftDialog(day),
+                            onRemove: (shift) => _removeShift(day, shift),
+                            onCopy: () => _copyFromDayDialog(day),
                           ),
-                          // shift chips
-                          if (dayShifts.isNotEmpty) ...[
-                            const Divider(height: 1, indent: 16, endIndent: 16),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              child: Wrap(
-                                spacing: 8, runSpacing: 8,
-                                children: dayShifts.map((shift) {
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Chip(
-                                      label: Text(
-                                          '${shift.startTime} – ${shift.endTime}',
-                                          style: const TextStyle(
-                                              fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w500)),
-                                      backgroundColor: Colors.transparent,
-                                      deleteIcon: const Icon(Icons.close, size: 14),
-                                      deleteIconColor: Colors.red.shade400,
-                                      onDeleted: () => _removeShift(day, shift),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
+                        ],
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// One day row of the Morning / Afternoon / Evening grid
+// ─────────────────────────────────────────────────────────
+class _ShiftDayRow extends StatelessWidget {
+  final String dayShort;
+  final String dayFull;
+  final bool isToday;
+  final bool isDirty;
+  final List<Color> slotColors;
+  final List<List<StaffShift>> slotShifts;
+  final ValueChanged<int> onAddToSlot;
+  final ValueChanged<StaffShift> onRemove;
+  final VoidCallback onCopy;
+
+  const _ShiftDayRow({
+    required this.dayShort,
+    required this.dayFull,
+    required this.isToday,
+    required this.isDirty,
+    required this.slotColors,
+    required this.slotShifts,
+    required this.onAddToSlot,
+    required this.onRemove,
+    required this.onCopy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty = slotShifts.every((s) => s.isEmpty);
+
+    return Container(
+      color: isToday ? AppColors.primary.withValues(alpha: 0.04) : null,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: 96,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Text(dayShort,
+                          style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+                              color: isToday ? AppColors.primary : AppColors.textPrimary)),
+                      if (isDirty) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.fiber_manual_record, size: 8, color: Colors.orange),
+                      ],
+                    ]),
+                    if (isEmpty)
+                      const Text('Closed',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
+                    const Spacer(),
+                    InkWell(
+                      onTap: onCopy,
+                      child: const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Icon(Icons.copy_outlined, size: 14, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            for (int slot = 0; slot < 3; slot++)
+              Expanded(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    border: Border(left: BorderSide(color: AppColors.border)),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: slotShifts[slot].isEmpty
+                      ? InkWell(
+                          onTap: () => onAddToSlot(slot),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: const Icon(Icons.add, size: 18, color: AppColors.textHint),
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 6, runSpacing: 6,
+                              children: [
+                                ...slotShifts[slot].map((shift) => Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: slotColors[slot].withValues(alpha: 0.4)),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                        Text('${shift.startTime}-${shift.endTime}',
+                                            style: TextStyle(
+                                                fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600,
+                                                color: slotColors[slot])),
+                                        const SizedBox(width: 4),
+                                        InkWell(
+                                          onTap: () => onRemove(shift),
+                                          child: Icon(Icons.close, size: 12, color: slotColors[slot]),
+                                        ),
+                                      ]),
+                                    )),
+                                InkWell(
+                                  onTap: () => onAddToSlot(slot),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    child: const Icon(Icons.add, size: 14, color: AppColors.textHint),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
-                        ]),
-                      );
-                    },
-                  ),
+                        ),
                 ),
-              ]),
+              ),
+          ],
+        ),
       ),
     );
   }
