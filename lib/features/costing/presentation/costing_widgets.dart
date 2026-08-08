@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/costing_model.dart';
+import '../../../core/theme/app_theme.dart';
 
 // ─── IDR Formatter ──────────────────────────────────────────────────────────
 final _idrFormat = NumberFormat('#,##0', 'id_ID');
@@ -41,17 +42,16 @@ class CurrencyInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = accentColor ?? theme.colorScheme.primary;
+    final color = accentColor ?? AppColors.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         RichText(
           text: TextSpan(
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
             ),
             children: [
               TextSpan(text: label),
@@ -59,7 +59,7 @@ class CurrencyInputField extends StatelessWidget {
                 const TextSpan(
                   text: ' *',
                   style: TextStyle(
-                      color: Colors.red, fontWeight: FontWeight.w800),
+                      color: AppColors.accent, fontWeight: FontWeight.w800),
                 ),
             ],
           ),
@@ -76,45 +76,49 @@ class CurrencyInputField extends StatelessWidget {
           // The red warning is visible immediately when the screen opens, no
           // need to wait for the user to start typing.
           autovalidateMode: AutovalidateMode.always,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface,
+          style: const TextStyle(
+            fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 15,
+            color: AppColors.textPrimary,
           ),
           decoration: InputDecoration(
             hintText: hint,
+            hintStyle: const TextStyle(fontFamily: 'Poppins', color: AppColors.textHint),
             prefixIcon: prefixIcon != null
                 ? Icon(prefixIcon, size: 18, color: color)
                 : const Padding(
                     padding: EdgeInsets.only(left: 12, right: 8),
                     child: Text('Rp',
                         style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13)),
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w700, fontSize: 13,
+                            color: AppColors.textSecondary)),
                   ),
             prefixIconConstraints:
                 const BoxConstraints(minWidth: 0, minHeight: 0),
             helperText: helperText,
-            helperStyle: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.outline),
+            helperStyle: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary),
             filled: true,
-            fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+            fillColor: AppColors.surfaceVariant,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
               borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
               borderSide: BorderSide(color: color, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Colors.red, width: 1.3),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              borderSide: const BorderSide(color: AppColors.accent, width: 1.3),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Colors.red, width: 1.6),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              borderSide: const BorderSide(color: AppColors.accent, width: 1.6),
             ),
             errorStyle: const TextStyle(
-              color: Colors.red,
+              fontFamily: 'Poppins',
+              color: AppColors.accent,
               fontWeight: FontWeight.w600,
               fontSize: 12,
             ),
@@ -137,27 +141,12 @@ class CostingResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primaryContainer,
-            theme.colorScheme.secondaryContainer,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.primary.withValues(alpha: 0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,18 +157,18 @@ class CostingResultCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                 ),
-                child: Icon(Icons.analytics_rounded,
-                    color: theme.colorScheme.primary, size: 20),
+                child: const Icon(Icons.analytics_rounded,
+                    color: AppColors.primary, size: 20),
               ),
               const SizedBox(width: 10),
-              Text(
+              const Text(
                 'Calculation Result',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.onPrimaryContainer,
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const Spacer(),
@@ -187,7 +176,7 @@ class CostingResultCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          const Divider(height: 1),
+          const Divider(height: 1, color: AppColors.border),
           const SizedBox(height: 16),
 
           // Result grid
@@ -198,7 +187,7 @@ class CostingResultCard extends StatelessWidget {
                 value: formatIdr(costing.hpp),
                 sublabel: 'Cost of Goods Sold',
                 icon: Icons.receipt_long_rounded,
-                color: theme.colorScheme.error,
+                color: AppColors.accent,
               ),
               const SizedBox(width: 12),
               _ResultTile(
@@ -206,7 +195,7 @@ class CostingResultCard extends StatelessWidget {
                 value: formatIdr(costing.recommendedSellingPriceRounded),
                 sublabel: 'With ${costing.targetProfitMarginPercent.toStringAsFixed(0)}% margin',
                 icon: Icons.price_check_rounded,
-                color: const Color(0xFF2E7D32),
+                color: AppColors.available,
               ),
             ],
           ),
@@ -228,8 +217,8 @@ class CostingResultCard extends StatelessWidget {
                 icon: Icons.trending_up_rounded,
                 color: costing.actualProfitMarginPercent >=
                         costing.targetProfitMarginPercent
-                    ? const Color(0xFF2E7D32)
-                    : theme.colorScheme.error,
+                    ? AppColors.available
+                    : AppColors.accent,
               ),
             ],
           ),
@@ -243,10 +232,10 @@ class CostingResultCard extends StatelessWidget {
   }
 
   Color _getFoodCostColor(double pct) {
-    if (pct >= 28 && pct <= 35) return const Color(0xFF2E7D32);
-    if (pct < 28) return const Color(0xFFF9A825);
+    if (pct >= 28 && pct <= 35) return AppColors.available;
+    if (pct < 28) return AppColors.accentOrange;
     if (pct <= 40) return const Color(0xFFE65100);
-    return const Color(0xFFB71C1C);
+    return AppColors.accent;
   }
 }
 
@@ -267,13 +256,12 @@ class _ResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withValues(alpha: 0.75),
-          borderRadius: BorderRadius.circular(10),
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,25 +270,23 @@ class _ResultTile extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               value,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: color,
-                fontSize: 15,
+              style: TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                color: color, fontSize: 15,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: theme.colorScheme.onSurface,
+              style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
             ),
             Text(
               sublabel,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
-                fontSize: 10,
+              style: const TextStyle(
+                fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 10,
               ),
             ),
           ],
@@ -320,31 +306,29 @@ class _StatusChip extends StatelessWidget {
     Color color;
     switch (status) {
       case CostingStatus.healthy:
-        color = const Color(0xFF2E7D32);
+        color = AppColors.available;
         break;
       case CostingStatus.warning:
-        color = const Color(0xFFF9A825);
+        color = AppColors.accentOrange;
         break;
       case CostingStatus.underpriced:
-        color = Theme.of(context).colorScheme.error;
+        color = AppColors.accent;
         break;
       default:
-        color = Colors.grey;
+        color = AppColors.textHint;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         '${status.emoji} ${status.label}',
         style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+          fontFamily: 'Poppins', color: color, fontSize: 11, fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -358,12 +342,11 @@ class _HealthScoreBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final color = score >= 70
-        ? const Color(0xFF2E7D32)
+        ? AppColors.available
         : score >= 40
-            ? const Color(0xFFF9A825)
-            : theme.colorScheme.error;
+            ? AppColors.accentOrange
+            : AppColors.accent;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,17 +354,17 @@ class _HealthScoreBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
+            const Text(
               'Financial Health Score',
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
               ),
             ),
             Text(
               '$score / 100',
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w800,
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w800,
                 color: color,
               ),
             ),
@@ -393,7 +376,7 @@ class _HealthScoreBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: score / 100,
             minHeight: 6,
-            backgroundColor: theme.colorScheme.outline.withValues(alpha: 0.2),
+            backgroundColor: AppColors.border,
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),
@@ -419,35 +402,33 @@ class CostingListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     Color statusColor;
     switch (costing.pricingStatus) {
       case CostingStatus.healthy:
-        statusColor = const Color(0xFF2E7D32);
+        statusColor = AppColors.available;
         break;
       case CostingStatus.warning:
-        statusColor = const Color(0xFFF9A825);
+        statusColor = AppColors.accentOrange;
         break;
       case CostingStatus.underpriced:
-        statusColor = theme.colorScheme.error;
+        statusColor = AppColors.accent;
         break;
       default:
-        statusColor = Colors.grey;
+        statusColor = AppColors.textHint;
     }
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             border: Border.all(
-              color: statusColor.withValues(alpha: 0.3),
+              color: statusColor.withValues(alpha: 0.35),
               width: 1,
             ),
           ),
@@ -470,8 +451,9 @@ class CostingListTile extends StatelessWidget {
                   children: [
                     Text(
                       costing.menuItemName,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -479,19 +461,17 @@ class CostingListTile extends StatelessWidget {
                       children: [
                         Text(
                           'COGS: ${formatIdr(costing.hpp)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text('·',
-                            style: TextStyle(
-                                color: theme.colorScheme.outline)),
+                        const Text('·', style: TextStyle(color: AppColors.textSecondary)),
                         const SizedBox(width: 8),
                         Text(
                           'FC: ${formatPct(costing.foodCostPercentage)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -505,17 +485,16 @@ class CostingListTile extends StatelessWidget {
                 children: [
                   Text(
                     formatIdr(costing.currentSellingPrice),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.onSurface,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 14,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     formatPct(costing.actualProfitMarginPercent),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: statusColor,
-                      fontWeight: FontWeight.w700,
+                    style: TextStyle(
+                      fontFamily: 'Poppins', color: statusColor, fontSize: 11, fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -523,8 +502,7 @@ class CostingListTile extends StatelessWidget {
               if (onDelete != null) ...[
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: Icon(Icons.delete_outline,
-                      size: 18, color: theme.colorScheme.error),
+                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.accent),
                   onPressed: onDelete,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
@@ -548,22 +526,20 @@ class CostingSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.inverseSurface,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.textPrimary,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             'Profitability Summary',
-            style: theme.textTheme.titleSmall?.copyWith(
-              color: theme.colorScheme.onInverseSurface,
-              fontWeight: FontWeight.w700,
+            style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 16),
@@ -572,7 +548,7 @@ class CostingSummaryCard extends StatelessWidget {
               _SummaryMetric(
                 label: 'Est. Revenue/mo',
                 value: formatIdr(summary.totalEstimatedMonthlyRevenue),
-                color: theme.colorScheme.onInverseSurface,
+                color: Colors.white,
               ),
               const SizedBox(width: 16),
               _SummaryMetric(
@@ -590,13 +566,13 @@ class CostingSummaryCard extends StatelessWidget {
               _SummaryMetric(
                 label: 'Avg Food Cost',
                 value: formatPct(summary.averageFoodCostPercent),
-                color: theme.colorScheme.onInverseSurface,
+                color: Colors.white,
               ),
               const SizedBox(width: 16),
               _SummaryMetric(
                 label: 'Avg Margin',
                 value: formatPct(summary.averageProfitMarginPercent),
-                color: theme.colorScheme.onInverseSurface,
+                color: Colors.white,
               ),
             ],
           ),
@@ -636,22 +612,20 @@ class _SummaryMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onInverseSurface.withValues(alpha: 0.6),
+            style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 11, color: Colors.white.withValues(alpha: 0.65),
             ),
           ),
           Text(
             value,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: color,
+            style: TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 16, color: color,
             ),
           ),
         ],
@@ -672,14 +646,12 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+          fontFamily: 'Poppins', color: color, fontSize: 11, fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -705,8 +677,7 @@ class CostingSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final c = color ?? theme.colorScheme.primary;
+    final c = color ?? AppColors.primary;
 
     return Row(
       children: [
@@ -714,7 +685,7 @@ class CostingSectionHeader extends StatelessWidget {
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: c.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
           ),
           child: Icon(icon, color: c, size: 18),
         ),
@@ -724,15 +695,16 @@ class CostingSectionHeader extends StatelessWidget {
           children: [
             Text(
               title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+              style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
               ),
             ),
             if (subtitle != null)
               Text(
                 subtitle!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary,
                 ),
               ),
           ],

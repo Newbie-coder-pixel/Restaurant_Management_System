@@ -6,7 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../models/costing_model.dart';
 import '../providers/costing_providers.dart';
 import 'costing_widgets.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/staff_shell.dart';
 import '../../../shared/models/menu_model.dart';
 import '../../menu/providers/menu_provider.dart';
 import '../../../core/router/app_router.dart';
@@ -48,6 +49,9 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
   // instead of generating a random 'custom-...' id every time it's saved.
   String? _selectedMenuItemId;
   bool _isComputingCost = false;
+  // Presentational only — the picked MenuItem, kept just so the recipe
+  // identity card can show its description when available. Not persisted.
+  MenuItem? _pickedMenu;
 
   @override
   void initState() {
@@ -111,6 +115,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
       _currentPriceCtrl.text = costing.currentSellingPrice.toStringAsFixed(0);
       _targetMarginCtrl.text = costing.targetProfitMarginPercent.toStringAsFixed(0);
       _selectedMenuItemId = costing.menuItemId;
+      _pickedMenu = null;
     });
     _tabController.animateTo(0);
   }
@@ -153,6 +158,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
         _allocatedOpCtrl.text = opCost.toStringAsFixed(0);
         _currentPriceCtrl.text = menu.price > 0 ? menu.price.toStringAsFixed(0) : '0';
         _targetMarginCtrl.text = '30';
+        _pickedMenu = menu;
       });
       notifier.updateLiveCurrentPrice(menu.price);
 
@@ -162,7 +168,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
             content: Text(
                 '⚠️ "${menu.name}" doesn\'t have a recipe (ingredients) yet, or its ingredients weren\'t found in inventory. '
                 'Enter the ingredient cost manually, or complete the recipe first in Menu Management.'),
-            backgroundColor: Colors.orange.shade700,
+            backgroundColor: AppColors.accentOrange,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 4),
           ),
@@ -179,7 +185,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusLg)),
       ),
       builder: (_) => _MenuPickerSheet(branchId: branchId),
     );
@@ -218,7 +224,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('✅ Costing data saved successfully'),
-          backgroundColor: const Color(0xFF2E7D32),
+          backgroundColor: AppColors.available,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -229,7 +235,7 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('❌ ${errorMsg.isEmpty ? "Failed to save" : errorMsg}'),
-          backgroundColor: Theme.of(context).colorScheme.error,
+          backgroundColor: AppColors.accent,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -239,99 +245,244 @@ class _CostingCalculatorScreenState extends ConsumerState<CostingCalculatorScree
   @override
   Widget build(BuildContext context) {
     final notifier = ref.watch(costingProvider.notifier);
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      drawer: const AppDrawer(),
-      appBar: AppBar(
-        title: const Text(
-          'Costing & Profit Calculator',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
-        ),
-        centerTitle: false,
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        actions: [
-          if (notifier.isSuperAdmin)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
-                  ),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    value: notifier.selectedBranchId,
-                    isDense: true,
-                    dropdownColor: Theme.of(context).colorScheme.surface,
-                    iconEnabledColor: Theme.of(context).colorScheme.primary,
-                    icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer),
-                    items: [
-                      DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('All Branches',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer)),
-                      ),
-                      ...notifier.branches.map((b) => DropdownMenuItem<String?>(
-                            value: b['id'] as String,
-                            child: Text(b['name'] as String,
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).colorScheme.onSurface)),
-                          )),
-                    ],
-                    onChanged: (val) => notifier.selectBranch(val),
-                  ),
+    return StaffShell(
+      pageTitle: 'Costing Calculator',
+      activeRoute: AppRoutes.costing,
+      topBarActions: [
+        if (notifier.isSuperAdmin)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String?>(
+                  value: notifier.selectedBranchId,
+                  isDense: true,
+                  icon: const Icon(Icons.keyboard_arrow_down,
+                      size: 16, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('All Branches',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 12))),
+                    ...notifier.branches.map((b) => DropdownMenuItem<String?>(
+                          value: b['id'] as String,
+                          child: Text(b['name'] as String,
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)))),
+                  ],
+                  onChanged: (val) => notifier.selectBranch(val),
                 ),
               ),
             ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => notifier.loadAll(),
+          ),
+        IconButton(
+          tooltip: 'Refresh',
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+          onPressed: () => notifier.loadAll(),
+        ),
+      ],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+            child: _buildHeader(),
+          ),
+          const SizedBox(height: 12),
+          _buildTabToggle(),
+          const Divider(height: 1, color: AppColors.border),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _CalculatorTab(
+                  formKey: _formKey,
+                  menuNameCtrl: _menuNameCtrl,
+                  ingredientCtrl: _ingredientCtrl,
+                  packagingCtrl: _packagingCtrl,
+                  allocatedOpCtrl: _allocatedOpCtrl,
+                  currentPriceCtrl: _currentPriceCtrl,
+                  targetMarginCtrl: _targetMarginCtrl,
+                  onSave: _save,
+                  onPickMenu: _openMenuPicker,
+                  isComputingCost: _isComputingCost,
+                  pickedMenu: _pickedMenu,
+                ),
+                _MenuListTab(onSelectCosting: _onSelectExistingCosting),
+              ],
+            ),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Calculator', icon: Icon(Icons.calculate_outlined, size: 18)),
-            Tab(text: 'Menu List', icon: Icon(Icons.list_alt_rounded, size: 18)),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Costing Calculator',
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 30,
+                  fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+              SizedBox(height: 4),
+              Text('Recipe management and margin analysis.',
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        SizedBox(
+          width: 240,
+          child: _MenuItemSelector(
+            currentName: _menuNameCtrl.text,
+            isLoading: _isComputingCost,
+            onTap: _openMenuPicker,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabToggle() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+      child: AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, _) {
+          return Row(
+            children: [
+              _TabToggleItem(
+                label: 'Calculator',
+                icon: Icons.calculate_outlined,
+                isSelected: _tabController.index == 0,
+                onTap: () => _tabController.animateTo(0),
+              ),
+              const SizedBox(width: 20),
+              _TabToggleItem(
+                label: 'Menu List',
+                icon: Icons.list_alt_rounded,
+                isSelected: _tabController.index == 1,
+                onTap: () => _tabController.animateTo(1),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Header controls
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TabToggleItem extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _TabToggleItem({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? AppColors.primary : Colors.transparent,
+              width: 2.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16,
+              color: isSelected ? AppColors.primary : AppColors.textSecondary),
+            const SizedBox(width: 6),
+            Text(label,
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? AppColors.primary : AppColors.textSecondary)),
           ],
-          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _CalculatorTab(
-            formKey: _formKey,
-            menuNameCtrl: _menuNameCtrl,
-            ingredientCtrl: _ingredientCtrl,
-            packagingCtrl: _packagingCtrl,
-            allocatedOpCtrl: _allocatedOpCtrl,
-            currentPriceCtrl: _currentPriceCtrl,
-            targetMarginCtrl: _targetMarginCtrl,
-            onSave: _save,
-            onPickMenu: _openMenuPicker,
-            isComputingCost: _isComputingCost,
+    );
+  }
+}
+
+class _MenuItemSelector extends StatelessWidget {
+  final String currentName;
+  final bool isLoading;
+  final VoidCallback onTap;
+  const _MenuItemSelector({
+    required this.currentName,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('SELECT MENU ITEM',
+          style: TextStyle(
+            fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+            letterSpacing: 0.5, color: AppColors.textSecondary)),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: isLoading ? null : onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    currentName.isEmpty ? 'Choose a menu item...' : currentName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700,
+                      color: currentName.isEmpty ? AppColors.textHint : AppColors.textPrimary)),
+                ),
+                if (isLoading)
+                  const SizedBox(
+                    width: 14, height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                else
+                  const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textSecondary),
+              ],
+            ),
           ),
-          _MenuListTab(onSelectCosting: _onSelectExistingCosting),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -351,6 +502,7 @@ class _CalculatorTab extends ConsumerWidget {
   final VoidCallback onSave;
   final VoidCallback onPickMenu;
   final bool isComputingCost;
+  final MenuItem? pickedMenu;
 
   const _CalculatorTab({
     required this.formKey,
@@ -363,6 +515,7 @@ class _CalculatorTab extends ConsumerWidget {
     required this.onSave,
     required this.onPickMenu,
     required this.isComputingCost,
+    this.pickedMenu,
   });
 
   @override
@@ -374,15 +527,12 @@ class _CalculatorTab extends ConsumerWidget {
     final notifier = ref.read(costingProvider.notifier);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       child: Form(
         key: formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CostingSummaryCard(summary: state.summary),
-            const SizedBox(height: 16),
-
             // ── Nudge: Operating Expense must be filled in first ───────────
             // The allocated operating cost per portion (used for COGS) is only
             // accurate once this month's Operating Expense data exists.
@@ -391,261 +541,799 @@ class _CalculatorTab extends ConsumerWidget {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+                  color: AppColors.accentOrange.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.35)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline_rounded, color: Colors.orange.shade800, size: 20),
+                    const Icon(Icons.info_outline_rounded, color: AppColors.accentOrange, size: 20),
                     const SizedBox(width: 10),
-                    Expanded(
+                    const Expanded(
                       child: Text(
                         'This month\'s Operating Expense hasn\'t been filled in yet, so the per-portion cost allocation is still Rp 0. Fill it in first so COGS is accurate.',
-                        style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
                       ),
                     ),
                     TextButton(
                       onPressed: () => context.go(AppRoutes.operatingExpense),
-                      child: const Text('Fill In Now', style: TextStyle(fontWeight: FontWeight.w700)),
+                      child: const Text('Fill In Now',
+                        style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: AppColors.accentOrange)),
                     ),
                   ],
                 ),
               ),
 
-            // ── Menu Name ──────────────────────────────────────────────────
-            Row(
-              children: [
-                const Expanded(
-                  child: CostingSectionHeader(
-                    title: 'Menu Identity',
-                    icon: Icons.restaurant_menu_rounded,
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: isComputingCost ? null : onPickMenu,
-                  icon: isComputingCost
-                      ? const SizedBox(
-                          width: 14, height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.restaurant_rounded, size: 16),
-                  label: const Text('Pick from Menu', style: TextStyle(fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: menuNameCtrl,
-              autovalidateMode: AutovalidateMode.always,
-              decoration: InputDecoration(
-                labelText: 'Menu Name *',
-                labelStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-                hintText: 'Menu item name (e.g. Nasi Goreng Spesial)',
-                prefixIcon: const Icon(Icons.label_rounded, size: 18),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary, width: 1.5),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.red, width: 1.3),
-                ),
-                focusedErrorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.red, width: 1.6),
-                ),
-                errorStyle: const TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Menu name is required' : null,
-            ),
-            const SizedBox(height: 24),
+            LayoutBuilder(builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 980;
+              final left = _LeftColumn(
+                menuNameCtrl: menuNameCtrl,
+                ingredientCtrl: ingredientCtrl,
+                packagingCtrl: packagingCtrl,
+                allocatedOpCtrl: allocatedOpCtrl,
+                onPickMenu: onPickMenu,
+                isComputingCost: isComputingCost,
+                pickedMenu: pickedMenu,
+                notifier: notifier,
+                state: state,
+                result: result,
+              );
+              final right = _FinancialSummaryPanel(
+                result: result,
+                currentPriceCtrl: currentPriceCtrl,
+                targetMarginCtrl: targetMarginCtrl,
+                notifier: notifier,
+                isSaving: state.isSaving,
+                onSave: onSave,
+              );
 
-            // ── Direct Costs ───────────────────────────────────────────────
-            const CostingSectionHeader(
-              title: 'Direct Costs',
-              subtitle: 'Cost per single portion',
-              icon: Icons.shopping_basket_rounded,
-              color: Color(0xFF1565C0),
-            ),
-            const SizedBox(height: 12),
-            CurrencyInputField(
-              label: 'Ingredient Cost',
-              hint: '0',
-              controller: ingredientCtrl,
-              helperText: 'From inventory data / recipe',
-              accentColor: const Color(0xFF1565C0),
-              isRequired: true,
-              onChanged: (v) => notifier.updateLiveIngredientCost(v),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Required';
-                final n = double.tryParse(v);
-                if (n == null) return 'Invalid';
-                if (n <= 0) return 'Ingredient cost must be greater than 0';
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            CurrencyInputField(
-              label: 'Packaging Cost',
-              hint: '0',
-              controller: packagingCtrl,
-              helperText: 'Box, plastic, straw, etc. (for takeaway)',
-              accentColor: const Color(0xFF1565C0),
-              onChanged: (v) => notifier.updateLivePackagingCost(v),
-            ),
-            _SubtotalRow(
-              label: 'Direct Cost Subtotal',
-              value: formatIdr(result.totalDirectCost),
-              color: const Color(0xFF1565C0),
-            ),
-            const SizedBox(height: 24),
-
-            // ── Indirect / Operating Costs ─────────────────────────────────
-            const CostingSectionHeader(
-              title: 'Operating Cost (Allocated)',
-              subtitle: 'Share of monthly cost per portion',
-              icon: Icons.business_center_rounded,
-              color: Color(0xFF6A1B9A),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: CurrencyInputField(
-                    label: 'Allocated Operating Cost/portion',
-                    hint: '0',
-                    controller: allocatedOpCtrl,
-                    helperText: 'Total OpEx ÷ Estimated portions/month',
-                    accentColor: const Color(0xFF6A1B9A),
-                    onChanged: (v) => notifier.updateLiveAllocatedOpCost(v),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
+              if (isWide) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 22),
-                    Tooltip(
-                      message: 'Auto-fill from the latest Operating Expense',
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          notifier.autoFillAllocatedCost();
-                          allocatedOpCtrl.text = ref
-                              .read(costingProvider)
-                              .operatingExpense
-                              .operatingCostPerPortion
-                              .toStringAsFixed(0);
-                        },
-                        icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
-                        label: const Text('Auto'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF6A1B9A),
-                          side: const BorderSide(color: Color(0xFF6A1B9A)),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                        ),
-                      ),
-                    ),
+                    Expanded(flex: 2, child: left),
+                    const SizedBox(width: 20),
+                    SizedBox(width: 340, child: right),
                   ],
-                ),
-              ],
-            ),
-
-            _OperatingExpenseInfoCard(expense: state.operatingExpense),
-            const SizedBox(height: 24),
-
-            // ── COGS ───────────────────────────────────────────────────────
-            _SubtotalRow(
-              label: '📌 COGS (Cost of Goods Sold)',
-              value: formatIdr(result.hpp),
-              color: Theme.of(context).colorScheme.error,
-              isHighlighted: true,
-            ),
-            const SizedBox(height: 24),
-
-            // ── Target Margin & Price ────────────────────────────────────
-            const CostingSectionHeader(
-              title: 'Target Profit & Selling Price',
-              icon: Icons.attach_money_rounded,
-              color: Color(0xFF2E7D32),
-            ),
-            const SizedBox(height: 12),
-            _MarginSlider(
-              label: 'Target Profit Margin',
-              value: double.tryParse(targetMarginCtrl.text) ?? 30,
-              controller: targetMarginCtrl,
-              onChanged: (v) {
-                targetMarginCtrl.text = v.toStringAsFixed(0);
-                notifier.updateLiveTargetMargin(v);
-              },
-            ),
-            const SizedBox(height: 12),
-            _RecommendedPriceBox(costing: result),
-            const SizedBox(height: 12),
-            CurrencyInputField(
-              label: 'Current Selling Price',
-              hint: '0',
-              controller: currentPriceCtrl,
-              helperText: 'Enter the currently applied selling price',
-              accentColor: const Color(0xFF2E7D32),
-              isRequired: true,
-              onChanged: (v) => notifier.updateLiveCurrentPrice(v),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Required';
-                final n = double.tryParse(v);
-                if (n == null) return 'Invalid';
-                if (n <= 0) return 'Selling price must be greater than 0';
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-
-            // ── Calculation Result ───────────────────────────────────────
-            CostingResultCard(costing: result),
-            const SizedBox(height: 24),
-
-            // ── Save Button ──────────────────────────────────────────────
-            FilledButton.icon(
-              onPressed: state.isSaving ? null : onSave,
-              icon: state.isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.save_rounded),
-              label: Text(state.isSaving ? 'Saving...' : 'Save Costing Data'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
+                );
+              }
+              return Column(
+                children: [
+                  left,
+                  const SizedBox(height: 20),
+                  right,
+                ],
+              );
+            }),
             const SizedBox(height: 32),
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEFT COLUMN — Recipe identity + Bill of Materials-style cost breakdown
+// ─────────────────────────────────────────────────────────────────────────────
+class _LeftColumn extends StatelessWidget {
+  final TextEditingController menuNameCtrl;
+  final TextEditingController ingredientCtrl;
+  final TextEditingController packagingCtrl;
+  final TextEditingController allocatedOpCtrl;
+  final VoidCallback onPickMenu;
+  final bool isComputingCost;
+  final MenuItem? pickedMenu;
+  final CostingNotifier notifier;
+  final CostingNotifier state;
+  final CostingModel result;
+
+  const _LeftColumn({
+    required this.menuNameCtrl,
+    required this.ingredientCtrl,
+    required this.packagingCtrl,
+    required this.allocatedOpCtrl,
+    required this.onPickMenu,
+    required this.isComputingCost,
+    required this.pickedMenu,
+    required this.notifier,
+    required this.state,
+    required this.result,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Recipe identity card ────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 64, height: 64,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: const Icon(Icons.ramen_dining_rounded, color: AppColors.primary, size: 30),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: menuNameCtrl,
+                            autovalidateMode: AutovalidateMode.always,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins', fontSize: 17,
+                              fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              hintText: 'Menu item name *',
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            validator: (v) =>
+                                (v == null || v.trim().isEmpty) ? 'Menu name is required' : null,
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: isComputingCost ? null : onPickMenu,
+                          icon: isComputingCost
+                              ? const SizedBox(
+                                  width: 14, height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.restaurant_rounded, size: 14),
+                          label: const Text('Pick from Menu', style: TextStyle(fontFamily: 'Poppins', fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      pickedMenu?.description?.isNotEmpty == true
+                          ? pickedMenu!.description!
+                          : 'Recipe cost and margin details for this menu item.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                    const SizedBox(height: 8),
+                    _PricingStatusBadge(status: result.pricingStatus),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Bill of Materials (Direct Costs) ────────────────────────────
+        _SectionCard(
+          title: 'Bill of Materials',
+          subtitle: 'Direct cost per single portion',
+          icon: Icons.shopping_basket_rounded,
+          color: AppColors.primary,
+          child: Column(
+            children: [
+              _CostLineRow(
+                label: 'Ingredient Cost',
+                helper: 'From inventory data / recipe',
+                controller: ingredientCtrl,
+                accentColor: AppColors.primary,
+                isRequired: true,
+                onChanged: (v) => notifier.updateLiveIngredientCost(v),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Required';
+                  final n = double.tryParse(v);
+                  if (n == null) return 'Invalid';
+                  if (n <= 0) return 'Ingredient cost must be greater than 0';
+                  return null;
+                },
+              ),
+              _CostLineRow(
+                label: 'Packaging Cost',
+                helper: 'Box, plastic, straw, etc. (for takeaway)',
+                controller: packagingCtrl,
+                accentColor: AppColors.primary,
+                onChanged: (v) => notifier.updateLivePackagingCost(v),
+              ),
+              const Divider(height: 24, color: AppColors.border),
+              _TotalLineRow(
+                label: 'Direct Cost Subtotal',
+                value: formatIdr(result.totalDirectCost),
+                color: AppColors.textPrimary,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // ── Operating Cost (Allocated) ──────────────────────────────────
+        _SectionCard(
+          title: 'Operating Cost (Allocated)',
+          subtitle: 'Share of monthly cost per portion',
+          icon: Icons.business_center_rounded,
+          color: AppColors.accent,
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: _CostLineRow(
+                      label: 'Allocated Operating Cost/portion',
+                      helper: 'Total OpEx ÷ Estimated portions/month',
+                      controller: allocatedOpCtrl,
+                      accentColor: AppColors.accent,
+                      onChanged: (v) => notifier.updateLiveAllocatedOpCost(v),
+                      showDivider: false,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Auto-fill from the latest Operating Expense',
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        notifier.autoFillAllocatedCost();
+                        allocatedOpCtrl.text =
+                            notifier.operatingExpense.operatingCostPerPortion.toStringAsFixed(0);
+                      },
+                      icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
+                      label: const Text('Auto', style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.accent,
+                        side: const BorderSide(color: AppColors.accent),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              _OperatingExpenseInfoCard(expense: state.operatingExpense),
+              const Divider(height: 24, color: AppColors.border),
+              _TotalLineRow(
+                label: 'COGS (Cost of Goods Sold)',
+                value: formatIdr(result.hpp),
+                color: AppColors.accent,
+                isHighlighted: true,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PricingStatusBadge extends StatelessWidget {
+  final CostingStatus status;
+  const _PricingStatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    switch (status) {
+      case CostingStatus.healthy:
+        color = AppColors.available;
+        break;
+      case CostingStatus.warning:
+        color = AppColors.accentOrange;
+        break;
+      case CostingStatus.underpriced:
+        color = AppColors.accent;
+        break;
+      default:
+        color = AppColors.textHint;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text('${status.emoji} ${status.label}',
+        style: TextStyle(
+          fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final Color color;
+  final Widget child;
+  const _SectionCard({
+    required this.title,
+    this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CostingSectionHeader(title: title, subtitle: subtitle, icon: icon, color: color),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+// A compact table-row style editable cost line: label + helper on the left,
+// a small currency field on the right — the closest honest mapping of this
+// data model (one lump cost per category) onto the mockup's ingredient rows.
+class _CostLineRow extends StatelessWidget {
+  final String label;
+  final String? helper;
+  final TextEditingController controller;
+  final Color accentColor;
+  final bool isRequired;
+  final ValueChanged<double> onChanged;
+  final String? Function(String?)? validator;
+  final bool showDivider;
+
+  const _CostLineRow({
+    required this.label,
+    this.helper,
+    required this.controller,
+    required this.accentColor,
+    required this.onChanged,
+    this.isRequired = false,
+    this.validator,
+    this.showDivider = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: showDivider ? 12 : 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary),
+                    children: [
+                      TextSpan(text: label),
+                      if (isRequired)
+                        const TextSpan(text: ' *',
+                          style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+                if (helper != null) ...[
+                  const SizedBox(height: 2),
+                  Text(helper!,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 130,
+            child: TextFormField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              autovalidateMode: AutovalidateMode.always,
+              onChanged: (v) => onChanged(double.tryParse(v) ?? 0),
+              validator: validator,
+              style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                isDense: true,
+                prefixText: 'Rp ',
+                prefixStyle: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
+                filled: true,
+                fillColor: AppColors.surfaceVariant,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  borderSide: BorderSide(color: accentColor, width: 1.5),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  borderSide: const BorderSide(color: AppColors.accent, width: 1.3),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TotalLineRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final bool isHighlighted;
+  const _TotalLineRow({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.isHighlighted = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+          style: TextStyle(
+            fontFamily: 'Poppins', fontSize: isHighlighted ? 14 : 13,
+            fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w600,
+            color: isHighlighted ? color : AppColors.textSecondary)),
+        Text(value,
+          style: TextStyle(
+            fontFamily: 'Poppins', fontSize: isHighlighted ? 16 : 14,
+            fontWeight: FontWeight.w800, color: color)),
+      ],
+    );
+  }
+}
+
+class _OperatingExpenseInfoCard extends StatelessWidget {
+  final OperatingExpenseModel expense;
+  const _OperatingExpenseInfoCard({required this.expense});
+
+  @override
+  Widget build(BuildContext context) {
+    if (expense.id.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Operating Expense Breakdown — ${expense.periodLabel}',
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accent)),
+          const SizedBox(height: 8),
+          _ExpenseLine('Total Labor', expense.totalLaborCost),
+          _ExpenseLine('Total Utilities', expense.totalUtilityCost),
+          _ExpenseLine('Rent & Overhead', expense.totalOverheadCost),
+          const Divider(height: 12, color: AppColors.border),
+          _ExpenseLine('Total OpEx / month', expense.totalOperatingExpense, bold: true),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Estimated portions/month',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+              Text('${expense.estimatedPortionsSoldMonthly} portions',
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+            ],
+          ),
+          _ExpenseLine('Allocated per portion', expense.operatingCostPerPortion, bold: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpenseLine extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool bold;
+  const _ExpenseLine(this.label, this.value, {this.bold = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      fontFamily: 'Poppins', fontSize: 12,
+      fontWeight: bold ? FontWeight.w800 : FontWeight.w400,
+      color: bold ? AppColors.accent : AppColors.textSecondary);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: style),
+          Text(formatIdr(value), style: style),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIGHT COLUMN — Financial Summary panel
+// ─────────────────────────────────────────────────────────────────────────────
+class _FinancialSummaryPanel extends StatelessWidget {
+  final CostingModel result;
+  final TextEditingController currentPriceCtrl;
+  final TextEditingController targetMarginCtrl;
+  final CostingNotifier notifier;
+  final bool isSaving;
+  final VoidCallback onSave;
+
+  const _FinancialSummaryPanel({
+    required this.result,
+    required this.currentPriceCtrl,
+    required this.targetMarginCtrl,
+    required this.notifier,
+    required this.isSaving,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final marginOk = result.actualProfitMarginPercent >= result.targetProfitMarginPercent;
+    final marginColor = result.currentSellingPrice <= 0
+        ? AppColors.textHint
+        : (marginOk ? AppColors.available : AppColors.accent);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Financial Summary',
+            style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          const SizedBox(height: 16),
+
+          const Text('TOTAL FOOD COST',
+            style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+              letterSpacing: 0.4, color: AppColors.textSecondary)),
+          const SizedBox(height: 2),
+          Text(formatIdr(result.totalDirectCost),
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.accent)),
+          const SizedBox(height: 16),
+
+          _MarginSlider(
+            value: double.tryParse(targetMarginCtrl.text) ?? 30,
+            controller: targetMarginCtrl,
+            onChanged: (v) {
+              targetMarginCtrl.text = v.toStringAsFixed(0);
+              notifier.updateLiveTargetMargin(v);
+            },
+          ),
+          const SizedBox(height: 14),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('SUGGESTED PRICE',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4, color: AppColors.textSecondary)),
+                  Text('Target ${result.targetProfitMarginPercent.toStringAsFixed(0)}% margin',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
+                ],
+              ),
+              Text(formatIdr(result.recommendedSellingPriceRounded),
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(color: AppColors.border, height: 1),
+          const SizedBox(height: 16),
+
+          const Text('ACTUAL SELLING PRICE',
+            style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+              letterSpacing: 0.4, color: AppColors.textSecondary)),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: currentPriceCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            autovalidateMode: AutovalidateMode.always,
+            onChanged: (v) => notifier.updateLiveCurrentPrice(double.tryParse(v) ?? 0),
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return 'Required';
+              final n = double.tryParse(v);
+              if (n == null) return 'Invalid';
+              if (n <= 0) return 'Selling price must be greater than 0';
+              return null;
+            },
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              isDense: true,
+              prefixText: 'Rp ',
+              prefixStyle: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+              filled: true,
+              fillColor: AppColors.surfaceVariant,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                borderSide: const BorderSide(color: AppColors.available, width: 1.5),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                borderSide: const BorderSide(color: AppColors.accent, width: 1.3),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: marginColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              border: Border.all(color: marginColor.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('GROSS MARGIN',
+                        style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4, color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text(formatIdr(result.profitPerPortion),
+                        style: const TextStyle(
+                          fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text('MARGIN %',
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+                        letterSpacing: 0.4, color: AppColors.textSecondary)),
+                    const SizedBox(height: 2),
+                    Text(formatPct(result.actualProfitMarginPercent),
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w800, color: marginColor)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          FilledButton.icon(
+            onPressed: isSaving ? null : onSave,
+            icon: isSaving
+                ? const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.save_rounded, size: 18),
+            label: Text(isSaving ? 'Saving...' : 'SAVE COSTING',
+              style: const TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.4)),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarginSlider extends StatelessWidget {
+  final double value;
+  final TextEditingController controller;
+  final ValueChanged<double> onChanged;
+
+  const _MarginSlider({
+    required this.value,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Target Profit Margin',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.available.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+              ),
+              child: Text('${value.toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.available)),
+            ),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: AppColors.available,
+            thumbColor: AppColors.available,
+            overlayColor: AppColors.available.withValues(alpha: 0.15),
+            inactiveTrackColor: AppColors.border,
+          ),
+          child: Slider(
+            value: value.clamp(5, 80),
+            min: 5, max: 80, divisions: 75,
+            onChanged: onChanged,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -689,7 +1377,7 @@ class _MenuListTabState extends ConsumerState<_MenuListTab> {
     final notifier = ref.read(costingProvider.notifier);
 
     if (state.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
 
     final filtered = notifier.getFilteredCostings(
@@ -698,32 +1386,34 @@ class _MenuListTabState extends ConsumerState<_MenuListTab> {
       sortByMarginAsc: true,
     );
 
-    return Column(
-      children: [
-        // Filter bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CostingSummaryCard(summary: state.summary),
+          const SizedBox(height: 20),
+
+          // Filter bar
+          Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _searchCtrl,
                   onChanged: (_) => setState(() {}),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search menu...',
-                    prefixIcon: const Icon(Icons.search, size: 18),
+                    hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
+                    prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
                     filled: true,
-                    fillColor: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
-                        .withValues(alpha: 0.4),
+                    fillColor: AppColors.surfaceVariant,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                       borderSide: BorderSide.none,
                     ),
                     isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
                 ),
               ),
@@ -731,384 +1421,90 @@ class _MenuListTabState extends ConsumerState<_MenuListTab> {
               PopupMenuButton<CostingStatus?>(
                 initialValue: _filterStatus,
                 onSelected: (v) => setState(() => _filterStatus = v),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: null, child: Text('All')),
-                  const PopupMenuItem(
-                      value: CostingStatus.healthy, child: Text('🟢 Healthy')),
-                  const PopupMenuItem(
-                      value: CostingStatus.warning,
-                      child: Text('🟡 Needs Review')),
-                  const PopupMenuItem(
-                      value: CostingStatus.underpriced,
-                      child: Text('🔴 Too Low')),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: null, child: Text('All')),
+                  PopupMenuItem(value: CostingStatus.healthy, child: Text('🟢 Healthy')),
+                  PopupMenuItem(value: CostingStatus.warning, child: Text('🟡 Needs Review')),
+                  PopupMenuItem(value: CostingStatus.underpriced, child: Text('🔴 Too Low')),
                 ],
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
-                        .withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.filter_list_rounded, size: 18),
+                      const Icon(Icons.filter_list_rounded, size: 18, color: AppColors.textSecondary),
                       const SizedBox(width: 4),
-                      Text(
-                        _filterStatus?.label ?? 'Filter',
-                        style: const TextStyle(fontSize: 13),
-                      ),
+                      Text(_filterStatus?.label ?? 'Filter',
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textPrimary)),
                     ],
                   ),
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
 
-        // List
-        Expanded(
-          child: filtered.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inbox_rounded, size: 48, color: Colors.grey),
-                      SizedBox(height: 8),
-                      Text('No costing data yet',
-                          style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                )
-              : ListView.separated(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final costing = filtered[i];
-                    return CostingListTile(
-                      costing: costing,
-                      onTap: () => widget.onSelectCosting(costing),
-                      onDelete: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: const Text('Delete Costing?'),
-                            content: Text(
-                                'The costing data for "${costing.menuItemName}" will be deleted.'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('Cancel'),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                style: FilledButton.styleFrom(
-                                    backgroundColor:
-                                        Theme.of(context).colorScheme.error),
-                                child: const Text('Delete'),
-                              ),
-                            ],
+          // List
+          if (filtered.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.inbox_rounded, size: 48, color: AppColors.textHint),
+                    SizedBox(height: 8),
+                    Text('No costing data yet',
+                        style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, i) {
+                final costing = filtered[i];
+                return CostingListTile(
+                  costing: costing,
+                  onTap: () => widget.onSelectCosting(costing),
+                  onDelete: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
+                        title: const Text('Delete Costing?',
+                          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                        content: Text(
+                            'The costing data for "${costing.menuItemName}" will be deleted.',
+                            style: const TextStyle(fontFamily: 'Poppins')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
                           ),
-                        );
-                        if (confirm == true && context.mounted) {
-                          await notifier.deleteCosting(costing.id);
-                        }
-                      },
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: FilledButton.styleFrom(backgroundColor: AppColors.accent),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
                     );
+                    if (confirm == true && context.mounted) {
+                      await notifier.deleteCosting(costing.id);
+                    }
                   },
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper Widgets (don't need provider access → remain StatelessWidget)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SubtotalRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  final bool isHighlighted;
-
-  const _SubtotalRow({
-    required this.label,
-    required this.value,
-    required this.color,
-    this.isHighlighted = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w600,
-              fontSize: isHighlighted ? 14 : 13,
+                );
+              },
             ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w800,
-              fontSize: isHighlighted ? 16 : 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MarginSlider extends StatelessWidget {
-  final String label;
-  final double value;
-  final TextEditingController controller;
-  final ValueChanged<double> onChanged;
-
-  const _MarginSlider({
-    required this.label,
-    required this.value,
-    required this.controller,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2E7D32).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '${value.toStringAsFixed(0)}%',
-                style: const TextStyle(
-                  color: Color(0xFF2E7D32),
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-        Slider(
-          value: value.clamp(5, 80),
-          min: 5,
-          max: 80,
-          divisions: 75,
-          activeColor: const Color(0xFF2E7D32),
-          onChanged: onChanged,
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('5%',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline)),
-            Text('Ideal: 30-50% for restaurants',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline)),
-            Text('80%',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline)),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _RecommendedPriceBox extends StatelessWidget {
-  final CostingModel costing;
-
-  const _RecommendedPriceBox({required this.costing});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: const Color(0xFF2E7D32).withValues(alpha: 0.4), width: 1.5),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.lightbulb_rounded,
-              color: Color(0xFF2E7D32), size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Recommended Selling Price',
-                  style: TextStyle(
-                    color: Color(0xFF2E7D32),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  formatIdr(costing.recommendedSellingPriceRounded),
-                  style: const TextStyle(
-                    color: Color(0xFF2E7D32),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 22,
-                  ),
-                ),
-                Text(
-                  'Already rounded to the nearest Rp 500',
-                  style: TextStyle(
-                    color: const Color(0xFF2E7D32).withValues(alpha: 0.7),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OperatingExpenseInfoCard extends StatelessWidget {
-  final OperatingExpenseModel expense;
-
-  const _OperatingExpenseInfoCard({required this.expense});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (expense.id.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF6A1B9A).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF6A1B9A).withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '📊 Operating Expense Breakdown — ${expense.periodLabel}',
-            style: const TextStyle(
-              color: Color(0xFF6A1B9A),
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _ExpenseLine('Total Labor', expense.totalLaborCost),
-          _ExpenseLine('Total Utilities', expense.totalUtilityCost),
-          _ExpenseLine('Rent & Overhead', expense.totalOverheadCost),
-          const Divider(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Total OpEx / month',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF6A1B9A))),
-              Text(formatIdr(expense.totalOperatingExpense),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF6A1B9A))),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Estimated portions/month',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
-              Text('${expense.estimatedPortionsSoldMonthly} portions',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('⚡ Allocated per portion',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF6A1B9A))),
-              Text(formatIdr(expense.operatingCostPerPortion),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF6A1B9A))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExpenseLine extends StatelessWidget {
-  final String label;
-  final double value;
-
-  const _ExpenseLine(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.outline)),
-          Text(formatIdr(value),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.outline)),
         ],
       ),
     );
@@ -1160,24 +1556,26 @@ class _MenuPickerSheetState extends ConsumerState<_MenuPickerSheet> {
                 child: Container(
                   width: 40, height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: AppColors.border,
                     borderRadius: BorderRadius.circular(4)),
                 ),
               ),
               const SizedBox(height: 12),
               const Text('Select Menu',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
               const SizedBox(height: 8),
               TextField(
                 controller: _searchCtrl,
                 onChanged: (_) => setState(() {}),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search menu...',
-                  prefixIcon: const Icon(Icons.search, size: 18),
+                  hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
+                  prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                  fillColor: AppColors.surfaceVariant,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                     borderSide: BorderSide.none,
                   ),
                   isDense: true,
@@ -1187,8 +1585,9 @@ class _MenuPickerSheetState extends ConsumerState<_MenuPickerSheet> {
               const SizedBox(height: 8),
               Expanded(
                 child: menusAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('Failed to load menu: $e')),
+                  loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                  error: (e, _) => Center(child: Text('Failed to load menu: $e',
+                      style: const TextStyle(fontFamily: 'Poppins'))),
                   data: (menus) {
                     var filtered = widget.branchId == null
                         ? menus
@@ -1204,29 +1603,29 @@ class _MenuPickerSheetState extends ConsumerState<_MenuPickerSheet> {
                     if (filtered.isEmpty) {
                       return const Center(
                         child: Text('No menu items in this branch yet.',
-                            style: TextStyle(color: Colors.grey)),
+                            style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
                       );
                     }
 
                     return ListView.separated(
                       controller: scrollController,
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: AppColors.border),
                       itemBuilder: (context, i) {
                         final m = filtered[i];
                         return ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
                             child: Text(
                               m.name.isNotEmpty ? m.name[0].toUpperCase() : '?',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: const TextStyle(
+                                color: AppColors.primary, fontWeight: FontWeight.w700),
                             ),
                           ),
-                          title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text(formatIdr(m.price), style: const TextStyle(fontSize: 12)),
+                          title: Text(m.name,
+                              style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                          subtitle: Text(formatIdr(m.price),
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
                           onTap: () => Navigator.pop(context, m),
                         );
                       },
