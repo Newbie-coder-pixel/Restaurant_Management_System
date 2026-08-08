@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,8 +6,9 @@ import '../../../shared/models/order_model.dart';
 import '../../../shared/models/order_event_model.dart';
 import '../../../shared/providers/order_events_provider.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/router/app_router.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/staff_shell.dart';
 import '../../../core/models/staff_role.dart';
 import '../services/kitchen_inventory_service.dart';
 
@@ -18,7 +20,6 @@ class KDSScreen extends ConsumerStatefulWidget {
 
 class _KDSScreenState extends ConsumerState<KDSScreen> {
   List<OrderModel> _orders = [];
-  int _readyCount = 0;
   int _newOrderCount = 0;
   List<Map<String, dynamic>> _lowStockItems = [];
   bool _isLoading = true;
@@ -36,9 +37,15 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
 
   bool get _isMultiBranchRole => _userRole == StaffRole.superadmin;
 
+  // Purely decorative wall-clock tick so wait-time/overdue labels stay live.
+  Timer? _tickTimer;
+
   @override
   void initState() {
     super.initState();
+    _tickTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -116,6 +123,8 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     try {
       // FIX: Explicitly select columns so order_type is guaranteed to be fetched
       // (using * together with a relation sometimes doesn't include all columns)
+      // Includes 'ready' alongside 'new'/'created'/'preparing' so the board's
+      // "Ready for Runner" column can render real tickets, not just a count.
       var query = Supabase.instance.client
           .from('orders')
           .select('''
@@ -129,7 +138,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               quantity, subtotal, special_requests, status
             )
           ''')
-          .inFilter('status', ['new', 'created', 'preparing'])
+          .inFilter('status', ['new', 'created', 'preparing', 'ready'])
           .gt('total_amount', 0); // exclude empty orders (0 items / Rp 0)
 
       if (targetBranch != null) {
@@ -137,17 +146,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       }
 
       final res = await query.order('created_at');
-
-      var readyQuery = Supabase.instance.client
-          .from('orders')
-          .select('id')
-          .eq('status', 'ready');
-
-      if (targetBranch != null) {
-        readyQuery = readyQuery.eq('branch_id', targetBranch);
-      }
-
-      final readyRes = await readyQuery;
 
       // ── Fetch low stock items ──────────────────────────────────
       List<Map<String, dynamic>> lowStock = [];
@@ -178,7 +176,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
               .map((e) => OrderModel.fromJson(e))
               .where((o) => o.items.isNotEmpty) // double-check: skip orders with no items
               .toList();
-          _readyCount = (readyRes as List).length;
           _lowStockItems = lowStock; // FIX Bug 1: assign to state so the banner shows
           _isLoading = false;
         });
@@ -225,6 +222,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   @override
   void dispose() {
     _channel?.unsubscribe();
+    _tickTimer?.cancel();
     super.dispose();
   }
 
@@ -337,8 +335,6 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
       order.status == OrderStatus.new_ || order.status == OrderStatus.created;
 
   bool _isQrOrder(OrderModel order) => order.orderType == 'qr_order';
-  bool _isAppOrder(OrderModel order) =>
-      order.orderType == 'app_order' || order.orderType == 'takeaway';
 
   String _orderSourceLabel(OrderModel order) {
     if (_isQrOrder(order)) return 'QR Order';
@@ -347,64 +343,110 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     return 'Staff Order';
   }
 
+  List<OrderModel> get _newOrders => _orders.where(_isNewOrder).toList();
+  List<OrderModel> get _preparingOrders =>
+      _orders.where((o) => o.status == OrderStatus.preparing).toList();
+  List<OrderModel> get _readyOrders =>
+      _orders.where((o) => o.status == OrderStatus.ready).toList();
+
+  bool _isOverdue(OrderModel order) {
+    if (order.status != OrderStatus.preparing) return false;
+    final estimate = order.estimatedPrepMinutes ?? 20;
+    return DateTime.now().difference(order.createdAt).inMinutes > estimate;
+  }
+
+  String _elapsedLabel(DateTime since) {
+    final elapsed = DateTime.now().difference(since);
+    final mm = elapsed.inMinutes.remainder(100).toString().padLeft(2, '0');
+    final ss = elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  String _ticketLabel(OrderModel order) =>
+      order.tableNumber != null ? 'T-${order.tableNumber}' : '#${order.orderNumber}';
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    return StaffShell(
+      pageTitle: 'Kitchen Display',
+      activeRoute: AppRoutes.kitchen,
+      topBarActions: _topBarActions(),
+      body: Column(children: [
+        if (_newOrderCount > 0) _buildNewOrderBanner(),
+        if (_lowStockItems.isNotEmpty) _buildLowStockBanner(),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : _orders.isEmpty
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      color: AppColors.primary,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildColumn(
+                              title: 'New',
+                              headerColor: AppColors.primary,
+                              headerTextColor: Colors.white,
+                              orders: _newOrders,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            _buildColumn(
+                              title: 'In Progress',
+                              headerColor: AppColors.textSecondary,
+                              headerTextColor: Colors.white,
+                              orders: _preparingOrders,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            _buildColumn(
+                              title: 'Ready for Runner',
+                              headerColor: AppColors.statusClosed,
+                              headerTextColor: AppColors.textPrimary,
+                              orders: _readyOrders,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+        ),
+      ]),
+    );
+  }
 
-    return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: colorScheme.surfaceContainerLowest,
-      appBar: AppBar(
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        title: Row(children: [
-          Container(
-            width: 10, height: 10,
+  // ── Top bar actions: branch filter (superadmin) + active/refresh ────────
+  List<Widget> _topBarActions() {
+    return [
+      if (_isMultiBranchRole)
+        Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: _orders.isNotEmpty ? const Color(0xFF4CAF50) : Colors.grey,
-              shape: BoxShape.circle,
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              border: Border.all(color: AppColors.border),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text('Kitchen (KDS)',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onSurface,
-            )),
-        ]),
-        actions: [
-          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
-          if (_isMultiBranchRole)
-            DropdownButtonHideUnderline(
+            child: DropdownButtonHideUnderline(
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: AppColors.darkSurface,
-                iconEnabledColor: colorScheme.onSurface.withValues(alpha: 0.5),
-                icon: Icon(Icons.keyboard_arrow_down,
-                    size: 16, color: colorScheme.onSurface.withValues(alpha: 0.6)),
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: colorScheme.onSurface),
+                icon: const Icon(Icons.keyboard_arrow_down,
+                    size: 16, color: AppColors.textSecondary),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
                 items: [
-                  DropdownMenuItem<String?>(
+                  const DropdownMenuItem<String?>(
                     value: null,
                     child: Text('All Branches',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: colorScheme.onSurface.withValues(alpha: 0.7)))),
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12))),
                   ..._branches.map((b) => DropdownMenuItem<String?>(
                         value: b.id,
                         child: Text(b.name,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.white)))),
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)))),
                 ],
                 onChanged: (val) {
                   setState(() {
@@ -416,82 +458,36 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
                 },
               ),
             ),
-          if (_readyCount > 0)
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green.shade600,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.room_service_outlined, size: 13, color: Colors.white),
-                const SizedBox(width: 4),
-                Text('$_readyCount Ready to Deliver',
-                  style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  )),
-              ]),
-            ),
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: _orders.isEmpty ? colorScheme.surfaceContainerHighest : AppColors.accent,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text('${_orders.length} Active',
-              style: TextStyle(
-                fontFamily: 'Poppins', fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: _orders.isEmpty ? colorScheme.outline : Colors.white,
-              )),
           ),
-          IconButton(
-            icon: Icon(Icons.refresh, color: colorScheme.onSurface),
-            onPressed: _load),
-        ],
+        ),
+      Container(
+        margin: const EdgeInsets.only(right: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: _orders.isEmpty ? AppColors.surfaceVariant : AppColors.accent,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+        ),
+        child: Text('${_orders.length} Active',
+          style: TextStyle(
+            fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700,
+            color: _orders.isEmpty ? AppColors.textSecondary : Colors.white)),
       ),
-      body: Column(children: [
-            if (_newOrderCount > 0) _buildNewOrderBanner(colorScheme),
-            if (_readyCount > 0) _buildReadyBanner(colorScheme),
-            if (_lowStockItems.isNotEmpty) _buildLowStockBanner(),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _orders.isEmpty
-                      ? _buildEmptyState(colorScheme)
-                      : RefreshIndicator(
-                          onRefresh: _load,
-                          child: GridView.builder(
-                            padding: const EdgeInsets.all(16),
-                            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 340,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              childAspectRatio: 0.70,
-                            ),
-                            itemCount: _orders.length,
-                            itemBuilder: (_, i) => _buildKDSCard(_orders[i], colorScheme),
-                          ),
-                        ),
-            ),
-          ]),
-    );
+      IconButton(
+        icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+        onPressed: _load,
+      ),
+    ];
   }
 
-  Widget _buildNewOrderBanner(ColorScheme colorScheme) {
+  Widget _buildNewOrderBanner() {
     return InkWell(
       onTap: () => setState(() => _newOrderCount = 0),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        color: colorScheme.primary,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 10),
+        color: AppColors.primary,
         child: Row(children: [
-          const Icon(Icons.notifications_active_rounded,
-              color: Colors.white, size: 18),
+          const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -509,34 +505,14 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     );
   }
 
-  Widget _buildReadyBanner(ColorScheme colorScheme) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: Colors.green.shade600,
-      child: Row(children: [
-        const Icon(Icons.room_service_outlined, color: Colors.white, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            '$_readyCount orders ready to deliver — waiter, check the Order Screen!',
-            style: const TextStyle(
-              fontFamily: 'Poppins', color: Colors.white,
-              fontWeight: FontWeight.w600, fontSize: 13),
-          ),
-        ),
-      ]),
-    );
-  }
-
-Widget _buildLowStockBanner() {
+  Widget _buildLowStockBanner() {
     final names = _lowStockItems
         .map((i) => '${i['name']} (${i['unit']})')
         .join(', ');
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: Colors.orange.shade700,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 10),
+      color: AppColors.accentOrange,
       child: Row(children: [
         const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
         const SizedBox(width: 10),
@@ -553,8 +529,8 @@ Widget _buildLowStockBanner() {
       ]),
     );
   }
-  
-  Widget _buildEmptyState(ColorScheme colorScheme) {
+
+  Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -562,308 +538,234 @@ Widget _buildLowStockBanner() {
           Container(
             width: 100, height: 100,
             decoration: BoxDecoration(
-              color: Colors.green.shade50, shape: BoxShape.circle),
-            child: Icon(Icons.check_circle_outline,
-              size: 60, color: Colors.green.shade400),
+              color: AppColors.primary.withValues(alpha: 0.10), shape: BoxShape.circle),
+            child: const Icon(Icons.check_circle_outline, size: 60, color: AppColors.primary),
           ),
           const SizedBox(height: 20),
-          Text('All orders done! 🎉',
+          const Text('All orders done! 🎉',
             style: TextStyle(
               fontFamily: 'Poppins', fontSize: 20,
-              fontWeight: FontWeight.w700, color: colorScheme.onSurface)),
+              fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
           const SizedBox(height: 8),
-          Text('Waiting for new orders...',
-            style: TextStyle(fontFamily: 'Poppins', color: colorScheme.outline)),
+          const Text('Waiting for new orders...',
+            style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
         ],
       ),
     );
   }
 
-  Widget _buildKDSCard(OrderModel order, ColorScheme colorScheme) {
-    final isNew     = _isNewOrder(order);
-    final isQr      = _isQrOrder(order);
-    final isApp     = _isAppOrder(order);
-    final label     = _orderSourceLabel(order);
+  // ── Kanban column ────────────────────────────────────────────────────────
+  Widget _buildColumn({
+    required String title,
+    required Color headerColor,
+    required Color headerTextColor,
+    required List<OrderModel> orders,
+  }) {
+    return SizedBox(
+      width: 380,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: headerColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusMd)),
+            ),
+            child: Row(children: [
+              Text(title.toUpperCase(),
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 15,
+                  fontWeight: FontWeight.w800, letterSpacing: 0.4,
+                  color: headerTextColor)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                ),
+                child: Text(
+                  orders.length == 1 ? '1 Order' : '${orders.length} Orders',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11,
+                    fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(AppSpacing.radiusMd)),
+              ),
+              child: orders.isEmpty
+                  ? Center(
+                      child: Text('No orders',
+                        style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 13,
+                          color: AppColors.textSecondary.withValues(alpha: 0.7))))
+                  : ListView.separated(
+                      itemCount: orders.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (_, i) => _buildTicket(orders[i]),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    // Color per type: QR=purple, App=teal green, Staff=blue
-    final Color badgeColor = isQr
-        ? const Color(0xFF7C3AED)
-        : isApp
-            ? const Color(0xFF0F9D58)
-            : AppColors.primary;
-
-    final IconData badgeIcon = isQr
-        ? Icons.qr_code_scanner
-        : isApp
-            ? Icons.smartphone_outlined
-            : Icons.person_outline;
-
-    final Color statusColor = isNew
-        ? (isQr ? const Color(0xFF7C3AED) : AppColors.orderNew)
-        : AppColors.orderPreparing;
+  // ── Ticket card ───────────────────────────────────────────────────────────
+  Widget _buildTicket(OrderModel order) {
+    final isNew    = _isNewOrder(order);
+    final isReady  = order.status == OrderStatus.ready;
+    final overdue  = _isOverdue(order);
+    final source   = _orderSourceLabel(order);
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8, offset: const Offset(0, 3)),
-        ],
+        color: overdue ? AppColors.accent.withValues(alpha: 0.08) : AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(
+          color: overdue ? AppColors.accent : AppColors.border,
+          width: overdue ? 1.6 : 1),
       ),
-      child: Column(children: [
-        // ── Header ───────────────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.10),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-          ),
-          child: Row(children: [
-            Container(width: 8, height: 8,
-              decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text('# ${order.orderNumber}',
-                style: TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-                  fontSize: 15, color: colorScheme.onSurface))),
-            if (order.tableNumber != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8)),
-                child: Text('Table ${order.tableNumber}',
-                  style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onPrimaryContainer))),
-          ]),
-        ),
-
-        // ── Sub-header ───────────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLowest,
-            border: Border(
-              bottom: BorderSide(color: colorScheme.outlineVariant, width: 0.5)),
-          ),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(badgeIcon, size: 11, color: badgeColor),
-                const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: badgeColor)),
-              ]),
-            ),
-            // ML estimate badge — shown if available
-            if (order.estimatedPrepMinutes != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.35))),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.schedule_rounded, size: 11, color: Colors.orange.shade700),
-                  const SizedBox(width: 3),
-                  Text(
-                    '~${order.estimatedPrepMinutes} min',
-                    style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.orange.shade700)),
-                ]),
-              ),
-            ],
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: statusColor.withValues(alpha: 0.35))),
-              child: Text(
-                isNew ? 'Waiting to Cook' : 'Cooking',
-                style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 10,
-                  fontWeight: FontWeight.w700, color: statusColor)),
-            ),
-          ]),
-        ),
-
-        // ── Items list ────────────────────────────────────────────────────────
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-            children: order.items.map((item) {
-              final notes       = item.specialRequests;
-              final itemReady   = item.status == OrderItemStatus.ready;
-              // Per-item button only shows while the order is being cooked (preparing)
-              final showItemBtn = !isNew && !itemReady;
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: itemReady
-                      ? Colors.green.shade50
-                      : colorScheme.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: itemReady
-                        ? Colors.green.shade200
-                        : colorScheme.outlineVariant,
-                    width: 0.8),
-                ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Header: ticket id + wait time / overdue / done ────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Main item row ────────────────────────────────────
-                    Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        // Badge qty
-                        Container(
-                          width: 30, height: 30,
-                          decoration: BoxDecoration(
-                            color: itemReady
-                                ? Colors.green.withValues(alpha: 0.15)
-                                : statusColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8)),
-                          child: Center(child: Text('${item.quantity}',
-                            style: TextStyle(
-                              fontFamily: 'Poppins', fontWeight: FontWeight.w800,
-                              color: itemReady ? Colors.green.shade700 : statusColor,
-                              fontSize: 14)))),
-                        const SizedBox(width: 10),
-                        Expanded(child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(children: [
-                              Expanded(
-                                child: Text(item.menuItemName,
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins', fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                    color: itemReady
-                                        ? Colors.green.shade700
-                                        : colorScheme.onSurface,
-                                    decoration: itemReady
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                  ))),
-                              if (itemReady)
-                                Icon(Icons.check_circle,
-                                  size: 16, color: Colors.green.shade600),
-                            ]),
-                            if (notes != null && notes.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.shade50,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.amber.shade200)),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Icon(Icons.edit_note,
-                                        size: 13, color: Colors.amber.shade700),
-                                      const SizedBox(width: 4),
-                                      Flexible(child: Text(notes,
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins', fontSize: 11,
-                                          color: Colors.amber.shade800,
-                                          fontWeight: FontWeight.w500))),
-                                    ]),
-                                )),
-                          ])),
-                      ]),
-                    ),
-
-                    // ── Per-item "Ready to Serve" button ────────────────
-                    if (showItemBtn)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                        child: SizedBox(
-                          width: double.infinity, height: 30,
-                          child: ElevatedButton.icon(
-                            onPressed: () => _markItemReady(item.id, order.id),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green.shade500,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(7))),
-                            icon: const Icon(Icons.check_rounded, size: 13),
-                            label: const Text('Ready to Serve',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11)),
-                          ),
-                        ),
-                      ),
+                    Text(_ticketLabel(order),
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: overdue
+                            ? AppColors.accent
+                            : (isReady ? AppColors.textSecondary : AppColors.textPrimary))),
+                    const SizedBox(height: 2),
+                    Text(source,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 12,
+                        fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                   ],
                 ),
-              );
-            }).toList(),
+              ),
+              if (isReady)
+                const Icon(Icons.check_circle_rounded, color: AppColors.available, size: 26)
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(_elapsedLabel(order.createdAt),
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: overdue ? AppColors.accent : AppColors.textPrimary)),
+                    Text(overdue ? 'OVERDUE' : (isNew ? 'Wait Time' : 'Cooking'),
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 10,
+                        fontWeight: FontWeight.w700, letterSpacing: 0.4,
+                        color: overdue ? AppColors.accent : AppColors.textSecondary)),
+                  ],
+                ),
+            ]),
           ),
-        ),
+          const Divider(height: 1, color: AppColors.border),
 
-        // ── Action button ─────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-          child: SizedBox(
-            width: double.infinity, height: 44,
-            child: isNew
-                ? ElevatedButton.icon(
-                    onPressed: () => _markPreparing(order.id),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.orderPreparing,
-                      foregroundColor: Colors.white, elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10))),
-                    icon: const Icon(Icons.local_fire_department_outlined, size: 16),
-                    label: const Text('Start Cooking',
+          // ── Items ────────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: order.items.map((item) {
+                final notes     = item.specialRequests;
+                final itemReady = item.status == OrderItemStatus.ready;
+                // Per-item toggle only useful while the order is cooking.
+                final showToggle = order.status == OrderStatus.preparing && !itemReady;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${item.quantity}x',
                       style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600, fontSize: 13)))
-                : ElevatedButton.icon(
-                    onPressed: () => _markReady(order.id),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade600,
-                      foregroundColor: Colors.white, elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10))),
-                    icon: const Icon(Icons.check_circle_outline, size: 16),
-                    label: const Text('✓ Ready to Serve',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700, fontSize: 13))),
+                        fontFamily: 'Poppins', fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: itemReady ? AppColors.textSecondary : AppColors.accent)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.menuItemName,
+                            style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: itemReady ? AppColors.textSecondary : AppColors.textPrimary,
+                              decoration: itemReady ? TextDecoration.lineThrough : null)),
+                          if (notes != null && notes.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text('- $notes',
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins', fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                  color: AppColors.textSecondary)),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (showToggle)
+                      IconButton(
+                        icon: const Icon(Icons.check_circle_outline_rounded, size: 22),
+                        color: AppColors.available,
+                        tooltip: 'Ready to serve',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _markItemReady(item.id, order.id),
+                      )
+                    else if (itemReady)
+                      const Icon(Icons.check_circle_rounded, size: 20, color: AppColors.available),
+                  ]),
+                );
+              }).toList(),
+            ),
           ),
-        ),
-      ]),
+
+          // ── Primary action ───────────────────────────────────────────────
+          if (!isReady)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
+              child: SizedBox(
+                width: double.infinity, height: 48,
+                child: ElevatedButton(
+                  onPressed: () => isNew ? _markPreparing(order.id) : _markReady(order.id),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isNew ? AppColors.accent : AppColors.available,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+                  ),
+                  child: Text(isNew ? 'BUMP' : 'MARK READY',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                      fontSize: 14, letterSpacing: 0.4)),
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 14),
+        ],
+      ),
     );
   }
 }

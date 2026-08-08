@@ -40,6 +40,9 @@ const staffShellSidebarItems = [
     label: 'Orders', icon: Icons.receipt_long_rounded,
     route: AppRoutes.order, requiredFeature: 'Order'),
   StaffShellSidebarItem(
+    label: 'Kitchen', icon: Icons.soup_kitchen_rounded,
+    route: AppRoutes.kitchen, requiredFeature: 'Kitchen (KDS)'),
+  StaffShellSidebarItem(
     label: 'Inventory', icon: Icons.inventory_2_rounded,
     route: AppRoutes.inventory, requiredFeature: 'Inventory'),
   StaffShellSidebarItem(
