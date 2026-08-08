@@ -17,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/models/order_model.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../payment/midtrans/midtrans_provider.dart';
 import '../../payment/models/midtrans_model.dart' show MidtransPaymentStatus, MidtransPaymentMethod;
 import '../../payment/services/receipt_service.dart';
@@ -164,135 +165,179 @@ class _QrPayNowScreenState extends ConsumerState<QrPayNowScreen> {
   @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(_payOrderProvider(widget.orderId));
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
-      appBar: AppBar(
-        title: const Text('Pay Now', style: TextStyle(fontFamily: 'Poppins')),
-        leading: BackButton(onPressed: () => context.pop()),
-      ),
-      body: orderAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.wifi_off_outlined, size: 48),
-              const SizedBox(height: 12),
-              Text('Failed to load order: $e', textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () => ref.invalidate(_payOrderProvider(widget.orderId)),
-                child: const Text('Try Again'),
-              ),
-            ]),
-          ),
-        ),
-        data: (order) {
-          // Already settled (e.g. the cashier processed it, or the customer
-          // paid from another device already) — never show a Pay button for
-          // a paid order, so it's structurally impossible to double-charge
-          // from this screen. Checks paymentStatus (order.isPaid), not
-          // status, since status no longer reliably reaches OrderStatus.paid
-          // for every order type (see midtrans-webhook/index.ts).
-          if (order.isPaid) {
-            return _AlreadyPaidView(
-              order: order,
-              onDone: () => _goToTracker(order),
-            );
-          }
-
-          final state = ref.watch(midtransProvider(order.id));
-
-          // Surface token-creation failures explicitly — createSnapToken()
-          // can fail (network, amount mismatch, order already paid
-          // elsewhere, missing branch, etc.) BEFORE the Snap UI ever opens.
-          // That specific failure (step: creatingToken → idle) never reaches
-          // onStatusConfirmed() in _pay(), so without this listener it would
-          // be silent: the loading overlay just disappears and the customer
-          // is left wondering whether anything happened.
-          ref.listen<MidtransState>(midtransProvider(order.id), (previous, next) {
-            if (previous?.step == MidtransFlowStep.creatingToken &&
-                next.step == MidtransFlowStep.idle &&
-                next.errorMessage != null) {
-              _showSnack(next.errorMessage!, isError: true);
-              // The order may already be paid (e.g. the cashier just
-              // processed it) — refresh so _AlreadyPaidView takes over
-              // instead of leaving a stale Pay button on screen.
-              ref.invalidate(_payOrderProvider(order.id));
-            }
-          });
-
-          final overtimeCharge = order.overtimeCharge.toDouble();
-          final total = order.totalAmount + overtimeCharge;
-
-          return Stack(children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Order #${order.orderNumber}',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 12),
-                  _BreakdownCard(order: order, overtimeCharge: overtimeCharge, total: total),
-                  const SizedBox(height: 16),
-                  _InfoBox(cs: cs),
-                  const SizedBox(height: 90),
-                ],
-              ),
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.5)),
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: state.isLoading ? null : () => _pay(order),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                    child: state.isLoading
-                        ? const SizedBox(
-                            width: 20, height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.payment_rounded, size: 20),
-                              const SizedBox(width: 8),
-                              Text('Pay ${_fmtRp(total)}',
-                                  style: const TextStyle(
-                                      fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
-                            ],
-                          ),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _PayNowHeader(onBack: () => context.pop()),
+            Expanded(
+              child: orderAsync.when(
+                loading: () => const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary)),
+                error: (e, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.wifi_off_outlined, size: 48, color: AppColors.textHint),
+                      const SizedBox(height: 12),
+                      Text('Failed to load order: $e',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () => ref.invalidate(_payOrderProvider(widget.orderId)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary, foregroundColor: Colors.white, elevation: 0),
+                        child: const Text('Try Again', style: TextStyle(fontFamily: 'Poppins')),
+                      ),
+                    ]),
                   ),
                 ),
+                data: (order) {
+                  // Already settled (e.g. the cashier processed it, or the customer
+                  // paid from another device already) — never show a Pay button for
+                  // a paid order, so it's structurally impossible to double-charge
+                  // from this screen. Checks paymentStatus (order.isPaid), not
+                  // status, since status no longer reliably reaches OrderStatus.paid
+                  // for every order type (see midtrans-webhook/index.ts).
+                  if (order.isPaid) {
+                    return _AlreadyPaidView(
+                      order: order,
+                      onDone: () => _goToTracker(order),
+                    );
+                  }
+
+                  final state = ref.watch(midtransProvider(order.id));
+
+                  // Surface token-creation failures explicitly — createSnapToken()
+                  // can fail (network, amount mismatch, order already paid
+                  // elsewhere, missing branch, etc.) BEFORE the Snap UI ever opens.
+                  // That specific failure (step: creatingToken → idle) never reaches
+                  // onStatusConfirmed() in _pay(), so without this listener it would
+                  // be silent: the loading overlay just disappears and the customer
+                  // is left wondering whether anything happened.
+                  ref.listen<MidtransState>(midtransProvider(order.id), (previous, next) {
+                    if (previous?.step == MidtransFlowStep.creatingToken &&
+                        next.step == MidtransFlowStep.idle &&
+                        next.errorMessage != null) {
+                      _showSnack(next.errorMessage!, isError: true);
+                      // The order may already be paid (e.g. the cashier just
+                      // processed it) — refresh so _AlreadyPaidView takes over
+                      // instead of leaving a stale Pay button on screen.
+                      ref.invalidate(_payOrderProvider(order.id));
+                    }
+                  });
+
+                  final overtimeCharge = order.overtimeCharge.toDouble();
+                  final total = order.totalAmount + overtimeCharge;
+
+                  return Stack(children: [
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Order #${order.orderNumber}',
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 19,
+                                  fontWeight: FontWeight.w800, color: AppColors.accent)),
+                          const SizedBox(height: 14),
+                          _BreakdownCard(order: order, overtimeCharge: overtimeCharge, total: total),
+                          const SizedBox(height: 16),
+                          const _InfoBox(),
+                          const SizedBox(height: 90),
+                        ],
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 16),
+                        decoration: const BoxDecoration(
+                          color: AppColors.background,
+                          border: Border(top: BorderSide(color: AppColors.border)),
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: ElevatedButton(
+                            onPressed: state.isLoading ? null : () => _pay(order),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.6),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+                              elevation: 0,
+                            ),
+                            child: state.isLoading
+                                ? const SizedBox(
+                                    width: 20, height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text('Pay ${_fmtRp(total)}',
+                                          style: const TextStyle(fontFamily: 'Poppins',
+                                              fontWeight: FontWeight.w700, fontSize: 15.5, color: Colors.white)),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.arrow_forward_rounded, size: 19, color: Colors.white),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (state.isLoading)
+                      Positioned.fill(
+                        child: _LoadingOverlay(
+                          state: state,
+                          onCancel: () => ref.read(midtransProvider(order.id).notifier).reset(),
+                        ),
+                      ),
+                  ]);
+                },
               ),
             ),
-            if (state.isLoading)
-              Positioned.fill(
-                child: _LoadingOverlay(
-                  state: state,
-                  onCancel: () => ref.read(midtransProvider(order.id).notifier).reset(),
-                ),
-              ),
-          ]);
-        },
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Header ─────────────────────────────────────────────────────────────────
+class _PayNowHeader extends StatelessWidget {
+  final VoidCallback onBack;
+  const _PayNowHeader({required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.textPrimary),
+          ),
+          const Expanded(
+            child: Text(
+              'Pay Now',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                  fontWeight: FontWeight.w700, color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(width: 48),
+        ],
       ),
     );
   }
@@ -308,67 +353,67 @@ class _BreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant, width: 0.8),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('${order.items.length} item${order.items.length == 1 ? '' : 's'}',
-              style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurfaceVariant)),
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                  fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
           const SizedBox(height: 8),
           ...order.items.map((item) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(children: [
                   Expanded(
                     child: Text('${item.quantity}× ${item.menuItemName}',
-                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textPrimary)),
                   ),
                   Text(_fmtRp(item.subtotal),
-                      style: const TextStyle(
-                          fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600)),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                          fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                 ]),
               )),
-          const Divider(height: 20, thickness: 0.5),
+          const Divider(color: AppColors.border, height: 20, thickness: 0.5),
           // Same row labels & order as the staff cashier PDF receipt
           // (receipt_service.dart _totalRow calls) so the bill reads
           // identically whether it's self-paid here or printed at the till.
-          _row(cs, 'Subtotal', order.subtotal),
-          _row(cs, 'PB1 (10%)', order.pb1Amount),
-          _row(cs, 'Service (3%)', order.serviceChargeAmount),
-          if (order.discountAmount > 0) _row(cs, 'Discount', -order.discountAmount, isDiscount: true),
-          if (overtimeCharge > 0) _row(cs, 'Extra Dining Time', overtimeCharge),
-          const Divider(height: 20, thickness: 0.5),
+          _row('Subtotal', order.subtotal),
+          _row('PB1 (10%)', order.pb1Amount),
+          _row('Service (3%)', order.serviceChargeAmount),
+          if (order.discountAmount > 0) _row('Discount', -order.discountAmount, isDiscount: true),
+          if (overtimeCharge > 0) _row('Extra Dining Time', overtimeCharge),
+          const Divider(color: AppColors.border, height: 20, thickness: 0.5),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             const Text('Total',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800)),
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                    fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
             Text(_fmtRp(total),
-                style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: cs.primary)),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 20,
+                    fontWeight: FontWeight.w800, color: AppColors.primary)),
           ]),
         ],
       ),
     );
   }
 
-  Widget _row(ColorScheme cs, String label, double amount, {bool isDiscount = false}) {
+  Widget _row(String label, double amount, {bool isDiscount = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: cs.onSurfaceVariant)),
+        Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
         Text(
           isDiscount ? '- ${_fmtRp(amount.abs())}' : _fmtRp(amount),
           style: TextStyle(
             fontFamily: 'Poppins',
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: isDiscount ? Colors.green.shade700 : cs.onSurface,
+            color: isDiscount ? Colors.green.shade700 : AppColors.textPrimary,
           ),
         ),
       ]),
@@ -378,26 +423,25 @@ class _BreakdownCard extends StatelessWidget {
 
 // ─── Info Box ─────────────────────────────────────────────────────────────────
 class _InfoBox extends StatelessWidget {
-  final ColorScheme cs;
-  const _InfoBox({required this.cs});
+  const _InfoBox();
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+        color: AppColors.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
       ),
-      child: Row(children: [
-        Icon(Icons.shield_outlined, size: 18, color: cs.primary),
-        const SizedBox(width: 10),
+      child: const Row(children: [
+        Icon(Icons.shield_outlined, size: 18, color: AppColors.primary),
+        SizedBox(width: 10),
         Expanded(
           child: Text(
             'Secure payment via Midtrans — card, GoPay, ShopeePay, QRIS, or Virtual '
             'Account. Once confirmed, this order is marked paid instantly for staff too.',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: cs.onSurfaceVariant, height: 1.4),
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary, height: 1.4),
           ),
         ),
       ]),
@@ -434,8 +478,8 @@ class _LoadingOverlay extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 40),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 24)],
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -445,22 +489,26 @@ class _LoadingOverlay extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: state.pollingProgress > 0 ? state.pollingProgress : null,
                   borderRadius: BorderRadius.circular(4),
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.surfaceVariant,
                 ),
               )
             else
               const Padding(
                 padding: EdgeInsets.only(bottom: 16),
-                child: CircularProgressIndicator(strokeWidth: 3),
+                child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary),
               ),
-            Icon(icon, size: 36, color: Theme.of(context).colorScheme.primary),
+            Icon(icon, size: 36, color: AppColors.primary),
             const SizedBox(height: 12),
             Text(title,
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                    fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                 textAlign: TextAlign.center),
             if (subtitle.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(subtitle,
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12), textAlign: TextAlign.center),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
+                  textAlign: TextAlign.center),
             ],
             // Only the polling step is cancellable from here — a token has
             // already been created by then. Closing this overlay only stops
@@ -473,7 +521,8 @@ class _LoadingOverlay extends StatelessWidget {
               TextButton(
                 onPressed: onCancel,
                 child: const Text('Close',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                        fontWeight: FontWeight.w600, color: AppColors.accent)),
               ),
             ],
           ]),
@@ -518,20 +567,21 @@ class _PaySuccessSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       expand: false,
-      builder: (context, scrollController) => SingleChildScrollView(
+      builder: (context, scrollController) => Container(
+        color: AppColors.background,
+        child: SingleChildScrollView(
         controller: scrollController,
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 36, height: 4,
             margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
           ),
           Container(
             width: 72, height: 72,
@@ -540,10 +590,11 @@ class _PaySuccessSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           const Text('Payment Successful!',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800)),
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 20,
+                  fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
           const SizedBox(height: 4),
-          Text('Thank you for dining with us — here is your receipt.',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey.shade600),
+          const Text('Thank you for dining with us — here is your receipt.',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
               textAlign: TextAlign.center),
           const SizedBox(height: 20),
           // ── Receipt ────────────────────────────────────────────────────
@@ -551,14 +602,15 @@ class _PaySuccessSheet extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outlineVariant, width: 0.8),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+              border: Border.all(color: AppColors.border),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Text('Order #${order.orderNumber}',
-                    style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14)),
+                    style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                        fontSize: 14, color: AppColors.textPrimary)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -570,7 +622,7 @@ class _PaySuccessSheet extends StatelessWidget {
               ]),
               const SizedBox(height: 2),
               Text('Paid via $paymentMethodLabel · ${_fmtDateTime(paidAt)}',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: cs.onSurfaceVariant)),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
             ]),
           ),
           const SizedBox(height: 12),
@@ -584,10 +636,10 @@ class _PaySuccessSheet extends StatelessWidget {
                     style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                 onPressed: onPrint,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: cs.primary,
-                  side: BorderSide(color: cs.primary),
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
                   minimumSize: const Size(0, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
                 ),
               ),
             ),
@@ -597,16 +649,18 @@ class _PaySuccessSheet extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: onDone,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
                   minimumSize: const Size(0, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+                  elevation: 0,
                 ),
                 child: const Text('Done', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
               ),
             ),
           ]),
         ]),
+        ),
       ),
     );
   }
@@ -621,42 +675,46 @@ class _PayPendingSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      color: AppColors.background,
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 36, height: 4,
           margin: const EdgeInsets.only(bottom: 20),
-          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+          decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
         ),
         Container(
           width: 72, height: 72,
-          decoration: BoxDecoration(color: const Color(0xFFD97706).withValues(alpha: 0.1), shape: BoxShape.circle),
-          child: const Icon(Icons.hourglass_top_rounded, size: 40, color: Color(0xFFD97706)),
+          decoration: BoxDecoration(color: AppColors.accentOrange.withValues(alpha: 0.1), shape: BoxShape.circle),
+          child: const Icon(Icons.hourglass_top_rounded, size: 40, color: AppColors.accentOrange),
         ),
         const SizedBox(height: 16),
         const Text('Awaiting Payment Confirmation',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w700)),
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 20,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         Text(
           'Order #${order.orderNumber} is awaiting payment confirmation. This is normal '
           'for VA transfer or QRIS — it can take a minute.',
-          style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade600, height: 1.5),
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary, height: 1.5),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            icon: const Icon(Icons.refresh_rounded, size: 18),
+            icon: const Icon(Icons.refresh_rounded, size: 18, color: Colors.white),
             label: const Text('Check Payment Status',
-                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white)),
             onPressed: onCheckStatus,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
               minimumSize: const Size(0, 50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+              elevation: 0,
             ),
           ),
         ),
@@ -664,9 +722,10 @@ class _PayPendingSheet extends StatelessWidget {
         TextButton(
           onPressed: onDone,
           child: const Text('Close (check later on the tracker)',
-              style: TextStyle(fontFamily: 'Poppins')),
+              style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
         ),
       ]),
+      ),
     );
   }
 }
@@ -690,16 +749,24 @@ class _AlreadyPaidView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text('This order is already paid',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w700),
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary),
               textAlign: TextAlign.center),
           const SizedBox(height: 6),
           Text(
             'Order #${order.orderNumber} was already settled — no need to pay again.',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade600),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+              elevation: 0,
+            ),
             onPressed: onDone,
             child: const Text('View Order Status', style: TextStyle(fontFamily: 'Poppins')),
           ),

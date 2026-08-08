@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 import '../services/qr_device_id_service.dart';
+import '../../../core/theme/app_theme.dart';
 
 class QrPaymentScreen extends ConsumerStatefulWidget {
   final String tableId;
@@ -99,80 +100,141 @@ class _QrPaymentScreenState extends ConsumerState<QrPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(activeQrCartProvider);
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final tableName = cart.tableName ?? widget.tableId;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerLowest,
-      appBar: AppBar(
-        title: const Text('Payment'),
-        leading: BackButton(onPressed: () => context.pop()),
-      ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _OrderPreviewCard(cart: cart),
-            ),
-          ),
-
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Payment Method',
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  _PaymentMethodCard(
-                    method: QrPaymentMethod.kasir,
-                    selected: _selected,
-                    title: 'Pay at Cashier',
-                    subtitle: 'Pay with cash or card at the cashier',
-                    icon: Icons.point_of_sale_outlined,
-                    badge: 'Recommended',
-                    onTap: () => setState(() => _selected = QrPaymentMethod.kasir),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _PaymentHeader(tableName: tableName, onBack: () => context.pop()),
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                          ),
+                          child: Text(
+                            'PAYMENT FOR $tableName'.toUpperCase(),
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                                fontWeight: FontWeight.w800, color: AppColors.accent,
+                                letterSpacing: 0.6),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  _PaymentMethodCard(
-                    method: QrPaymentMethod.qris,
-                    selected: _selected,
-                    title: 'QRIS',
-                    subtitle: 'Scan the QR code for digital payment',
-                    icon: Icons.qr_code_scanner_outlined,
-                    onTap: () => setState(() => _selected = QrPaymentMethod.qris),
+
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                      child: _OrderPreviewCard(cart: cart),
+                    ),
+                  ),
+
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Select Payment Method',
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: 19,
+                                  fontWeight: FontWeight.w800, color: AppColors.accent)),
+                          const SizedBox(height: 14),
+                          _PaymentMethodCard(
+                            method: QrPaymentMethod.kasir,
+                            selected: _selected,
+                            title: 'Pay at Cashier',
+                            subtitle: 'Pay with cash or card at the cashier',
+                            icon: Icons.point_of_sale_outlined,
+                            badge: 'Recommended',
+                            onTap: () => setState(() => _selected = QrPaymentMethod.kasir),
+                          ),
+                          const SizedBox(height: 12),
+                          _PaymentMethodCard(
+                            method: QrPaymentMethod.qris,
+                            selected: _selected,
+                            title: 'QRIS / E-Wallet',
+                            subtitle: 'Scan the QR code for digital payment',
+                            icon: Icons.qr_code_scanner_outlined,
+                            onTap: () => setState(() => _selected = QrPaymentMethod.qris),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  if (_selected == QrPaymentMethod.qris)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                        child: _QrisInfoCard(totalAmount: cart.totalAmount),
+                      ),
+                    ),
+
+                  // ✅ FIX: connect onChanged to _orderNotes
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                      child: _NotesSection(
+                        onChanged: (val) => setState(() => _orderNotes = val),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-
-          if (_selected == QrPaymentMethod.qris)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                child: _QrisInfoCard(totalAmount: cart.totalAmount),
-              ),
+            _PaymentBottomBar(
+              method: _selected,
+              isLoading: _isSubmitting,
+              onConfirm: _submitOrder,
             ),
-
-          // ✅ FIX: connect onChanged to _orderNotes
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
-              child: _NotesSection(
-                onChanged: (val) => setState(() => _orderNotes = val),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-      bottomNavigationBar: _PaymentBottomBar(
-        cart: cart,
-        method: _selected,
-        isLoading: _isSubmitting,
-        onConfirm: _submitOrder,
+    );
+  }
+}
+
+// ─── Header ─────────────────────────────────────────────────────────────────
+class _PaymentHeader extends StatelessWidget {
+  final String tableName;
+  final VoidCallback onBack;
+  const _PaymentHeader({required this.tableName, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.textPrimary),
+          ),
+          Expanded(
+            child: Text(
+              tableName,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                  fontWeight: FontWeight.w700, color: AppColors.primary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 48),
+        ],
       ),
     );
   }
@@ -185,105 +247,106 @@ class _OrderPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
       ),
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
+          Container(height: 4, color: AppColors.textPrimary),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Order Summary',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 19,
+                        fontWeight: FontWeight.w800, color: AppColors.accent)),
+                const SizedBox(height: 4),
+                Text(
+                  '${cart.tableName ?? "Table"} · ${cart.customerName ?? "Guest"}',
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                      color: AppColors.textSecondary),
                 ),
-                child: Icon(Icons.receipt_long_outlined, color: colorScheme.primary, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Order Summary',
-                      style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
-                  Text(
-                    '${cart.tableName ?? "Table"} · ${cart.customerName ?? "Guest"}',
-                    style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+                const SizedBox(height: 12),
+                Divider(color: AppColors.border, height: 1),
+                const SizedBox(height: 12),
 
-          ...cart.items.take(3).map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    Text(
-                      '${item.quantity}×',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        item.menuItem.name,
-                        style: theme.textTheme.bodySmall,
-                        overflow: TextOverflow.ellipsis,
+                ...cart.items.map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.menuItem.name,
+                                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5,
+                                      fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                                ),
+                                const SizedBox(height: 2),
+                                Text('x${item.quantity}',
+                                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                                        color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ),
+                          Text(_formatPrice(item.subtotal),
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5,
+                                  fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                        ],
                       ),
+                    )),
+
+                Divider(color: AppColors.border, height: 1),
+                const SizedBox(height: 12),
+
+                _summaryRow('SUBTOTAL', _formatPrice(cart.subtotal)),
+                const SizedBox(height: 8),
+                _summaryRow('TAX & SERVICE (11%)', _formatPrice(cart.taxAmount)),
+
+                const SizedBox(height: 14),
+                Divider(color: AppColors.border, height: 1),
+                const SizedBox(height: 14),
+
+                Row(
+                  children: [
+                    const Text('Total',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                            fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                    const Spacer(),
+                    Text(
+                      _formatPrice(cart.totalAmount),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 22,
+                          fontWeight: FontWeight.w800, color: AppColors.primary),
                     ),
-                    Text(_formatPrice(item.subtotal), style: theme.textTheme.bodySmall),
                   ],
                 ),
-              )),
-
-          if (cart.items.length > 3)
-            Text(
-              '+${cart.items.length - 3} more item(s)',
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline),
+              ],
             ),
-
-          const Divider(height: 24, thickness: 0.5),
-
-          Row(
-            children: [
-              Text('Subtotal', style: theme.textTheme.bodyMedium),
-              const Spacer(),
-              Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodyMedium),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text('VAT (11%)', style: theme.textTheme.bodyMedium),
-              const Spacer(),
-              Text(_formatPrice(cart.taxAmount), style: theme.textTheme.bodyMedium),
-            ],
-          ),
-          const Divider(height: 20, thickness: 0.5),
-          Row(
-            children: [
-              Text('Total',
-                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-              const Spacer(),
-              Text(
-                _formatPrice(cart.totalAmount),
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.primary),
-              ),
-            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value) {
+    return Row(
+      children: [
+        Text(label,
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 11.5,
+                fontWeight: FontWeight.w700, color: AppColors.textSecondary, letterSpacing: 0.4)),
+        const Spacer(),
+        Text(value,
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+      ],
     );
   }
 
@@ -317,8 +380,6 @@ class _PaymentMethodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final isSelected = method == selected;
 
     return GestureDetector(
@@ -329,13 +390,11 @@ class _PaymentMethodCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: isSelected
-              ? colorScheme.primaryContainer.withValues(alpha: 0.5)
-              : colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           border: Border.all(
-            color: isSelected ? colorScheme.primary : colorScheme.outlineVariant,
-            width: isSelected ? 2 : 0.8,
+            color: isSelected ? AppColors.accent : AppColors.border,
+            width: isSelected ? 1.6 : 1,
           ),
         ),
         padding: const EdgeInsets.all(14),
@@ -343,15 +402,18 @@ class _PaymentMethodCard extends StatelessWidget {
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.all(10),
+              width: 42, height: 42,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected ? colorScheme.primary : colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
+                color: isSelected
+                    ? AppColors.accent.withValues(alpha: 0.12)
+                    : AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
               ),
               child: Icon(
                 icon,
-                size: 22,
-                color: isSelected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
+                size: 20,
+                color: isSelected ? AppColors.accent : AppColors.textSecondary,
               ),
             ),
             const SizedBox(width: 12),
@@ -362,22 +424,20 @@ class _PaymentMethodCard extends StatelessWidget {
                   Row(
                     children: [
                       Text(title,
-                          style: theme.textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.bold)),
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5,
+                              fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                       if (badge != null) ...[
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.green.shade100,
+                            color: AppColors.primary.withValues(alpha: 0.14),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             badge!,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.green.shade700,
-                              fontSize: 10,
-                            ),
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                                fontWeight: FontWeight.w700, color: AppColors.primary),
                           ),
                         ),
                       ],
@@ -385,24 +445,31 @@ class _PaymentMethodCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                          color: AppColors.textSecondary)),
                 ],
               ),
             ),
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              width: 20,
-              height: 20,
+              width: 22,
+              height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected ? colorScheme.primary : colorScheme.outline,
+                  color: isSelected ? AppColors.accent : AppColors.border,
                   width: 2,
                 ),
-                color: isSelected ? colorScheme.primary : Colors.transparent,
+                color: Colors.transparent,
               ),
               child: isSelected
-                  ? Icon(Icons.check, size: 12, color: colorScheme.onPrimary)
+                  ? Center(
+                      child: Container(
+                        width: 11, height: 11,
+                        decoration: const BoxDecoration(
+                            shape: BoxShape.circle, color: AppColors.accent),
+                      ),
+                    )
                   : null,
             ),
           ],
@@ -419,13 +486,11 @@ class _QrisInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blue.shade200, width: 0.8),
+        color: AppColors.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
       ),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -433,19 +498,17 @@ class _QrisInfoCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
+              const Icon(Icons.info_outline, size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
-              Text(
+              const Text(
                 'How to Pay with QRIS',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: Colors.blue.shade700,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                    color: AppColors.primary, fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          const _QrisStep(number: '1', text: 'Tap the "Confirm Order" button below'),
+          const _QrisStep(number: '1', text: 'Tap the "Confirm Payment" button below'),
           const _QrisStep(number: '2', text: 'Show your queue number to the cashier'),
           const _QrisStep(number: '3', text: 'The cashier will display the QRIS code'),
           const _QrisStep(number: '4', text: 'Scan the QR code with your digital wallet app'),
@@ -473,11 +536,12 @@ class _QrisStep extends StatelessWidget {
           Container(
             width: 18,
             height: 18,
-            decoration: BoxDecoration(color: Colors.blue.shade600, shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
             child: Center(
               child: Text(
                 number,
                 style: const TextStyle(
+                  fontFamily: 'Poppins',
                   color: Colors.white,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
@@ -489,8 +553,7 @@ class _QrisStep extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style:
-                  Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.blue.shade800),
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5, color: AppColors.textSecondary),
             ),
           ),
         ],
@@ -506,14 +569,11 @@ class _NotesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -521,11 +581,12 @@ class _NotesSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.edit_note_outlined, size: 18, color: colorScheme.primary),
+              const Icon(Icons.edit_note_outlined, size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
-              Text(
+              const Text(
                 'Notes (Optional)',
-                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                    fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
             ],
           ),
@@ -533,12 +594,19 @@ class _NotesSection extends StatelessWidget {
           TextField(
             onChanged: onChanged,
             maxLines: 3,
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5, color: AppColors.textPrimary),
             decoration: InputDecoration(
               hintText: 'Example: not spicy, nut allergy, etc...',
+              hintStyle: const TextStyle(fontFamily: 'Poppins', color: AppColors.textHint, fontSize: 13),
               filled: true,
+              fillColor: AppColors.surfaceVariant,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                 borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
               ),
               contentPadding: const EdgeInsets.all(12),
             ),
@@ -551,13 +619,11 @@ class _NotesSection extends StatelessWidget {
 
 // ─── Payment Bottom Bar ───────────────────────────────────────────────────────
 class _PaymentBottomBar extends StatelessWidget {
-  final QrOrderSession cart;
   final QrPaymentMethod method;
   final bool isLoading;
   final VoidCallback onConfirm;
 
   const _PaymentBottomBar({
-    required this.cart,
     required this.method,
     required this.isLoading,
     required this.onConfirm,
@@ -565,88 +631,55 @@ class _PaymentBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(top: BorderSide(color: colorScheme.outlineVariant, width: 0.5)),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(top: BorderSide(color: AppColors.border)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Text('Total Payment',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.outline)),
-              const Spacer(),
-              Text(
-                _formatPrice(cart.totalAmount),
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
-                ),
-              ),
-            ],
+      child: SizedBox(
+        width: double.infinity,
+        height: 54,
+        child: ElevatedButton(
+          onPressed: isLoading ? null : onConfirm,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accent,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+            elevation: 0,
           ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : onConfirm,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                foregroundColor: colorScheme.onPrimary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
-              child: isLoading
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        ),
-                        SizedBox(width: 10),
-                        Text('Processing...'),
-                      ],
-                    )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          method == QrPaymentMethod.qris
-                              ? Icons.qr_code_scanner_outlined
-                              : Icons.check_circle_outline,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          method == QrPaymentMethod.qris
-                              ? 'Confirm & Pay with QRIS'
-                              : 'Confirm Order',
-                          style:
-                              theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ],
+          child: isLoading
+              ? const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     ),
-            ),
-          ),
-        ],
+                    SizedBox(width: 10),
+                    Text('Processing...',
+                        style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      method == QrPaymentMethod.qris
+                          ? 'Confirm & Pay with QRIS'
+                          : 'Confirm Payment',
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 15.5,
+                          fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward_rounded, size: 19, color: Colors.white),
+                  ],
+                ),
+        ),
       ),
     );
-  }
-
-  String _formatPrice(double price) {
-    final formatted = price
-        .toStringAsFixed(0)
-        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
-    return 'Rp $formatted';
   }
 }
 
@@ -669,78 +702,105 @@ class QrQrisScreen extends StatelessWidget {
         "00020101021126670016ID.CO.BANKMANDIRI01189360001100000000000215200000000000000303IDR0109${totalAmount.toInt()}5200000115300036058202ID5915Restoran A1 Kartika6007Jakarta6105123456304XXXX";
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Pay with QRIS')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        foregroundColor: AppColors.textPrimary,
+        title: const Text('Pay with QRIS',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             const SizedBox(height: 20),
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    const Text('Total amount due', style: TextStyle(fontSize: 16)),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Rp ${totalAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                      style: const TextStyle(
-                          fontSize: 36, fontWeight: FontWeight.bold, color: Colors.green),
-                    ),
-                  ],
-                ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  const Text('Total amount due',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 15, color: AppColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Rp ${totalAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 34,
+                        fontWeight: FontWeight.w800, color: AppColors.primary),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15)
-                ],
+                borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                border: Border.all(color: AppColors.border),
               ),
               child: QrImageView(
                 data: qrisData,
                 version: QrVersions.auto,
-                size: 280,
+                size: 260,
                 gapless: false,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
             const Text(
               'Scan this QRIS code using your\nbank or e-wallet app',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, height: 1.4),
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 15, color: AppColors.textSecondary, height: 1.4),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(16),
+                color: AppColors.primary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
               ),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('How to Pay:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  SizedBox(height: 12),
-                  Text('1. Open your bank / e-wallet app'),
-                  Text('2. Select the Scan QR menu'),
-                  Text('3. Point your camera at the QR code above'),
-                  Text('4. The amount will appear automatically'),
-                  Text('5. Confirm the payment'),
+                  Text('How to Pay:',
+                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                          fontSize: 14, color: AppColors.textPrimary)),
+                  SizedBox(height: 10),
+                  Text('1. Open your bank / e-wallet app',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+                  Text('2. Select the Scan QR menu',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+                  Text('3. Point your camera at the QR code above',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+                  Text('4. The amount will appear automatically',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+                  Text('5. Confirm the payment',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
                 ],
               ),
             ),
-            const SizedBox(height: 30),
-            ElevatedButton.icon(
-              onPressed: () => context.go('/qr/$tableId/track/$orderId'),
-              icon: const Icon(Icons.receipt_long),
-              label: const Text('View Order Status'),
-              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: () => context.go('/qr/$tableId/track/$orderId'),
+                icon: const Icon(Icons.receipt_long, color: Colors.white),
+                label: const Text('View Order Status',
+                    style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+                  elevation: 0,
+                ),
+              ),
             ),
           ],
         ),
