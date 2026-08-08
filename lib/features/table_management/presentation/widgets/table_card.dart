@@ -5,6 +5,70 @@ import '../../../../shared/models/table_model.dart';
 import '../../../../shared/models/order_model.dart' show kMaxDineInDuration, calculateOvertimeCharge;
 import '../../../../core/theme/app_theme.dart';
 
+// Shows the same table detail / status-change UI (_StatusBottomSheet below)
+// either as a bottom sheet (mobile / narrow layouts) or as a right-anchored
+// slide-in panel (wide/desktop layouts, e.g. the floor-plan view in
+// table_screen.dart) — single-sourcing the booking/order fetch logic so both
+// presentations stay in sync.
+Future<void> showTableDetailSheet(
+  BuildContext context,
+  TableModel table,
+  void Function(TableStatus) onStatusChange, {
+  bool anchorRight = false,
+}) {
+  if (!anchorRight) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) =>
+          _StatusBottomSheet(table: table, onStatusChange: onStatusChange),
+    );
+  }
+  return showGeneralDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Table detail',
+    barrierColor: Colors.black26,
+    transitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (ctx, __, ___) => Align(
+      alignment: Alignment.centerRight,
+      child: Material(
+        color: AppColors.surface,
+        child: SafeArea(
+          child: SizedBox(
+            width: 380,
+            height: double.infinity,
+            child: Stack(
+              children: [
+                SingleChildScrollView(
+                  child: _StatusBottomSheet(
+                      table: table, onStatusChange: onStatusChange),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+    transitionBuilder: (ctx, anim, __, child) => SlideTransition(
+      position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+          .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+      child: child,
+    ),
+  );
+}
+
 class TableCard extends StatefulWidget {          // ← CHANGED to StatefulWidget
   final TableModel table;
   final void Function(TableStatus) onStatusChange;
