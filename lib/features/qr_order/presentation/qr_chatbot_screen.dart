@@ -8,6 +8,7 @@ import '../data/qr_order_repository.dart';
 import '../providers/qr_cart_provider.dart';
 import '../services/qr_chatbot_service.dart';
 import '../services/qr_weather_service.dart';
+import '../../../core/theme/app_theme.dart';
 
 class _QrChatMessage {
   final String role;
@@ -476,43 +477,64 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
   // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Material(
-      color: cs.surface,
-      elevation: 12,
-      shadowColor: Colors.black.withValues(alpha: 0.3),
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          _buildHeader(cs),
-          Expanded(child: _buildMessages(cs)),
-          _buildQuickActions(cs),
-          _buildInput(cs),
-        ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 32,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(painter: _DiamondPatternPainter()),
+                  ),
+                  _buildMessages(),
+                ],
+              ),
+            ),
+            _buildQuickActions(),
+            _buildInput(),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeader(ColorScheme cs) {
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-      color: cs.primary,
+      padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20), topRight: Radius.circular(20)),
+      ),
       child: Row(
         children: [
           Container(
-            width: 30,
-            height: 30,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [cs.primary, cs.tertiary],
+              gradient: const LinearGradient(
+                colors: [AppColors.primary, AppColors.accent],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
             ),
-            child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 16),
+            child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -520,23 +542,18 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Menu Assistant',
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onPrimary)),
+                const Text('Menu Assistant',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                        fontWeight: FontWeight.w800, color: Colors.white)),
                 Text(_tableName,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 10,
-                        color: cs.onPrimary.withValues(alpha: 0.7))),
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 11.5,
+                        color: Colors.white70)),
               ],
             ),
           ),
           IconButton(
-            icon: Icon(Icons.close_rounded, size: 20, color: cs.onPrimary),
+            icon: const Icon(Icons.close_rounded, size: 20, color: Colors.white),
             tooltip: 'Close',
             onPressed: widget.onClose,
           ),
@@ -545,28 +562,38 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     );
   }
 
-  Widget _buildMessages(ColorScheme cs) {
+  Widget _buildMessages() {
     if (_loadingContext && _messages.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     return ListView.builder(
       controller: _scrollCtrl,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       itemCount: _messages.length + (_isTyping ? 1 : 0),
       itemBuilder: (_, i) {
-        if (i == _messages.length) return _buildTypingIndicator(cs);
+        if (i == _messages.length) return _buildTypingIndicator();
         final m = _messages[i];
         final isUser = m.role == 'user';
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
             mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              if (!isUser) ...[
+                const CircleAvatar(
+                  radius: 14,
+                  backgroundColor: AppColors.surfaceVariant,
+                  child: Icon(Icons.smart_toy_rounded, size: 14, color: AppColors.primary),
+                ),
+                const SizedBox(width: 8),
+              ],
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                   decoration: BoxDecoration(
-                    color: isUser ? cs.primary : cs.surfaceContainerHighest,
+                    color: isUser ? AppColors.primary : AppColors.surface,
+                    border: isUser ? null : Border.all(color: AppColors.border),
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(14),
                       topRight: const Radius.circular(14),
@@ -576,11 +603,13 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
                   ),
                   child: isUser
                       ? Text(m.content,
-                          style: TextStyle(color: cs.onPrimary, fontSize: 13, height: 1.4))
+                          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white,
+                              fontSize: 13.5, height: 1.4))
                       : MarkdownBody(
                           data: m.content,
                           styleSheet: MarkdownStyleSheet(
-                            p: TextStyle(color: cs.onSurface, fontSize: 13, height: 1.4),
+                            p: const TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary,
+                                fontSize: 13.5, height: 1.4),
                           ),
                         ),
                 ),
@@ -592,58 +621,107 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     );
   }
 
-  Widget _buildTypingIndicator(ColorScheme cs) => Padding(
+  Widget _buildTypingIndicator() => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
+        child: Row(
+          children: [
+            const CircleAvatar(
+              radius: 14,
+              backgroundColor: AppColors.surfaceVariant,
+              child: Icon(Icons.smart_toy_rounded, size: 14, color: AppColors.primary),
             ),
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                border: Border.all(color: AppColors.border),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(14),
+                  topRight: Radius.circular(14),
+                  bottomRight: Radius.circular(14),
+                  bottomLeft: Radius.circular(4),
+                ),
+              ),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+              ),
             ),
-          ),
+          ],
         ),
       );
 
-  Widget _buildQuickActions(ColorScheme cs) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: (_awaitingWeatherReply
-                    ? _weatherFallbackReplies
-                    : _quickActions)
-                .map((e) => Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: GestureDetector(
-                        onTap: () => _send(e.$2),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(e.$1,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: cs.onPrimaryContainer)),
+  Widget _buildQuickActions() {
+    final replies = _awaitingWeatherReply ? _weatherFallbackReplies : _quickActions;
+    final featured = _awaitingWeatherReply ? null : replies.first;
+    final rest = _awaitingWeatherReply ? replies : replies.sublist(1);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('QUICK ACTIONS',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                  fontWeight: FontWeight.w800, color: AppColors.textSecondary,
+                  letterSpacing: 0.6)),
+          const SizedBox(height: 8),
+          if (featured != null) ...[
+            GestureDetector(
+              onTap: () => _send(featured.$2),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: Text(featured.$1,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                        fontWeight: FontWeight.w700, color: AppColors.accent)),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: rest
+                .map((e) => GestureDetector(
+                      onTap: () => _send(e.$2),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                          border: Border.all(color: AppColors.border),
                         ),
+                        child: Text(e.$1,
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                                fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                       ),
                     ))
                 .toList(),
           ),
-        ),
-      );
+        ],
+      ),
+    );
+  }
 
-  Widget _buildInput(ColorScheme cs) => Padding(
-        padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+  Widget _buildInput() => Container(
+        padding: const EdgeInsets.fromLTRB(14, 8, 10, 12),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -651,12 +729,14 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
                 controller: _msgCtrl,
                 onSubmitted: (_) => _send(),
                 textInputAction: TextInputAction.send,
-                style: const TextStyle(fontSize: 13),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                    color: AppColors.textPrimary),
                 decoration: InputDecoration(
-                  hintText: 'Ask about the menu...',
-                  hintStyle: const TextStyle(fontSize: 13),
+                  hintText: 'Type a message...',
+                  hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                      color: AppColors.textHint),
                   filled: true,
-                  fillColor: cs.surfaceContainerHighest,
+                  fillColor: AppColors.surfaceVariant,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
@@ -664,12 +744,40 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             IconButton(
-              icon: Icon(Icons.send_rounded, color: cs.primary),
+              icon: (_isTyping || _loadingContext)
+                  ? const SizedBox(width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent))
+                  : const Icon(Icons.send_rounded, color: AppColors.accent),
               onPressed: (_isTyping || _loadingContext) ? null : _send,
             ),
           ],
         ),
       );
+}
+
+class _DiamondPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.border.withValues(alpha: 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    const spacing = 28.0;
+    for (double y = -spacing; y < size.height + spacing; y += spacing) {
+      for (double x = -spacing; x < size.width + spacing; x += spacing) {
+        final path = Path()
+          ..moveTo(x, y - spacing / 2)
+          ..lineTo(x + spacing / 2, y)
+          ..lineTo(x, y + spacing / 2)
+          ..lineTo(x - spacing / 2, y)
+          ..close();
+        canvas.drawPath(path, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
