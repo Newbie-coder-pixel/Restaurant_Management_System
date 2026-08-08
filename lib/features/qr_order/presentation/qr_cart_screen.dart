@@ -5,6 +5,7 @@ import '../providers/qr_cart_provider.dart';
 import '../data/qr_order_repository.dart';
 import '../services/qr_device_id_service.dart';
 import '../../../../core/services/prep_time_service.dart'; // ← ML Service
+import '../../../core/theme/app_theme.dart';
 
 class QrCartScreen extends ConsumerStatefulWidget {
   final String tableId;
@@ -113,17 +114,16 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   }
 
   // ── Helper: Info Row ───────────────────────────────────────────────────────
-  Widget _buildInfoRow(ThemeData theme, ColorScheme colorScheme,
-      String label, String value) {
+  Widget _buildInfoRow(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: colorScheme.outline)),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                color: AppColors.textSecondary)),
         Text(value,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
       ],
     );
   }
@@ -134,8 +134,6 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     // In add-order mode, skip name/phone form validation
     if (addMode == null && !_formKey.currentState!.validate()) return;
 
-    final colorScheme = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
     final cart = ref.read(activeQrCartProvider);
     final activeTable = ref.read(activeQrTableProvider);
     final tableName = (activeTable.tableName?.isNotEmpty == true)
@@ -146,7 +144,8 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Padding(
@@ -156,14 +155,14 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Header ────────────────────────────────────────────
-              Row(children: [
+              const Row(children: [
                 Icon(Icons.shopping_cart_outlined,
-                    color: colorScheme.primary, size: 24),
-                const SizedBox(width: 10),
+                    color: AppColors.primary, size: 24),
+                SizedBox(width: 10),
                 Text(
                   'Confirm Order',
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 19,
+                      fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                 ),
               ]),
               const SizedBox(height: 16),
@@ -173,23 +172,20 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
                 child: Column(children: [
-                  _buildInfoRow(theme, colorScheme, 'Name',
-                      _nameCtrl.text.trim()),
+                  _buildInfoRow('Name', _nameCtrl.text.trim()),
                   const SizedBox(height: 8),
-                  _buildInfoRow(theme, colorScheme, 'Phone No.',
+                  _buildInfoRow('Phone No.',
                       _phoneCtrl.text.trim().isEmpty ? '-' : _phoneCtrl.text.trim()),
                   const SizedBox(height: 8),
-                  _buildInfoRow(theme, colorScheme, 'Table', tableName),
+                  _buildInfoRow('Table', tableName),
                   const SizedBox(height: 8),
-                  _buildInfoRow(theme, colorScheme, 'Total',
-                      _formatPrice(cart.totalAmount)),
+                  _buildInfoRow('Total', _formatPrice(cart.totalAmount)),
                   const SizedBox(height: 8),
-                  _buildInfoRow(theme, colorScheme, 'Items',
-                      '${cart.items.length} item'),
+                  _buildInfoRow('Items', '${cart.items.length} item'),
                 ]),
               ),
               const SizedBox(height: 12),
@@ -198,25 +194,21 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colorScheme.errorContainer.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: colorScheme.error.withValues(alpha: 0.2)),
+                  color: AppColors.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
                 ),
                 child: Column(children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.info_outline,
-                          size: 16, color: colorScheme.error),
+                      const Icon(Icons.info_outline, size: 16, color: AppColors.accent),
                       const SizedBox(width: 8),
-                      Expanded(
+                      const Expanded(
                         child: Text(
                           'Orders that have been sent to the kitchen cannot be cancelled.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onErrorContainer,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                              color: AppColors.textPrimary, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],
@@ -225,15 +217,13 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.check_circle_outline,
-                          size: 16, color: colorScheme.error),
+                      const Icon(Icons.check_circle_outline, size: 16, color: AppColors.accent),
                       const SizedBox(width: 8),
-                      Expanded(
+                      const Expanded(
                         child: Text(
                           'Make sure your order is correct before continuing.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onErrorContainer,
-                          ),
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                              color: AppColors.textSecondary),
                         ),
                       ),
                     ],
@@ -248,11 +238,14 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                   child: OutlinedButton(
                     onPressed: () => Navigator.pop(ctx, false),
                     style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.border),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
                     ),
-                    child: const Text('Check Again'),
+                    child: const Text('Check Again',
+                        style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -260,16 +253,16 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(ctx, true),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: colorScheme.onPrimary,
+                      backgroundColor: AppColors.accent,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
                       elevation: 0,
                     ),
                     child: const Text(
                       'Order Now',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
@@ -426,19 +419,31 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
         title: Row(children: [
-          const Icon(Icons.edit_note, size: 20),
+          const Icon(Icons.edit_note, size: 20, color: AppColors.primary),
           const SizedBox(width: 8),
           Expanded(child: Text(item.menuItem.name,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                fontWeight: FontWeight.w700, color: AppColors.textPrimary),
             overflow: TextOverflow.ellipsis)),
         ]),
         content: TextField(
           controller: ctrl, maxLines: 3, autofocus: true,
+          style: const TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: 'Example: not spicy, no onions...',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            hintStyle: const TextStyle(fontFamily: 'Poppins', color: AppColors.textHint),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              borderSide: const BorderSide(color: AppColors.border)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              borderSide: const BorderSide(color: AppColors.border)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              borderSide: const BorderSide(color: AppColors.primary)),
             contentPadding: const EdgeInsets.all(12))),
         actions: [
           TextButton(
@@ -446,7 +451,8 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
               notifier.updateNotes(item.menuItem.id, '');
               Navigator.pop(ctx);
             },
-            child: const Text('Remove Note', style: TextStyle(color: Colors.grey))),
+            child: const Text('Remove Note',
+                style: TextStyle(fontFamily: 'Poppins', color: AppColors.textHint))),
           ElevatedButton(
             onPressed: () {
               notifier.updateNotes(item.menuItem.id, ctrl.text.trim());
@@ -455,7 +461,9 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
               final cart = ref.read(activeQrCartProvider);
               _fetchEstimate(cart);
             },
-            child: const Text('Save')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary, foregroundColor: Colors.white, elevation: 0),
+            child: const Text('Save', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -465,29 +473,49 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
   Widget build(BuildContext context) {
     final cart     = ref.watch(activeQrCartProvider);
     final notifier = ref.read(activeQrCartNotifierProvider);
-    final theme    = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
     if (cart.isEmpty) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Cart'),
-          leading: BackButton(onPressed: () => context.pop()),
-        ),
-        body: Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.shopping_cart_outlined, size: 80, color: colorScheme.outline),
-            const SizedBox(height: 16),
-            Text('Your cart is empty', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text('Choose a menu item first',
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => context.pop(),
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('Back to Menu')),
-          ]),
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _CartHeader(
+                tableName: cart.tableName ?? widget.tableId,
+                onBack: () => context.pop(),
+                onClear: null,
+              ),
+              Expanded(
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.shopping_cart_outlined, size: 80, color: AppColors.textHint),
+                    const SizedBox(height: 16),
+                    const Text('Your cart is empty',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 17,
+                            fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                    const SizedBox(height: 8),
+                    const Text('Choose a menu item first',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                            color: AppColors.textSecondary)),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () => context.pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Back to Menu',
+                          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
+                  ]),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -496,207 +524,273 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     final isAddMode = addMode != null;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerLowest,
-      appBar: AppBar(
-        title: Text(isAddMode ? 'Add Order' : 'Order Cart'),
-        leading: BackButton(onPressed: () {
-          // When backing out of add mode, reset the mode so it doesn't get stuck
-          if (isAddMode) {
-            ref.read(addOrderModeProvider.notifier).state = null;
-            notifier.clearCart();
-          }
-          context.pop();
-        }),
-        actions: [
-          TextButton(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Clear Cart?'),
-                  content: const Text('All items will be removed from the cart.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel')),
-                    TextButton(
-                      onPressed: () {
-                        notifier.clearCart();
-                        Navigator.pop(context);
-                        context.pop();
-                      },
-                      style: TextButton.styleFrom(foregroundColor: colorScheme.error),
-                      child: const Text('Clear')),
-                  ],
-                ),
-              );
-            },
-            child: Text('Clear',
-              style: TextStyle(color: colorScheme.error, fontSize: 13)),
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: CustomScrollView(
-          slivers: [
-            // ── ML Estimate Banner ─────────────────────────────────────────
-            if (_isFetchingEstimate || _estimatedMinutes != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: colorScheme.primary.withValues(alpha: 0.2)),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _CartHeader(
+                tableName: cart.tableName ?? widget.tableId,
+                onBack: () {
+                  // When backing out of add mode, reset the mode so it doesn't get stuck
+                  if (isAddMode) {
+                    ref.read(addOrderModeProvider.notifier).state = null;
+                    notifier.clearCart();
+                  }
+                  context.pop();
+                },
+                onClear: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      backgroundColor: AppColors.surface,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
+                      title: const Text('Clear Cart?',
+                          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                      content: const Text('All items will be removed from the cart.',
+                          style: TextStyle(fontFamily: 'Poppins')),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel',
+                              style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary))),
+                        TextButton(
+                          onPressed: () {
+                            notifier.clearCart();
+                            Navigator.pop(context);
+                            context.pop();
+                          },
+                          style: TextButton.styleFrom(foregroundColor: AppColors.accent),
+                          child: const Text('Clear',
+                              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600))),
+                      ],
                     ),
-                    child: Row(children: [
-                      Icon(Icons.schedule_rounded,
-                        size: 20, color: colorScheme.primary),
-                      const SizedBox(width: 10),
-                      Expanded(child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _isFallbackEstimate
-                                ? 'Rough Estimate (offline)'
-                                : 'Estimated Ready Time',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 2),
-                          if (_isFetchingEstimate)
-                            Row(children: [
-                              SizedBox(
-                                width: 12, height: 12,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: colorScheme.primary)),
-                              const SizedBox(width: 8),
-                              Text('Calculating...',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onPrimaryContainer)),
-                            ])
-                          else
-                            Text(
-                              PrepTimeService.formatEstimate(_estimatedMinutes!),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w700)),
-                        ],
-                      )),
-                      Icon(Icons.info_outline,
-                        size: 16,
-                        color: colorScheme.primary.withValues(alpha: 0.5)),
-                    ]),
-                  ),
-                ),
+                  );
+                },
               ),
-
-            // ── Add-order mode banner ──────────────────────────────────
-            if (isAddMode)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: colorScheme.secondary.withValues(alpha: 0.4)),
-                    ),
-                    child: Row(children: [
-                      Icon(Icons.add_circle_outline,
-                        color: colorScheme.secondary, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
+              Expanded(
+                child: CustomScrollView(
+                  slivers: [
+                    // ── Title block ──────────────────────────────────────
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Text(isAddMode ? 'Add Order' : 'Your Order',
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 30,
+                                    fontWeight: FontWeight.w800, color: AppColors.primary)),
+                            const SizedBox(height: 6),
                             Text(
-                              'Add Order Mode',
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: colorScheme.onSecondaryContainer,
-                                fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              'Queue No.: ${addMode.queueNumber} · Existing items cannot be changed',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSecondaryContainer
-                                    .withValues(alpha: 0.75)),
+                              isAddMode
+                                  ? 'These new items will be added to your existing order.'
+                                  : 'Review your items before sending to the kitchen.',
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                                  color: AppColors.textSecondary, height: 1.4),
                             ),
                           ],
                         ),
                       ),
-                    ]),
-                  ),
+                    ),
+
+                    // ── ML Estimate Banner ─────────────────────────────────────────
+                    if (_isFetchingEstimate || _estimatedMinutes != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+                            ),
+                            child: Row(children: [
+                              const Icon(Icons.schedule_rounded, size: 20, color: AppColors.primary),
+                              const SizedBox(width: 10),
+                              Expanded(child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _isFallbackEstimate
+                                        ? 'Rough Estimate (offline)'
+                                        : 'Estimated Ready Time',
+                                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                                        fontWeight: FontWeight.w700, color: AppColors.textSecondary,
+                                        letterSpacing: 0.4)),
+                                  const SizedBox(height: 2),
+                                  if (_isFetchingEstimate)
+                                    Row(children: [
+                                      const SizedBox(
+                                        width: 12, height: 12,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: AppColors.primary)),
+                                      const SizedBox(width: 8),
+                                      const Text('Calculating...',
+                                          style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                                              color: AppColors.textPrimary)),
+                                    ])
+                                  else
+                                    Text(
+                                      PrepTimeService.formatEstimate(_estimatedMinutes!),
+                                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 16,
+                                          fontWeight: FontWeight.w800, color: AppColors.primary)),
+                                ],
+                              )),
+                              Icon(Icons.info_outline, size: 16,
+                                  color: AppColors.primary.withValues(alpha: 0.5)),
+                            ]),
+                          ),
+                        ),
+                      ),
+
+                    // ── Add-order mode banner ──────────────────────────────────
+                    if (isAddMode)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                              border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(children: [
+                              const Icon(Icons.add_circle_outline, color: AppColors.accent, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Add Order Mode',
+                                        style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                                            fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                                    Text(
+                                      'Queue No.: ${addMode.queueNumber} · Existing items cannot be changed',
+                                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                                          color: AppColors.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ]),
+                          ),
+                        ),
+                      ),
+
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                        child: Text('${cart.totalItems} item(s) ordered',
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                                fontWeight: FontWeight.w700, color: AppColors.textSecondary,
+                                letterSpacing: 0.4)),
+                      ),
+                    ),
+
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final item = cart.items[index];
+                          return _CartItemTile(
+                            item: item,
+                            onAdd:      () {
+                              notifier.addItem(item.menuItem);
+                              _fetchEstimate(ref.read(activeQrCartProvider));
+                            },
+                            onRemove:   () {
+                              notifier.removeItem(item.menuItem.id);
+                              _fetchEstimate(ref.read(activeQrCartProvider));
+                            },
+                            onDelete:   () {
+                              notifier.deleteItem(item.menuItem.id);
+                              _fetchEstimate(ref.read(activeQrCartProvider));
+                            },
+                            onEditNotes: () => _showNotesDialog(item),
+                          );
+                        },
+                        childCount: cart.items.length,
+                      ),
+                    ),
+
+                    // In add-order mode, the name/phone form is not needed
+                    if (!isAddMode)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                          child: _CustomerInfoCard(
+                            nameCtrl:  _nameCtrl,
+                            phoneCtrl: _phoneCtrl,
+                            tableName: cart.tableName ?? 'Table'),
+                        ),
+                      ),
+
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                        child: _OrderSummaryCard(cart: cart, isAddMode: isAddMode),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Text('${cart.totalItems} item(s) ordered',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.outline)),
+              _CartBottomBar(
+                cart:      cart,
+                onProceed: _showOrderConfirmationDialog,
+                isLoading: _isSubmitting,
+                isAddMode: isAddMode,
               ),
-            ),
-
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final item = cart.items[index];
-                  return _CartItemTile(
-                    item: item,
-                    onAdd:      () {
-                      notifier.addItem(item.menuItem);
-                      _fetchEstimate(ref.read(activeQrCartProvider));
-                    },
-                    onRemove:   () {
-                      notifier.removeItem(item.menuItem.id);
-                      _fetchEstimate(ref.read(activeQrCartProvider));
-                    },
-                    onDelete:   () {
-                      notifier.deleteItem(item.menuItem.id);
-                      _fetchEstimate(ref.read(activeQrCartProvider));
-                    },
-                    onEditNotes: () => _showNotesDialog(item),
-                  );
-                },
-                childCount: cart.items.length,
-              ),
-            ),
-
-            // In add-order mode, the name/phone form is not needed
-            if (!isAddMode)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _CustomerInfoCard(
-                    nameCtrl:  _nameCtrl,
-                    phoneCtrl: _phoneCtrl,
-                    tableName: cart.tableName ?? 'Table'),
-                ),
-              ),
-
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                child: _OrderSummaryCard(cart: cart, isAddMode: isAddMode),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-      bottomNavigationBar: _CartBottomBar(
-        cart:      cart,
-        onProceed: _showOrderConfirmationDialog,
-        isLoading: _isSubmitting,
-        isAddMode: isAddMode,
+    );
+  }
+}
+
+// ─── Header ─────────────────────────────────────────────────────────────────
+class _CartHeader extends StatelessWidget {
+  final String tableName;
+  final VoidCallback onBack;
+  final VoidCallback? onClear;
+
+  const _CartHeader({required this.tableName, required this.onBack, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.textPrimary),
+          ),
+          Expanded(
+            child: Text(
+              tableName,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                  fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (onClear != null)
+            IconButton(
+              onPressed: onClear,
+              icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.accent),
+            )
+          else
+            const SizedBox(width: 48),
+        ],
       ),
     );
   }
@@ -720,113 +814,118 @@ class _CartItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme       = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final hasNotes = item.notes != null && item.notes!.isNotEmpty;
 
     return Dismissible(
       key: ValueKey(item.menuItem.id),
       direction: DismissDirection.endToStart,
       background: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
         decoration: BoxDecoration(
-          color: colorScheme.error, borderRadius: BorderRadius.circular(14)),
+          color: AppColors.accent, borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: Icon(Icons.delete_outline, color: colorScheme.onError, size: 24)),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 24)),
       onDismissed: (_) => onDelete(),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
         decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colorScheme.outlineVariant, width: 0.8)),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.border),
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(item.menuItem.name,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 17,
+                          fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: Text(_formatPrice(item.menuItem.price),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                          fontWeight: FontWeight.w700, color: AppColors.primary)),
+                ),
+              ],
+            ),
+            if (item.menuItem.description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(item.menuItem.description,
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                      color: AppColors.textSecondary, height: 1.35),
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+            const SizedBox(height: 6),
             Row(children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(width: 60, height: 60,
-                  child: item.menuItem.imageUrl != null
-                      ? Image.network(item.menuItem.imageUrl!, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: const Icon(Icons.fastfood_outlined, size: 24, color: Colors.grey)))
-                      : Container(
-                          color: colorScheme.surfaceContainerHighest,
-                          child: const Icon(Icons.fastfood_outlined, size: 24, color: Colors.grey)))),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(item.menuItem.name,
-                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Row(children: [
-                  Text(_formatPrice(item.menuItem.price),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.primary, fontWeight: FontWeight.w500)),
-                  const SizedBox(width: 8),
-                  // ── Prep time badge ──────────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.timer_outlined, size: 11, color: Colors.orange.shade700),
-                      const SizedBox(width: 3),
-                      Text('${item.menuItem.preparationTimeMinutes} min',
-                        style: TextStyle(fontSize: 10,
-                          color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
-                    ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.accentOrange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.timer_outlined, size: 11, color: AppColors.accentOrange),
+                  const SizedBox(width: 3),
+                  Text('${item.menuItem.preparationTimeMinutes} min',
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                          color: AppColors.accentOrange, fontWeight: FontWeight.w700)),
                 ]),
-              ])),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(_formatPrice(item.subtotal),
-                  style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  _SmallQtyBtn(icon: Icons.remove, onTap: onRemove, colorScheme: colorScheme),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Text('${item.quantity}',
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold))),
-                  _SmallQtyBtn(icon: Icons.add, onTap: onAdd, colorScheme: colorScheme),
-                ]),
-              ]),
+              ),
+              const Spacer(),
+              Text(_formatPrice(item.subtotal),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                      fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
             ]),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  _QtyBtn(icon: Icons.remove, onTap: onRemove),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Text('${item.quantity}',
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                            fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+                  _QtyBtn(icon: Icons.add, onTap: onAdd),
+                ]),
+              ),
+              const Spacer(),
+            ]),
+            const SizedBox(height: 10),
             GestureDetector(
               onTap: onEditNotes,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: (item.notes != null && item.notes!.isNotEmpty)
-                      ? colorScheme.primaryContainer.withValues(alpha: 0.5)
-                      : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                   border: Border.all(
-                    color: (item.notes != null && item.notes!.isNotEmpty)
-                        ? colorScheme.primary.withValues(alpha: 0.3)
-                        : colorScheme.outlineVariant)),
+                      color: hasNotes ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border)),
                 child: Row(children: [
-                  Icon(
-                    (item.notes != null && item.notes!.isNotEmpty)
-                        ? Icons.edit_note : Icons.note_add_outlined,
-                    size: 14,
-                    color: (item.notes != null && item.notes!.isNotEmpty)
-                        ? colorScheme.primary : colorScheme.outline),
+                  Icon(hasNotes ? Icons.edit_note : Icons.note_add_outlined,
+                      size: 15, color: hasNotes ? AppColors.primary : AppColors.textHint),
                   const SizedBox(width: 6),
                   Expanded(child: Text(
-                    (item.notes != null && item.notes!.isNotEmpty)
-                        ? item.notes!
-                        : 'Add a note (not spicy, etc...)',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: (item.notes != null && item.notes!.isNotEmpty)
-                          ? colorScheme.primary : colorScheme.outline,
-                      fontStyle: (item.notes != null && item.notes!.isNotEmpty)
-                          ? FontStyle.normal : FontStyle.italic),
-                    maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      hasNotes ? item.notes! : 'Add Note (e.g. Extra spicy)',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                          color: hasNotes ? AppColors.textPrimary : AppColors.textHint,
+                          fontStyle: hasNotes ? FontStyle.normal : FontStyle.italic),
+                      maxLines: 2, overflow: TextOverflow.ellipsis)),
                 ]),
               ),
             ),
@@ -843,23 +942,23 @@ class _CartItemTile extends StatelessWidget {
   }
 }
 
-class _SmallQtyBtn extends StatelessWidget {
+class _QtyBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  final ColorScheme colorScheme;
 
-  const _SmallQtyBtn({required this.icon, required this.onTap, required this.colorScheme});
+  const _QtyBtn({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 26, height: 26,
+        width: 30, height: 30,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(6)),
-        child: Icon(icon, size: 14, color: colorScheme.onPrimaryContainer)));
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill)),
+        child: Icon(icon, size: 15, color: AppColors.primary)));
   }
 }
 
@@ -875,47 +974,61 @@ class _CustomerInfoCard extends StatelessWidget {
     required this.tableName,
   });
 
+  InputDecoration _decoration({required String label, String? hint, String? helper, required IconData icon}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, fontSize: 13),
+      hintText: hint,
+      hintStyle: const TextStyle(fontFamily: 'Poppins', color: AppColors.textHint, fontSize: 13),
+      helperText: helper,
+      helperStyle: const TextStyle(fontFamily: 'Poppins', color: AppColors.textHint, fontSize: 11),
+      prefixIcon: Icon(icon, color: AppColors.textHint, size: 20),
+      filled: true,
+      fillColor: AppColors.surfaceVariant,
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.4)),
+      errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderSide: const BorderSide(color: AppColors.accent)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme       = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant, width: 0.8)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border)),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(Icons.person_outline, size: 18, color: colorScheme.primary),
+          const Icon(Icons.person_outline, size: 18, color: AppColors.primary),
           const SizedBox(width: 8),
-          Text('Customer Information',
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+          const Text('Customer Information',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                  fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
         ]),
         const SizedBox(height: 14),
         TextFormField(
           initialValue: tableName,
           readOnly: true,
-          decoration: InputDecoration(
-            labelText: 'Table Number',
-            prefixIcon: const Icon(Icons.table_restaurant_outlined),
-            filled: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10))),
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
+          decoration: _decoration(label: 'Table Number', icon: Icons.table_restaurant_outlined),
+        ),
         const SizedBox(height: 10),
         TextFormField(
           controller: nameCtrl,
           textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            labelText: 'Customer Name *',
-            hintText: 'Example: John',
-            prefixIcon: const Icon(Icons.badge_outlined),
-            filled: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
+          decoration: _decoration(
+              label: 'Customer Name *', hint: 'Example: John', icon: Icons.badge_outlined),
           validator: (val) {
             if (val == null || val.trim().isEmpty) return 'Name cannot be empty';
             if (val.trim().length < 2) return 'Name is too short';
@@ -925,15 +1038,12 @@ class _CustomerInfoCard extends StatelessWidget {
         TextFormField(
           controller: phoneCtrl,
           keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            labelText: 'Phone Number (optional)',
-            hintText: 'Example: 08123456789',
-            prefixIcon: const Icon(Icons.phone_outlined),
-            helperText: 'Format: 08xxxxxxxxxx (10-13 digits)',
-            filled: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
+          decoration: _decoration(
+              label: 'Phone Number (optional)',
+              hint: 'Example: 08123456789',
+              helper: 'Format: 08xxxxxxxxxx (10-13 digits)',
+              icon: Icons.phone_outlined),
           validator: (val) {
             if (val == null || val.trim().isEmpty) return null;
             final digits = val.trim().replaceAll(RegExp(r'\s+'), '');
@@ -956,107 +1066,65 @@ class _OrderSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme       = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant, width: 0.8)),
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(Icons.receipt_outlined, size: 18, color: colorScheme.primary),
-          const SizedBox(width: 8),
-          Text('Additional Summary',
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-        ]),
-        const SizedBox(height: 14),
-
-        // Item list
-        ...cart.items.map((item) => Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Row(children: [
-            Text('${item.quantity}×',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.primary, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 6),
-            Expanded(child: Text(item.menuItem.name,
-              style: theme.textTheme.bodySmall,
-              maxLines: 1, overflow: TextOverflow.ellipsis)),
-            Text(_formatPrice(item.subtotal), style: theme.textTheme.bodySmall),
-          ]),
-        )),
-
-        Divider(color: colorScheme.outlineVariant, height: 20, thickness: 0.5),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(color: AppColors.border, height: 1, thickness: 1),
+        const SizedBox(height: 16),
 
         if (!isAddMode) ...[
-          // Normal mode: show the full breakdown
-          Row(children: [
-            Text('Subtotal',
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-            const Spacer(),
-            Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall),
-          ]),
-          const SizedBox(height: 4),
-          Row(children: [
-            Text('Service Charge (3%)',
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-            const Spacer(),
-            Text(_formatPrice(cart.serviceCharge), style: theme.textTheme.bodySmall),
-          ]),
-          const SizedBox(height: 4),
-          Row(children: [
-            Text('PB1 (10%)',
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-            const Spacer(),
-            Text(_formatPrice(cart.pb1Amount), style: theme.textTheme.bodySmall),
-          ]),
+          _row('Subtotal', _formatPrice(cart.subtotal)),
           const SizedBox(height: 8),
+          _row('Service Charge (3%)', _formatPrice(cart.serviceCharge)),
+          const SizedBox(height: 8),
+          _row('PB1 (10%)', _formatPrice(cart.pb1Amount)),
+          const SizedBox(height: 16),
+          const Divider(color: AppColors.border, height: 1, thickness: 1),
+          const SizedBox(height: 16),
+          Row(children: [
+            const Text('Total',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 19,
+                    fontWeight: FontWeight.w800, color: AppColors.primary)),
+            const Spacer(),
+            Text(_formatPrice(cart.totalAmount),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 19,
+                    fontWeight: FontWeight.w800, color: AppColors.primary)),
+          ]),
+        ] else ...[
+          _row('New items subtotal', _formatPrice(cart.subtotal), emphasize: true),
+          const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(10)),
-            child: Row(children: [
-              Text('Total', style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer)),
-              const Spacer(),
-              Text(_formatPrice(cart.totalAmount),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold, color: colorScheme.primary)),
-            ])),
-        ] else ...[
-          // Add-order mode: only show new items' subtotal + note that tax is auto-calculated
-          Row(children: [
-            Text('New items subtotal',
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
-            const Spacer(),
-            Text(_formatPrice(cart.subtotal), style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(8),
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
             ),
             child: Row(children: [
-              Icon(Icons.info_outline, size: 13, color: colorScheme.outline),
+              const Icon(Icons.info_outline, size: 13, color: AppColors.textSecondary),
               const SizedBox(width: 6),
-              Expanded(
+              const Expanded(
                 child: Text(
                   'PB1 & Service Charge are calculated automatically from the order total.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.outline, fontSize: 11),
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 11.5, color: AppColors.textSecondary),
                 ),
               ),
             ]),
           ),
         ],
-      ]),
+      ],
     );
+  }
+
+  Widget _row(String label, String value, {bool emphasize = false}) {
+    return Row(children: [
+      Text(label,
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textSecondary)),
+      const Spacer(),
+      Text(value,
+          style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+              fontWeight: emphasize ? FontWeight.w700 : FontWeight.w600,
+              color: AppColors.textPrimary)),
+    ]);
   }
 
   String _formatPrice(double price) {
@@ -1082,58 +1150,38 @@ class _CartBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme       = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(top: BorderSide(color: colorScheme.outlineVariant, width: 0.5))),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(top: BorderSide(color: AppColors.border))),
       child: SizedBox(
-        width: double.infinity, height: 52,
+        width: double.infinity, height: 54,
         child: ElevatedButton(
           onPressed: isLoading ? null : onProceed,
           style: ElevatedButton.styleFrom(
-            backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            backgroundColor: AppColors.accent,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
             elevation: 0),
           child: isLoading
               ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   SizedBox(width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
                   SizedBox(width: 10),
-                  Text('Sending to Kitchen...'),
+                  Text('Sending to Kitchen...',
+                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
                 ])
               : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const Icon(Icons.send_outlined, size: 20),
-                  const SizedBox(width: 8),
-                  Text('Order Now',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: colorScheme.onPrimary, fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: colorScheme.onPrimary.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(20)),
-                    // In add mode: show only the new items' subtotal (not total+tax)
-                    child: Text(
-                      isAddMode
-                          ? '${_formatPrice(cart.subtotal)} (new items)'
-                          : _formatPrice(cart.totalAmount),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onPrimary, fontWeight: FontWeight.bold))),
+                  const Icon(Icons.send_rounded, size: 19, color: Colors.white),
+                  const SizedBox(width: 10),
+                  Text(isAddMode ? 'Send Additional Order' : 'Send Order',
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 15.5,
+                          fontWeight: FontWeight.w700, color: Colors.white)),
                 ]),
         ),
       ),
     );
-  }
-
-  String _formatPrice(double price) {
-    final formatted = price.toStringAsFixed(0)
-        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
-    return 'Rp $formatted';
   }
 }
