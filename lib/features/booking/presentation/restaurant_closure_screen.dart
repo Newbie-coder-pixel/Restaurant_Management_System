@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../core/models/staff_role.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/staff_shell.dart';
 
 // Simple model for a branch
 class _Branch {
@@ -36,6 +37,19 @@ class _RestaurantClosureScreenState
 
   DateTime _focusedDay = DateTime.now();
   Map<String, Map<String, dynamic>> _closures = {};
+
+  // ── "Add Closure" panel state ──────────────────────────────────────────
+  // Tapping a calendar day (or picking a date in the panel) selects a day
+  // here; the panel then lets the user confirm add/remove via a button
+  // press instead of mutating immediately on tap.
+  DateTime? _selectedDay;
+  final _reasonCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -116,26 +130,40 @@ class _RestaurantClosureScreenState
     }
   }
 
-
-  Future<void> _toggleClosure(DateTime day) async {
-    if (_selectedBranchId == null) return;
+  // ── Select a day (tap on the calendar, or the panel's date picker) ─────
+  void _onDaySelected(DateTime day) {
     final dateStr = _fmtDate(day);
-
-    final today = DateTime.now();
-    final todayStr = _fmtDate(today);
+    final todayStr = _fmtDate(DateTime.now());
     if (dateStr.compareTo(todayStr) < 0) {
-      _showSnack('Cannot change a date that has already passed', Colors.orange);
+      _showSnack('Cannot change a date that has already passed', AppColors.accentOrange);
       return;
     }
-
-    if (_closures.containsKey(dateStr)) {
-      await _removeClosure(dateStr);
-    } else {
-      await _addClosure(day, dateStr);
-    }
+    setState(() {
+      _selectedDay = day;
+      _focusedDay = day;
+      _reasonCtrl.text = _closures[dateStr]?['reason'] as String? ?? '';
+    });
   }
 
-  Future<void> _addClosure(DateTime day, String dateStr) async {
+  Future<void> _pickDateForPanel() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDay ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) _onDaySelected(picked);
+  }
+
+  bool get _selectedIsClosed =>
+      _selectedDay != null && _closures.containsKey(_fmtDate(_selectedDay!));
+
+  // ── Schedule the closure currently selected in the panel ───────────────
+  Future<void> _schedulePanelClosure() async {
+    if (_selectedDay == null || _selectedBranchId == null) return;
+    final day = _selectedDay!;
+    final dateStr = _fmtDate(day);
+
     final bookings = await Supabase.instance.client
         .from('bookings')
         .select('id')
@@ -149,7 +177,7 @@ class _RestaurantClosureScreenState
         context: context,
         builder: (ctx) => AlertDialog(
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
           title: const Text('Active Bookings Exist',
               style: TextStyle(
                   fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -178,13 +206,10 @@ class _RestaurantClosureScreenState
       if (confirm != true) return;
     }
 
-    if (!mounted) return;
-    final reason = await _showReasonDialog(day);
-    if (reason == null) return;
-
     setState(() => _isSaving = true);
     try {
       final staff = ref.read(currentStaffProvider);
+      final reason = _reasonCtrl.text.trim();
       await Supabase.instance.client.from('restaurant_closures').insert({
         'branch_id': _selectedBranchId,
         'closure_date': dateStr,
@@ -193,9 +218,9 @@ class _RestaurantClosureScreenState
       });
       await _loadClosures();
       _showSnack('✅ ${_fmtDisplayDate(day)} marked as a closed day',
-          const Color(0xFF4CAF50));
+          AppColors.available);
     } catch (e) {
-      _showSnack('Failed to save: $e', Colors.red);
+      _showSnack('Failed to save: $e', AppColors.accent);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -213,63 +238,10 @@ class _RestaurantClosureScreenState
       _showSnack(
           '✅ Closure date removed — restaurant is open again', AppColors.available);
     } catch (e) {
-      _showSnack('Failed to delete: $e', Colors.red);
+      _showSnack('Failed to delete: $e', AppColors.accent);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
-  }
-
-  Future<String?> _showReasonDialog(DateTime day) async {
-    final ctrl = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(children: [
-          const Icon(Icons.store_rounded, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text('Close ${_fmtDisplayDate(day)}',
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16)),
-          ),
-        ]),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Closure reason (optional):',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-          const SizedBox(height: 10),
-          TextField(
-            controller: ctrl,
-            autofocus: true,
-            maxLines: 2,
-            decoration: InputDecoration(
-              hintText: 'Example: Holiday, Renovation, Private Event...',
-              hintStyle:
-                  const TextStyle(fontFamily: 'Poppins', fontSize: 12),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child:
-                const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
-          ),
-          ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Save',
-                style:
-                    TextStyle(fontFamily: 'Poppins', color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showSnack(String msg, Color color) {
@@ -292,220 +264,236 @@ class _RestaurantClosureScreenState
       ..sort((a, b) => a.key.compareTo(b.key));
   }
 
+  String? get _selectedBranchName => _branches
+      .where((b) => b.id == _selectedBranchId)
+      .map((b) => b.name)
+      .firstOrNull;
+
   // ─────────────────────────────────────────────────────────────
   // BUILD
   // ─────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Restaurant Closure Days'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        titleTextStyle: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.white),
-        actions: [
-          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
-          if (_isSuperAdmin)
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedBranchId,
-                isDense: true,
-                dropdownColor: AppColors.primary,
-                iconEnabledColor: Colors.white60,
-                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
-                items: _branches
-                    .map((b) => DropdownMenuItem<String>(
-                          value: b.id,
-                          child: Text(b.name,
-                              style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 11,
-                                  color: Colors.white))))
-                    .toList(),
-                onChanged: (val) {
-                  if (val == null || val == _selectedBranchId) return;
-                  setState(() {
-                    _selectedBranchId = val;
-                    _closures = {};
-                    _focusedDay = DateTime.now();
-                  });
-                  _loadClosures();
-                },
-              ),
+    return StaffShell(
+      pageTitle: 'Restaurant Closures',
+      activeRoute: AppRoutes.closures,
+      topBarActions: [
+        if (_isSaving)
+          const Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: SizedBox(
+              width: 18, height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
             ),
-          const SizedBox(width: 4),
-          if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.only(right: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
-                ),
-              ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _loadClosures,
-            ),
-        ],
-      ),
+          )
+        else
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+            onPressed: _loadClosures,
+          ),
+      ],
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : RefreshIndicator(
               onRefresh: _loadClosures,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildInfoBanner(),
-                  const SizedBox(height: 16),
-                  _buildCalendar(),
-                  const SizedBox(height: 20),
-                  _buildUpcomingList(),
-                  const SizedBox(height: 24),
-                ],
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    LayoutBuilder(builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 980;
+                      final left = _buildCalendar();
+                      final right = _buildAddClosurePanel();
+
+                      if (isWide) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 2, child: left),
+                            const SizedBox(width: 20),
+                            SizedBox(width: 340, child: right),
+                          ],
+                        );
+                      }
+                      return Column(children: [left, const SizedBox(height: 20), right]);
+                    }),
+                    const SizedBox(height: 24),
+                    _buildUpcomingList(),
+                  ],
+                ),
               ),
             ),
     );
   }
 
-
   // ─────────────────────────────────────────────────────────────
-  // INFO BANNER
+  // CALENDAR (month grid)
   // ─────────────────────────────────────────────────────────────
 
-  Widget _buildInfoBanner() => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.touch_app_rounded,
-                color: AppColors.primary, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _isSuperAdmin
-                    ? 'Select a branch in the top right corner, then tap a date to mark/unmark it as a closure day. '
-                        'Changes only apply to the selected branch.'
-                    : 'Tap a date on the calendar to mark/unmark the restaurant\'s closure day. '
-                        'New bookings can\'t be made on dates marked as closed.',
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    color: AppColors.primary),
-              ),
+  Widget _buildCalendar() {
+    final monthLabel = _monthLabel(_focusedDay);
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Custom header: icon + month/year + prev/next ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_month_rounded, color: AppColors.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(monthLabel,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 17,
+                    fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                const Spacer(),
+                if (_isSuperAdmin && _branches.isNotEmpty) ...[
+                  _branchChip(),
+                  const SizedBox(width: 8),
+                ],
+                IconButton(
+                  icon: const Icon(Icons.chevron_left_rounded, color: AppColors.textSecondary),
+                  onPressed: () => setState(() =>
+                      _focusedDay = DateTime(_focusedDay.year, _focusedDay.month - 1, 1)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+                  onPressed: () => setState(() =>
+                      _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 1)),
+                ),
+              ],
             ),
-          ],
-        ),
-      );
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: TableCalendar(
+              firstDay: DateTime.now().subtract(const Duration(days: 1)),
+              lastDay: DateTime.now().add(const Duration(days: 365)),
+              focusedDay: _focusedDay,
+              headerVisible: false,
+              selectedDayPredicate: (d) =>
+                  _selectedDay != null && isSameDay(d, _selectedDay!),
+              onDaySelected: (selected, focused) => _onDaySelected(selected),
+              onPageChanged: (focused) => setState(() => _focusedDay = focused),
+              daysOfWeekStyle: const DaysOfWeekStyle(
+                weekdayStyle: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary, letterSpacing: 0.4),
+                weekendStyle: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary, letterSpacing: 0.4),
+              ),
+              calendarBuilders: CalendarBuilders(
+                dowBuilder: (ctx, day) {
+                  const labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+                  return Center(
+                    child: Text(labels[day.weekday - 1],
+                      style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary, letterSpacing: 0.4)),
+                  );
+                },
+                defaultBuilder: (ctx, day, focusedDay) => _dayCell(day),
+                todayBuilder: (ctx, day, focusedDay) => _dayCell(day, isToday: true),
+                outsideBuilder: (ctx, day, focusedDay) => _dayCell(day, isOutside: true),
+                selectedBuilder: (ctx, day, focusedDay) => _dayCell(day, isSelected: true),
+              ),
+              calendarStyle: const CalendarStyle(outsideDaysVisible: true),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  // ─────────────────────────────────────────────────────────────
-  // CALENDAR
-  // ─────────────────────────────────────────────────────────────
-
-  Widget _buildCalendar() => Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 2)),
-          ],
-        ),
-        child: TableCalendar(
-          firstDay: DateTime.now().subtract(const Duration(days: 1)),
-          lastDay: DateTime.now().add(const Duration(days: 365)),
-          focusedDay: _focusedDay,
-          onDaySelected: (selected, focused) {
-            setState(() => _focusedDay = focused);
-            _toggleClosure(selected);
+  Widget _branchChip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedBranchId,
+          isDense: true,
+          icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textSecondary),
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
+          items: _branches
+              .map((b) => DropdownMenuItem<String>(
+                    value: b.id,
+                    child: Text(b.name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12))))
+              .toList(),
+          onChanged: (val) {
+            if (val == null || val == _selectedBranchId) return;
+            setState(() {
+              _selectedBranchId = val;
+              _closures = {};
+              _focusedDay = DateTime.now();
+              _selectedDay = null;
+              _reasonCtrl.clear();
+            });
+            _loadClosures();
           },
-          onPageChanged: (focused) =>
-              setState(() => _focusedDay = focused),
-          calendarBuilders: CalendarBuilders(
-            defaultBuilder: (ctx, day, focusedDay) {
-              final isWeekend = day.weekday == DateTime.saturday ||
-                  day.weekday == DateTime.sunday;
-              return _dayCell(day, isWeekend: isWeekend);
-            },
-            todayBuilder: (ctx, day, focusedDay) =>
-                _dayCell(day, isToday: true),
-            outsideBuilder: (ctx, day, focusedDay) =>
-                _dayCell(day, isOutside: true),
-          ),
-          calendarStyle: const CalendarStyle(
-            outsideDaysVisible: true,
-          ),
-          headerStyle: const HeaderStyle(
-            formatButtonVisible: false,
-            titleCentered: true,
-            titleTextStyle: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600,
-                fontSize: 16),
-          ),
         ),
-      );
+      ),
+    );
+  }
+
+  String _monthLabel(DateTime d) {
+    const months = ['January','February','March','April','May','June',
+      'July','August','September','October','November','December'];
+    return '${months[d.month - 1]} ${d.year}';
+  }
 
   Widget _dayCell(
     DateTime day, {
-    bool isWeekend = false,
     bool isToday = false,
     bool isOutside = false,
+    bool isSelected = false,
   }) {
     final dateStr = _fmtDate(day);
     final isClosed = _closures.containsKey(dateStr);
+    final isPast = dateStr.compareTo(_fmtDate(DateTime.now())) < 0;
 
     Color bgColor = Colors.transparent;
-    Color textColor = isOutside
-        ? Colors.black26
-        : isWeekend
-            ? AppColors.accent.withValues(alpha: 0.8)
-            : AppColors.textPrimary;
+    Color textColor = isOutside || isPast
+        ? AppColors.textHint
+        : AppColors.textPrimary;
     FontWeight fontWeight = FontWeight.normal;
+    Border? border;
 
     if (isClosed) {
-      bgColor = AppColors.accent.withValues(alpha: 0.15);
+      bgColor = AppColors.accent.withValues(alpha: 0.14);
       textColor = AppColors.accent;
-      fontWeight = FontWeight.w700;
+      fontWeight = FontWeight.w800;
     }
     if (isToday && !isClosed) {
-      bgColor = AppColors.primary.withValues(alpha: 0.12);
       textColor = AppColors.primary;
-      fontWeight = FontWeight.w700;
+      fontWeight = FontWeight.w800;
+      border = Border.all(color: AppColors.primary.withValues(alpha: 0.5));
+    }
+    if (isSelected) {
+      border = Border.all(color: AppColors.primary, width: 2);
     }
 
     return Container(
-      margin: const EdgeInsets.all(4),
+      margin: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-        border: isClosed
-            ? Border.all(color: AppColors.accent.withValues(alpha: 0.5))
-            : isToday
-                ? Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.4))
-                : null,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: border,
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -516,15 +504,190 @@ class _RestaurantClosureScreenState
                   fontSize: 13,
                   fontWeight: fontWeight,
                   color: textColor)),
-          if (isClosed)
-            Container(
-              width: 4,
-              height: 4,
-              decoration: const BoxDecoration(
-                color: AppColors.accent,
-                shape: BoxShape.circle,
-              ),
+          if (isClosed) ...[
+            const SizedBox(height: 2),
+            Icon(
+              _closures[dateStr]?['reason'] == null
+                  ? Icons.event_busy_rounded
+                  : Icons.event_busy_rounded,
+              size: 12, color: AppColors.accent),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ADD CLOSURE PANEL
+  // ─────────────────────────────────────────────────────────────
+
+  Widget _buildAddClosurePanel() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceVariant,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
+            child: Row(children: [
+              Icon(_selectedIsClosed ? Icons.event_available_rounded : Icons.add_circle_outline_rounded,
+                color: AppColors.accent, size: 18),
+              const SizedBox(width: 8),
+              Text(_selectedIsClosed ? 'Manage Closure' : 'Add Closure',
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary)),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('BRANCH',
+                  style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4, color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                _isSuperAdmin
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedBranchId,
+                            isExpanded: true,
+                            icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textSecondary),
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textPrimary),
+                            items: _branches
+                                .map((b) => DropdownMenuItem<String>(
+                                      value: b.id,
+                                      child: Text(b.name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13))))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val == null || val == _selectedBranchId) return;
+                              setState(() {
+                                _selectedBranchId = val;
+                                _closures = {};
+                                _selectedDay = null;
+                                _reasonCtrl.clear();
+                              });
+                              _loadClosures();
+                            },
+                          ),
+                        ),
+                      )
+                    : Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                        ),
+                        child: Text(_selectedBranchName ?? 'My Branch',
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary)),
+                      ),
+                const SizedBox(height: 16),
+
+                const Text('DATE',
+                  style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4, color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: _pickDateForPanel,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(
+                          _selectedDay == null ? 'Tap a date...' : _fmtDisplayDate(_selectedDay!),
+                          style: TextStyle(
+                            fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+                            color: _selectedDay == null ? AppColors.textHint : AppColors.textPrimary)),
+                      ),
+                      const Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.textSecondary),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                const Text('REASON (OPTIONAL)',
+                  style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4, color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _reasonCtrl,
+                  enabled: !_selectedIsClosed,
+                  maxLines: 2,
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'e.g., Public Holiday, Maintenance...',
+                    hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textHint),
+                    filled: true,
+                    fillColor: AppColors.surfaceVariant,
+                    contentPadding: const EdgeInsets.all(12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _selectedDay == null || _isSaving
+                        ? null
+                        : (_selectedIsClosed
+                            ? () => _removeClosure(_fmtDate(_selectedDay!))
+                            : _schedulePanelClosure),
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Icon(_selectedIsClosed ? Icons.delete_outline_rounded : Icons.save_rounded, size: 18),
+                    label: Text(
+                      _selectedIsClosed ? 'REMOVE CLOSURE' : 'SCHEDULE CLOSURE',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.4)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _selectedIsClosed ? AppColors.textHint : AppColors.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -539,126 +702,128 @@ class _RestaurantClosureScreenState
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        const Icon(Icons.event_busy_rounded,
-            color: AppColors.accent, size: 18),
+        const Icon(Icons.event_busy_rounded, color: AppColors.accent, size: 18),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-          'Closure Schedule${_isSuperAdmin && _selectedBranchId != null ? ' — ${_branches.where((b) => b.id == _selectedBranchId).map((b) => b.name).firstOrNull ?? ""}' : ''} (${upcoming.length})',
+            'Upcoming Closures${_isSuperAdmin && _selectedBranchName != null ? ' — $_selectedBranchName' : ''} (${upcoming.length})',
             style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w700,
-                fontSize: 15),
+                fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary),
           ),
         ),
       ]),
       const SizedBox(height: 12),
       if (upcoming.isEmpty)
         Container(
-          padding: const EdgeInsets.all(24),
+          width: double.infinity,
+          padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2)),
-            ],
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            border: Border.all(color: AppColors.border),
           ),
           child: const Center(
             child: Column(children: [
               Icon(Icons.store_rounded, size: 40, color: AppColors.textHint),
               SizedBox(height: 8),
               Text('No closure days scheduled yet',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: AppColors.textSecondary)),
+                  style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
             ]),
           ),
         )
       else
-        ...upcoming.map((e) {
-          final dateStr = e.key;
-          final row = e.value;
-          final reason = row['reason'] as String?;
-          final parts = dateStr.split('-');
-          final dt = DateTime(int.parse(parts[0]), int.parse(parts[1]),
-              int.parse(parts[2]));
-          final dayName = _dayName(dt.weekday);
-          final isToday = dateStr == _fmtDate(DateTime.now());
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.3)),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2)),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            border: Border.all(color: AppColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              // Header row
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: AppColors.surfaceVariant,
+                child: const Row(children: [
+                  Expanded(flex: 3, child: Text('DATE', style: _kHeaderStyle)),
+                  Expanded(flex: 5, child: Text('REASON', style: _kHeaderStyle)),
+                  SizedBox(width: 44),
+                ]),
+              ),
+              for (int i = 0; i < upcoming.length; i++) ...[
+                if (i != 0) const Divider(height: 1, color: AppColors.border),
+                _closureRow(upcoming[i]),
               ],
-            ),
-            child: ListTile(
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.event_busy_rounded,
-                    color: AppColors.accent, size: 22),
-              ),
-              title: Row(children: [
-                Text('$dayName, ${dt.day}/${dt.month}/${dt.year}',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13)),
-                if (isToday) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text('Today',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ]),
-              subtitle: Text(
-                reason ?? 'No reason given',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    color: reason != null
-                        ? AppColors.textSecondary
-                        : AppColors.textHint,
-                    fontStyle: reason == null
-                        ? FontStyle.italic
-                        : FontStyle.normal),
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    color: AppColors.accent, size: 20),
-                tooltip: 'Remove closure day',
-                onPressed: () => _removeClosure(dateStr),
-              ),
-            ),
-          );
-        }),
+            ],
+          ),
+        ),
     ]);
+  }
+
+  static const _kHeaderStyle = TextStyle(
+    fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+    letterSpacing: 0.4, color: AppColors.textSecondary);
+
+  Widget _closureRow(MapEntry<String, Map<String, dynamic>> e) {
+    final dateStr = e.key;
+    final row = e.value;
+    final reason = row['reason'] as String?;
+    final parts = dateStr.split('-');
+    final dt = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    final dayName = _dayName(dt.weekday);
+    final isToday = dateStr == _fmtDate(DateTime.now());
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Row(children: [
+              Text('$dayName, ${dt.day}/${dt.month}/${dt.year}',
+                  style: const TextStyle(
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13,
+                      color: AppColors.textPrimary)),
+              if (isToday) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('Today',
+                      style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 9,
+                          color: Colors.white, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ]),
+          ),
+          Expanded(
+            flex: 5,
+            child: Text(
+              reason ?? 'No reason given',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 12,
+                  color: reason != null ? AppColors.textSecondary : AppColors.textHint,
+                  fontStyle: reason == null ? FontStyle.italic : FontStyle.normal),
+            ),
+          ),
+          SizedBox(
+            width: 44,
+            child: IconButton(
+              icon: const Icon(Icons.delete_outline, color: AppColors.accent, size: 20),
+              tooltip: 'Remove closure day',
+              onPressed: () => _removeClosure(dateStr),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _dayName(int weekday) {
