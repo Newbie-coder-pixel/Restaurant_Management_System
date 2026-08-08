@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../providers/auth_provider.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -273,6 +273,124 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  Widget _buildAuthCard(BuildContext context, AuthState authState) {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(maxWidth: 400),
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Staff Login',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 22,
+                  fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          const SizedBox(height: 4),
+          const Text('Enter your credentials to sign in.',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              prefixIcon: Icon(Icons.email_outlined),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _passCtrl,
+            obscureText: _obscure,
+            onSubmitted: (_) => _handleLogin(),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              labelText: 'Password',
+              prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: (_isSubmitting || authState.isLoading) ? null : _forgotPassword,
+              child: const Text('Forgot Password?',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                      fontWeight: FontWeight.w600, color: AppColors.accent)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              onPressed: (_isSubmitting || authState.isLoading) ? null : _handleLogin,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+              ),
+              child: (_isSubmitting || authState.isLoading)
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Log In',
+                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text('Authorized staff only',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 11.5, color: AppColors.textHint)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBrandPanel() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.primary, AppColors.accent],
+        ),
+      ),
+      padding: const EdgeInsets.all(40),
+      alignment: Alignment.bottomLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+            ),
+            child: const Icon(Icons.restaurant_menu, size: 32, color: Colors.white),
+          ),
+          const SizedBox(height: 20),
+          const Text('RestaurantOS',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 30,
+                  fontWeight: FontWeight.w800, color: Colors.white)),
+          const SizedBox(height: 6),
+          Text('Multi-branch restaurant management, in one place.',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                  color: Colors.white.withValues(alpha: 0.8), height: 1.4)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
@@ -297,99 +415,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 900;
+
+            final authCard = Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                child: _buildAuthCard(context, authState),
+              ),
+            );
+
+            if (!isWide) {
+              return authCard;
+            }
+
+            return Row(
               children: [
-                Container(
-                  width: 80, height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(Icons.restaurant_menu, size: 44, color: Colors.white),
-                ),
-                const SizedBox(height: 24),
-                const Text('RestaurantOS',
-                  style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 28,
-                    fontWeight: FontWeight.w700, color: Colors.white)),
-                const SizedBox(height: 8),
-                const Text('Staff Login',
-                  style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 14, color: Colors.white60)),
-                const SizedBox(height: 48),
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: Colors.white, borderRadius: BorderRadius.circular(20)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text('Log In to Your Account',
-                        style: TextStyle(
-                          fontFamily: 'Poppins', fontSize: 18,
-                          fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                      const SizedBox(height: 24),
-                      TextField(
-                        controller: _emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email_outlined)),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _passCtrl,
-                        obscureText: _obscure,
-                        onSubmitted: (_) => _handleLogin(),
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                          ),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: (_isSubmitting || authState.isLoading) ? null : _forgotPassword,
-                          child: const Text('Forgot Password?',
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary)),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: (_isSubmitting || authState.isLoading) ? null : _handleLogin,
-                          child: (_isSubmitting || authState.isLoading)
-                              ? const SizedBox(width: 20, height: 20,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2))
-                              : const Text('Log In'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text('Authorized staff only',
-                  style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 12, color: Colors.white38)),
+                Expanded(child: _buildBrandPanel()),
+                Expanded(child: authCard),
               ],
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
