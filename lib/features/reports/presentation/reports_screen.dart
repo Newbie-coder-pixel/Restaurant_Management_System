@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/staff_shell.dart';
 import '../../../shared/models/order_model.dart'; // ← added this
 import '../providers/reports_provider.dart';
 
@@ -22,67 +23,63 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     });
   }
 
+  final _topMenuSectionKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     final notifier = ref.watch(reportsProvider);
     final s = notifier.state;
 
-    return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Reports & Analytics'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        titleTextStyle: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.white),
-        actions: [
-          if (s.isSuperAdmin)
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String?>(
-                value: s.selectedBranchId,
-                isDense: true,
-                dropdownColor: AppColors.primary,
-                iconEnabledColor: Colors.white60,
-                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: Colors.white70),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('All Branches',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Colors.white70)),
-                  ),
-                  ...s.branches.map((b) => DropdownMenuItem<String?>(
-                        value: b['id'] as String,
-                        child: Text(b['name'] as String,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.white)),
-                      )),
-                ],
-                onChanged: (val) => notifier.selectBranch(val),
+    return StaffShell(
+      pageTitle: 'Reports',
+      activeRoute: AppRoutes.reports,
+      topBarActions: [
+        if (s.isSuperAdmin)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String?>(
+                  value: s.selectedBranchId,
+                  isDense: true,
+                  icon: const Icon(Icons.keyboard_arrow_down,
+                      size: 16, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('All Branches',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 12))),
+                    ...s.branches.map((b) => DropdownMenuItem<String?>(
+                          value: b['id'] as String,
+                          child: Text(b['name'] as String,
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)))),
+                  ],
+                  onChanged: (val) => notifier.selectBranch(val),
+                ),
               ),
             ),
-          const SizedBox(width: 8),
-          IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: notifier.load),
-        ],
-      ),
+          ),
+        _PeriodToggle(
+          current: s.period,
+          onChanged: (p) => notifier.selectPeriod(p),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+            onPressed: notifier.load),
+      ],
       body: s.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -93,55 +90,42 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   // populations (VA/QRIS orders can settle several minutes to hours after
                   // being created), not a bug — hence the explicit subtitle here so it's
                   // not mistaken for two numbers that should match.
-                  Row(children: [
-                    _kpiCard('Orders Received', '${s.todayOrders}',
-                        Icons.receipt_long, AppColors.primary,
-                        subtitle: 'orders created today'),
-                    const SizedBox(width: 12),
-                    _kpiCard(
-                        'Revenue',
-                        _formatRupiahCompact(s.todayRevenue),
-                        Icons.monetization_on_outlined,
-                        _StatusColors.good,
-                        subtitle: 'payments settled today'),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    _kpiCard('Bookings Today', '${s.todayBookings}',
-                        Icons.event_available, const Color(0xFF4A3AA7)),
-                    const SizedBox(width: 12),
-                    _kpiCard(
-                        'COGS Today',
-                        _formatRupiahCompact(s.todayCogs),
-                        Icons.calculate_outlined,
-                        const Color(0xFFEB6834)),
-                  ]),
+                  LayoutBuilder(builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 760;
+                    final cards = [
+                      _kpiCard('Gross Revenue', _formatRupiahCompact(s.todayRevenue),
+                          Icons.payments_outlined, subtitle: 'payments settled today'),
+                      _kpiCard('Orders Received', '${s.todayOrders}',
+                          Icons.receipt_long_outlined, subtitle: 'orders created today'),
+                      _kpiCard('Bookings Today', '${s.todayBookings}',
+                          Icons.event_available_outlined),
+                      _kpiCard('COGS Today', _formatRupiahCompact(s.todayCogs),
+                          Icons.calculate_outlined),
+                    ];
+                    if (isWide) {
+                      return Row(children: [
+                        for (int i = 0; i < cards.length; i++) ...[
+                          Expanded(child: cards[i]),
+                          if (i != cards.length - 1) const SizedBox(width: 12),
+                        ],
+                      ]);
+                    }
+                    return Column(children: [
+                      Row(children: [Expanded(child: cards[0]), const SizedBox(width: 12), Expanded(child: cards[1])]),
+                      const SizedBox(height: 12),
+                      Row(children: [Expanded(child: cards[2]), const SizedBox(width: 12), Expanded(child: cards[3])]),
+                    ]);
+                  }),
                   const SizedBox(height: 24),
 
-                  // Revenue chart — header + period toggle
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Revenue ${s.period.label}',
-                          style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16),
-                        ),
-                      ),
-                      _PeriodToggle(
-                        current: s.period,
-                        onChanged: (p) => notifier.selectPeriod(p),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
+                  // Revenue chart + Top Sellers panel
+                  LayoutBuilder(builder: (context, constraints) {
+                    final chart = _SectionCard(
+                      title: 'Revenue Trend',
+                      subtitle: 'Daily gross sales · ${s.period.label}',
+                      icon: Icons.show_chart_rounded,
                       child: SizedBox(
-                        height: 220,
+                        height: 260,
                         child: _allZero(s.revenueSpots)
                             ? Center(
                                 child: Column(
@@ -167,14 +151,40 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 periodDays: s.period.days,
                               ),
                       ),
-                    ),
-                  ),
+                    );
+                    final topSellers = _TopSellersPanel(
+                      topMenus: s.topMenus,
+                      onViewFullReport: () {
+                        final ctx = _topMenuSectionKey.currentContext;
+                        if (ctx != null) {
+                          Scrollable.ensureVisible(ctx,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut);
+                        }
+                      },
+                    );
+                    final isWide = constraints.maxWidth >= 900;
+                    if (isWide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 2, child: chart),
+                          const SizedBox(width: 16),
+                          SizedBox(width: 320, child: topSellers),
+                        ],
+                      );
+                    }
+                    return Column(children: [chart, const SizedBox(height: 16), topSellers]);
+                  }),
                   const SizedBox(height: 24),
 
-                  _TopMenuSection(
-                      topMenus: s.topMenus,
-                      categories: s.topMenuCategories,
-                      period: s.period),
+                  KeyedSubtree(
+                    key: _topMenuSectionKey,
+                    child: _TopMenuSection(
+                        topMenus: s.topMenus,
+                        categories: s.topMenuCategories,
+                        period: s.period),
+                  ),
                   const SizedBox(height: 24),
                   _MenuMarginSection(menuMargins: s.menuMargins),
                   const SizedBox(height: 24),
@@ -184,105 +194,86 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   if (s.isSuperAdmin) const SizedBox(height: 24),
 
                   // Recent orders
-                  const Text('Recent Orders',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16)),
+                  const _SectionHeader(title: 'Recent Orders', icon: Icons.receipt_long_outlined),
                   const SizedBox(height: 12),
-                  ...s.recentOrders.map((o) => Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary
-                                  .withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Text(
-                                o.orderNumber.split('-').last,
-                                style: const TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 11,
-                                    color: AppColors.primary),
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            o.tableNumber != null
-                                ? 'Table ${o.tableNumber}'
-                                : 'Takeaway',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Row(
-                            children: [
-                              Text('${o.items.length} item • ',
-                                  style: AppTextStyles.caption),
-                              _orderStatusChip(o.status),
-                            ],
-                          ),
-                          trailing: Text(
-                            _formatRupiah(o.totalAmount),
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontWeight: FontWeight.w700,
-                                // Orders that are unpaid/not settled are shown
-                                // in a neutral ink color (not the same accent
-                                // color as paid orders) — previously all orders
-                                // in this list (including cancelled/unpaid ones)
-                                // were given the same visual weight as orders
-                                // that were actually paid.
-                                color: o.isPaid
-                                    ? AppColors.accent
-                                    : AppColors.textHint),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                    ),
+                    child: Column(children: [
+                      for (int i = 0; i < s.recentOrders.length; i++) ...[
+                        if (i > 0) const Divider(height: 1, color: AppColors.border),
+                        _RecentOrderRow(order: s.recentOrders[i], statusChip: _orderStatusChip),
+                      ],
+                      if (s.recentOrders.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(
+                            child: Text('No orders yet',
+                                style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
                           ),
                         ),
-                      )),
+                    ]),
+                  ),
                 ],
               ),
             ),
     );
   }
 
-  Widget _kpiCard(
-          String label, String value, IconData icon, Color color,
-          {String? subtitle}) =>
-      Expanded(
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(icon, color: color, size: 22),
-                const SizedBox(height: 8),
-                Text(value,
-                    style: TextStyle(
+  Widget _kpiCard(String label, String value, IconData icon, {String? subtitle}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(label.toUpperCase(),
+                    style: const TextStyle(
                         fontFamily: 'Poppins',
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        color: color)),
-                const SizedBox(height: 4),
-                Text(label, style: AppTextStyles.caption),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 9.5,
-                          color: AppColors.textHint)),
-                ],
-              ],
-            ),
+                        letterSpacing: 0.4,
+                        color: AppColors.textSecondary)),
+              ),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 16, color: AppColors.primary),
+              ),
+            ],
           ),
-        ),
-      );
+          const SizedBox(height: 12),
+          Text(value,
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 22,
+                  color: AppColors.textPrimary)),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(subtitle,
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 10.5,
+                    color: AppColors.textHint)),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _orderStatusChip(OrderStatus status) {
     final Color color;
@@ -527,6 +518,253 @@ class _RevenueLineChart extends StatelessWidget {
         ),
         lineBarsData: [lineBarData],
       ),
+    );
+  }
+}
+
+// ── Section Header (icon-in-box + title, no emoji) ─────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  const _SectionHeader({required this.title, required this.icon, this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 15, color: AppColors.primary),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: AppColors.textPrimary)),
+              if (subtitle != null)
+                Text(subtitle!,
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 11.5, color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Bordered card wrapper used for the Revenue Trend chart ─────────────────
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final Widget child;
+  const _SectionCard({required this.title, required this.icon, required this.child, this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(title: title, subtitle: subtitle, icon: icon),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+// ── Top Sellers side panel ──────────────────────────────────────────────────
+
+class _TopSellersPanel extends StatelessWidget {
+  final List<Map<String, dynamic>> topMenus;
+  final VoidCallback onViewFullReport;
+  const _TopSellersPanel({required this.topMenus, required this.onViewFullReport});
+
+  @override
+  Widget build(BuildContext context) {
+    final top = topMenus.take(4).toList();
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: _SectionHeader(title: 'Top Sellers', icon: Icons.leaderboard_outlined),
+          ),
+          if (top.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 20),
+              child: Text('No sales data yet',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+            )
+          else ...[
+            const Divider(height: 1, color: AppColors.border),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 10, 16, 6),
+              child: Row(children: [
+                SizedBox(width: 20, child: Text('#', style: AppTextStyles.label)),
+                Expanded(child: Text('ITEM NAME', style: AppTextStyles.label)),
+                Text('QTY', style: AppTextStyles.label),
+                SizedBox(width: 12),
+                Text('REV', style: AppTextStyles.label),
+              ]),
+            ),
+            for (int i = 0; i < top.length; i++) ...[
+              if (i > 0) const Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      child: Text('${i + 1}',
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                              color: AppColors.primary)),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(top[i]['name'] as String,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13)),
+                          Text(top[i]['category'] as String? ?? '',
+                              style: const TextStyle(
+                                  fontFamily: 'Poppins', fontSize: 10.5, color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    Text('${top[i]['qty']}',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12)),
+                    const SizedBox(width: 12),
+                    Text(_formatRupiahCompact(top[i]['revenue'] as double),
+                        style: const TextStyle(
+                            fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 12, color: AppColors.primary)),
+                  ],
+                ),
+              ),
+            ],
+            const Divider(height: 1, color: AppColors.border),
+            InkWell(
+              onTap: onViewFullReport,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                color: AppColors.surfaceVariant,
+                child: const Center(
+                  child: Text('VIEW FULL MENU REPORT',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                          color: AppColors.accent)),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Recent order row ─────────────────────────────────────────────────────────
+
+class _RecentOrderRow extends StatelessWidget {
+  final OrderModel order;
+  final Widget Function(OrderStatus) statusChip;
+  const _RecentOrderRow({required this.order, required this.statusChip});
+
+  @override
+  Widget build(BuildContext context) {
+    final o = order;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Center(
+            child: Text(
+              o.orderNumber.split('-').last,
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  color: AppColors.primary),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                o.tableNumber != null ? 'Table ${o.tableNumber}' : 'Takeaway',
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 2),
+              Row(children: [
+                Text('${o.items.length} item • ', style: AppTextStyles.caption),
+                statusChip(o.status),
+              ]),
+            ],
+          ),
+        ),
+        Text(
+          _formatRupiah(o.totalAmount),
+          style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w700,
+              // Orders that are unpaid/not settled are shown in a neutral ink
+              // color (not the same accent color as paid orders) — previously
+              // all orders in this list (including cancelled/unpaid ones)
+              // were given the same visual weight as orders that were
+              // actually paid.
+              color: o.isPaid ? AppColors.accent : AppColors.textHint),
+        ),
+      ]),
     );
   }
 }
@@ -826,11 +1064,9 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
     );
   }
 
-  Widget _header() => Text('🏆 Best-Selling Menu · ${widget.period.label}',
-      style: const TextStyle(
-          fontFamily: 'Poppins',
-          fontWeight: FontWeight.w700,
-          fontSize: 16));
+  Widget _header() => _SectionHeader(
+      title: 'Best-Selling Menu · ${widget.period.label}',
+      icon: Icons.emoji_events_outlined);
 
   Widget _categoryChips() {
     if (widget.categories.length <= 1) return const SizedBox.shrink();
@@ -895,57 +1131,63 @@ class _MenuMarginSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('💡 Margin per Menu',
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w700,
-                fontSize: 16)),
-        const SizedBox(height: 4),
         // Subtitle updated: data now comes from costingProvider
-        const Text(
-          'Based on COGS from the costing module',
-          style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 11,
-              color: AppColors.textSecondary),
+        const _SectionHeader(
+          title: 'Margin per Menu',
+          subtitle: 'Based on COGS from the costing module',
+          icon: Icons.insights_outlined,
         ),
         const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('🟢 Highest Margin',
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(children: [
+                Icon(Icons.trending_up_rounded, size: 15, color: _StatusColors.good),
+                SizedBox(width: 6),
+                Text('Highest Margin',
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         fontSize: 13,
-                        color: Colors.green)),
-                const SizedBox(height: 12),
-                ...top.map((item) => _MarginRow(item: item)),
-              ],
-            ),
+                        color: _StatusColors.good)),
+              ]),
+              const SizedBox(height: 12),
+              ...top.map((item) => _MarginRow(item: item)),
+            ],
           ),
         ),
         if (bottom.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('🔴 Needs Attention (Low Margin)',
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(children: [
+                  Icon(Icons.trending_down_rounded, size: 15, color: _StatusColors.critical),
+                  SizedBox(width: 6),
+                  Text('Needs Attention (Low Margin)',
                       style: TextStyle(
                           fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           fontSize: 13,
-                          color: Colors.red)),
-                  const SizedBox(height: 12),
-                  ...bottom.map((item) => _MarginRow(item: item)),
-                ],
-              ),
+                          color: _StatusColors.critical)),
+                ]),
+                const SizedBox(height: 12),
+                ...bottom.map((item) => _MarginRow(item: item)),
+              ],
             ),
           ),
         ],
@@ -1071,17 +1313,11 @@ class _BranchRevenueSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('🏪 Branch Comparison',
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w700,
-                fontSize: 16)),
-        const SizedBox(height: 4),
-        const Text('This month\'s revenue per branch',
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                color: AppColors.textSecondary)),
+        const _SectionHeader(
+          title: 'Branch Comparison',
+          subtitle: 'This month\'s revenue per branch',
+          icon: Icons.storefront_outlined,
+        ),
         const SizedBox(height: 12),
         Card(
           child: Padding(
@@ -1199,7 +1435,8 @@ class _BranchRevenueSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
           child: Row(
             children: [
-              const Text('👑 ', style: TextStyle(fontSize: 13)),
+              const Icon(Icons.emoji_events_rounded, size: 15, color: AppColors.primary),
+              const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   '${branchRevenue.first['name']} — ${_formatRupiah(branchRevenue.first['revenue'] as double)} this month',
