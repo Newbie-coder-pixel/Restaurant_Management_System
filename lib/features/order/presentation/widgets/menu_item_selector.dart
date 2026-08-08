@@ -7,6 +7,8 @@ import '../../../../core/services/prep_time_service.dart'; // ← ML Service
 import '../../../../core/config/app_config.dart';
 import '../../../../shared/services/order_number_service.dart';
 
+const double _kPosPanelBreakpoint = 900;
+
 class MenuItemSelector extends StatefulWidget {
   final String branchId;
   final List<TableModel> tables;
@@ -91,6 +93,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         orElse: () => _allItems.first);
     return a + item.price * e.value.qty;
   });
+
+  double get _cartTax   => _cartPrice * AppConfig.defaultTaxRate;
+  double get _cartGrandTotal => _cartPrice + _cartTax;
 
   void _addToCart(MenuItem item) {
     setState(() {
@@ -308,53 +313,71 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
-    return Column(children: [
-      _buildHeader(),
-      Expanded(child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _buildCategorySidebar(),
-        Expanded(child: _buildMenuList()),
-      ])),
-      if (_cartTotal > 0) _buildCartBar(),
-    ]);
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth >= _kPosPanelBreakpoint;
+      return Column(children: [
+        _buildOrderInfoBar(isWide),
+        Expanded(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _buildCategorySidebar(),
+            Expanded(child: _buildMenuGrid()),
+            if (isWide) _buildOrderPanel(),
+          ]),
+        ),
+        if (!isWide && _cartTotal > 0) _buildCompactCartBar(),
+      ]);
+    });
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
-  Widget _buildHeader() {
+  // ── Order info bar: table + customer details ───────────────────────────────
+  Widget _buildOrderInfoBar(bool isWide) {
     return Container(
       color: AppColors.surface,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border))),
-      child: Column(children: [
-        DropdownButtonFormField<String?>(
-          initialValue: _selectedTableId,
-          decoration: const InputDecoration(
-            labelText: 'Select Table',
-            labelStyle: TextStyle(fontFamily: 'Poppins'),
-            prefixIcon: Icon(Icons.table_restaurant_outlined, size: 18),
-            isDense: true,
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          items: [
-            const DropdownMenuItem(value: null,
-              child: Text('Takeaway', style: TextStyle(fontFamily: 'Poppins'))),
-            ...widget.tables.where((t) => t.status == TableStatus.available).map((t) =>
-              DropdownMenuItem(value: t.id,
-                child: Text('Table ${t.tableNumber} (${t.capacity} guests)',
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)))),
-          ],
-          onChanged: (v) => setState(() => _selectedTableId = v),
+      child: Row(children: [
+        SizedBox(
+          width: isWide ? 260 : double.infinity,
+          child: _tableDropdown(),
         ),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(flex: 3, child: _field(_nameCtrl, 'Customer Name *', Icons.person_outline)),
-          const SizedBox(width: 8),
+        if (isWide) ...[
+          const SizedBox(width: 12),
+          Expanded(flex: 2, child: _field(_nameCtrl, 'Customer Name *', Icons.person_outline)),
+          const SizedBox(width: 12),
           Expanded(flex: 2, child: _field(_phoneCtrl, 'Phone (optional)', Icons.phone_outlined,
             keyboardType: TextInputType.phone)),
-        ]),
+        ],
       ]),
+    );
+  }
+
+  Widget _tableDropdown() {
+    return DropdownButtonFormField<String?>(
+      initialValue: _selectedTableId,
+      decoration: InputDecoration(
+        labelText: 'Table',
+        labelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+        prefixIcon: const Icon(Icons.table_restaurant_outlined, size: 18),
+        isDense: true,
+        filled: true,
+        fillColor: AppColors.surfaceVariant,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+      items: [
+        const DropdownMenuItem(value: null,
+          child: Text('Takeaway', style: TextStyle(fontFamily: 'Poppins', fontSize: 13))),
+        ...widget.tables.where((t) => t.status == TableStatus.available).map((t) =>
+          DropdownMenuItem(value: t.id,
+            child: Text('Table ${t.tableNumber} (${t.capacity} guests)',
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)))),
+      ],
+      onChanged: (v) => setState(() => _selectedTableId = v),
     );
   }
 
@@ -369,10 +392,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         labelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
         prefixIcon: Icon(icon, size: 16),
         isDense: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+        filled: true,
+        fillColor: AppColors.surfaceVariant,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm), borderSide: BorderSide.none),
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       ),
     );
@@ -381,67 +404,82 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   // ── Category sidebar ───────────────────────────────────────────────────────
   Widget _buildCategorySidebar() {
     return Container(
-      width: 86,
-      color: const Color(0xFFF7F8FA),
+      width: 90,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(right: BorderSide(color: AppColors.border))),
       child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         children: [
           _catItem(null, 'All', Icons.apps_rounded, _allItems.length),
           ...(_categories.map((c) => _catItem(
-            c.id, c.name, Icons.restaurant_outlined,
-            _allItems.where((m) => m.categoryId == c.id).length))),
+            c.id, c.name, _categoryIcon(c.name), _allItems.where((m) => m.categoryId == c.id).length))),
         ],
       ),
     );
+  }
+
+  // A best-effort icon per category name — purely decorative, falls back to a
+  // generic dish icon for names that don't match a known keyword.
+  IconData _categoryIcon(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('starter')) return Icons.star_outline_rounded;
+    if (n.contains('main'))    return Icons.restaurant_outlined;
+    if (n.contains('satay') || n.contains('sate')) return Icons.kebab_dining_outlined;
+    if (n.contains('rice') || n.contains('nasi'))  return Icons.rice_bowl_outlined;
+    if (n.contains('drink') || n.contains('minum')) return Icons.local_cafe_outlined;
+    if (n.contains('dessert') || n.contains('sweet')) return Icons.icecream_outlined;
+    return Icons.restaurant_menu_outlined;
   }
 
   Widget _catItem(String? catId, String name, IconData icon, int count) {
     final sel = _selectedCatId == catId;
     return GestureDetector(
       onTap: () => setState(() => _selectedCatId = catId),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
           color: sel ? AppColors.primary : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: sel ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.25),
-            blurRadius: 6, offset: const Offset(0, 2))] : null,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, size: 20, color: sel ? Colors.white : AppColors.textSecondary),
-          const SizedBox(height: 5),
+          const SizedBox(height: 6),
           Text(name, style: TextStyle(
-            fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600,
-            color: sel ? Colors.white : AppColors.textSecondary),
+            fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700,
+            color: sel ? Colors.white : AppColors.textPrimary),
             textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 2),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(
-              color: sel ? Colors.white.withValues(alpha: 0.2) : AppColors.border.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(8)),
-            child: Text('$count', style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700,
-              color: sel ? Colors.white : AppColors.textHint))),
+          const SizedBox(height: 3),
+          Text('$count', style: TextStyle(
+            fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w600,
+            color: sel ? Colors.white70 : AppColors.textHint)),
         ]),
       ),
     );
   }
 
-  // ── Menu list ──────────────────────────────────────────────────────────────
-  Widget _buildMenuList() {
+  // ── Menu grid (fast-tap) ────────────────────────────────────────────────────
+  Widget _buildMenuGrid() {
     final items = _filtered;
     if (items.isEmpty) {
       return const Center(child: Text('No menu items available',
         style: TextStyle(fontFamily: 'Poppins', color: AppColors.textHint)));
     }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-      itemCount: items.length,
-      itemBuilder: (_, i) => _menuItemCard(items[i]),
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final crossAxisCount = (constraints.maxWidth / 230).floor().clamp(1, 5);
+      return GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          mainAxisSpacing: 14,
+          crossAxisSpacing: 14,
+          childAspectRatio: 0.98,
+        ),
+        itemCount: items.length,
+        itemBuilder: (_, i) => _menuItemCard(items[i]),
+      );
+    });
   }
 
   Widget _menuItemCard(MenuItem item) {
@@ -450,136 +488,306 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     final hasNotes = (entry?.notes ?? '').isNotEmpty;
     final inCart  = qty > 0;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.only(bottom: 8),
+    return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: inCart ? AppColors.primary.withValues(alpha: 0.03) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         border: Border.all(
-          color: inCart ? AppColors.primary.withValues(alpha: 0.25) : AppColors.border.withValues(alpha: 0.5),
-          width: inCart ? 1.5 : 1),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04),
-          blurRadius: 4, offset: const Offset(0, 1))],
+          color: inCart ? AppColors.primary : AppColors.border,
+          width: inCart ? 1.4 : 1),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(item.name, style: const TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
-              const SizedBox(height: 2),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(height: 3, color: inCart ? AppColors.primary : AppColors.accentOrange),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(item.name,
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14,
+                  color: AppColors.textPrimary)),
+              if (item.description != null && item.description!.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(item.description!,
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
+              ],
+              const Spacer(),
               Row(children: [
-                Text('Rp ${item.price.toStringAsFixed(0)}', style: const TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w700,
-                  fontSize: 13, color: AppColors.accent)),
-                // ── Badge prep time ──────────────────────────────────────
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6)),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.timer_outlined, size: 11, color: Colors.orange.shade700),
-                    const SizedBox(width: 3),
-                    Text('${item.preparationTimeMinutes} min', style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 10,
-                      color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
-                  ])),
-                if (inCart) ...[
-                  const SizedBox(width: 8),
+                const Icon(Icons.timer_outlined, size: 11, color: AppColors.textHint),
+                const SizedBox(width: 3),
+                Text('${item.preparationTimeMinutes} min', style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 10, color: AppColors.textHint)),
+              ]),
+              const SizedBox(height: 6),
+              Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                Expanded(
+                  child: Text('Rp ${_fmtK(item.price)}',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                      fontSize: 15, color: AppColors.accent))),
+                if (!inCart)
+                  GestureDetector(
+                    onTap: () => _addToCart(item),
+                    child: Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.add, size: 18, color: AppColors.textPrimary)))
+                else
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(6)),
-                    child: Text('= Rp ${(item.price * qty).toStringAsFixed(0)}',
-                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
-                        fontWeight: FontWeight.w600, color: AppColors.primary))),
-                ],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3))),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      _qtyBtn(Icons.remove_rounded, () => _removeFromCart(item)),
+                      SizedBox(width: 22, child: Center(child: Text('$qty', style: const TextStyle(
+                        fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                        fontSize: 13, color: AppColors.primary)))),
+                      _qtyBtn(Icons.add_rounded, () => _addToCart(item)),
+                    ])),
               ]),
-            ])),
-            const SizedBox(width: 12),
-            if (!inCart)
-              ElevatedButton.icon(
-                onPressed: () => _addToCart(item),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary, foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                icon: const Icon(Icons.add, size: 14),
-                label: const Text('Add',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600)))
-            else
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2))),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  _qtyBtn(Icons.remove_rounded, () => _removeFromCart(item)),
-                  SizedBox(width: 32, child: Center(child: Text('$qty', style: const TextStyle(
-                    fontFamily: 'Poppins', fontWeight: FontWeight.w800,
-                    fontSize: 15, color: AppColors.primary)))),
-                  _qtyBtn(Icons.add_rounded, () => _addToCart(item)),
-                ])),
-          ]),
-          if (inCart) ...[
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () => _showNotesDialog(item),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: hasNotes ? Colors.amber.withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: hasNotes ? Colors.amber.withValues(alpha: 0.35) : Colors.grey.withValues(alpha: 0.2))),
-                child: Row(children: [
-                  Icon(hasNotes ? Icons.edit_note : Icons.note_add_outlined,
-                    size: 15, color: hasNotes ? Colors.amber.shade700 : AppColors.textHint),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(
-                    hasNotes ? entry!.notes : 'Add a note (not spicy, no onions...)',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
-                      color: hasNotes ? Colors.amber.shade800 : AppColors.textHint,
-                      fontStyle: hasNotes ? FontStyle.normal : FontStyle.italic),
-                    overflow: TextOverflow.ellipsis, maxLines: 2)),
-                  if (hasNotes) ...[
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => setState(() => _cart[item.id]?.notes = ''),
-                      child: Icon(Icons.close, size: 14, color: Colors.amber.shade600)),
-                  ],
-                ]),
-              ),
-            ),
-          ],
-        ]),
-      ),
+              if (inCart) ...[
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () => _showNotesDialog(item),
+                  child: Row(children: [
+                    Icon(hasNotes ? Icons.edit_note : Icons.note_add_outlined,
+                      size: 13, color: hasNotes ? const Color(0xFFB07A0F) : AppColors.textHint),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text(
+                      hasNotes ? entry!.notes : 'Add note',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                        color: hasNotes ? const Color(0xFFB07A0F) : AppColors.textHint,
+                        fontStyle: hasNotes ? FontStyle.normal : FontStyle.italic),
+                      overflow: TextOverflow.ellipsis, maxLines: 1)),
+                  ]),
+                ),
+              ],
+            ]),
+          ),
+        ),
+      ]),
     );
   }
+
+  String _fmtK(double price) => price.toStringAsFixed(0);
 
   Widget _qtyBtn(IconData icon, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 32, height: 32,
+        width: 26, height: 26,
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, size: 16, color: AppColors.primary)),
+          color: AppColors.primary.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(6)),
+        child: Icon(icon, size: 14, color: AppColors.primary)),
     );
   }
 
-  // ── Cart bar (with ML estimate) ──────────────────────────────────────────
-  Widget _buildCartBar() {
+  // ── Order ticket panel (wide layouts) ───────────────────────────────────────
+  Widget _buildOrderPanel() {
+    return Container(
+      width: 340,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(left: BorderSide(color: AppColors.border))),
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+          child: Row(children: [
+            const Expanded(
+              child: Text('Current Order',
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                  fontSize: 16, color: AppColors.textPrimary))),
+            Text(_isTakeaway ? 'Takeaway' : 'Dine-in',
+              style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
+          ]),
+        ),
+        const Divider(height: 1, color: AppColors.border),
+        Expanded(
+          child: _cart.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('No items yet — tap a menu item to add it.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textHint))))
+              : ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  children: _cart.entries.map((e) {
+                    final item = _allItems.firstWhere((m) => m.id == e.key,
+                        orElse: () => _allItems.first);
+                    return _orderTicketRow(item, e.value);
+                  }).toList(),
+                ),
+        ),
+        if (_isFetchingEstimate || _estimatedMinutes != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2))),
+              child: Row(children: [
+                const Icon(Icons.schedule_rounded, size: 15, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _isFallbackEstimate ? 'Rough estimate (offline)' : 'Estimated ready to cook',
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary))),
+                if (_isFetchingEstimate)
+                  const SizedBox(width: 13, height: 13,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                else
+                  Text(PrepTimeService.formatEstimate(_estimatedMinutes!),
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 12,
+                      fontWeight: FontWeight.w700, color: AppColors.primary)),
+              ]),
+            ),
+          ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AppColors.border))),
+          child: Column(children: [
+            _totalRow('Subtotal', _cartPrice),
+            const SizedBox(height: 4),
+            _totalRow('Tax (${(AppConfig.defaultTaxRate * 100).toStringAsFixed(0)}%)', _cartTax),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Divider(height: 1, color: AppColors.border)),
+            Row(children: [
+              const Text('Total', style: TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 15,
+                color: AppColors.textPrimary)),
+              const Spacer(),
+              Text('Rp ${_cartGrandTotal.toStringAsFixed(0)}', style: const TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 18,
+                color: AppColors.accent)),
+            ]),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _cart.isEmpty || _isSubmitting ? null : _submitOrder,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent, foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.4),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm))),
+                icon: _isSubmitting
+                    ? const SizedBox(width: 15, height: 15,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.send_rounded, size: 17),
+                label: Text(_isSubmitting ? 'Sending...' : 'Send to Kitchen',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14))),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _totalRow(String label, double value) {
+    return Row(children: [
+      Text(label, style: const TextStyle(
+        fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+      const Spacer(),
+      Text('Rp ${value.toStringAsFixed(0)}', style: const TextStyle(
+        fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary)),
+    ]);
+  }
+
+  Widget _orderTicketRow(MenuItem item, _CartEntry entry) {
+    final hasNotes = entry.notes.isNotEmpty;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(color: AppColors.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8)),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _qtyBtn(Icons.add_rounded, () => _addToCart(item)),
+              SizedBox(height: 22, child: Center(child: Text('${entry.qty}', style: const TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                fontSize: 12, color: AppColors.primary)))),
+              _qtyBtn(Icons.remove_rounded, () => _removeFromCart(item)),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(item.name,
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13,
+                  color: AppColors.textPrimary)),
+              const SizedBox(height: 2),
+              Text('Rp ${item.price.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
+            ]),
+          ),
+          Text('Rp ${(item.price * entry.qty).toStringAsFixed(0)}',
+            style: const TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13,
+              color: AppColors.textPrimary)),
+        ]),
+        if (hasNotes) ...[
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => setState(() => entry.notes = ''),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6E3B4).withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(6)),
+              child: Row(children: [
+                Expanded(child: Text('- ${entry.notes}',
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Color(0xFF7A5A12)),
+                  overflow: TextOverflow.ellipsis)),
+                const Icon(Icons.close, size: 13, color: Color(0xFF7A5A12)),
+              ]),
+            ),
+          ),
+        ],
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => _showNotesDialog(item),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.edit_note, size: 13, color: AppColors.textHint),
+            const SizedBox(width: 3),
+            Text(hasNotes ? 'Edit Note' : 'Add Note',
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  // ── Compact cart bar (narrow layouts, replaces the side panel) ─────────────
+  Widget _buildCompactCartBar() {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.primary,
@@ -589,8 +797,6 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-
-        // ── ML estimate row ──────────────────────────────────────────────
         if (_isFetchingEstimate || _estimatedMinutes != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -620,8 +826,6 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
               ]),
             ),
           ),
-
-        // ── Main cart row ─────────────────────────────────────────────────
         Row(children: [
           Container(
             width: 36, height: 36,

@@ -580,15 +580,15 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         width: 120,
         height: double.infinity,
         decoration: const BoxDecoration(
-          color: Color(0xFF1A1F2E),
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(2, 0))],
+          color: AppColors.surface,
+          border: Border(right: BorderSide(color: AppColors.border)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(14, 16, 14, 10),
             child: Text('STATUS', style: TextStyle(
               fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700,
-              color: Colors.white38, letterSpacing: 1.5)),
+              color: AppColors.textHint, letterSpacing: 1.5)),
           ),
           Expanded(
             child: ListView(
@@ -644,7 +644,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                       const SizedBox(height: 6),
                       Text(def.name, style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : Colors.white60,
+                        color: isSelected ? Colors.white : AppColors.textSecondary,
                         height: 1.3)),
                     ]),
                   ),
@@ -996,18 +996,18 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
         width: 120,
         height: double.infinity,
         decoration: const BoxDecoration(
-          color: Color(0xFF1A1F2E),
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(2, 0))],
+          color: AppColors.surface,
+          border: Border(right: BorderSide(color: AppColors.border)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(14, 16, 14, 10),
             child: Text('FILTER', style: TextStyle(
               fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700,
-              color: Colors.white38, letterSpacing: 1.5)),
+              color: AppColors.textHint, letterSpacing: 1.5)),
           ),
           ...[
-            ('all', 'All', Icons.receipt_long_outlined, Colors.white),
+            ('all', 'All', Icons.receipt_long_outlined, AppColors.primary),
             ('paid', 'Paid', Icons.check_circle_outline, const Color(0xFF43A047)),
             ('cancelled', 'Cancelled', Icons.cancel_outlined, const Color(0xFFE53935)),
           ].map((f) {
@@ -1023,15 +1023,15 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSelected ? color.withValues(alpha: 0.2) : Colors.transparent,
+                  color: isSelected ? color.withValues(alpha: 0.12) : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                   border: isSelected ? Border.all(color: color.withValues(alpha: 0.4)) : null),
                 child: Row(children: [
-                  Icon(f.$3, size: 14, color: isSelected ? color : Colors.white38),
+                  Icon(f.$3, size: 14, color: isSelected ? color : AppColors.textHint),
                   const SizedBox(width: 8),
                   Text(f.$2, style: TextStyle(
                     fontFamily: 'Poppins', fontSize: 11, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                    color: isSelected ? color : Colors.white54)),
+                    color: isSelected ? color : AppColors.textSecondary)),
                 ]),
               ),
             );
