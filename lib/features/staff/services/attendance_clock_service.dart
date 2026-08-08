@@ -26,6 +26,27 @@ class AttendanceClockService {
     return AttendanceRecord.fromJson(res);
   }
 
+  /// Batched variant of [fetchTodayRecord], keyed by staff_id — used to show
+  /// on-duty/off-duty status across a staff list without one query per row.
+  Future<Map<String, AttendanceRecord>> fetchTodayRecordsForStaffIds(
+      List<String> staffIds) async {
+    if (staffIds.isEmpty) return {};
+    final today = DateTime.now();
+    final dateStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final res = await _client
+        .from('attendance')
+        .select()
+        .inFilter('staff_id', staffIds)
+        .eq('date', dateStr);
+    final map = <String, AttendanceRecord>{};
+    for (final row in (res as List)) {
+      final record = AttendanceRecord.fromJson(row as Map<String, dynamic>);
+      map[record.staffId] = record;
+    }
+    return map;
+  }
+
   Future<AttendanceRecord> clockIn({
     required double latitude,
     required double longitude,
