@@ -35,6 +35,7 @@ abstract class AppRoutes {
   static const staffGateway   = '/staff-access';
   static const login          = '/login';
   static const staffResetPassword = '/reset-password';
+  static const home           = '/home';
   static const tables         = '/tables';
   static const booking        = '/booking';
   static const bookingStats   = '/booking-stats';
@@ -70,21 +71,11 @@ abstract class AppRoutes {
   static const qrTrack      = '/qr/:tableId/track/:orderId';
 }
 
-String _defaultRouteForRole(StaffRole role) {
-  switch (role) {
-    case StaffRole.superadmin:
-    case StaffRole.manager:
-      return AppRoutes.reports;
-    case StaffRole.cashier:
-      return AppRoutes.cashier;
-    case StaffRole.waiter:
-      return AppRoutes.order;
-    case StaffRole.kitchen:
-      return AppRoutes.kitchen;
-    case StaffRole.host:
-      return AppRoutes.tables;
-  }
-}
+// Every role lands on the shared Service Portal hub after login — it filters
+// its own tiles against StaffRole.accessFeatures (see StaffHomeScreen), so a
+// single-module role like kitchen still lands here but only sees its one
+// tile, rather than a role-specific redirect skipping the hub entirely.
+String _defaultRouteForRole(StaffRole role) => AppRoutes.home;
 
 class _AuthChangeNotifier extends ChangeNotifier {
   _AuthChangeNotifier(this._ref) {
@@ -119,6 +110,8 @@ bool _roleCanAccessRoute(StaffRole role, String path) {
   bool has(String f) => features.contains(f);
 
   switch (path) {
+    case AppRoutes.home:
+      return true; // every logged-in role can see the Service Portal hub
     case AppRoutes.tables:
       return has('Table Management');
     case AppRoutes.booking:
@@ -369,6 +362,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ── Staff Routes ──────────────────────────────────────────────────────
       GoRoute(path: AppRoutes.login,        builder: (_, __) => const LoginScreen()),
       GoRoute(path: AppRoutes.staffResetPassword, builder: (_, __) => const StaffResetPasswordScreen()),
+      GoRoute(path: AppRoutes.home,         builder: (_, __) => const StaffHomeScreen()),
       GoRoute(path: AppRoutes.tables,       builder: (_, __) => const TableScreen()),
       GoRoute(path: AppRoutes.booking,      builder: (_, __) => const BookingScreen()),
       GoRoute(path: AppRoutes.bookingStats, builder: (_, __) => const BookingStatsScreen()),

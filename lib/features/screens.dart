@@ -1,5 +1,6 @@
 export '../shared/widgets/app_drawer.dart';
 export 'auth/presentation/login_screen.dart';
+export 'staff/presentation/staff_home_screen.dart';
 export 'table_management/presentation/table_screen.dart';
 export 'booking/presentation/booking_screen.dart';
 export 'booking/presentation/booking_stats_screen.dart'; 

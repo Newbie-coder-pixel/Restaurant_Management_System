@@ -33,6 +33,12 @@ const _allRoles = {
 
 const _navItems = [
   _NavItem(
+    label: 'Service Portal',
+    icon: Icons.dashboard_rounded,
+    route: AppRoutes.home,
+    allowedRoles: _allRoles,
+  ),
+  _NavItem(
     label: 'Reports & Analytics',
     icon: Icons.bar_chart_rounded,
     route: AppRoutes.reports,
