@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/order_model.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/staff_shell.dart';
 import '../../payment/presentation/screens/midtrans_payment_screen.dart';
 
 const _red = AppColors.accent;
@@ -465,67 +466,118 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     return isWide ? _buildWideLayout() : _buildNarrowLayout();
   }
 
-  Widget _buildWideLayout() => Row(children: [
-        SizedBox(width: 380, child: _buildOrderList(showAppBar: true)),
-        const VerticalDivider(width: 1),
-        Expanded(
-          child: _selected == null
-              ? _buildEmptyDetail()
-              : Column(children: [
-                  if (_canCancel(_selected!))
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: AppColors.border),
-                        ),
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          icon: const Icon(Icons.cancel_outlined,
-                              size: 18, color: _red),
-                          label: const Text('Cancel Order',
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontWeight: FontWeight.w600,
-                                  color: _red)),
-                          onPressed: () => _onCancelOrder(_selected!),
-                        ),
-                      ),
-                    ),
-                  Expanded(
-                    child: MidtransPaymentScreen(
-                      order: _selected!,
-                      onPaymentSuccess: () {
-                        setState(() => _selected = null);
-                        _load();
-                      },
-                      onClose: () => setState(() => _selected = null),
-                    ),
-                  ),
-                ]),
+  List<Widget> get _branchTopBarActions => [
+        // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+        if (_isSuperAdmin)
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                icon: const Icon(Icons.keyboard_arrow_down,
+                    size: 16, color: AppColors.textSecondary),
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('All Branches',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                        value: b['id'] as String,
+                        child: Text(b['name'] as String,
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)))),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                    _orders = [];
+                    _selected = null;
+                  });
+                  _load();
+                  _subscribeRealtime();
+                },
+              ),
+            ),
+          ),
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+          onPressed: _load,
         ),
-      ]);
+      ];
+
+  Widget _buildWideLayout() => StaffShell(
+        pageTitle: 'Cashier',
+        activeRoute: AppRoutes.order,
+        topBarActions: _branchTopBarActions,
+        body: Row(children: [
+          SizedBox(width: 380, child: _buildOrderListBody()),
+          const VerticalDivider(width: 1, color: AppColors.border),
+          Expanded(
+            child: _selected == null
+                ? _buildEmptyDetail()
+                : Column(children: [
+                    if (_canCancel(_selected!))
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: AppColors.border),
+                          ),
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            icon: const Icon(Icons.cancel_outlined,
+                                size: 18, color: _red),
+                            label: const Text('Cancel Order',
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontWeight: FontWeight.w600,
+                                    color: _red)),
+                            onPressed: () => _onCancelOrder(_selected!),
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: MidtransPaymentScreen(
+                        order: _selected!,
+                        onPaymentSuccess: () {
+                          setState(() => _selected = null);
+                          _load();
+                        },
+                        onClose: () => setState(() => _selected = null),
+                      ),
+                    ),
+                  ]),
+          ),
+        ]),
+      );
 
   Widget _buildNarrowLayout() {
     if (_selected != null) {
       return Scaffold(
-        drawer: const AppDrawer(),
         backgroundColor: AppColors.background,
         appBar: AppBar(
-          title: Text('Order #${_selected!.orderNumber}'),
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          title: Text('Order #${_selected!.orderNumber}',
+              style: const TextStyle(
+                  fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                  fontSize: 16, color: AppColors.textPrimary)),
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          shape: const Border(bottom: BorderSide(color: AppColors.border)),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
             onPressed: () => setState(() => _selected = null)),
           actions: [
             if (_canCancel(_selected!))
               IconButton(
-                icon: const Icon(Icons.cancel_outlined),
+                icon: const Icon(Icons.cancel_outlined, color: _red),
                 tooltip: 'Cancel Order',
                 onPressed: () => _onCancelOrder(_selected!),
               ),
@@ -541,11 +593,16 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
         ),
       );
     }
-    return _buildOrderList(showAppBar: true);
+    return StaffShell(
+      pageTitle: 'Cashier',
+      activeRoute: AppRoutes.order,
+      topBarActions: _branchTopBarActions,
+      body: _buildOrderListBody(),
+    );
   }
 
-  Widget _buildOrderList({bool showAppBar = false}) {
-    final body = _isLoading
+  Widget _buildOrderListBody() {
+    return _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _orders.isEmpty
             ? const Center(
@@ -724,65 +781,6 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                   );
                 },
               );
-
-    if (!showAppBar) return body;
-    return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Cashier'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        titleTextStyle: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.white),
-        actions: [
-          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
-          if (_isSuperAdmin)
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String?>(
-                value: _selectedBranchId,
-                isDense: true,
-                dropdownColor: AppColors.primary,
-                iconEnabledColor: Colors.white60,
-                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('All Branches',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Colors.white70))),
-                  ..._branches.map((b) => DropdownMenuItem<String?>(
-                        value: b['id'] as String,
-                        child: Text(b['name'] as String,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.white)))),
-                ],
-                onChanged: (val) {
-                  setState(() {
-                    _selectedBranchId = val;
-                    _orders = [];
-                    _selected = null;
-                  });
-                  _load();
-                  _subscribeRealtime();
-                },
-              ),
-            ),
-          const SizedBox(width: 4),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
-        ],
-      ),
-      body: body,
-    );
   }
 
   Widget _buildEmptyDetail() => const Center(

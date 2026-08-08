@@ -260,63 +260,70 @@ class _OrderHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('#${order.orderNumber}',
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Text(
+                order.tableNumber != null
+                    ? 'Table ${order.tableNumber}'
+                    : '#${order.orderNumber}',
                 style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary)),
-            const SizedBox(width: 8),
-            _TypeBadge(order.orderType ?? 'staff'),
-          ]),
-          const SizedBox(height: 2),
-          Row(children: [
-            if (order.tableNumber != null) ...[
-              const Icon(Icons.table_restaurant_outlined,
-                  size: 13, color: AppColors.textHint),
-              const SizedBox(width: 4),
-              Text('Table ${order.tableNumber}',
+              const SizedBox(width: 8),
+              _TypeBadge(order.orderType ?? 'staff', isDineIn: order.tableNumber != null),
+            ]),
+            const SizedBox(height: 3),
+            Row(children: [
+              Text('#${order.orderNumber}',
                   style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
                       color: AppColors.textHint)),
-              const SizedBox(width: 10),
-            ],
-            if (order.customerName != null) ...[
-              const Icon(Icons.person_outline,
-                  size: 13, color: AppColors.textHint),
-              const SizedBox(width: 4),
-              Text(order.customerName!,
-                  style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 12,
-                      color: AppColors.textHint)),
-            ],
+              if (order.customerName != null) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.person_outline,
+                    size: 13, color: AppColors.textHint),
+                const SizedBox(width: 4),
+                Text(order.customerName!,
+                    style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: AppColors.textHint)),
+              ],
+            ]),
           ]),
-        ]),
-      ),
-      if (onClose != null)
-        IconButton(
-            onPressed: onClose,
-            icon: const Icon(Icons.close, color: AppColors.textHint)),
-    ]);
+        ),
+        if (onClose != null)
+          IconButton(
+              onPressed: onClose,
+              icon: const Icon(Icons.close, color: AppColors.textHint)),
+      ]),
+    );
   }
 }
 
 class _TypeBadge extends StatelessWidget {
   final String type;
-  const _TypeBadge(this.type);
+  final bool isDineIn;
+  const _TypeBadge(this.type, {this.isDineIn = false});
 
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (type) {
       'qr_order' => ('QR', const Color(0xFF7C3AED)),
       'app_order' || 'takeaway' => ('App', const Color(0xFF2563EB)),
-      _ => ('Staff', AppColors.primary),
+      _ => (isDineIn ? 'Dine In' : 'Takeaway', AppColors.primary),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -361,20 +368,32 @@ class _OrderItemsCard extends StatelessWidget {
                 color: AppColors.textSecondary)),
         const SizedBox(height: 8),
         ...order.items.take(5).map((item) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                Expanded(
-                  child: Text('${item.quantity}× ${item.menuItemName}',
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(
+                    child: Text('${item.quantity}× ${item.menuItemName}',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: AppColors.textPrimary)),
+                  ),
+                  Text(_fmtRp(item.subtotal),
                       style: const TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 13,
-                          color: AppColors.textPrimary)),
-                ),
-                Text(_fmtRp(item.subtotal),
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
+                          fontWeight: FontWeight.w600)),
+                ]),
+                if (item.specialRequests != null && item.specialRequests!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text('- ${item.specialRequests}',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: AppColors.textSecondary)),
+                  ),
               ]),
             )),
         if (order.items.length > 5)
@@ -416,7 +435,7 @@ class _BreakdownCard extends StatelessWidget {
       child: Column(children: [
         _Row('Subtotal', subtotal),
         _Row('Service Charge (3%)', serviceCharge),
-        _Row('PB1 / Tax (10%)', pb1),
+        _Row('PB1 (10%)', pb1),
         if (discount > 0) _Row('Discount', -discount, isDiscount: true),
         if (overtimeCharge > 0)
           _Row('Extra Dining Time (>2 hrs)', overtimeCharge),
