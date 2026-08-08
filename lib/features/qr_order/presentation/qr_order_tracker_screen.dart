@@ -9,6 +9,7 @@ import '../../../core/services/prep_time_service.dart'; // ← ML Service
 import '../providers/qr_cart_provider.dart';
 import '../services/qr_device_id_service.dart';
 import '../../payment/models/midtrans_model.dart';
+import '../../../core/theme/app_theme.dart';
 
 class QrOrderTrackerScreen extends ConsumerWidget {
   final String orderId;
@@ -26,39 +27,49 @@ class QrOrderTrackerScreen extends ConsumerWidget {
 
     return orderAsync.when(
       loading: () => Scaffold(
+        backgroundColor: AppColors.background,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(),
+              const CircularProgressIndicator(color: AppColors.primary),
               const SizedBox(height: 16),
-              Text('Loading order status...',
-                  style: Theme.of(context).textTheme.bodyMedium),
+              const Text('Loading order status...',
+                  style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
             ],
           ),
         ),
       ),
       error: (e, _) => Scaffold(
-        appBar: AppBar(title: const Text('Order Status')),
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          foregroundColor: AppColors.textPrimary,
+          title: const Text('Order Status', style: TextStyle(fontFamily: 'Poppins')),
+        ),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.wifi_off_outlined, size: 64, color: Colors.grey),
+              const Icon(Icons.wifi_off_outlined, size: 64, color: AppColors.textHint),
               const SizedBox(height: 16),
-              const Text('Unable to load status'),
+              const Text('Unable to load status',
+                  style: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary)),
               const SizedBox(height: 8),
               if (queueNumber != null)
                 Text(
                   'Queue No.: $queueNumber',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18),
+                  style: const TextStyle(fontFamily: 'Poppins',
+                      fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textPrimary),
                 ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () => ref.invalidate(qrOrderWatchProvider(orderId)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary, foregroundColor: Colors.white, elevation: 0),
                 icon: const Icon(Icons.refresh),
-                label: const Text('Try Again'),
+                label: const Text('Try Again', style: TextStyle(fontFamily: 'Poppins')),
               ),
             ],
           ),
@@ -79,14 +90,14 @@ class _TrackerBody extends StatelessWidget {
   static const _steps = [
     (
       status: QrOrderStatus.created,
-      label: 'Order Received',
+      label: 'Received',
       sublabel: 'Order received, waiting for the kitchen',
       icon: Icons.hourglass_top_outlined,
     ),
     (
       status: QrOrderStatus.preparing,
-      label: 'Being Cooked',
-      sublabel: 'The kitchen is preparing your order',
+      label: 'Preparing',
+      sublabel: 'Our chefs are crafting your order with care.',
       icon: Icons.outdoor_grill_outlined,
     ),
     (
@@ -97,8 +108,8 @@ class _TrackerBody extends StatelessWidget {
     ),
     (
       status: QrOrderStatus.served,
-      label: 'Enjoy Your Meal',
-      sublabel: 'Your order is on your table',
+      label: 'Served',
+      sublabel: 'Your order is on your table. Enjoy!',
       icon: Icons.sentiment_very_satisfied_outlined,
     ),
     (
@@ -111,95 +122,233 @@ class _TrackerBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final isCancelled = order.status == QrOrderStatus.cancelled;
 
     return Scaffold(
-      backgroundColor: colorScheme.surfaceContainerLowest,
-      body: CustomScrollView(
-        slivers: [
-          // ── Header / Queue Number ──────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _QueueHeader(order: order),
-          ),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _TrackerHeader(order: order),
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  // ── Status Hero ─────────────────────────────────────────────
+                  SliverToBoxAdapter(child: _StatusHero(order: order)),
 
-          // ── ML Time Estimate ──────────────────────────────────────────
-          // Only shown while the order is active (created / preparing)
-          if (!isCancelled &&
-              (order.status == QrOrderStatus.created ||
-                  order.status == QrOrderStatus.preparing))
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _PrepTimeCard(order: order),
-              ),
-            ),
+                  // ── ML Time Estimate ──────────────────────────────────────────
+                  // Only shown while the order is active (created / preparing)
+                  if (!isCancelled &&
+                      (order.status == QrOrderStatus.created ||
+                          order.status == QrOrderStatus.preparing))
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                        child: _PrepTimeCard(order: order),
+                      ),
+                    ),
 
-          // ── Cancelled Banner ─────────────────────────────────────────────
-          if (isCancelled)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.cancel_outlined,
-                          color: colorScheme.error),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Order cancelled. Please contact the cashier.',
-                          style: TextStyle(color: colorScheme.error),
+                  // ── Cancelled Banner ─────────────────────────────────────────────
+                  if (isCancelled)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                            border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.cancel_outlined, color: AppColors.accent),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Order cancelled. Please contact the cashier.',
+                                  style: TextStyle(fontFamily: 'Poppins', color: AppColors.accent,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
+                    ),
+
+                  // ── Timeline ───────────────────────────────────────────────
+                  if (!isCancelled)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                        child: _StatusTimeline(order: order, steps: _steps),
+                      ),
+                    ),
+
+                  // ── Payment Status ────────────────────────────────────────────────
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: _PaymentStatusCard(order: order),
+                    ),
                   ),
-                ),
+
+                  // ── Order Items ──────────────────────────────────────────────────
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                      child: _OrderDetailCard(order: order),
+                    ),
+                  ),
+
+                  // ── Actions ───────────────────────────────────────────────────────
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                      child: _TrackerActions(order: order),
+                    ),
+                  ),
+                ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-          // ── Progress Steps ───────────────────────────────────────────────
-          if (!isCancelled)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _StatusStepper(
-                  currentStatus: order.status,
-                  steps: _steps,
-                ),
-              ),
-            ),
+// ─── Header ─────────────────────────────────────────────────────────────────
+class _TrackerHeader extends StatelessWidget {
+  final QrOrderModel order;
+  const _TrackerHeader({required this.order});
 
-          // ── Payment Status ────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _PaymentStatusCard(order: order),
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => context.pop(),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.textPrimary),
+          ),
+          Expanded(
+            child: Text(
+              order.tableName ?? 'Table',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                  fontWeight: FontWeight.w700, color: AppColors.primary),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-
-          // ── Order Detail ──────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: _OrderDetailCard(order: order),
-            ),
-          ),
-
-          // ── Actions ───────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              child: _TrackerActions(order: order),
-            ),
+          SizedBox(
+            width: 48,
+            child: order.isActive
+                ? const Center(child: _PulsingDot(color: AppColors.primary))
+                : null,
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Status Hero ──────────────────────────────────────────────────────────────
+class _StatusHero extends StatelessWidget {
+  final QrOrderModel order;
+  const _StatusHero({required this.order});
+
+  String get _headline {
+    switch (order.status) {
+      case QrOrderStatus.created:   return 'Order Received';
+      case QrOrderStatus.preparing: return 'Order is Preparing';
+      case QrOrderStatus.ready:     return 'Ready to Serve!';
+      case QrOrderStatus.served:    return 'Enjoy Your Meal!';
+      case QrOrderStatus.paid:      return 'Thank You!';
+      case QrOrderStatus.cancelled: return 'Order Cancelled';
+    }
+  }
+
+  List<Color> get _gradient {
+    switch (order.status) {
+      case QrOrderStatus.cancelled:
+        return [AppColors.accent.withValues(alpha: 0.85), AppColors.accent];
+      case QrOrderStatus.paid:
+        return [Colors.green.shade400, Colors.green.shade700];
+      default:
+        return [AppColors.primaryLight, AppColors.accent];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: _gradient,
+        ),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              AppColors.textPrimary.withValues(alpha: 0.55),
+            ],
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 28, 20, 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'STATUS',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                  fontWeight: FontWeight.w800, color: Colors.white.withValues(alpha: 0.85),
+                  letterSpacing: 1.2),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _headline,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 28,
+                  fontWeight: FontWeight.w800, color: Colors.white),
+            ),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: order.queueNumber ?? order.orderNumber));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Queue number copied!'), duration: Duration(seconds: 2)),
+                );
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Queue No. ${order.queueNumber ?? order.orderNumber} · ${order.customerName}',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                        color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.copy_outlined, size: 13, color: Colors.white.withValues(alpha: 0.8)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -270,24 +419,11 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            cs.primaryContainer.withValues(alpha: 0.7),
-            cs.secondaryContainer.withValues(alpha: 0.5),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: cs.primary.withValues(alpha: 0.2),
-          width: 1,
-        ),
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
       ),
       padding: const EdgeInsets.all(16),
       child: FutureBuilder<PrepTimeResult?>(
@@ -297,17 +433,15 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
           if (snap.connectionState == ConnectionState.waiting) {
             return Row(
               children: [
-                SizedBox(
+                const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: cs.primary),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                 ),
                 const SizedBox(width: 12),
-                Text(
+                const Text(
                   'Calculating time estimate...',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: cs.onPrimaryContainer),
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textPrimary),
                 ),
               ],
             );
@@ -323,15 +457,13 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
               : result.estimatedMinutes;
 
           if (isFallback && displayMinutes <= 0) {
-            return Row(
+            return const Row(
               children: [
-                Icon(Icons.access_time_outlined,
-                    color: cs.outline, size: 20),
-                const SizedBox(width: 10),
+                Icon(Icons.access_time_outlined, color: AppColors.textHint, size: 20),
+                SizedBox(width: 10),
                 Text(
                   'Time estimate not available',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: cs.outline),
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12.5, color: AppColors.textSecondary),
                 ),
               ],
             );
@@ -343,14 +475,12 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.12),
+                  color: AppColors.primary.withValues(alpha: 0.14),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                    isFallback
-                        ? Icons.access_time_outlined
-                        : Icons.soup_kitchen_outlined,
-                    color: cs.primary,
+                    isFallback ? Icons.access_time_outlined : Icons.soup_kitchen_outlined,
+                    color: AppColors.primary,
                     size: 22),
               ),
               const SizedBox(width: 14),
@@ -361,21 +491,15 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isFallback
-                          ? 'Rough Estimate (offline)'
-                          : 'Estimated Cooking Time',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: cs.onPrimaryContainer
-                            .withValues(alpha: 0.75),
-                      ),
+                      isFallback ? 'Rough Estimate (offline)' : 'Estimated Cooking Time',
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 11.5,
+                          fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       PrepTimeService.formatEstimate(displayMinutes),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                          fontWeight: FontWeight.w800, color: AppColors.primary),
                     ),
                   ],
                 ),
@@ -383,26 +507,21 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
 
               // AI Badge
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: cs.primary.withValues(alpha: 0.3), width: 1),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.smart_toy_outlined,
-                        size: 12, color: cs.primary),
-                    const SizedBox(width: 4),
+                    Icon(Icons.smart_toy_outlined, size: 12, color: AppColors.primary),
+                    SizedBox(width: 4),
                     Text(
                       'AI',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                          fontWeight: FontWeight.w800, color: AppColors.primary),
                     ),
                   ],
                 ),
@@ -415,161 +534,12 @@ class _PrepTimeCardState extends State<_PrepTimeCard> {
   }
 }
 
-// ─── Queue Header ─────────────────────────────────────────────────────────────
-
-class _QueueHeader extends StatelessWidget {
-  final QrOrderModel order;
-
-  const _QueueHeader({required this.order});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: order.status == QrOrderStatus.cancelled
-              ? [colorScheme.errorContainer, colorScheme.error.withValues(alpha: 0.3)]
-              : order.status == QrOrderStatus.paid
-                  ? [Colors.green.shade400, Colors.green.shade600]
-                  : [colorScheme.primary, colorScheme.primaryContainer],
-        ),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-          child: Column(
-            children: [
-              // App bar row
-              Row(
-                children: [
-                  Text(
-                    'Order Status',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  // Live indicator
-                  if (order.isActive)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _PulsingDot(),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Live',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              // Queue number (big)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 32, vertical: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.3), width: 1),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'Queue No.',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                          color: colorScheme.onPrimary.withValues(alpha: 0.8)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      order.queueNumber ?? order.orderNumber,
-                      style: theme.textTheme.displayMedium?.copyWith(
-                        color: colorScheme.onPrimary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 4,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(
-                            text: order.queueNumber ?? order.orderNumber));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Queue number copied!'),
-                              duration: Duration(seconds: 2)),
-                        );
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.copy_outlined,
-                              size: 14,
-                              color: colorScheme.onPrimary.withValues(alpha: 0.7)),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Copy number',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color:
-                                    colorScheme.onPrimary.withValues(alpha: 0.7)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Status label
-              Text(
-                '${order.status.emoji}  ${order.status.label}',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: colorScheme.onPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 4),
-              Text(
-                '${order.tableName ?? 'Table'} · ${order.customerName}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onPrimary.withValues(alpha: 0.75)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ─── Pulsing Dot ──────────────────────────────────────────────────────────────
 
 class _PulsingDot extends StatefulWidget {
+  final Color color;
+  const _PulsingDot({this.color = Colors.greenAccent});
+
   @override
   State<_PulsingDot> createState() => _PulsingDotState();
 }
@@ -602,21 +572,18 @@ class _PulsingDotState extends State<_PulsingDot>
     return FadeTransition(
       opacity: _anim,
       child: Container(
-        width: 7,
-        height: 7,
-        decoration: const BoxDecoration(
-          color: Colors.greenAccent,
-          shape: BoxShape.circle,
-        ),
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }
 }
 
-// ─── Status Stepper ───────────────────────────────────────────────────────────
+// ─── Status Timeline ──────────────────────────────────────────────────────────
 
-class _StatusStepper extends StatelessWidget {
-  final QrOrderStatus currentStatus;
+class _StatusTimeline extends StatelessWidget {
+  final QrOrderModel order;
   final List<
       ({
         QrOrderStatus status,
@@ -625,121 +592,122 @@ class _StatusStepper extends StatelessWidget {
         IconData icon,
       })> steps;
 
-  const _StatusStepper(
-      {required this.currentStatus, required this.steps});
+  const _StatusTimeline({required this.order, required this.steps});
+
+  String _fmtTime(DateTime dt) {
+    final local = dt.toLocal();
+    final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = local.hour >= 12 ? 'PM' : 'AM';
+    return '$hour12:$minute $period';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final currentIdx = currentStatus.stepIndex;
+    final currentIdx = order.status.stepIndex;
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: currentStatus.progress,
-              minHeight: 6,
-              backgroundColor: colorScheme.surfaceContainerHighest,
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(colorScheme.primary),
-            ),
-          ),
-          const SizedBox(height: 20),
+          const Text('Timeline',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 19,
+                  fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          const SizedBox(height: 18),
+          ...steps.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final step = entry.value;
+            final isCompleted = idx < currentIdx;
+            final isCurrent = idx == currentIdx;
+            final isLast = idx == steps.length - 1;
 
-          // Steps
-          Column(
-            children: steps.asMap().entries.map((entry) {
-              final idx = entry.key;
-              final step = entry.value;
-              final isDone = idx <= currentIdx;
-              final isCurrent = idx == currentIdx;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    // Circle indicator
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 400),
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isDone
-                            ? colorScheme.primary
-                            : colorScheme.surfaceContainerHighest,
-                        border: isCurrent
-                            ? Border.all(
-                                color: colorScheme.primary, width: 2)
-                            : null,
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isCompleted
+                              ? AppColors.textPrimary
+                              : Colors.transparent,
+                          border: isCurrent
+                              ? Border.all(color: AppColors.accent, width: 2)
+                              : (!isCompleted
+                                  ? Border.all(color: AppColors.border, width: 1.5)
+                                  : null),
+                        ),
+                        child: Icon(
+                          isCompleted ? Icons.check_rounded : step.icon,
+                          size: 17,
+                          color: isCompleted
+                              ? Colors.white
+                              : (isCurrent ? AppColors.accent : AppColors.textHint),
+                        ),
                       ),
-                      child: Icon(
-                        isDone ? Icons.check : step.icon,
-                        size: 18,
-                        color: isDone
-                            ? colorScheme.onPrimary
-                            : colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    Expanded(
+                      if (!isLast)
+                        Expanded(
+                          child: Container(
+                            width: 2,
+                            margin: const EdgeInsets.symmetric(vertical: 2),
+                            color: isCompleted ? AppColors.textPrimary : AppColors.border,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 6, bottom: isLast ? 0 : 22),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             step.label,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: isCurrent
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isDone
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurface,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 15,
+                              fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w700,
+                              color: isCurrent
+                                  ? AppColors.accent
+                                  : (isCompleted ? AppColors.textPrimary : AppColors.textHint),
                             ),
                           ),
-                          if (isCurrent)
+                          if (idx == 0 && (isCompleted || isCurrent)) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              'Order confirmed by kitchen at ${_fmtTime(order.createdAt)}.',
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                                  color: AppColors.textSecondary, height: 1.35),
+                            ),
+                          ] else if (isCurrent) ...[
+                            const SizedBox(height: 3),
                             Text(
                               step.sublabel,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.outline),
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                                  color: AppColors.textSecondary, height: 1.35),
                             ),
+                          ],
                         ],
                       ),
                     ),
-
-                    if (isCurrent)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'Now',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -755,8 +723,6 @@ class _PaymentStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final isPaid = order.paymentStatus == QrPaymentStatus.paid;
     // Same label source the staff cashier PDF receipt uses (receipt_service.dart)
     // — one mapping, so a payment method never reads differently across receipts.
@@ -765,11 +731,13 @@ class _PaymentStatusCard extends StatelessWidget {
     // meaning for an order with no online payment method recorded.
     final methodLabel = MidtransPaymentMethod.label(order.paymentMethod ?? 'kasir');
 
+    final statusColor = isPaid ? Colors.green.shade700 : AppColors.accentOrange;
+
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
       ),
       padding: const EdgeInsets.all(14),
       child: Row(
@@ -777,17 +745,12 @@ class _PaymentStatusCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isPaid
-                  ? Colors.green.shade50
-                  : Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(10),
+              color: statusColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
             ),
             child: Icon(
-              isPaid
-                  ? Icons.check_circle_outline
-                  : Icons.schedule_outlined,
-              color:
-                  isPaid ? Colors.green.shade600 : Colors.orange.shade600,
+              isPaid ? Icons.check_circle_outline : Icons.schedule_outlined,
+              color: statusColor,
               size: 22,
             ),
           ),
@@ -798,19 +761,14 @@ class _PaymentStatusCard extends StatelessWidget {
               children: [
                 Text(
                   isPaid ? 'Paid' : 'Pay After Dining',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: isPaid
-                        ? Colors.green.shade700
-                        : Colors.orange.shade700,
-                  ),
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                      fontWeight: FontWeight.w700, color: statusColor),
                 ),
                 Text(
                   isPaid
                       ? 'Payment via $methodLabel confirmed'
                       : 'Please pay at the cashier after you finish dining',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: colorScheme.outline),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -820,13 +778,12 @@ class _PaymentStatusCard extends StatelessWidget {
             children: [
               Text(
                 _formatPrice(order.totalAmount),
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                    fontWeight: FontWeight.w700, color: AppColors.textPrimary),
               ),
-              Text(
-                'already includes PB1 & service charge',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: colorScheme.outline, fontSize: 10),
+              const Text(
+                'incl. PB1 & service',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: AppColors.textHint),
               ),
             ],
           ),
@@ -838,184 +795,121 @@ class _PaymentStatusCard extends StatelessWidget {
   String _formatPrice(double price) {
     final formatted = price
         .toStringAsFixed(0)
-        .replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
   }
 }
 
 // ─── Order Detail Card ────────────────────────────────────────────────────────
 
-class _OrderDetailCard extends StatefulWidget {
+class _OrderDetailCard extends StatelessWidget {
   final QrOrderModel order;
 
   const _OrderDetailCard({required this.order});
 
   @override
-  State<_OrderDetailCard> createState() => _OrderDetailCardState();
-}
-
-class _OrderDetailCardState extends State<_OrderDetailCard> {
-  bool _expanded = false;
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final subtotal = order.items.fold(0.0, (sum, i) => sum + i.subtotal);
+    final pb1 = subtotal * 1.03 * 0.10;
+    final service = subtotal * 0.03;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant, width: 0.8),
-      ),
-      child: Column(
-        children: [
-          // Header
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Order Items',
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 22,
+                fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+        const SizedBox(height: 14),
+
+        ...order.items.map((item) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(color: AppColors.border),
+              ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.receipt_long_outlined,
-                      size: 18, color: colorScheme.primary),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    ),
+                    child: Text('${item.quantity}x',
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                            fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.menuItemName,
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5,
+                                fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                        if (item.notes != null && item.notes!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(item.notes!,
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
+                                  color: AppColors.textSecondary)),
+                        ],
+                      ],
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Order Details (${widget.order.items.length} item)',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    color: colorScheme.outline,
-                  ),
+                  Text(_formatPrice(item.subtotal),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                          fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                 ],
               ),
-            ),
-          ),
+            )),
 
-          // Items (collapsible)
-          AnimatedSize(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            child: _expanded
-                ? Column(
-                    children: [
-                      Divider(
-                          height: 1,
-                          color: colorScheme.outlineVariant),
-                      ...widget.order.items.map((item) => Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                            child: Row(
-                              children: [
-                                Text(
-                                  '${item.quantity}×',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(item.menuItemName,
-                                          style:
-                                              theme.textTheme.bodySmall),
-                                      if (item.notes != null &&
-                                          item.notes!.isNotEmpty)
-                                        Text('📝 ${item.notes}',
-                                            style: theme
-                                                .textTheme.bodySmall
-                                                ?.copyWith(
-                                                    color: colorScheme
-                                                        .outline,
-                                                    fontSize: 11)),
-                                    ],
-                                  ),
-                                ),
-                                Text(
-                                  _formatPrice(item.subtotal),
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                              ],
-                            ))),
-                      const SizedBox(height: 10),
-                      Divider(height: 1, color: colorScheme.outlineVariant),
-                      // Same row labels & order as the staff cashier PDF
-                      // receipt (receipt_service.dart _totalRow calls) —
-                      // Subtotal, PB1, Service, [Discount], [Overtime], Total.
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                        child: _PriceRow(
-                          label: 'Subtotal',
-                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal),
-                          theme: theme,
-                          colorScheme: colorScheme,
-                          formatPrice: _formatPrice,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-                        child: _PriceRow(
-                          label: 'PB1 (10%)',
-                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 1.03 * 0.10,
-                          theme: theme,
-                          colorScheme: colorScheme,
-                          formatPrice: _formatPrice,
-                          isNote: true,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 6, 14, 0),
-                        child: _PriceRow(
-                          label: 'Service (3%)',
-                          amount: widget.order.items.fold(0.0, (sum, i) => sum + i.subtotal) * 0.03,
-                          theme: theme,
-                          colorScheme: colorScheme,
-                          formatPrice: _formatPrice,
-                          isNote: true,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
-                        child: Row(
-                          children: [
-                            Text('Total',
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                    fontWeight: FontWeight.bold)),
-                            const Spacer(),
-                            Text(
-                              _formatPrice(widget.order.totalAmount),
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: colorScheme.primary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  )
-                : const SizedBox.shrink(),
+        const SizedBox(height: 6),
+        Divider(color: AppColors.border, height: 1),
+        const SizedBox(height: 12),
+
+        _PriceRow(label: 'Subtotal', amount: subtotal, formatPrice: _formatPrice),
+        const SizedBox(height: 6),
+        _PriceRow(
+            label: 'Tax & Service (13%)', amount: pb1 + service, formatPrice: _formatPrice),
+
+        const SizedBox(height: 16),
+        Container(
+          height: 3,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(2),
+            gradient: LinearGradient(colors: [
+              AppColors.textPrimary,
+              AppColors.textPrimary.withValues(alpha: 0.0),
+            ]),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 16),
+
+        Row(
+          children: [
+            const Text('Total',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
+                    fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            const Spacer(),
+            Text(
+              _formatPrice(order.totalAmount),
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 20,
+                  fontWeight: FontWeight.w800, color: AppColors.primary),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
   String _formatPrice(double price) {
     final formatted = price
         .toStringAsFixed(0)
-        .replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
     return 'Rp $formatted';
   }
 }
@@ -1025,37 +919,24 @@ class _OrderDetailCardState extends State<_OrderDetailCard> {
 class _PriceRow extends StatelessWidget {
   final String label;
   final double amount;
-  final ThemeData theme;
-  final ColorScheme colorScheme;
   final String Function(double) formatPrice;
-  final bool isNote;
 
   const _PriceRow({
     required this.label,
     required this.amount,
-    required this.theme,
-    required this.colorScheme,
     required this.formatPrice,
-    this.isNote = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: isNote ? colorScheme.outline : colorScheme.onSurface,
-          ),
-        ),
+        Text(label,
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5, color: AppColors.textSecondary)),
         const Spacer(),
-        Text(
-          formatPrice(amount),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: isNote ? colorScheme.outline : colorScheme.onSurface,
-          ),
-        ),
+        Text(formatPrice(amount),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
       ],
     );
   }
@@ -1166,8 +1047,6 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final order = widget.order;
     final isCreated = order.status == QrOrderStatus.created;
     final isPreparing = order.status == QrOrderStatus.preparing;
@@ -1194,19 +1073,18 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: colorScheme.outlineVariant),
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              border: Border.all(color: AppColors.border),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                Icon(Icons.smartphone_outlined, size: 16, color: colorScheme.onSurfaceVariant),
-                const SizedBox(width: 8),
+                Icon(Icons.smartphone_outlined, size: 16, color: AppColors.textSecondary),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Only the device that placed this order can add items to it.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: colorScheme.onSurfaceVariant, fontSize: 11),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11.5, color: AppColors.textSecondary),
                   ),
                 ),
               ],
@@ -1221,17 +1099,17 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
             child: ElevatedButton.icon(
               onPressed: () => _goToAddOrder(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                foregroundColor: colorScheme.onPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
                 elevation: 0,
               ),
-              icon: const Icon(Icons.add_shopping_cart_outlined),
+              icon: const Icon(Icons.add, color: Colors.white),
               label: const Text(
-                'Add Order',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                'Add to Order',
+                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                    fontSize: 15.5, color: Colors.white),
               ),
             ),
           ),
@@ -1240,22 +1118,18 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: colorScheme.tertiaryContainer.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: colorScheme.tertiary.withValues(alpha: 0.3)),
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                Icon(Icons.info_outline,
-                    size: 14, color: colorScheme.tertiary),
-                const SizedBox(width: 8),
+                Icon(Icons.info_outline, size: 14, color: AppColors.primary),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Items already sent to the kitchen cannot be changed or cancelled.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onTertiaryContainer,
-                        fontSize: 11),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11.5, color: AppColors.textSecondary),
                   ),
                 ),
               ],
@@ -1271,21 +1145,21 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
             child: ElevatedButton.icon(
               onPressed: () => context.push('/qr/${order.tableId}/pay/${order.id}'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                foregroundColor: colorScheme.onPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
                 elevation: 0,
               ),
-              icon: const Icon(Icons.payment_rounded),
+              icon: const Icon(Icons.payment_rounded, color: Colors.white),
               label: const Text('Pay Now',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                      fontSize: 15.5, color: Colors.white)),
             ),
           ),
           const SizedBox(height: 8),
-          Center(
-            child: Text('or',
-                style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+          const Center(
+            child: Text('or', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textHint)),
           ),
           const SizedBox(height: 8),
         ],
@@ -1298,21 +1172,21 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
               child: ElevatedButton.icon(
                 onPressed: _isRequestingBill ? null : () => _requestBill(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade600,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+                  elevation: 0,
                 ),
                 icon: _isRequestingBill
                     ? const SizedBox(
                         width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.receipt_outlined),
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.receipt_outlined, color: Colors.white),
                 label: Text(
                   _isRequestingBill ? 'Sending...' : 'Request Bill',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                      fontSize: 15.5, color: Colors.white),
                 ),
               ),
             )
@@ -1322,18 +1196,18 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 border: Border.all(color: Colors.green.shade300),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.check_circle_outline,
-                      color: Colors.green.shade700, size: 20),
+                  Icon(Icons.check_circle_outline, color: Colors.green.shade700, size: 20),
                   const SizedBox(width: 8),
                   Text(
                     'Bill requested — the cashier is on the way',
                     style: TextStyle(
+                      fontFamily: 'Poppins',
                       color: Colors.green.shade700,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1348,18 +1222,17 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
-          child: Row(
+          child: const Row(
             children: [
-              Icon(Icons.help_outline, size: 16, color: colorScheme.outline),
-              const SizedBox(width: 8),
+              Icon(Icons.help_outline, size: 16, color: AppColors.textSecondary),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Having an issue? Show this screen to our staff.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: colorScheme.outline),
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12.5, color: AppColors.textSecondary),
                 ),
               ),
             ],
