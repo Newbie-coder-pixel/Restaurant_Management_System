@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/menu_provider.dart';
-import 'widgets/menu_card.dart';
+import '../../../shared/models/menu_model.dart';
 import 'widgets/add_menu_form.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../core/models/staff_role.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/staff_shell.dart';
 
 class MenuScreen extends ConsumerWidget {
   const MenuScreen({super.key});
@@ -43,6 +45,7 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
 
   String? _selectedBranchId;
   List<Map<String, dynamic>> _branches = [];
+
   @override
   void initState() {
     super.initState();
@@ -105,8 +108,7 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
 
   /// Effective branchId for widgets that need an explicit branchId
   /// (AddMenuForm, CategoryTabs)
-  String get _effectiveBranchId =>
-      _selectedBranchId ?? widget.branchId;
+  String get _effectiveBranchId => _selectedBranchId ?? widget.branchId;
 
   void _openAddMenu() {
     // If superadmin hasn't picked a branch yet, don't open the form
@@ -132,382 +134,196 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      drawer: const AppDrawer(),
-      body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [
-          _MenuAppBar(
-            onAddMenu: _openAddMenu,
-            isSuperAdmin: widget.isSuperAdmin,
-            branches: _branches,
-            selectedBranchId: _selectedBranchId,
-            onBranchChanged: _onBranchChanged,
+    return StaffShell(
+      pageTitle: 'Menu Items',
+      activeRoute: AppRoutes.menu,
+      topBarActions: [
+        // ── Branch filter (superadmin only) ──
+        if (widget.isSuperAdmin && _branches.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String?>(
+                  value: _selectedBranchId,
+                  isDense: true,
+                  icon: const Icon(Icons.keyboard_arrow_down,
+                      size: 16, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
+                  items: _branches
+                      .map((b) => DropdownMenuItem<String?>(
+                            value: b['id'] as String,
+                            child: Text(b['name'] as String,
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                          ))
+                      .toList(),
+                  onChanged: _onBranchChanged,
+                ),
+              ),
+            ),
           ),
-        ],
-        body: Column(
+        IconButton(
+          tooltip: 'Refresh',
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+          onPressed: () => ref.read(menuProvider.notifier).refresh(),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: FilledButton.icon(
+            onPressed: _openAddMenu,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+            ),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('ADD MENU ITEM',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+                fontSize: 12, letterSpacing: 0.3)),
+          ),
+        ),
+      ],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SearchFilterBar(searchCtrl: _searchCtrl),
-            _CategoryTabs(branchId: _effectiveBranchId),
-            const _StatsRow(),
-            const Expanded(child: _MenuGrid()),
+            const Text('Menu Management',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 30,
+                fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            const SizedBox(height: 4),
+            const Text('Manage availability, pricing, and details for all dishes.',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: 20),
+            _FilterPanel(searchCtrl: _searchCtrl, branchId: _effectiveBranchId),
+            const SizedBox(height: 20),
+            const _MenuGrid(),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddMenu,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Menu',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-      ),
     );
   }
 }
 
-// ─── APP BAR ──────────────────────────────────────────────────────────────────
+// ─── SEARCH + CATEGORY FILTER PANEL ────────────────────────────────────────────
 
-class _MenuAppBar extends StatelessWidget {
-  final VoidCallback onAddMenu;
-  final bool isSuperAdmin;
-  final List<Map<String, dynamic>> branches;
-  final String? selectedBranchId;
-  final ValueChanged<String?> onBranchChanged;
-
-  const _MenuAppBar({
-    required this.onAddMenu,
-    required this.isSuperAdmin,
-    required this.branches,
-    required this.selectedBranchId,
-    required this.onBranchChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return SliverAppBar(
-      expandedHeight: 120,
-      floating: true,
-      snap: true,
-      pinned: true,
-      backgroundColor: colorScheme.surface,
-      surfaceTintColor: colorScheme.primary,
-      flexibleSpace: FlexibleSpaceBar(
-        title: Text(
-          'Menu Management',
-          style: TextStyle(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.w800,
-            fontSize: 20,
-          ),
-        ),
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                colorScheme.primaryContainer.withValues(alpha: 0.5),
-                colorScheme.surface,
-              ],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        // ── Branch filter dropdown (superadmin only) ──
-        if (isSuperAdmin && branches.isNotEmpty)
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String?>(
-              value: selectedBranchId,
-              isDense: true,
-              dropdownColor: colorScheme.surfaceContainerHighest,
-              iconEnabledColor: colorScheme.onSurface.withValues(alpha: 0.6),
-              icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                color: colorScheme.onSurface.withValues(alpha: 0.8),
-              ),
-              items: [
-                ...branches.map(
-                  (b) => DropdownMenuItem<String?>(
-                    value: b['id'] as String,
-                    child: Text(
-                      b['name'] as String,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        color: colorScheme.onSurface.withValues(alpha: 0.8),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              onChanged: onBranchChanged,
-            ),
-          ),
-        const SizedBox(width: 4),
-        // ── Refresh ──
-        Consumer(
-          builder: (_, ref, __) => IconButton(
-            onPressed: () => ref.read(menuProvider.notifier).refresh(),
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
-          ),
-        ),
-        IconButton(
-          onPressed: onAddMenu,
-          icon: const Icon(Icons.add_circle_outline),
-          tooltip: 'Add Menu',
-        ),
-        const SizedBox(width: 8),
-      ],
-    );
-  }
-}
-
-// ─── SEARCH & FILTER BAR ──────────────────────────────────────────────────────
-
-class _SearchFilterBar extends ConsumerWidget {
+class _FilterPanel extends ConsumerWidget {
   final TextEditingController searchCtrl;
-  const _SearchFilterBar({required this.searchCtrl});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final filter = ref.watch(menuFilterProvider);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: searchCtrl,
-              onChanged: (v) => ref.read(menuFilterProvider.notifier).update(
-                    (s) => s.copyWith(searchQuery: v),
-                  ),
-              decoration: InputDecoration(
-                hintText: 'Search menu...',
-                hintStyle: TextStyle(
-                    color: colorScheme.onSurface.withValues(alpha: 0.4)),
-                prefixIcon: Icon(Icons.search,
-                    color: colorScheme.onSurface.withValues(alpha: 0.4)),
-                filled: true,
-                fillColor:
-                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                isDense: true,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          FilterChip(
-            label: const Text('Available', style: TextStyle(fontSize: 12)),
-            selected: filter.showAvailableOnly == true,
-            onSelected: (v) =>
-                ref.read(menuFilterProvider.notifier).update(
-                      (s) => s.copyWith(showAvailableOnly: v ? true : null),
-                    ),
-            selectedColor: colorScheme.primaryContainer,
-            checkmarkColor: colorScheme.primary,
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── CATEGORY TABS ────────────────────────────────────────────────────────────
-
-class _CategoryTabs extends ConsumerWidget {
   final String branchId;
-  const _CategoryTabs({required this.branchId});
+  const _FilterPanel({required this.searchCtrl, required this.branchId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
     final filter = ref.watch(menuFilterProvider);
     final categoriesAsync = ref.watch(categoryNotifierProvider(branchId));
-    final counts = ref.watch(menuCountByCategoryProvider);
 
-    return SizedBox(
-      height: 48,
-      child: categoriesAsync.when(
-        loading: () => const SizedBox.shrink(),
-        error: (_, __) => const SizedBox.shrink(),
-        data: (categories) => ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          children: [
-            // "All" chip
-            _categoryChip(
-              context: context,
-              colorScheme: colorScheme,
-              emoji: '🍽️',
-              label: 'All',
-              count: counts.values.fold(0, (a, b) => a + b),
-              isSelected: filter.categoryId == null,
-              onTap: () => ref.read(menuFilterProvider.notifier).update(
-                    (s) => s.copyWith(clearCategory: true),
-                  ),
-            ),
-            const SizedBox(width: 8),
-            ...categories.asMap().entries.map((entry) {
-              final cat = entry.value;
-              final isSelected = filter.categoryId == cat.id;
-              final count = counts[cat.id] ?? 0;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _categoryChip(
-                  context: context,
-                  colorScheme: colorScheme,
-                  emoji: '🍴',
-                  label: cat.name,
-                  count: count,
-                  isSelected: isSelected,
-                  onTap: () =>
-                      ref.read(menuFilterProvider.notifier).update(
-                            (s) => s.copyWith(categoryId: cat.id),
-                          ),
-                ),
-              );
-            }),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
       ),
-    );
-  }
-
-  Widget _categoryChip({
-    required BuildContext context,
-    required ColorScheme colorScheme,
-    required String emoji,
-    required String label,
-    required int count,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? colorScheme.primary
-              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Row(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 14)),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-                color:
-                    isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? colorScheme.onPrimary.withValues(alpha: 0.25)
-                    : colorScheme.onSurface.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected
-                      ? colorScheme.onPrimary
-                      : colorScheme.onSurface,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── STATS ROW ────────────────────────────────────────────────────────────────
-
-class _StatsRow extends ConsumerWidget {
-  const _StatsRow();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final menus = ref.watch(filteredMenuProvider).valueOrNull ?? [];
-    final available = menus.where((m) => m.isAvailable).length;
-    final total = menus.length;
-    final unavailable = total - available;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      child: Row(
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _StatChip(
-              label: 'Total', value: '$total', color: Colors.blue.shade400),
-          const SizedBox(width: 8),
-          _StatChip(
-              label: 'Available',
-              value: '$available',
-              color: Colors.green.shade500),
-          const SizedBox(width: 8),
-          _StatChip(
-              label: 'Out of Stock',
-              value: '$unavailable',
-              color: Colors.red.shade400),
+          SizedBox(
+            width: 320,
+            child: TextField(
+              controller: searchCtrl,
+              onChanged: (v) => ref
+                  .read(menuFilterProvider.notifier)
+                  .update((s) => s.copyWith(searchQuery: v)),
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search menu items...',
+                hintStyle: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
+                prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                filled: true,
+                fillColor: AppColors.surfaceVariant,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+          ),
+          _FilterPill(
+            label: 'All',
+            isSelected: filter.categoryId == null,
+            onTap: () => ref
+                .read(menuFilterProvider.notifier)
+                .update((s) => s.copyWith(clearCategory: true)),
+          ),
+          categoriesAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (categories) => Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: categories
+                  .map((cat) => _FilterPill(
+                        label: cat.name,
+                        isSelected: filter.categoryId == cat.id,
+                        onTap: () => ref
+                            .read(menuFilterProvider.notifier)
+                            .update((s) => s.copyWith(categoryId: cat.id)),
+                      ))
+                  .toList(),
+            ),
+          ),
+          _FilterPill(
+            label: 'Available',
+            isSelected: filter.showAvailableOnly == true,
+            onTap: () => ref.read(menuFilterProvider.notifier).update(
+                (s) => s.copyWith(
+                    showAvailableOnly: filter.showAvailableOnly == true ? null : true)),
+          ),
         ],
       ),
     );
   }
 }
 
-class _StatChip extends StatelessWidget {
+class _FilterPill extends StatelessWidget {
   final String label;
-  final String value;
-  final Color color;
-
-  const _StatChip(
-      {required this.label, required this.value, required this.color});
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _FilterPill({required this.label, required this.isSelected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: RichText(
-        text: TextSpan(
-          style: TextStyle(fontSize: 12, color: color),
-          children: [
-            TextSpan(
-                text: value,
-                style: const TextStyle(fontWeight: FontWeight.w800)),
-            TextSpan(
-                text: ' $label',
-                style: TextStyle(color: color.withValues(alpha: 0.8))),
-          ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          border: Border.all(color: isSelected ? AppColors.accent : AppColors.border),
         ),
+        child: Text(label.toUpperCase(),
+          style: TextStyle(
+            fontFamily: 'Poppins', fontSize: 12, letterSpacing: 0.3,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? Colors.white : AppColors.textPrimary)),
       ),
     );
   }
@@ -519,10 +335,11 @@ class _MenuGrid extends ConsumerWidget {
   const _MenuGrid();
 
   int _crossAxisCount(double width) {
-    if (width >= 1200) return 5;
-    if (width >= 900) return 4;
-    if (width >= 600) return 3;
-    return 2;
+    if (width >= 1400) return 5;
+    if (width >= 1100) return 4;
+    if (width >= 780) return 3;
+    if (width >= 480) return 2;
+    return 1;
   }
 
   @override
@@ -530,54 +347,270 @@ class _MenuGrid extends ConsumerWidget {
     final menusAsync = ref.watch(filteredMenuProvider);
 
     return menusAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline,
-                size: 56, color: Colors.red.withValues(alpha: 0.7)),
-            const SizedBox(height: 12),
-            Text('Failed to load menu',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              error.toString(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton.tonal(
-              onPressed: () => ref.refresh(menuProvider),
-              child: const Text('Try Again'),
-            ),
-          ],
+      loading: () => const Padding(
+        padding: EdgeInsets.only(top: 60),
+        child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      ),
+      error: (error, _) => Padding(
+        padding: const EdgeInsets.only(top: 40),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: AppColors.accent),
+              const SizedBox(height: 12),
+              const Text('Failed to load menu',
+                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                onPressed: () => ref.refresh(menuProvider),
+                child: const Text('Try Again'),
+              ),
+            ],
+          ),
         ),
       ),
       data: (menus) {
         if (menus.isEmpty) return const _EmptyState();
 
         return LayoutBuilder(
-          builder: (context, constraints) {
-            return GridView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: _crossAxisCount(constraints.maxWidth),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.72,
-              ),
-              itemCount: menus.length,
-              itemBuilder: (_, i) => MenuCard(menu: menus[i]),
-            );
-          },
+          builder: (context, constraints) => GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: _crossAxisCount(constraints.maxWidth),
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 0.78,
+            ),
+            itemCount: menus.length,
+            itemBuilder: (_, i) => _MenuItemCard(menu: menus[i]),
+          ),
         );
       },
+    );
+  }
+}
+
+// ─── MENU ITEM CARD ───────────────────────────────────────────────────────────
+
+class _MenuItemCard extends ConsumerStatefulWidget {
+  final MenuItem menu;
+  const _MenuItemCard({required this.menu});
+
+  @override
+  ConsumerState<_MenuItemCard> createState() => _MenuItemCardState();
+}
+
+class _MenuItemCardState extends ConsumerState<_MenuItemCard> {
+  bool _isToggling = false;
+
+  Future<void> _handleToggle() async {
+    if (_isToggling) return;
+    setState(() => _isToggling = true);
+    final success = await ref
+        .read(menuProvider.notifier)
+        .toggleAvailability(widget.menu.id, widget.menu.isAvailable);
+    if (mounted) {
+      setState(() => _isToggling = false);
+      if (!success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to change menu status'),
+            backgroundColor: AppColors.accent,
+          ),
+        );
+      }
+    }
+  }
+
+  void _handleEdit() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddMenuForm(existingMenu: widget.menu, branchId: widget.menu.branchId),
+    );
+  }
+
+  void _handleDelete() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Menu Item?',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: Text('"${widget.menu.name}" will be permanently deleted.',
+          style: const TextStyle(fontFamily: 'Poppins')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(menuProvider.notifier).deleteMenu(widget.menu.id);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmtPrice(double v) => v.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+
+  @override
+  Widget build(BuildContext context) {
+    final menu = widget.menu;
+    final categoriesAsync = ref.watch(categoryNotifierProvider(menu.branchId));
+    final categoryName = categoriesAsync.valueOrNull
+            ?.where((c) => c.id == menu.categoryId)
+            .map((c) => c.name)
+            .firstOrNull ??
+        'Uncategorized';
+
+    final isOut = !menu.isAvailable;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Stack(
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 10,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    (menu.imageUrl != null && menu.imageUrl!.isNotEmpty)
+                        ? Image.network(menu.imageUrl!,
+                            fit: BoxFit.cover,
+                            color: isOut ? Colors.black.withValues(alpha: 0.35) : null,
+                            colorBlendMode: isOut ? BlendMode.darken : null,
+                            errorBuilder: (_, __, ___) => const _PlaceholderImage())
+                        : const _PlaceholderImage(),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 10, right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text(categoryName.toUpperCase(),
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 10,
+                      fontWeight: FontWeight.w800, letterSpacing: 0.3,
+                      color: AppColors.textPrimary)),
+                ),
+              ),
+              Positioned(
+                top: 10, left: 10,
+                child: Row(children: [
+                  _RoundIconButton(icon: Icons.edit_outlined, onTap: _handleEdit),
+                  const SizedBox(width: 6),
+                  _RoundIconButton(icon: Icons.delete_outline, onTap: _handleDelete,
+                    color: Colors.red.shade600),
+                ]),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(menu.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 16,
+                    fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+                Text('Rp ${_fmtPrice(menu.price)}',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 14,
+                    fontWeight: FontWeight.w700, color: AppColors.primary)),
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: AppColors.border),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(isOut ? 'SOLD OUT' : 'AVAILABLE',
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 11,
+                        fontWeight: FontWeight.w800, letterSpacing: 0.3,
+                        color: isOut ? AppColors.accent : AppColors.textPrimary)),
+                    _isToggling
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                        : Switch(
+                            value: menu.isAvailable,
+                            onChanged: (_) => _handleToggle(),
+                            activeThumbColor: Colors.white,
+                            activeTrackColor: AppColors.accent,
+                            inactiveThumbColor: Colors.white,
+                            inactiveTrackColor: AppColors.border,
+                          ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? color;
+  const _RoundIconButton({required this.icon, required this.onTap, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+      child: Container(
+        width: 28, height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.surface.withValues(alpha: 0.92),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 15, color: color ?? AppColors.textSecondary),
+      ),
+    );
+  }
+}
+
+class _PlaceholderImage extends StatelessWidget {
+  const _PlaceholderImage();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.surfaceVariant,
+      child: const Icon(Icons.restaurant, size: 32, color: AppColors.textHint),
     );
   }
 }
@@ -589,43 +622,31 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer.withValues(alpha: 0.4),
-              shape: BoxShape.circle,
+    return Padding(
+      padding: const EdgeInsets.only(top: 60),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96, height: 96,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.restaurant_menu, size: 48, color: AppColors.primary),
             ),
-            child: Icon(
-              Icons.restaurant_menu,
-              size: 48,
-              color: colorScheme.primary.withValues(alpha: 0.6),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'No menu items yet',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Add your first menu item\nto start receiving orders.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: colorScheme.onSurface.withValues(alpha: 0.55),
-              height: 1.5,
-            ),
-          ),
-        ],
+            const SizedBox(height: 20),
+            const Text('No menu items yet',
+              style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 18,
+                fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            const Text('Add your first menu item\nto start receiving orders.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary, height: 1.5)),
+          ],
+        ),
       ),
     );
   }
