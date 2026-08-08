@@ -1,22 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/table_model.dart';
 import '../../../shared/models/order_model.dart' show calculateOvertimeCharge;
-import '../../../shared/models/staff_model.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/widgets/clock_in_out_control.dart';
-import '../../../shared/widgets/notification_bell.dart';
+import '../../../shared/widgets/staff_shell.dart';
+import '../../../shared/widgets/diamond_pattern_painter.dart';
 import 'widgets/table_card.dart' show showTableDetailSheet;
 import 'widgets/add_table_dialog.dart';
-import '../../../shared/widgets/app_drawer.dart';
-
-const double _kSidebarBreakpoint = 900;
 
 class TableScreen extends ConsumerStatefulWidget {
   const TableScreen({super.key});
@@ -39,19 +34,6 @@ class _TableScreenState extends ConsumerState<TableScreen> {
   List<_BranchItem> _branches = [];
   String? _selectedBranchId; // null = all branches
   StaffRole? _userRole;
-
-  // Purely decorative wall-clock in the top bar (matches the floor-plan
-  // design reference) — no business logic behind it.
-  Timer? _clockTimer;
-  DateTime _now = DateTime.now();
-
-  @override
-  void initState() {
-    super.initState();
-    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
-    });
-  }
 
   bool _initialized = false;
 
@@ -186,7 +168,6 @@ class _TableScreenState extends ConsumerState<TableScreen> {
   @override
   void dispose() {
     _channel?.unsubscribe();
-    _clockTimer?.cancel();
     super.dispose();
   }
 
@@ -273,12 +254,11 @@ class _TableScreenState extends ConsumerState<TableScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final staff = ref.watch(currentStaffProvider);
-    final isWide = MediaQuery.of(context).size.width >= _kSidebarBreakpoint;
+    final isWide = MediaQuery.of(context).size.width >= kStaffShellSidebarBreakpoint;
 
-    return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: AppColors.background,
+    return StaffShell(
+      pageTitle: 'Floor Plan',
+      activeRoute: AppRoutes.tables,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _handleAddTable(),
         backgroundColor: AppColors.accent,
@@ -287,25 +267,46 @@ class _TableScreenState extends ConsumerState<TableScreen> {
           style: TextStyle(
             color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
       ),
-      body: SafeArea(
-        child: Row(
-          children: [
-            if (isWide) _buildSidebar(staff),
-            Expanded(
-              child: Column(
-                children: [
-                  _buildTopBar(staff, isWide: isWide),
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _buildFloorPlanArea(isWide: isWide),
-                  ),
+      topBarActions: [
+        if (_userRole == StaffRole.superadmin)
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedBranchId,
+                isDense: true,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textSecondary),
+                style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('All Branches',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 12))),
+                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                    value: b.id,
+                    child: Text(b.name,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)))),
                 ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                    _isLoading = true;
+                  });
+                  _load();
+                },
               ),
             ),
-          ],
+          ),
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+          onPressed: _load,
         ),
-      ),
+        const SizedBox(width: 4),
+      ],
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildFloorPlanArea(isWide: isWide),
     );
   }
 
@@ -359,249 +360,6 @@ class _TableScreenState extends ConsumerState<TableScreen> {
         duration: const Duration(seconds: 4),
       ));
     }
-  }
-
-  // ── Sidebar (wide layouts only) ─────────────────────────────────────────
-  Widget _buildSidebar(StaffMember? staff) {
-    final role = staff?.role ?? StaffRole.waiter;
-    final items = _sidebarItems.where(
-      (i) => role == StaffRole.superadmin || role.accessFeatures.contains(i.requiredFeature)).toList();
-    final currentRoute = GoRouterState.of(context).matchedLocation;
-
-    return Container(
-      width: 260,
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 44, height: 44,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.storefront_rounded,
-                    color: AppColors.accent, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Service Portal',
-                        style: TextStyle(
-                          fontFamily: 'Poppins', fontSize: 16,
-                          fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-                      const SizedBox(height: 2),
-                      Text('STAFF ACCESS ONLY',
-                        style: TextStyle(
-                          fontFamily: 'Poppins', fontSize: 10,
-                          fontWeight: FontWeight.w700, letterSpacing: 0.6,
-                          color: AppColors.accent.withValues(alpha: 0.8))),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: AppColors.border),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              children: items.map((item) {
-                final isActive = currentRoute == item.route;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 4),
-                  decoration: BoxDecoration(
-                    color: isActive ? AppColors.accent : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ListTile(
-                    dense: true,
-                    leading: Icon(item.icon, size: 20,
-                      color: isActive ? Colors.white : AppColors.textSecondary),
-                    title: Text(item.label,
-                      style: TextStyle(
-                        fontFamily: 'Poppins', fontSize: 13,
-                        fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                        color: isActive ? Colors.white : AppColors.textPrimary)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    onTap: () {
-                      if (currentRoute != item.route) context.go(item.route);
-                    },
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const Divider(height: 1, color: AppColors.border),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.help_outline_rounded,
-                    size: 20, color: AppColors.textSecondary),
-                  title: const Text('Support',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textPrimary)),
-                  onTap: () => showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: const Text('Need Help?',
-                        style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-                      content: const Text(
-                        'Contact your branch manager or superadmin for support with the Service Portal.',
-                        style: TextStyle(fontFamily: 'Poppins')),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Close')),
-                      ],
-                    ),
-                  ),
-                ),
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.logout_rounded,
-                    size: 20, color: Colors.redAccent),
-                  title: const Text('Logout',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.redAccent)),
-                  onTap: () => _confirmLogout(),
-                ),
-                const SizedBox(height: 8),
-                const ClockOutButton(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmLogout() {
-    final authNotifier = ref.read(authStateProvider.notifier);
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirm Logout',
-          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-        content: const Text('Are you sure you want to log out of this account?',
-          style: TextStyle(fontFamily: 'Poppins')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              await authNotifier.signOut();
-            },
-            child: const Text('Logout', style: TextStyle(color: Colors.white))),
-        ],
-      ),
-    );
-  }
-
-  // ── Top bar ──────────────────────────────────────────────────────────────
-  Widget _buildTopBar(StaffMember? staff, {required bool isWide}) {
-    final timeLabel =
-        '${_now.hour.toString().padLeft(2, '0')}:${_now.minute.toString().padLeft(2, '0')}';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          if (!isWide)
-            Builder(
-              builder: (ctx) => IconButton(
-                icon: const Icon(Icons.menu_rounded, color: AppColors.textPrimary),
-                onPressed: () => Scaffold.of(ctx).openDrawer(),
-              ),
-            ),
-          const Text('Floor Plan',
-            style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 18,
-              fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          if (staff != null) ...[
-            const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(staff.role.displayName,
-                style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11,
-                  fontWeight: FontWeight.w700, color: Color(0xFF4CAF50))),
-            ),
-          ],
-          const Spacer(),
-          if (_userRole == StaffRole.superadmin)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String?>(
-                  value: _selectedBranchId,
-                  isDense: true,
-                  icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textSecondary),
-                  style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('All Branches',
-                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12))),
-                    ..._branches.map((b) => DropdownMenuItem<String?>(
-                      value: b.id,
-                      child: Text(b.name,
-                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)))),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedBranchId = val;
-                      _isLoading = true;
-                    });
-                    _load();
-                  },
-                ),
-              ),
-            ),
-          Text('$timeLabel WIB',
-            style: const TextStyle(
-              fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
-          const SizedBox(width: 12),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
-            onPressed: _load,
-          ),
-          if (staff?.branchId != null) NotificationBell(branchId: staff!.branchId!),
-          Builder(
-            builder: (ctx) => IconButton(
-              icon: const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
-              tooltip: 'Menu',
-              onPressed: () => Scaffold.of(ctx).openDrawer(),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   // ── Floor plan area: legend + canvas ────────────────────────────────────
@@ -686,7 +444,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          Positioned.fill(child: CustomPaint(painter: _DiamondPatternPainter())),
+          const Positioned.fill(child: CustomPaint(painter: DiamondPatternPainter())),
           Padding(
             padding: const EdgeInsets.all(24),
             child: SingleChildScrollView(
@@ -777,54 +535,6 @@ class _BranchItem {
   final String id;
   final String name;
   _BranchItem({required this.id, required this.name});
-}
-
-class _SidebarItem {
-  final String label;
-  final IconData icon;
-  final String route;
-  final String requiredFeature;
-  const _SidebarItem({
-    required this.label, required this.icon,
-    required this.route, required this.requiredFeature,
-  });
-}
-
-const _sidebarItems = [
-  _SidebarItem(
-    label: 'Floor Plan', icon: Icons.table_restaurant_rounded,
-    route: AppRoutes.tables, requiredFeature: 'Table Management'),
-  _SidebarItem(
-    label: 'Orders', icon: Icons.receipt_long_rounded,
-    route: AppRoutes.order, requiredFeature: 'Order'),
-  _SidebarItem(
-    label: 'Inventory', icon: Icons.inventory_2_rounded,
-    route: AppRoutes.inventory, requiredFeature: 'Inventory'),
-  _SidebarItem(
-    label: 'Staff Shift', icon: Icons.badge_rounded,
-    route: AppRoutes.staff, requiredFeature: 'Staff'),
-  _SidebarItem(
-    label: 'Reports', icon: Icons.bar_chart_rounded,
-    route: AppRoutes.reports, requiredFeature: 'Reports & Analytics'),
-];
-
-// ── Clock-out control: wraps the existing ClockInOutControl in the
-// sidebar's amber pill styling shown in the floor-plan design reference.
-class ClockOutButton extends StatelessWidget {
-  const ClockOutButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-      ),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: const ClockInOutControl(),
-    );
-  }
 }
 
 // ── Floor-plan table tile: colored/shaped by status, positioned via Wrap. ──
@@ -979,28 +689,3 @@ class _FloorTableTileState extends State<_FloorTableTile> {
   }
 }
 
-// ── Subtle diamond-grid background texture behind the floor plan canvas. ──
-class _DiamondPatternPainter extends CustomPainter {
-  static const double _step = 22;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.border.withValues(alpha: 0.6)
-      ..strokeWidth = 1;
-    for (double y = -_step; y < size.height + _step; y += _step) {
-      for (double x = -_step; x < size.width + _step; x += _step) {
-        final path = Path()
-          ..moveTo(x, y - 5)
-          ..lineTo(x + 5, y)
-          ..lineTo(x, y + 5)
-          ..lineTo(x - 5, y)
-          ..close();
-        canvas.drawPath(path, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

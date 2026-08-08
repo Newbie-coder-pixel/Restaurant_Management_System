@@ -4,12 +4,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../shared/models/booking_model.dart';
 import '../../../core/models/staff_role.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../shared/widgets/staff_shell.dart';
+import '../../../shared/widgets/diamond_pattern_painter.dart';
 import 'widgets/booking_card.dart';
 import 'widgets/add_booking_dialog.dart';
 import 'widgets/edit_booking_dialog.dart';
-import '../../../shared/widgets/app_drawer.dart';
 
 class BookingScreen extends ConsumerStatefulWidget {
   const BookingScreen({super.key});
@@ -643,45 +645,42 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
 
     final canFilterBranch = isSuperadmin;
 
-    final mainContent = Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Booking Management'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        titleTextStyle: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.white),
-        actions: [
-          // ── BRANCH FILTER DROPDOWN (superadmin only) ──
-          if (canFilterBranch)
-            DropdownButtonHideUnderline(
+    return StaffShell(
+      pageTitle: 'Bookings & Reservations',
+      activeRoute: AppRoutes.booking,
+      floatingActionButton: _tab.index == 0
+          ? FloatingActionButton.extended(
+              onPressed: _showAddBooking,
+              backgroundColor: AppColors.accent,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('New Reservation',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600)),
+            )
+          : null,
+      topBarActions: [
+        // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+        if (canFilterBranch)
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: DropdownButtonHideUnderline(
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: AppColors.primary,
-                iconEnabledColor: Colors.white60,
-                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+                icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.textSecondary),
                 style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                    fontFamily: 'Poppins', fontSize: 12, color: AppColors.textPrimary),
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
                     child: Text('All Branches',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Colors.white70))),
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 12))),
                   ..._branches.map((b) => DropdownMenuItem<String?>(
                         value: b['id'] as String,
                         child: Text(b['name'] as String,
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.white)))),
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)))),
                 ],
                 onChanged: (val) {
                   setState(() {
@@ -702,46 +701,70 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                 },
               ),
             ),
-          const SizedBox(width: 4),
-          IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                _load();
-                _loadDatesWithBooking();
-              }),
+          ),
+        IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+            onPressed: () {
+              _load();
+              _loadDatesWithBooking();
+            }),
+        const SizedBox(width: 4),
+      ],
+      body: Column(
+        children: [
+          _buildTabSelector(),
+          Expanded(
+            child: TabBarView(
+              controller: _tab,
+              children: [_buildReservasi(), _buildHistory()],
+            ),
+          ),
         ],
-        bottom: TabBar(
-          controller: _tab,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          indicatorColor: AppColors.accent,
-          labelStyle: const TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w600),
-          tabs: const [
-            Tab(text: 'Reservations'),
-            Tab(text: 'History'),
+      ),
+    );
+  }
+
+  // ── Pill-style tab selector (Reservations / History) ────────────────────
+  Widget _buildTabSelector() {
+    return Container(
+      color: AppColors.surface,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm + 2),
+        ),
+        child: Row(
+          children: [
+            _tabPill('Reservations', 0),
+            _tabPill('History', 1),
           ],
         ),
       ),
-      floatingActionButton: _tab.index == 0
-          ? FloatingActionButton.extended(
-              onPressed: _showAddBooking,
-              backgroundColor: AppColors.accent,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('New Reservation',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600)),
-            )
-          : null,
-      body: TabBarView(
-        controller: _tab,
-        children: [_buildReservasi(), _buildHistory()],
+    );
+  }
+
+  Widget _tabPill(String label, int index) {
+    final selected = _tab.index == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _tab.animateTo(index)),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
+          alignment: Alignment.center,
+          child: Text(label,
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : AppColors.textSecondary)),
+        ),
       ),
     );
-
-    return mainContent;
   }
 
 
@@ -784,19 +807,58 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     }
   }
 
+  Map<String, dynamic>? _tableDataFor(BookingModel b) {
+    final rawIdx = _bookings.indexOf(b);
+    return rawIdx >= 0
+        ? _bookingsRaw[rawIdx]['restaurant_tables'] as Map<String, dynamic>?
+        : null;
+  }
+
+  // Opens the full BookingCard (with edit/cancel/status actions) as a dialog
+  // — same widget/logic used before, just presented on demand instead of
+  // inline, so the compact grid tiles below can stay lightweight.
+  void _openBookingDetail(BookingModel b) {
+    final tableData = _tableDataFor(b);
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        backgroundColor: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440, maxHeight: 640),
+          child: SingleChildScrollView(
+            child: BookingCard(
+              booking: b,
+              tableData: tableData,
+              statusColor: _statusColor(b.status),
+              onStatusChange: (s) => _updateStatus(b.id, s),
+              onCancel: (notes) => _cancelBooking(b.id, notes),
+              onEdit: () {
+                Navigator.pop(context);
+                _showEditBooking(b, tableData);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildReservasi() {
     return Column(children: [
       _buildCalendar(),
-      const Divider(height: 1),
+      const Divider(height: 1, color: AppColors.border),
       if (!_isLoading && _bookings.isNotEmpty) _buildStatsBar(),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
         child: TextField(
           controller: _searchCtrl,
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
           decoration: InputDecoration(
             hintText: 'Search name, phone, or confirmation code...',
-            hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-            prefixIcon: const Icon(Icons.search, size: 20),
+            hintStyle: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
+            prefixIcon: const Icon(Icons.search, size: 20, color: AppColors.textSecondary),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
                     icon: const Icon(Icons.clear, size: 18),
@@ -804,9 +866,14 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                 : null,
             contentPadding:
                 const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                borderSide: const BorderSide(color: AppColors.border)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                borderSide: const BorderSide(color: AppColors.border)),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: AppColors.surface,
           ),
         ),
       ),
@@ -843,27 +910,34 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
                                 color: AppColors.textSecondary)),
                       ],
                     ))
-                : ListView.builder(
+                : SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                    itemCount: _filteredBookings.length,
-                    itemBuilder: (_, i) {
-                      final b = _filteredBookings[i];
-                      final rawIdx = _bookings.indexOf(b);
-                      final tableData = rawIdx >= 0
-                          ? _bookingsRaw[rawIdx]['restaurant_tables']
-                              as Map<String, dynamic>?
-                          : null;
-                      return BookingCard(
+                    child: Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: _filteredBookings.map((b) => _ReservationTile(
                         booking: b,
-                        tableData: tableData,
+                        tableNumber: _tableDataFor(b)?['table_number']?.toString(),
                         statusColor: _statusColor(b.status),
-                        onStatusChange: (s) => _updateStatus(b.id, s),
-                        onCancel: (notes) => _cancelBooking(b.id, notes),
-                        onEdit: () => _showEditBooking(b, tableData),
-                      );
-                    }),
+                        statusLabel: _statusLabel(b.status),
+                        onTap: () => _openBookingDetail(b),
+                      )).toList(),
+                    ),
+                  ),
       ),
     ]);
+  }
+
+  String _statusLabel(BookingStatus s) {
+    switch (s) {
+      case BookingStatus.pending:    return 'Pending';
+      case BookingStatus.confirmed:  return 'Confirmed';
+      case BookingStatus.seated:     return 'Seated';
+      case BookingStatus.cancelled:  return 'Cancelled';
+      case BookingStatus.noShow:     return 'No Show';
+      case BookingStatus.completed:  return 'Completed';
+      case BookingStatus.waitlisted: return 'Waitlist';
+    }
   }
 
   Widget _buildStatsBar() {
@@ -1091,53 +1165,190 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     ]);
   }
 
-  Widget _buildCalendar() => TableCalendar(
-        firstDay: DateTime.utc(2024),
-        lastDay: DateTime.utc(2030),
-        focusedDay: _focusedDay,
-        selectedDayPredicate: (d) => isSameDay(d, _selectedDay),
-        onDaySelected: (sel, foc) {
-          setState(() {
-            _selectedDay = sel;
-            _focusedDay = foc;
-          });
-          _load();
-        },
-        onPageChanged: (focusedDay) {
-          setState(() => _focusedDay = focusedDay);
-          _loadDatesWithBooking();
-        },
-        calendarBuilders: CalendarBuilders(
-          markerBuilder: (ctx, day, events) {
-            final dateStr = _fmtDate(day);
-            if (_datesWithBooking.contains(dateStr)) {
-              return Positioned(
-                bottom: 4,
-                child: Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                        color: AppColors.accent, shape: BoxShape.circle)),
-              );
-            }
-            return null;
+  // ── Boxed day-strip cell (WED / 12 style), swipeable week-at-a-time via
+  // TableCalendar's built-in gestures — header/weekday-row hidden so only
+  // the strip of day boxes shows, matching the floor-plan-family design.
+  Widget _dayCell(DateTime day, {required bool selected}) {
+    final today = isSameDay(day, DateTime.now());
+    const weekdayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    final hasBooking = _datesWithBooking.contains(_fmtDate(day));
+    return Container(
+      width: 58,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: selected ? AppColors.primary : AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(
+            color: selected
+                ? AppColors.primary
+                : (today ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border),
+            width: today && !selected ? 1.5 : 1),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(weekdayLabels[day.weekday - 1],
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white70 : AppColors.textSecondary)),
+          const SizedBox(height: 4),
+          Text('${day.day}',
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800,
+                  color: selected ? Colors.white : AppColors.textPrimary)),
+          const SizedBox(height: 3),
+          Container(
+            width: 5, height: 5,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: hasBooking
+                  ? (selected ? Colors.white : AppColors.accent)
+                  : Colors.transparent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalendar() => Container(
+        color: AppColors.surface,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: TableCalendar(
+          firstDay: DateTime.utc(2024),
+          lastDay: DateTime.utc(2030),
+          focusedDay: _focusedDay,
+          headerVisible: false,
+          daysOfWeekVisible: false,
+          rowHeight: 78,
+          selectedDayPredicate: (d) => isSameDay(d, _selectedDay),
+          onDaySelected: (sel, foc) {
+            setState(() {
+              _selectedDay = sel;
+              _focusedDay = foc;
+            });
+            _load();
           },
+          onPageChanged: (focusedDay) {
+            setState(() => _focusedDay = focusedDay);
+            _loadDatesWithBooking();
+          },
+          calendarBuilders: CalendarBuilders(
+            defaultBuilder: (ctx, day, focusedDay) => _dayCell(day, selected: false),
+            todayBuilder: (ctx, day, focusedDay) => _dayCell(day, selected: false),
+            outsideBuilder: (ctx, day, focusedDay) => _dayCell(day, selected: false),
+            selectedBuilder: (ctx, day, focusedDay) => _dayCell(day, selected: true),
+          ),
+          calendarFormat: CalendarFormat.week,
         ),
-        calendarStyle: const CalendarStyle(
-          selectedDecoration: BoxDecoration(
-              color: AppColors.primary, shape: BoxShape.circle),
-          todayDecoration: BoxDecoration(
-              color: Color(0x99E94560), shape: BoxShape.circle),
-          defaultTextStyle: TextStyle(fontFamily: 'Poppins'),
-          weekendTextStyle:
-              TextStyle(fontFamily: 'Poppins', color: AppColors.accent)),
-        headerStyle: const HeaderStyle(
-          formatButtonVisible: false,
-          titleCentered: true,
-          titleTextStyle: TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w600,
-              fontSize: 16)),
-        calendarFormat: CalendarFormat.week,
       );
+}
+
+// ── Compact reservation tile for the grid view. Tapping opens the full
+// BookingCard (with edit/cancel/status actions) in a dialog — this tile is
+// purely a read-only summary, all interaction logic stays in BookingCard.
+class _ReservationTile extends StatelessWidget {
+  final BookingModel booking;
+  final String? tableNumber;
+  final Color statusColor;
+  final String statusLabel;
+  final VoidCallback onTap;
+
+  const _ReservationTile({
+    required this.booking,
+    required this.tableNumber,
+    required this.statusColor,
+    required this.statusLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final time = booking.bookingTime.length >= 5
+        ? booking.bookingTime.substring(0, 5)
+        : booking.bookingTime;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 240,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header: time + status badge, textured background ──
+            Stack(
+              children: [
+                const Positioned.fill(child: CustomPaint(painter: DiamondPatternPainter())),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(time,
+                          style: const TextStyle(
+                              fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w800,
+                              color: AppColors.primary)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(statusLabel,
+                            style: const TextStyle(
+                                fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700,
+                                color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 1, color: AppColors.border),
+            // ── Body: name, guests, table ──
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(booking.customerName,
+                      style: const TextStyle(
+                          fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    const Icon(Icons.people_alt_outlined, size: 15, color: AppColors.textSecondary),
+                    const SizedBox(width: 5),
+                    Text('${booking.guestCount} PAX',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                    const SizedBox(width: 14),
+                    Icon(Icons.chair_alt_outlined, size: 15,
+                        color: tableNumber != null ? AppColors.textSecondary : AppColors.textHint),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(tableNumber != null ? 'Table $tableNumber' : 'Unassigned',
+                          style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 12,
+                              color: tableNumber != null ? AppColors.textSecondary : AppColors.textHint),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
