@@ -54,6 +54,9 @@ const staffShellSidebarItems = [
   StaffShellSidebarItem(
     label: 'Reports', icon: Icons.bar_chart_rounded,
     route: AppRoutes.reports, requiredFeature: 'Reports & Analytics'),
+  StaffShellSidebarItem(
+    label: 'Multi Branch', icon: Icons.store_mall_directory_rounded,
+    route: AppRoutes.branches, requiredFeature: 'Multi Branch'),
 ];
 
 // ── Clock-in/out control wrapped in the sidebar's amber pill styling. ──

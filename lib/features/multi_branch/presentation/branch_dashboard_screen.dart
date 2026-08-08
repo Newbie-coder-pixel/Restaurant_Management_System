@@ -1,13 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart'; // ← ADDED IMPORT
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/router/app_router.dart'; // ← ADDED IMPORT
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/staff_shell.dart';
+
+class _BranchStats {
+  final double revenue;
+  final int activeOrders;
+  final int staffTotal;
+  final int staffOnDuty;
+  const _BranchStats({
+    this.revenue = 0,
+    this.activeOrders = 0,
+    this.staffTotal = 0,
+    this.staffOnDuty = 0,
+  });
+}
 
 class BranchDashboardScreen extends ConsumerStatefulWidget {
   const BranchDashboardScreen({super.key});
@@ -17,6 +30,7 @@ class BranchDashboardScreen extends ConsumerStatefulWidget {
 
 class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
   List<Map<String, dynamic>> _branches = [];
+  Map<String, _BranchStats> _stats = {};
   bool _isLoading = true;
 
   @override
@@ -46,13 +60,67 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
               'id, name, address, phone, email, is_active, '
               'opening_time, closing_time, latitude, longitude')
           .order('created_at');
-      setState(() {
-        _branches = (res as List).cast<Map<String, dynamic>>();
-        _isLoading = false;
-      });
+      _branches = (res as List).cast<Map<String, dynamic>>();
+      await _loadStats();
+      if (mounted) setState(() => _isLoading = false);
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // ── Per-branch stat tiles (revenue / active orders / staff on duty) ────
+  // Reuses the exact filters already used elsewhere: payments.status='paid'
+  // for revenue (reports_provider.dart), the "active" order status list
+  // (order_screen.dart), and staff.is_active / attendance for headcount
+  // (staff_screen.dart, attendance_clock_service.dart) — just scoped per
+  // branch here instead of a single selected branch.
+  Future<void> _loadStats() async {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final tomorrowStart = todayStart.add(const Duration(days: 1));
+    final todayStr = todayStart.toIso8601String().split('T').first;
+    const activeStatuses = ['new', 'created', 'paid', 'preparing', 'ready', 'served'];
+    final client = Supabase.instance.client;
+
+    final entries = await Future.wait(_branches.map((b) async {
+      final id = b['id'] as String;
+      try {
+        final results = await Future.wait([
+          client.from('payments').select('amount')
+              .eq('status', 'paid').eq('branch_id', id)
+              .gte('created_at', todayStart.toIso8601String())
+              .lt('created_at', tomorrowStart.toIso8601String()),
+          client.from('orders').select('id')
+              .eq('branch_id', id).inFilter('status', activeStatuses),
+          client.from('staff').select('id')
+              .eq('branch_id', id).eq('is_active', true),
+          client.from('attendance').select('id')
+              .eq('branch_id', id).eq('date', todayStr).eq('status', 'present')
+              .filter('clock_out', 'is', null),
+        ]);
+
+        final revenue = (results[0] as List).fold<double>(
+            0, (sum, r) => sum + ((r as Map)['amount'] as num).toDouble());
+
+        return MapEntry(id, _BranchStats(
+          revenue: revenue,
+          activeOrders: (results[1] as List).length,
+          staffTotal: (results[2] as List).length,
+          staffOnDuty: (results[3] as List).length,
+        ));
+      } catch (_) {
+        return MapEntry(id, const _BranchStats());
+      }
+    }));
+
+    if (mounted) setState(() => _stats = Map.fromEntries(entries));
+  }
+
+  String _fmtRupiahCompact(num value) {
+    final v = value.toDouble();
+    if (v.abs() >= 1000000) return 'Rp ${(v / 1000000).toStringAsFixed(1)}M';
+    if (v.abs() >= 1000) return 'Rp ${(v / 1000).toStringAsFixed(0)}K';
+    return 'Rp ${v.toStringAsFixed(0)}';
   }
 
   String _fmtTime(String? t) {
@@ -85,9 +153,9 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => StatefulBuilder(builder: (ctx, ss) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
         title: Text(isEdit ? 'Edit Branch' : 'Add Branch',
-          style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w800)),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
 
@@ -130,27 +198,27 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.2))),
+                color: AppColors.iconAccentBlue.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                border: Border.all(color: AppColors.iconAccentBlue.withValues(alpha: 0.25))),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(children: [
-                    Icon(Icons.my_location, size: 15, color: Colors.blue),
+                    Icon(Icons.my_location, size: 15, color: AppColors.iconAccentBlue),
                     SizedBox(width: 6),
                     Text('Location Coordinates',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
-                        color: Colors.blue)),
+                        color: AppColors.iconAccentBlue)),
                   ]),
                   const SizedBox(height: 4),
                   const Text(
                     'Required for the "Nearest Branch" feature in the customer app.',
                     style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 11, color: Colors.grey)),
+                      fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
                   const SizedBox(height: 10),
                   Row(children: [
                     Expanded(
@@ -197,12 +265,13 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                 border: Border.all(color: AppColors.primary.withValues(alpha: 0.2))),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('🕐 Operating Hours',
+                const Text('Operating Hours',
                   style: TextStyle(
-                    fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13)),
+                    fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13,
+                    color: AppColors.textPrimary)),
                 const SizedBox(height: 10),
                 Row(children: [
                   Expanded(child: _TimePickerButton(
@@ -237,7 +306,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
                 decoration: BoxDecoration(
                   color: (isActive ? AppColors.available : AppColors.textHint)
                       .withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                   border: Border.all(
                     color: (isActive ? AppColors.available : AppColors.textHint)
                         .withValues(alpha: 0.3))),
@@ -272,11 +341,11 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade50,
+                  color: AppColors.accent.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8)),
                 child: Text(msg,
                   style: const TextStyle(
-                    color: Colors.red, fontSize: 12, fontFamily: 'Poppins'))),
+                    color: AppColors.accent, fontSize: 12, fontFamily: 'Poppins'))),
             ],
           ]),
         ),
@@ -364,7 +433,6 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
     );
   }
 
-  // FIX: Replaced Navigator.push with context.go for GoRouter compatibility
   void _navigateToTransferStock() {
     context.go(AppRoutes.transferStock);
   }
@@ -381,27 +449,24 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_isAuthorized) {
-      return Scaffold(
-        drawer: const AppDrawer(),
-        appBar: AppBar(title: const Text('Multi-Branch Dashboard')),
-        body: const Center(
-          child: Text('You do not have access to this page.'),
+      return const Scaffold(
+        body: Center(
+          child: Text('You do not have access to this page.',
+            style: TextStyle(fontFamily: 'Poppins')),
         ),
       );
     }
 
-    return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Multi-Branch Dashboard'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        titleTextStyle: const TextStyle(
-          fontFamily: 'Poppins', fontSize: 18,
-          fontWeight: FontWeight.w600, color: Colors.white),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
-      ),
+    return StaffShell(
+      pageTitle: 'Multi-Branch Overview',
+      activeRoute: AppRoutes.branches,
+      topBarActions: [
+        IconButton(
+          tooltip: 'Refresh',
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+          onPressed: _load,
+        ),
+      ],
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showBranchDialog(),
         backgroundColor: AppColors.accent,
@@ -411,150 +476,291 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
             color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : _branches.isEmpty
-              ? const Center(child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.store_outlined, size: 64, color: AppColors.textHint),
-                    SizedBox(height: 12),
-                    Text('No branches yet',
-                      style: TextStyle(
-                        fontFamily: 'Poppins', color: AppColors.textSecondary)),
-                  ]))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _branches.length,
-                  itemBuilder: (_, i) {
-                    final b        = _branches[i];
-                    final isActive = b['is_active'] == true;
-                    final openStr  = _fmtTime(b['opening_time']);
-                    final closeStr = _fmtTime(b['closing_time']);
-                    final hasCoords =
-                        b['latitude'] != null && b['longitude'] != null;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        leading: Container(
-                          width: 50, height: 50,
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? AppColors.primary.withValues(alpha: 0.1)
-                                : AppColors.textHint.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12)),
-                          child: Icon(Icons.store,
-                            color: isActive ? AppColors.primary : AppColors.textHint,
-                            size: 26)),
-                        title: Text(b['name'] ?? '',
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (b['address'] != null) ...[
-                              const SizedBox(height: 4),
-                              Text(b['address'], style: AppTextStyles.caption),
-                            ],
-                            if (b['phone'] != null) ...[
-                              const SizedBox(height: 2),
-                              Text(b['phone'], style: AppTextStyles.caption),
-                            ],
-                            if (b['email'] != null) ...[
-                              const SizedBox(height: 2),
-                              Text(b['email'], style: AppTextStyles.caption),
-                            ],
-                            const SizedBox(height: 4),
-                            Row(children: [
-                              const Icon(Icons.access_time,
-                                  size: 13, color: AppColors.textHint),
-                              const SizedBox(width: 4),
-                              Text('$openStr – $closeStr WIB',
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins', fontSize: 11,
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w500)),
-                              const SizedBox(width: 10),
-                              Icon(
-                                hasCoords
-                                    ? Icons.location_on
-                                    : Icons.location_off_outlined,
-                                size: 13,
-                                color: hasCoords ? Colors.blue : AppColors.textHint),
-                              const SizedBox(width: 3),
-                              Text(
-                                hasCoords
-                                    ? 'Coordinates available'
-                                    : 'No coordinates',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 10,
-                                  color: hasCoords
-                                      ? Colors.blue
-                                      : AppColors.textHint)),
-                            ]),
-                          ],
-                        ),
-                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                          // Transfer Stock button — FIX: uses context.go
-                          Container(
-                            margin: const EdgeInsets.only(right: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.accent.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: AppColors.accent.withValues(alpha: 0.4)),
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.swap_horiz, size: 20),
-                              color: AppColors.accent,
-                              tooltip: 'Transfer Stock',
-                              onPressed: _navigateToTransferStock, // ← FIX
-                            ),
+              ? const _EmptyBranchesState()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 24),
+                      LayoutBuilder(builder: (context, constraints) {
+                        final width = constraints.maxWidth;
+                        final columns = width >= 1180 ? 3 : (width >= 760 ? 2 : 1);
+                        return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _branches.length,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: columns,
+                            crossAxisSpacing: 20,
+                            mainAxisSpacing: 20,
+                            mainAxisExtent: 322,
                           ),
-                          // Edit button
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 20),
-                            color: AppColors.primary,
-                            tooltip: 'Edit',
-                            onPressed: () => _showBranchDialog(branch: b)),
-                          // Status badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: (isActive
-                                      ? AppColors.available
-                                      : AppColors.textHint)
-                                  .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isActive
-                                    ? AppColors.available
-                                    : AppColors.textHint)),
-                            child: Text(isActive ? 'Active' : 'Inactive',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isActive
-                                    ? AppColors.available
-                                    : AppColors.textHint)),
+                          itemBuilder: (_, i) => _BranchCard(
+                            branch: _branches[i],
+                            stats: _stats[_branches[i]['id']] ?? const _BranchStats(),
+                            fmtRupiah: _fmtRupiahCompact,
+                            fmtTime: _fmtTime,
+                            onEdit: () => _showBranchDialog(branch: _branches[i]),
+                            onTransfer: _navigateToTransferStock,
                           ),
-                        ]),
-                        isThreeLine: true,
-                      ),
-                    );
-                  },
+                        );
+                      }),
+                    ],
+                  ),
                 ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Multi-Branch Overview',
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 30,
+                  fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+              SizedBox(height: 4),
+              Text('Real-time status across all locations',
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 14, color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+        FilledButton.icon(
+          onPressed: _navigateToTransferStock,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
+          ),
+          icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+          label: const Text('TRANSFER STOCK',
+            style: TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w800,
+              fontSize: 13, letterSpacing: 0.4)),
+        ),
+      ],
     );
   }
 }
 
-// ─── Time Picker Button ───────────────────────────────────────────────────────
+// ─── Branch card ──────────────────────────────────────────────────────────
+
+class _BranchCard extends StatelessWidget {
+  final Map<String, dynamic> branch;
+  final _BranchStats stats;
+  final String Function(num) fmtRupiah;
+  final String Function(String?) fmtTime;
+  final VoidCallback onEdit;
+  final VoidCallback onTransfer;
+
+  const _BranchCard({
+    required this.branch,
+    required this.stats,
+    required this.fmtRupiah,
+    required this.fmtTime,
+    required this.onEdit,
+    required this.onTransfer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = branch['is_active'] == true;
+    final address = branch['address'] as String?;
+    final openStr  = fmtTime(branch['opening_time']);
+    final closeStr = fmtTime(branch['closing_time']);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Banner ────────────────────────────────────────────
+          Container(
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            color: (isActive ? AppColors.primary : AppColors.textHint)
+                .withValues(alpha: 0.08),
+            child: Row(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: (isActive ? AppColors.primary : AppColors.textHint)
+                        .withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: Icon(Icons.storefront_rounded,
+                    color: isActive ? AppColors.primary : AppColors.textHint, size: 20),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    border: Border.all(
+                      color: isActive ? AppColors.primary : AppColors.textHint),
+                  ),
+                  child: Text(isActive ? 'OPEN' : 'CLOSED',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                      color: isActive ? AppColors.primary : AppColors.textHint)),
+                ),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(branch['name'] ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 18,
+                    fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                const SizedBox(height: 3),
+                Text(
+                  (address == null || address.isEmpty) ? 'No address on file' : address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  const Icon(Icons.access_time_rounded, size: 12, color: AppColors.textHint),
+                  const SizedBox(width: 4),
+                  Text('$openStr – $closeStr WIB',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
+                ]),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1, color: AppColors.border),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Column(
+              children: [
+                _statRow("Today's Revenue", fmtRupiah(stats.revenue)),
+                const SizedBox(height: 8),
+                _statRow('Active Orders', '${stats.activeOrders}'),
+                const SizedBox(height: 8),
+                _statRow('Staff Count', '${stats.staffOnDuty} / ${stats.staffTotal}'),
+              ],
+            ),
+          ),
+
+          const Spacer(),
+          const Divider(height: 1, color: AppColors.border),
+
+          Row(
+            children: [
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: onTransfer,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.accent,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                  label: const Text('Transfer',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              Container(width: 1, height: 24, color: AppColors.border),
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: onEdit,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+          style: const TextStyle(
+            fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+        Text(value,
+          style: const TextStyle(
+            fontFamily: 'Poppins', fontSize: 14,
+            fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+      ],
+    );
+  }
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────
+
+class _EmptyBranchesState extends StatelessWidget {
+  const _EmptyBranchesState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 96, height: 96,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.store_outlined, size: 48, color: AppColors.primary),
+          ),
+          const SizedBox(height: 20),
+          const Text('No branches yet',
+            style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 18,
+              fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          const Text('Use "Add Branch" to register your first location.',
+            style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Time Picker Button ───────────────────────────────────────────────────
 
 class _TimePickerButton extends StatelessWidget {
   final String label;
@@ -572,12 +778,12 @@ class _TimePickerButton extends StatelessWidget {
     final m = time.minute.toString().padLeft(2, '0');
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
           border: Border.all(color: AppColors.primary.withValues(alpha: 0.4))),
         child: Column(children: [
           Text(label,
@@ -586,7 +792,8 @@ class _TimePickerButton extends StatelessWidget {
           const SizedBox(height: 2),
           Text('$h:$m',
             style: const TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
+              fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16,
+              color: AppColors.textPrimary)),
         ]),
       ),
     );

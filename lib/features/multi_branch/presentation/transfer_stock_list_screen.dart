@@ -3,10 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../shared/widgets/staff_shell.dart';
 import '../models/transfer_stock_model.dart';
 import '../services/transfer_stock_service.dart';
 import 'widgets/transfer_stock_dialog.dart';
@@ -89,7 +90,7 @@ class _TransferStockListScreenState
     if (result == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('✅ Transfer request sent successfully!'),
-        backgroundColor: Color(0xFF4CAF50),
+        backgroundColor: AppColors.available,
       ));
       _load();
     }
@@ -120,7 +121,7 @@ class _TransferStockListScreenState
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('❌ Item not found in this branch\'s inventory. Make sure the item name matches.'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.accent,
           duration: Duration(seconds: 5),
         ));
         return;
@@ -136,7 +137,7 @@ class _TransferStockListScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('✅ Transfer confirmed successfully & stock updated!'),
-          backgroundColor: Color(0xFF4CAF50),
+          backgroundColor: AppColors.available,
         ));
         _load();
       }
@@ -144,7 +145,7 @@ class _TransferStockListScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('❌ Failed to confirm: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.accent,
         ));
       }
     }
@@ -169,7 +170,7 @@ class _TransferStockListScreenState
             child: const Text('No')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.accent,
               foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Yes, Cancel',
@@ -185,7 +186,7 @@ class _TransferStockListScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Transfer cancelled.'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.accentOrange,
         ));
         _load();
       }
@@ -193,7 +194,7 @@ class _TransferStockListScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('❌ Failed to cancel: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.accent,
         ));
       }
     }
@@ -201,20 +202,16 @@ class _TransferStockListScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Stock Transfer'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        titleTextStyle: const TextStyle(
-          fontFamily: 'Poppins', fontSize: 18,
-          fontWeight: FontWeight.w600, color: Colors.white),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
-        ],
-      ),
+    return StaffShell(
+      pageTitle: 'Stock Transfer',
+      activeRoute: AppRoutes.branches,
+      topBarActions: [
+        IconButton(
+          tooltip: 'Refresh',
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+          onPressed: _load,
+        ),
+      ],
       floatingActionButton: _canManage
           ? FloatingActionButton.extended(
               onPressed: _openRequestDialog,
@@ -228,13 +225,14 @@ class _TransferStockListScreenState
           : null,
       body: Column(children: [
         _buildFilterChips(),
+        const Divider(height: 1, color: AppColors.border),
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
               : _transfers.isEmpty
                   ? _buildEmptyState()
                   : ListView.builder(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       itemCount: _transfers.length,
                       itemBuilder: (_, i) => _buildTransferCard(_transfers[i]),
                     ),
@@ -246,11 +244,11 @@ class _TransferStockListScreenState
   // ── Filter chips ───────────────────────────────────────────────
   Widget _buildFilterChips() {
     return Container(
-      height: 50,
+      height: 54,
       color: AppColors.surface,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Row(children: [
           _chip(null, 'All'),
           _chip(TransferStatus.pending,  'Pending'),
@@ -266,9 +264,9 @@ class _TransferStockListScreenState
     final color = status == null
         ? AppColors.primary
         : status == TransferStatus.pending
-            ? Colors.orange
+            ? AppColors.accentOrange
             : status == TransferStatus.received
-                ? const Color(0xFF4CAF50)
+                ? AppColors.available
                 : AppColors.textHint;
 
     return Padding(
@@ -280,15 +278,15 @@ class _TransferStockListScreenState
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: selected ? color : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
             border: Border.all(color: selected ? color : AppColors.border),
           ),
           child: Text(label,
             style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w500,
+              fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600,
               color: selected ? Colors.white : AppColors.textSecondary)),
         ),
       ),
@@ -302,9 +300,9 @@ class _TransferStockListScreenState
     final isReceived = t.status == TransferStatus.received;
 
     final statusColor = isPending
-        ? Colors.orange
+        ? AppColors.accentOrange
         : isReceived
-            ? const Color(0xFF4CAF50)
+            ? AppColors.available
             : AppColors.textHint;
 
     return Card(
@@ -321,14 +319,14 @@ class _TransferStockListScreenState
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: (isIncoming ? const Color(0xFF4CAF50) : AppColors.accent)
+                  color: (isIncoming ? AppColors.available : AppColors.accent)
                       .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   isIncoming ? Icons.arrow_downward : Icons.arrow_upward,
                   size: 18,
-                  color: isIncoming ? const Color(0xFF4CAF50) : AppColors.accent,
+                  color: isIncoming ? AppColors.available : AppColors.accent,
                 ),
               ),
               const SizedBox(width: 10),
@@ -377,23 +375,23 @@ class _TransferStockListScreenState
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4CAF50).withValues(alpha: 0.06),
+                  color: AppColors.available.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: const Color(0xFF4CAF50).withValues(alpha: 0.3)),
+                    color: AppColors.available.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Row(children: [
                       Icon(Icons.verified_rounded,
-                        size: 14, color: Color(0xFF4CAF50)),
+                        size: 14, color: AppColors.available),
                       SizedBox(width: 6),
                       Text('Proof of Receipt',
                         style: TextStyle(
                           fontFamily: 'Poppins', fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF4CAF50))),
+                          color: AppColors.available)),
                     ]),
                     const SizedBox(height: 8),
                     _detailRow(Icons.person_rounded, 'Received by',
@@ -418,7 +416,7 @@ class _TransferStockListScreenState
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
+                        backgroundColor: AppColors.available,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -437,8 +435,8 @@ class _TransferStockListScreenState
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
+                        foregroundColor: AppColors.accent,
+                        side: const BorderSide(color: AppColors.accent),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                       ),
@@ -526,10 +524,10 @@ class _ConfirmReceiveDialog extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: const Color(0xFF4CAF50).withValues(alpha: 0.12),
+            color: AppColors.available.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8)),
           child: const Icon(Icons.verified_rounded,
-            color: Color(0xFF4CAF50), size: 20)),
+            color: AppColors.available, size: 20)),
         const SizedBox(width: 10),
         const Text('Confirm Receipt',
           style: TextStyle(
@@ -546,10 +544,10 @@ class _ConfirmReceiveDialog extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50).withValues(alpha: 0.06),
+              color: AppColors.available.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: const Color(0xFF4CAF50).withValues(alpha: 0.3)),
+                color: AppColors.available.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -577,7 +575,7 @@ class _ConfirmReceiveDialog extends StatelessWidget {
             style: TextStyle(fontFamily: 'Poppins'))),
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF4CAF50),
+            backgroundColor: AppColors.available,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10))),
