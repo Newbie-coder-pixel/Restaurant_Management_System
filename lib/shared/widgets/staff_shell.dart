@@ -25,38 +25,85 @@ class StaffShellSidebarItem {
   final String label;
   final IconData icon;
   final String route;
-  final String requiredFeature;
+  final Set<StaffRole> allowedRoles;
   const StaffShellSidebarItem({
     required this.label, required this.icon,
-    required this.route, required this.requiredFeature,
+    required this.route, required this.allowedRoles,
   });
 }
 
+const _allStaffRoles = {
+  StaffRole.superadmin,
+  StaffRole.manager,
+  StaffRole.cashier,
+  StaffRole.waiter,
+  StaffRole.kitchen,
+  StaffRole.host,
+};
+
+// Mirrors AppDrawer's _navItems (and StaffHomeScreen's portal tiles) so the
+// sidebar, drawer, and Service Portal grid never drift out of sync again —
+// gated by role directly rather than StaffRole.accessFeatures, since a few
+// of these routes (Closed Days, Operating Expense, Costing & COGS) have no
+// corresponding accessFeatures entry and are gated by role identity alone
+// in the router's _roleCanAccessRoute.
 const staffShellSidebarItems = [
   StaffShellSidebarItem(
     label: 'Floor Plan', icon: Icons.table_restaurant_rounded,
-    route: AppRoutes.tables, requiredFeature: 'Table Management'),
+    route: AppRoutes.tables,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter}),
+  StaffShellSidebarItem(
+    label: 'Reservations', icon: Icons.calendar_month_rounded,
+    route: AppRoutes.booking,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter}),
+  StaffShellSidebarItem(
+    label: 'Reservation Stats', icon: Icons.insert_chart_outlined_rounded,
+    route: AppRoutes.bookingStats,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
+  StaffShellSidebarItem(
+    label: 'Closed Days', icon: Icons.event_busy_rounded,
+    route: AppRoutes.closures,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
     label: 'Orders', icon: Icons.receipt_long_rounded,
-    route: AppRoutes.order, requiredFeature: 'Order'),
+    route: AppRoutes.order,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier, StaffRole.waiter}),
   StaffShellSidebarItem(
     label: 'Kitchen', icon: Icons.soup_kitchen_rounded,
-    route: AppRoutes.kitchen, requiredFeature: 'Kitchen (KDS)'),
+    route: AppRoutes.kitchen,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.kitchen}),
   StaffShellSidebarItem(
-    label: 'Inventory', icon: Icons.inventory_2_rounded,
-    route: AppRoutes.inventory, requiredFeature: 'Inventory'),
+    label: 'Cashier', icon: Icons.point_of_sale_rounded,
+    route: AppRoutes.cashier,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier}),
   StaffShellSidebarItem(
     label: 'Menu Items', icon: Icons.restaurant_menu_rounded,
-    route: AppRoutes.menu, requiredFeature: 'Menu'),
+    route: AppRoutes.menu,
+    allowedRoles: _allStaffRoles),
+  StaffShellSidebarItem(
+    label: 'Inventory', icon: Icons.inventory_2_rounded,
+    route: AppRoutes.inventory,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
     label: 'Staff Shift', icon: Icons.people_rounded,
-    route: AppRoutes.staff, requiredFeature: 'Staff'),
-  StaffShellSidebarItem(
-    label: 'Reports', icon: Icons.bar_chart_rounded,
-    route: AppRoutes.reports, requiredFeature: 'Reports & Analytics'),
+    route: AppRoutes.staff,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
     label: 'Multi Branch', icon: Icons.store_rounded,
-    route: AppRoutes.branches, requiredFeature: 'Multi Branch'),
+    route: AppRoutes.branches,
+    allowedRoles: {StaffRole.superadmin}),
+  StaffShellSidebarItem(
+    label: 'Operating Expense', icon: Icons.payments_rounded,
+    route: AppRoutes.operatingExpense,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
+  StaffShellSidebarItem(
+    label: 'Costing & COGS', icon: Icons.calculate_rounded,
+    route: AppRoutes.costing,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
+  StaffShellSidebarItem(
+    label: 'Reports', icon: Icons.bar_chart_rounded,
+    route: AppRoutes.reports,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
 ];
 
 // ── Clock-in/out control wrapped in the sidebar's amber pill styling. ──
@@ -148,8 +195,7 @@ class _StaffShellState extends ConsumerState<StaffShell> {
   // ── Sidebar (wide layouts only) ─────────────────────────────────────────
   Widget _buildSidebar(BuildContext context, StaffRole? role) {
     final r = role ?? StaffRole.waiter;
-    final items = staffShellSidebarItems.where(
-      (i) => r == StaffRole.superadmin || r.accessFeatures.contains(i.requiredFeature)).toList();
+    final items = staffShellSidebarItems.where((i) => i.allowedRoles.contains(r)).toList();
 
     return Container(
       width: 260,
