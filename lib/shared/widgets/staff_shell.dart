@@ -357,7 +357,12 @@ class _StaffShellState extends ConsumerState<StaffShell> {
                 onPressed: () => Scaffold.of(ctx).openDrawer(),
               ),
             ),
-          Flexible(
+          // Expanded (tight fit), not Flexible (loose) — a loose flex child
+          // that renders narrower than its allocated share leaves that slack
+          // unclaimed rather than handing it back to the Spacer below, which
+          // left the whole trailing cluster (branch filter/clock/bell/gear)
+          // stranded short of the true right edge instead of flush against it.
+          Expanded(
             child: Text(widget.pageTitle,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
