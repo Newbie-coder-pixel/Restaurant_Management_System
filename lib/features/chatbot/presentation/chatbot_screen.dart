@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 
@@ -26,14 +27,55 @@ class _BranchItem {
 
 // ── Quick Actions ──────────────────────────────────────────────────────
 const _quickActionsV2 = [
-  _QuickAction(label: 'Daily Report',       emoji: '📊', prompt: 'Generate a complete daily report for today',                                                      category: 'analytics'),
-  _QuickAction(label: 'Compare Weeks',      emoji: '📈', prompt: 'Compare this week\'s revenue vs last week\'s',                                                    category: 'analytics'),
-  _QuickAction(label: 'Best-Selling Menu',  emoji: '🏆', prompt: 'What menu item is the best seller this month?',                                                   category: 'menu'),
-  _QuickAction(label: 'Today\'s Bookings',  emoji: '📅', prompt: 'Show all of today\'s bookings with details',                                                      category: 'booking'),
-  _QuickAction(label: 'Revenue This Month', emoji: '💰', prompt: 'What is total revenue this month and the growth trend?',                                         category: 'analytics'),
-  _QuickAction(label: 'Menu Info',          emoji: '🍽️', prompt: 'Show all menu items with prices, categories, and allergen/dietary info',                        category: 'menu'),
-  _QuickAction(label: 'Menu Margins',       emoji: '💡', prompt: 'Which menu item has the highest profit margin? Show a comparison',                                category: 'menu'),
-  _QuickAction(label: 'Export Report',      emoji: '📥', prompt: '__export__',                                                                                      category: 'export'),
+  _QuickAction(
+    label: 'Daily Report',
+    emoji: '📊',
+    prompt: 'Generate a complete daily report for today',
+    category: 'analytics',
+  ),
+  _QuickAction(
+    label: 'Compare Weeks',
+    emoji: '📈',
+    prompt: 'Compare this week\'s revenue vs last week\'s',
+    category: 'analytics',
+  ),
+  _QuickAction(
+    label: 'Best-Selling Menu',
+    emoji: '🏆',
+    prompt: 'What menu item is the best seller this month?',
+    category: 'menu',
+  ),
+  _QuickAction(
+    label: 'Today\'s Bookings',
+    emoji: '📅',
+    prompt: 'Show all of today\'s bookings with details',
+    category: 'booking',
+  ),
+  _QuickAction(
+    label: 'Revenue This Month',
+    emoji: '💰',
+    prompt: 'What is total revenue this month and the growth trend?',
+    category: 'analytics',
+  ),
+  _QuickAction(
+    label: 'Menu Info',
+    emoji: '🍽️',
+    prompt:
+        'Show all menu items with prices, categories, and allergen/dietary info',
+    category: 'menu',
+  ),
+  _QuickAction(
+    label: 'Menu Margins',
+    emoji: '💡',
+    prompt: 'Which menu item has the highest profit margin? Show a comparison',
+    category: 'menu',
+  ),
+  _QuickAction(
+    label: 'Export Report',
+    emoji: '📥',
+    prompt: '__export__',
+    category: 'export',
+  ),
 ];
 
 class _QuickAction {
@@ -41,7 +83,25 @@ class _QuickAction {
   final String emoji;
   final String prompt;
   final String category;
-  const _QuickAction({required this.label, required this.emoji, required this.prompt, required this.category});
+  const _QuickAction({
+    required this.label,
+    required this.emoji,
+    required this.prompt,
+    required this.category,
+  });
+}
+
+IconData _categoryIcon(String category) {
+  switch (category) {
+    case 'menu':
+      return Icons.restaurant_menu_rounded;
+    case 'booking':
+      return Icons.event_rounded;
+    case 'export':
+      return Icons.download_rounded;
+    default:
+      return Icons.bar_chart_rounded;
+  }
 }
 
 // Keyword trigger export
@@ -74,7 +134,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
   final _scrollCtrl = ScrollController();
 
   List<String> _lowStockAlert = [];
-bool _quickActionsExpanded = false; // ← ADDED THIS LINE
+  bool _quickActionsExpanded = false; // ← ADDED THIS LINE
 
   // Last date range the staff asked about in chat (e.g. "report from 2 aug
   // - 5 aug"), so the export sheet's Period can default to that instead of
@@ -83,14 +143,45 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
 
   // ── Sentiment Detection ────────────────────────────────────────────
   static const _negativeKeywords = [
-    'lambat', 'lama', 'error', 'rusak', 'masalah', 'problem', 'gagal',
-    'tidak bisa', 'gabisa', 'kenapa', 'bug', 'salah', 'keluhan', 'komplain',
-    'kecewa', 'buruk', 'jelek', 'parah', 'bingung', 'susah', 'ribet',
-    'tidak jalan', 'ga jalan', 'tidak muncul', 'ga muncul', 'hilang',
+    'lambat',
+    'lama',
+    'error',
+    'rusak',
+    'masalah',
+    'problem',
+    'gagal',
+    'tidak bisa',
+    'gabisa',
+    'kenapa',
+    'bug',
+    'salah',
+    'keluhan',
+    'komplain',
+    'kecewa',
+    'buruk',
+    'jelek',
+    'parah',
+    'bingung',
+    'susah',
+    'ribet',
+    'tidak jalan',
+    'ga jalan',
+    'tidak muncul',
+    'ga muncul',
+    'hilang',
   ];
   static const _urgentKeywords = [
-    'urgent', 'darurat', 'segera', 'cepat', 'bos', 'penting', 'kritis',
-    'tidak berfungsi', 'mati', 'down', 'offline',
+    'urgent',
+    'darurat',
+    'segera',
+    'cepat',
+    'bos',
+    'penting',
+    'kritis',
+    'tidak berfungsi',
+    'mati',
+    'down',
+    'offline',
   ];
 
   String _detectSentiment(String text) {
@@ -183,48 +274,51 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     final todayEnd = '${dateStr(now)}T23:59:59';
 
     final weekStart = dateStr(now.subtract(Duration(days: now.weekday - 1)));
-    final lastWeekStart =
-        dateStr(now.subtract(Duration(days: now.weekday + 6)));
+    final lastWeekStart = dateStr(
+      now.subtract(Duration(days: now.weekday + 6)),
+    );
     final lastWeekEnd = dateStr(now.subtract(Duration(days: now.weekday)));
 
-    final monthStart =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
+    final monthStart = '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
 
     final branchLabel = _isSuperadmin && _selectedBranchId == null
         ? 'All Branches'
-        : _branches
-                .where((b) => b.id == _selectedBranchId)
-                .firstOrNull
-                ?.name ??
-            'My Branch';
+        : _branches.where((b) => b.id == _selectedBranchId).firstOrNull?.name ??
+              'My Branch';
 
     try {
       // ── 1. Orders hari ini ──────────────────────────────────────────
       var qToday = sb
           .from('orders')
           .select(
-              'total_amount, status, payment_status, created_at, order_type, payment_method')
+            'total_amount, status, payment_status, created_at, order_type, payment_method',
+          )
           .gte('created_at', todayStart)
           .lte('created_at', todayEnd);
       if (branchId != null) qToday = qToday.eq('branch_id', branchId);
-      final ordersToday =
-          (await qToday as List).cast<Map<String, dynamic>>();
+      final ordersToday = (await qToday as List).cast<Map<String, dynamic>>();
 
       // "Completed" = served/paid kitchen-wise, OR already paid up front
       // (customer-app orders never reach status 'paid' — see
       // midtrans-webhook/index.ts — so payment_status is the real signal).
       final completedToday = ordersToday
-          .where((o) =>
-              o['status'] == 'paid' ||
-              o['status'] == 'served' ||
-              o['payment_status'] == 'paid')
+          .where(
+            (o) =>
+                o['status'] == 'paid' ||
+                o['status'] == 'served' ||
+                o['payment_status'] == 'paid',
+          )
           .toList();
       final revenueToday = completedToday.fold<double>(
-          0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
-      final cancelledToday =
-          ordersToday.where((o) => o['status'] == 'cancelled').length;
-      final avgOrderValue =
-          completedToday.isEmpty ? 0.0 : revenueToday / completedToday.length;
+        0,
+        (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0),
+      );
+      final cancelledToday = ordersToday
+          .where((o) => o['status'] == 'cancelled')
+          .length;
+      final avgOrderValue = completedToday.isEmpty
+          ? 0.0
+          : revenueToday / completedToday.length;
 
       // ── Hitung order berdasarkan order_type ──────────────────────────
       final Map<String, int> orderTypeCount = {};
@@ -232,12 +326,15 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       for (final o in completedToday) {
         final type = (o['order_type'] as String?) ?? 'unknown';
         orderTypeCount[type] = (orderTypeCount[type] ?? 0) + 1;
-        orderTypeRevenue[type] = (orderTypeRevenue[type] ?? 0) +
+        orderTypeRevenue[type] =
+            (orderTypeRevenue[type] ?? 0) +
             ((o['total_amount'] as num?)?.toDouble() ?? 0);
       }
       final orderTypeSummary = orderTypeCount.entries
-          .map((e) =>
-              '${e.key}: ${e.value} transactions (Rp ${orderTypeRevenue[e.key]!.toStringAsFixed(0)})')
+          .map(
+            (e) =>
+                '${e.key}: ${e.value} transactions (Rp ${orderTypeRevenue[e.key]!.toStringAsFixed(0)})',
+          )
           .toList();
 
       final Map<String, int> paymentCount = {};
@@ -245,12 +342,15 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       for (final o in completedToday) {
         final method = (o['payment_method'] as String?) ?? 'unknown';
         paymentCount[method] = (paymentCount[method] ?? 0) + 1;
-        paymentRevenue[method] = (paymentRevenue[method] ?? 0) +
+        paymentRevenue[method] =
+            (paymentRevenue[method] ?? 0) +
             ((o['total_amount'] as num?)?.toDouble() ?? 0);
       }
       final paymentSummary = paymentCount.entries
-          .map((e) =>
-              '${e.key}: ${e.value} transactions (Rp ${paymentRevenue[e.key]!.toStringAsFixed(0)})')
+          .map(
+            (e) =>
+                '${e.key}: ${e.value} transactions (Rp ${paymentRevenue[e.key]!.toStringAsFixed(0)})',
+          )
           .toList();
 
       final Map<int, int> perJam = {};
@@ -271,15 +371,18 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
           .gte('created_at', '${weekStart}T00:00:00')
           .lte('created_at', todayEnd);
       if (branchId != null) qWeek = qWeek.eq('branch_id', branchId);
-      final ordersWeek =
-          (await qWeek as List).cast<Map<String, dynamic>>();
+      final ordersWeek = (await qWeek as List).cast<Map<String, dynamic>>();
       final revenueWeek = ordersWeek
-          .where((o) =>
-              o['status'] == 'paid' ||
-              o['status'] == 'served' ||
-              o['payment_status'] == 'paid')
+          .where(
+            (o) =>
+                o['status'] == 'paid' ||
+                o['status'] == 'served' ||
+                o['payment_status'] == 'paid',
+          )
           .fold<double>(
-              0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+            0,
+            (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0),
+          );
 
       // ── 3. Orders minggu lalu ───────────────────────────────────────
       var qLastWeek = sb
@@ -288,15 +391,19 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
           .gte('created_at', '${lastWeekStart}T00:00:00')
           .lte('created_at', '${lastWeekEnd}T23:59:59');
       if (branchId != null) qLastWeek = qLastWeek.eq('branch_id', branchId);
-      final ordersLastWeek =
-          (await qLastWeek as List).cast<Map<String, dynamic>>();
+      final ordersLastWeek = (await qLastWeek as List)
+          .cast<Map<String, dynamic>>();
       final revenueLastWeek = ordersLastWeek
-          .where((o) =>
-              o['status'] == 'paid' ||
-              o['status'] == 'served' ||
-              o['payment_status'] == 'paid')
+          .where(
+            (o) =>
+                o['status'] == 'paid' ||
+                o['status'] == 'served' ||
+                o['payment_status'] == 'paid',
+          )
           .fold<double>(
-              0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+            0,
+            (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0),
+          );
 
       // ── 4. Orders bulan ini ─────────────────────────────────────────
       var qMonth = sb
@@ -305,15 +412,18 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
           .gte('created_at', '${monthStart}T00:00:00')
           .lte('created_at', todayEnd);
       if (branchId != null) qMonth = qMonth.eq('branch_id', branchId);
-      final ordersMonth =
-          (await qMonth as List).cast<Map<String, dynamic>>();
+      final ordersMonth = (await qMonth as List).cast<Map<String, dynamic>>();
       final revenueMonth = ordersMonth
-          .where((o) =>
-              o['status'] == 'paid' ||
-              o['status'] == 'served' ||
-              o['payment_status'] == 'paid')
+          .where(
+            (o) =>
+                o['status'] == 'paid' ||
+                o['status'] == 'served' ||
+                o['payment_status'] == 'paid',
+          )
           .fold<double>(
-              0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+            0,
+            (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0),
+          );
 
       // ── 5. Menu terlaris bulan ini ──────────────────────────────────
       var qCompletedOrders = sb
@@ -324,28 +434,35 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
           .or('status.in.(paid,served),payment_status.eq.paid')
           .gte('created_at', '${monthStart}T00:00:00')
           .lte('created_at', todayEnd);
-      if (branchId != null) qCompletedOrders = qCompletedOrders.eq('branch_id', branchId);
-      final completedOrders = (await qCompletedOrders as List).cast<Map<String, dynamic>>();
-      final completedOrderIds = completedOrders.map((o) => o['id'] as String).toList();
+      if (branchId != null)
+        qCompletedOrders = qCompletedOrders.eq('branch_id', branchId);
+      final completedOrders = (await qCompletedOrders as List)
+          .cast<Map<String, dynamic>>();
+      final completedOrderIds = completedOrders
+          .map((o) => o['id'] as String)
+          .toList();
 
       final Map<String, int> menuCount = {};
       if (completedOrderIds.isNotEmpty) {
-        final itemsRaw = (await sb
-            .from('order_items')
-            .select('menu_item_name, quantity')
-            .inFilter('order_id', completedOrderIds) as List)
-            .cast<Map<String, dynamic>>();
+        final itemsRaw =
+            (await sb
+                        .from('order_items')
+                        .select('menu_item_name, quantity')
+                        .inFilter('order_id', completedOrderIds)
+                    as List)
+                .cast<Map<String, dynamic>>();
         for (final item in itemsRaw) {
           final name = (item['menu_item_name'] as String?) ?? 'Unknown';
           final qty = (item['quantity'] as num?)?.toInt() ?? 1;
           menuCount[name] = (menuCount[name] ?? 0) + qty;
         }
       }
-      final topMenu = (menuCount.entries.toList()
-            ..sort((a, b) => b.value.compareTo(a.value)))
-          .take(5)
-          .map((e) => '${e.key} (${e.value}x)')
-          .toList();
+      final topMenu =
+          (menuCount.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value)))
+              .take(5)
+              .map((e) => '${e.key} (${e.value}x)')
+              .toList();
 
       final weekGrowth = revenueLastWeek == 0
           ? 'N/A'
@@ -356,22 +473,29 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       var qBooking = sb
           .from('bookings')
           .select(
-              'customer_name, guest_count, booking_time, status, special_requests, deposit_status')
+            'customer_name, guest_count, booking_time, status, special_requests, deposit_status',
+          )
           .eq('booking_date', todayDate);
       if (branchId != null) qBooking = qBooking.eq('branch_id', branchId);
-      final bookingsToday =
-          (await qBooking as List).cast<Map<String, dynamic>>();
+      final bookingsToday = (await qBooking as List)
+          .cast<Map<String, dynamic>>();
 
-      final bookingConfirmed =
-          bookingsToday.where((b) => b['status'] == 'confirmed').toList();
-      final bookingPending =
-          bookingsToday.where((b) => b['status'] == 'pending').toList();
-      final bookingCancelled =
-          bookingsToday.where((b) => b['status'] == 'cancelled').length;
-      final bookingNoShow =
-          bookingsToday.where((b) => b['status'] == 'no_show').length;
+      final bookingConfirmed = bookingsToday
+          .where((b) => b['status'] == 'confirmed')
+          .toList();
+      final bookingPending = bookingsToday
+          .where((b) => b['status'] == 'pending')
+          .toList();
+      final bookingCancelled = bookingsToday
+          .where((b) => b['status'] == 'cancelled')
+          .length;
+      final bookingNoShow = bookingsToday
+          .where((b) => b['status'] == 'no_show')
+          .length;
       final totalGuests = bookingConfirmed.fold<int>(
-          0, (s, b) => s + ((b['guest_count'] as num?)?.toInt() ?? 0));
+        0,
+        (s, b) => s + ((b['guest_count'] as num?)?.toInt() ?? 0),
+      );
 
       final bookingList = bookingConfirmed.map((b) {
         final time = (b['booking_time'] as String?)?.substring(0, 5) ?? '-';
@@ -380,16 +504,14 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
         final deposit = b['deposit_status'] ?? 'none';
         final notes = b['special_requests'];
         return '$time - $name ($guests guests)${deposit == 'paid' ? ' [Deposit✅]' : ''}${notes != null ? ' - $notes' : ''}';
-      }).toList()
-        ..sort();
+      }).toList()..sort();
 
       final pendingList = bookingPending.map((b) {
         final time = (b['booking_time'] as String?)?.substring(0, 5) ?? '-';
         final name = b['customer_name'] ?? '-';
         final guests = b['guest_count'] ?? 0;
         return '$time - $name ($guests guests)';
-      }).toList()
-        ..sort();
+      }).toList()..sort();
 
       // ── 7. Inventory stok menipis ───────────────────────────────────
       var qInv = sb
@@ -398,24 +520,30 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       if (branchId != null) qInv = qInv.eq('branch_id', branchId);
       final invRaw = (await qInv as List).cast<Map<String, dynamic>>();
 
-      final lowStock = invRaw.where((i) {
-        final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
-        final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
-        return cur <= min;
-      }).map((i) {
-        final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
-        final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
-        return '${i['name']} (stock: $cur ${i['unit']}, min: $min ${i['unit']})';
-      }).toList();
+      final lowStock = invRaw
+          .where((i) {
+            final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
+            final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
+            return cur <= min;
+          })
+          .map((i) {
+            final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
+            final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
+            return '${i['name']} (stock: $cur ${i['unit']}, min: $min ${i['unit']})';
+          })
+          .toList();
 
-      final nearLowStock = invRaw.where((i) {
-        final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
-        final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
-        return cur > min && cur <= min * 1.5 && min > 0;
-      }).map((i) {
-        final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
-        return '${i['name']} (stock: $cur ${i['unit']})';
-      }).toList();
+      final nearLowStock = invRaw
+          .where((i) {
+            final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
+            final min = (i['minimum_stock'] as num?)?.toDouble() ?? 0;
+            return cur > min && cur <= min * 1.5 && min > 0;
+          })
+          .map((i) {
+            final cur = (i['current_stock'] as num?)?.toDouble() ?? 0;
+            return '${i['name']} (stock: $cur ${i['unit']})';
+          })
+          .toList();
 
       return {
         'cabang': branchLabel,
@@ -426,10 +554,9 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
           'order_dibatalkan': cancelledToday,
           'revenue': 'Rp ${revenueToday.toStringAsFixed(0)}',
           'rata_rata_nilai_order': 'Rp ${avgOrderValue.toStringAsFixed(0)}',
-          'jam_paling_ramai':
-              jamTerramai == '-' ? '-' : '$jamTerramai:00',
+          'jam_paling_ramai': jamTerramai == '-' ? '-' : '$jamTerramai:00',
           'payment_method': paymentSummary,
-          'order_type': orderTypeSummary,  // ✅ DITAMBAHKAN
+          'order_type': orderTypeSummary, // ✅ DITAMBAHKAN
         },
         'minggu_ini': {
           'total_order': ordersWeek.length,
@@ -472,18 +599,43 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
   // to answer it other than declining — which reads exactly like the SCOPE
   // refusal even though the question is legitimately about this restaurant.
   static const _monthNames = {
-    'jan': 1, 'january': 1, 'januari': 1,
-    'feb': 2, 'february': 2, 'februari': 2,
-    'mar': 3, 'march': 3, 'maret': 3,
-    'apr': 4, 'april': 4,
-    'may': 5, 'mei': 5,
-    'jun': 6, 'june': 6, 'juni': 6,
-    'jul': 7, 'july': 7, 'juli': 7,
-    'aug': 8, 'august': 8, 'agu': 8, 'agt': 8, 'agustus': 8,
-    'sep': 9, 'sept': 9, 'september': 9,
-    'oct': 10, 'october': 10, 'okt': 10, 'oktober': 10,
-    'nov': 11, 'november': 11,
-    'dec': 12, 'december': 12, 'des': 12, 'desember': 12,
+    'jan': 1,
+    'january': 1,
+    'januari': 1,
+    'feb': 2,
+    'february': 2,
+    'februari': 2,
+    'mar': 3,
+    'march': 3,
+    'maret': 3,
+    'apr': 4,
+    'april': 4,
+    'may': 5,
+    'mei': 5,
+    'jun': 6,
+    'june': 6,
+    'juni': 6,
+    'jul': 7,
+    'july': 7,
+    'juli': 7,
+    'aug': 8,
+    'august': 8,
+    'agu': 8,
+    'agt': 8,
+    'agustus': 8,
+    'sep': 9,
+    'sept': 9,
+    'september': 9,
+    'oct': 10,
+    'october': 10,
+    'okt': 10,
+    'oktober': 10,
+    'nov': 11,
+    'november': 11,
+    'dec': 12,
+    'december': 12,
+    'des': 12,
+    'desember': 12,
   };
 
   List<DateTime> _extractDates(String text) {
@@ -493,7 +645,9 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     final dates = <DateTime>[];
 
     // "2 aug", "2nd august 2026", "2 aug 2026"
-    final named = RegExp(r'(\d{1,2})\s*(?:st|nd|rd|th)?\s+([a-z]+)\.?\s*(\d{4})?');
+    final named = RegExp(
+      r'(\d{1,2})\s*(?:st|nd|rd|th)?\s+([a-z]+)\.?\s*(\d{4})?',
+    );
     for (final m in named.allMatches(lower)) {
       final day = int.tryParse(m.group(1)!);
       final month = _monthNames[m.group(2)!];
@@ -528,7 +682,12 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
         r'\b(now|present|currently|current date|to date|sekarang|saat ini|hari ini)\b',
       );
       if (nowKeywords.hasMatch(lower) &&
-          !dates.any((d) => d.year == today.year && d.month == today.month && d.day == today.day)) {
+          !dates.any(
+            (d) =>
+                d.year == today.year &&
+                d.month == today.month &&
+                d.day == today.day,
+          )) {
         dates.add(today);
       }
     }
@@ -540,10 +699,16 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     final dates = _extractDates(text);
     if (dates.isEmpty) return null;
     dates.sort();
-    return (start: dates.first, end: dates.length > 1 ? dates.last : dates.first);
+    return (
+      start: dates.first,
+      end: dates.length > 1 ? dates.last : dates.first,
+    );
   }
 
-  Future<Map<String, dynamic>> _fetchCustomRangeData(DateTime start, DateTime end) async {
+  Future<Map<String, dynamic>> _fetchCustomRangeData(
+    DateTime start,
+    DateTime end,
+  ) async {
     final sb = Supabase.instance.client;
     final branchId = _isSuperadmin ? _selectedBranchId : _myBranchId;
     String dateStr(DateTime d) => d.toIso8601String().substring(0, 10);
@@ -558,13 +723,17 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       final orders = (await q as List).cast<Map<String, dynamic>>();
 
       final completed = orders
-          .where((o) =>
-              o['status'] == 'paid' ||
-              o['status'] == 'served' ||
-              o['payment_status'] == 'paid')
+          .where(
+            (o) =>
+                o['status'] == 'paid' ||
+                o['status'] == 'served' ||
+                o['payment_status'] == 'paid',
+          )
           .toList();
       final revenue = completed.fold<double>(
-          0, (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0));
+        0,
+        (s, o) => s + ((o['total_amount'] as num?)?.toDouble() ?? 0),
+      );
       final cancelled = orders.where((o) => o['status'] == 'cancelled').length;
 
       return {
@@ -591,8 +760,11 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       // 1. Fetch menu items without a join
       dynamic qMenu = sb
           .from('menu_items')
-          .select('id, name, price, description, is_available, preparation_time_minutes, category_id');
-      if (branchId != null) qMenu = (qMenu as dynamic).eq('branch_id', branchId);
+          .select(
+            'id, name, price, description, is_available, preparation_time_minutes, category_id',
+          );
+      if (branchId != null)
+        qMenu = (qMenu as dynamic).eq('branch_id', branchId);
       final menuRaw = ((await (qMenu as dynamic).order('name')) as List)
           .cast<Map<String, dynamic>>();
 
@@ -603,21 +775,28 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       if (branchId != null) catQuery = catQuery.eq('branch_id', branchId);
       final catRaw = (await catQuery) as List;
       final catMap = <String, String>{
-        for (final c in catRaw) c['id'] as String: c['name'] as String
+        for (final c in catRaw) c['id'] as String: c['name'] as String,
       };
 
       if (menuRaw.isEmpty) {
-        return {'total_menu': 0, 'menu_tersedia': [], 'menu_tidak_tersedia': [], 'ranking_margin': []};
+        return {
+          'total_menu': 0,
+          'menu_tersedia': [],
+          'menu_tidak_tersedia': [],
+          'ranking_margin': [],
+        };
       }
 
       final menuIds = menuRaw.map((m) => m['id'] as String).toList();
 
       // 3. Fetch allergens for all menu items
-      final allergensRaw = (await sb
-          .from('menu_item_allergens')
-          .select('menu_item_id, allergen')
-          .inFilter('menu_item_id', menuIds) as List)
-          .cast<Map<String, dynamic>>();
+      final allergensRaw =
+          (await sb
+                      .from('menu_item_allergens')
+                      .select('menu_item_id, allergen')
+                      .inFilter('menu_item_id', menuIds)
+                  as List)
+              .cast<Map<String, dynamic>>();
 
       final Map<String, List<String>> allergenMap = {};
       for (final a in allergensRaw) {
@@ -626,11 +805,13 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       }
 
       // 4. Fetch dietary tags for all menu items
-      final dietaryRaw = (await sb
-          .from('menu_item_dietary')
-          .select('menu_item_id, dietary_tag')
-          .inFilter('menu_item_id', menuIds) as List)
-          .cast<Map<String, dynamic>>();
+      final dietaryRaw =
+          (await sb
+                      .from('menu_item_dietary')
+                      .select('menu_item_id, dietary_tag')
+                      .inFilter('menu_item_id', menuIds)
+                  as List)
+              .cast<Map<String, dynamic>>();
 
       final Map<String, List<String>> dietaryMap = {};
       for (final d in dietaryRaw) {
@@ -639,11 +820,13 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       }
 
       // 5. Fetch menu_ingredients to calculate COGS
-      final ingredientsRaw = (await sb
-          .from('menu_ingredients')
-          .select('menu_item_id, quantity, cost_per_unit')
-          .inFilter('menu_item_id', menuIds) as List)
-          .cast<Map<String, dynamic>>();
+      final ingredientsRaw =
+          (await sb
+                      .from('menu_ingredients')
+                      .select('menu_item_id, quantity, cost_per_unit')
+                      .inFilter('menu_item_id', menuIds)
+                  as List)
+              .cast<Map<String, dynamic>>();
 
       final Map<String, double> cogsMap = {};
       for (final ing in ingredientsRaw) {
@@ -676,7 +859,9 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
           'prep_time': prepTime != null ? '$prepTime min' : '-',
           'cogs': cogs > 0 ? 'Rp ${cogs.toStringAsFixed(0)}' : 'not set yet',
           'cogs_raw': cogs,
-          'margin_persen': margin != null ? '${margin.toStringAsFixed(1)}%' : 'not set yet',
+          'margin_persen': margin != null
+              ? '${margin.toStringAsFixed(1)}%'
+              : 'not set yet',
           'margin_raw': margin,
           'allergen': allergens.isEmpty ? 'none' : allergens.join(', '),
           'dietary': dietary.isEmpty ? '-' : dietary.join(', '),
@@ -690,30 +875,44 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
       }
 
       // 7. Best margin ranking (only items that already have COGS)
-      final withMargin = available
-          .where((m) => (m['margin_raw'] as double?) != null && (m['cogs_raw'] as double) > 0)
-          .toList()
-        ..sort((a, b) {
-          final ma = (a['margin_raw'] as double?) ?? 0;
-          final mb = (b['margin_raw'] as double?) ?? 0;
-          return mb.compareTo(ma);
-        });
+      final withMargin =
+          available
+              .where(
+                (m) =>
+                    (m['margin_raw'] as double?) != null &&
+                    (m['cogs_raw'] as double) > 0,
+              )
+              .toList()
+            ..sort((a, b) {
+              final ma = (a['margin_raw'] as double?) ?? 0;
+              final mb = (b['margin_raw'] as double?) ?? 0;
+              return mb.compareTo(ma);
+            });
 
-      final rankingMargin = withMargin.take(5).map((m) =>
-          '${m['nama']}: margin ${m['margin_persen']} (jual ${m['harga']}, COGS ${m['cogs']})').toList();
+      final rankingMargin = withMargin
+          .take(5)
+          .map(
+            (m) =>
+                '${m['nama']}: margin ${m['margin_persen']} (jual ${m['harga']}, COGS ${m['cogs']})',
+          )
+          .toList();
 
       // 8. Format menu detail for the AI (without raw fields)
-      final availableForAI = available.map((m) => {
-        'nama': m['nama'],
-        'harga': m['harga'],
-        'kategori': m['kategori'],
-        'deskripsi': m['deskripsi'],
-        'prep_time': m['prep_time'],
-        'cogs': m['cogs'],
-        'margin_persen': m['margin_persen'],
-        'allergen': m['allergen'],
-        'dietary': m['dietary'],
-      }).toList();
+      final availableForAI = available
+          .map(
+            (m) => {
+              'nama': m['nama'],
+              'harga': m['harga'],
+              'kategori': m['kategori'],
+              'deskripsi': m['deskripsi'],
+              'prep_time': m['prep_time'],
+              'cogs': m['cogs'],
+              'margin_persen': m['margin_persen'],
+              'allergen': m['allergen'],
+              'dietary': m['dietary'],
+            },
+          )
+          .toList();
 
       return {
         'total_menu': menuRaw.length,
@@ -785,14 +984,14 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
   Future<void> _showExportSheet() async {
     final branchName = _isSuperadmin
         ? (_selectedBranchId == null
-            ? 'All Branches'
-            : _branches
-                    .where((b) => b.id == _selectedBranchId)
-                    .firstOrNull
-                    ?.name ??
-                'Branch')
+              ? 'All Branches'
+              : _branches
+                        .where((b) => b.id == _selectedBranchId)
+                        .firstOrNull
+                        ?.name ??
+                    'Branch')
         : (_branches.where((b) => b.id == _myBranchId).firstOrNull?.name ??
-            'My Branch');
+              'My Branch');
 
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -807,7 +1006,9 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     );
 
     if (result == true && mounted) {
-      _addBot('✅ Report exported successfully! The file is now available in the share sheet.');
+      _addBot(
+        '✅ Report exported successfully! The file is now available in the share sheet.',
+      );
     }
   }
 
@@ -828,7 +1029,8 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     final lower = text.toLowerCase();
     if (_exportKeywords.any((k) => lower.contains(k))) {
       chatNotifier.addMessage(
-          ChatMessage(role: 'user', content: text, timestamp: DateTime.now()));
+        ChatMessage(role: 'user', content: text, timestamp: DateTime.now()),
+      );
       _addBot('📥 Opening report export panel...');
       await Future.delayed(const Duration(milliseconds: 400));
       await _showExportSheet();
@@ -838,7 +1040,8 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     _msgCtrl.clear();
 
     chatNotifier.addMessage(
-        ChatMessage(role: 'user', content: text, timestamp: DateTime.now()));
+      ChatMessage(role: 'user', content: text, timestamp: DateTime.now()),
+    );
     chatNotifier.setTyping(true);
 
     _scrollToBottom();
@@ -851,7 +1054,8 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     final results = await Future.wait([
       _fetchAnalyticsData(),
       _fetchMenuData(),
-      if (dateRange != null) _fetchCustomRangeData(dateRange.start, dateRange.end),
+      if (dateRange != null)
+        _fetchCustomRangeData(dateRange.start, dateRange.end),
     ]);
     final data = results[0];
     final menuData = results[1];
@@ -862,8 +1066,8 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     if (warnings != null && mounted) {
       final low = (warnings['stok_habis_atau_dibawah_minimum'] as List? ?? [])
           .cast<String>();
-      final near =
-          (warnings['stok_hampir_habis'] as List? ?? []).cast<String>();
+      final near = (warnings['stok_hampir_habis'] as List? ?? [])
+          .cast<String>();
       setState(() {
         _lowStockAlert = [
           ...low.map((s) => '🚨 $s'),
@@ -875,16 +1079,21 @@ bool _quickActionsExpanded = false; // ← ADDED THIS LINE
     // Format menu detail for the system prompt
     final menuTersedia = (menuData['menu_tersedia'] as List? ?? [])
         .cast<Map<String, dynamic>>();
-    final menuDetail = menuTersedia.map((m) =>
-        '• ${m['nama']} — ${m['harga']} [${m['kategori']}]\n'
-        '  Deskripsi: ${m['deskripsi']}\n'
-        '  COGS: ${m['cogs']} | Margin: ${m['margin_persen']} | Prep: ${m['prep_time']}\n'
-        '  Allergen: ${m['allergen']} | Dietary: ${m['dietary']}').join('\n');
+    final menuDetail = menuTersedia
+        .map(
+          (m) =>
+              '• ${m['nama']} — ${m['harga']} [${m['kategori']}]\n'
+              '  Deskripsi: ${m['deskripsi']}\n'
+              '  COGS: ${m['cogs']} | Margin: ${m['margin_persen']} | Prep: ${m['prep_time']}\n'
+              '  Allergen: ${m['allergen']} | Dietary: ${m['dietary']}',
+        )
+        .join('\n');
 
     final menuTidakTersedia = (menuData['menu_tidak_tersedia'] as List? ?? []);
     final rankingMargin = (menuData['ranking_margin'] as List? ?? []);
 
-    final systemPrompt = '''
+    final systemPrompt =
+        '''
 You are Resto Analytics AI, a restaurant-operations assistant built ONLY for
 this specific restaurant's internal team. Read this scope rule before
 anything else in this prompt.
@@ -991,7 +1200,11 @@ FORMAT RULES:
 - Give insight and recommendations, not just raw numbers
 
 STAFF SENTIMENT: $sentiment
-${sentiment == 'urgent' ? '- URGENT: Prioritize a quick solution. Start by acknowledging the urgency. Suggest escalating to a manager if needed.' : sentiment == 'negative' ? '- The staff member is having difficulty. Start with empathy, acknowledge the problem first, use a supportive tone, give clear troubleshooting steps.' : '- Respond normally, friendly and professional.'}
+${sentiment == 'urgent'
+            ? '- URGENT: Prioritize a quick solution. Start by acknowledging the urgency. Suggest escalating to a manager if needed.'
+            : sentiment == 'negative'
+            ? '- The staff member is having difficulty. Start with empathy, acknowledge the problem first, use a supportive tone, give clear troubleshooting steps.'
+            : '- Respond normally, friendly and professional.'}
 
 REMINDER: Stay strictly within the SCOPE rule at the top of this prompt.
 If the user's message isn't about this restaurant's operations, decline it
@@ -1030,8 +1243,15 @@ have instead.
   }
 
   void _addBot(String content) {
-    ref.read(chatProvider.notifier).addMessage(
-        ChatMessage(role: 'assistant', content: content, timestamp: DateTime.now()));
+    ref
+        .read(chatProvider.notifier)
+        .addMessage(
+          ChatMessage(
+            role: 'assistant',
+            content: content,
+            timestamp: DateTime.now(),
+          ),
+        );
   }
 
   void _scrollToBottom() {
@@ -1081,38 +1301,71 @@ have instead.
       drawer: const AppDrawer(),
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
         titleTextStyle: const TextStyle(
           fontFamily: 'Poppins',
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          color: Colors.white,
+          color: AppColors.textPrimary,
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            const Text('AI Chatbot'),
-            if (staff != null)
-              Text(
-                staff.fullName,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 11,
-                  color: Colors.white60,
-                  fontWeight: FontWeight.normal,
-                ),
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(9),
               ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Pusaka Assistant'),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: AppColors.available,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      staff != null ? '${staff.fullName} • ONLINE' : 'ONLINE',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ],
         ),
         actions: [
           if (staff != null)
             Container(
               margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50).withValues(alpha: 0.2),
+                color: AppColors.available.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -1121,7 +1374,7 @@ have instead.
                   fontFamily: 'Poppins',
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF4CAF50),
+                  color: AppColors.available,
                 ),
               ),
             ),
@@ -1131,22 +1384,39 @@ have instead.
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: AppColors.primary,
-                iconEnabledColor: Colors.white60,
+                dropdownColor: AppColors.surface,
+                iconEnabledColor: AppColors.textSecondary,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('All Branches',
+                    child: Text(
+                      'All Branches',
                       style: TextStyle(
-                        fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
-                  ..._branches.map((b) => DropdownMenuItem<String?>(
-                    value: b.id,
-                    child: Text(b.name,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins', fontSize: 11, color: Colors.white)))),
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  ..._branches.map(
+                    (b) => DropdownMenuItem<String?>(
+                      value: b.id,
+                      child: Text(
+                        b.name,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
                 onChanged: (val) {
                   setState(() {
@@ -1164,7 +1434,11 @@ have instead.
           const SizedBox(width: 4),
           // Tombol clear history
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 20),
+            icon: const Icon(
+              Icons.refresh_rounded,
+              size: 20,
+              color: AppColors.textSecondary,
+            ),
             tooltip: 'Clear Chat History',
             onPressed: _resetChat,
           ),
@@ -1196,23 +1470,24 @@ have instead.
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       decoration: const BoxDecoration(
-        color: AppColors.primary,
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
           Container(
-            width: 30,
-            height: 30,
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primary, AppColors.accent],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(15),
+              color: AppColors.accent,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.smart_toy_rounded,
-                color: Colors.white, size: 16),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              color: Colors.white,
+              size: 17,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1220,21 +1495,39 @@ have instead.
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('AI Chatbot',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    )),
-                if (staff != null)
-                  Text(staff.fullName,
+                const Text(
+                  'Pusaka Assistant',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: AppColors.available,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      staff != null ? '${staff.fullName} • ONLINE' : 'ONLINE',
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 10,
-                        color: Colors.white60,
-                      )),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1243,26 +1536,39 @@ have instead.
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
                 isDense: true,
-                dropdownColor: AppColors.primary,
-                iconEnabledColor: Colors.white60,
+                dropdownColor: AppColors.surface,
+                iconEnabledColor: AppColors.textSecondary,
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('All Branches',
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Colors.white70))),
-                  ..._branches.map((b) => DropdownMenuItem<String?>(
+                    child: Text(
+                      'All Branches',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  ..._branches.map(
+                    (b) => DropdownMenuItem<String?>(
                       value: b.id,
-                      child: Text(b.name,
-                          style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 11,
-                              color: Colors.white)))),
+                      child: Text(
+                        b.name,
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
                 onChanged: (val) {
                   setState(() {
@@ -1278,12 +1584,20 @@ have instead.
               ),
             ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, size: 18, color: Colors.white70),
+            icon: const Icon(
+              Icons.refresh_rounded,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
             tooltip: 'Clear Chat History',
             onPressed: _resetChat,
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, size: 20, color: Colors.white),
+            icon: const Icon(
+              Icons.close_rounded,
+              size: 20,
+              color: AppColors.textSecondary,
+            ),
             tooltip: 'Close',
             onPressed: widget.onClose,
           ),
@@ -1295,16 +1609,19 @@ have instead.
   // ── Stock Alert Banner ─────────────────────────────────────────────
   Widget _buildStockAlert() {
     final hasUrgent = _lowStockAlert.any((s) => s.startsWith('🚨'));
+    final tint = hasUrgent ? AppColors.accent : AppColors.accentOrange;
     return Container(
       width: double.infinity,
-      color:
-          hasUrgent ? const Color(0xFFFFEBEE) : const Color(0xFFFFF8E1),
+      color: tint.withValues(alpha: 0.08),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(hasUrgent ? '🚨' : '⚠️',
-              style: const TextStyle(fontSize: 16)),
+          Icon(
+            hasUrgent ? Icons.error_rounded : Icons.warning_rounded,
+            size: 16,
+            color: tint,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1316,19 +1633,15 @@ have instead.
                     fontFamily: 'Poppins',
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: hasUrgent
-                        ? const Color(0xFFC62828)
-                        : const Color(0xFFE65100),
+                    color: tint,
                   ),
                 ),
                 Text(
                   _lowStockAlert.take(3).join(' • '),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
-                    color: hasUrgent
-                        ? const Color(0xFFB71C1C)
-                        : const Color(0xFFBF360C),
+                    color: AppColors.textSecondary,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -1338,14 +1651,12 @@ have instead.
           ),
           GestureDetector(
             onTap: () => _send(
-                'Show details of the problematic stock warnings and recommendations'),
+              'Show details of the problematic stock warnings and recommendations',
+            ),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: hasUrgent
-                    ? const Color(0xFFC62828)
-                    : const Color(0xFFE65100),
+                color: tint,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(
@@ -1366,128 +1677,145 @@ have instead.
 
   // ── Messages ───────────────────────────────────────────────────────
   Widget _buildMessages(ChatState chatState) => ListView.builder(
-        controller: _scrollCtrl,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        itemCount:
-            chatState.messages.length + (chatState.isTyping ? 1 : 0),
-        itemBuilder: (_, i) {
-          if (i == chatState.messages.length) {
-            return const TypingIndicator();
-          }
-          final m = chatState.messages[i];
-          final isUser = m.role == 'user';
-          if (isUser) {
-            return ChatBubble(message: m);
-          }
-          return _buildBotBubble(m);
-        },
-      );
+    controller: _scrollCtrl,
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    itemCount: chatState.messages.length + (chatState.isTyping ? 1 : 0),
+    itemBuilder: (_, i) {
+      if (i == chatState.messages.length) {
+        return const TypingIndicator();
+      }
+      final m = chatState.messages[i];
+      final isUser = m.role == 'user';
+      if (isUser) {
+        return ChatBubble(message: m);
+      }
+      return _buildBotBubble(m);
+    },
+  );
 
   // Bot bubble using MarkdownBody
   Widget _buildBotBubble(ChatMessage m) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primary, AppColors.accent],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.restaurant,
-                color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.72,
-              ),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(4),
-                  bottomRight: Radius.circular(16),
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(7),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 13,
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  MarkdownBody(
-                    data: m.content,
-                    styleSheet: MarkdownStyleSheet(
-                      p: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        color: AppColors.textPrimary,
-                        height: 1.5,
-                      ),
-                      strong: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                      h1: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                      h2: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                      h3: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                      listBullet: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        color: AppColors.textPrimary,
-                      ),
-                      blockquote: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${m.timestamp.hour.toString().padLeft(2, '0')}:${m.timestamp.minute.toString().padLeft(2, '0')}',
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 8),
+              const Text(
+                'ASSISTANT',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${m.timestamp.hour.toString().padLeft(2, '0')}:${m.timestamp.minute.toString().padLeft(2, '0')}',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10,
+                  color: AppColors.textHint,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.86,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: MarkdownBody(
+              data: m.content,
+              extensionSet: md.ExtensionSet.gitHubWeb,
+              styleSheet: MarkdownStyleSheet(
+                p: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                  height: 1.5,
+                ),
+                strong: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                h1: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                h2: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                h3: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+                listBullet: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                ),
+                blockquote: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  fontStyle: FontStyle.italic,
+                ),
+                tableHead: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: AppColors.textSecondary,
+                ),
+                tableBody: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: AppColors.textPrimary,
+                ),
+                tableBorder: TableBorder.all(
+                  color: AppColors.border,
+                  width: 1,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                tableCellsPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                tableColumnWidth: const IntrinsicColumnWidth(),
               ),
             ),
           ),
@@ -1498,118 +1826,144 @@ have instead.
 
   // ── Quick Actions ──────────────────────────────────────────────────
   Widget _buildQuickActions() {
-  return AnimatedContainer(
-    duration: const Duration(milliseconds: 250),
-    curve: Curves.easeInOut,
-    color: AppColors.surface,
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ── Header toggle ──────────────────────────────────────
-        InkWell(
-          onTap: () => setState(() => _quickActionsExpanded = !_quickActionsExpanded),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(color: AppColors.border),
-                bottom: BorderSide(color: AppColors.border),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.flash_on_rounded, size: 14, color: AppColors.primary),
-                const SizedBox(width: 6),
-                const Text('Quick Actions',
-                  style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 12,
-                    fontWeight: FontWeight.w600, color: AppColors.primary)),
-                const Spacer(),
-                AnimatedRotation(
-                  turns: _quickActionsExpanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 250),
-                  child: const Icon(Icons.expand_more, size: 18, color: AppColors.textSecondary),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      color: AppColors.surface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Header toggle ──────────────────────────────────────
+          InkWell(
+            onTap: () =>
+                setState(() => _quickActionsExpanded = !_quickActionsExpanded),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppColors.border),
+                  bottom: BorderSide(color: AppColors.border),
                 ),
-              ],
-            ),
-          ),
-        ),
-
-        // ── 2-column grid (only when expanded) ────────────────
-        if (_quickActionsExpanded)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 3.0,
               ),
-              itemCount: _quickActionsV2.length,
-              itemBuilder: (_, i) {
-                final action = _quickActionsV2[i];
-                return _QuickActionButton(
-                  action: action,
-                  onTap: () => _send(action.prompt),
-                );
-              },
-            ),
-          ),
-
-        // ── Horizontal scroll kecil saat collapsed ─────────────
-        if (!_quickActionsExpanded)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-            child: Row(
-              children: _quickActionsV2.map((action) {
-                final color = _categoryColor(action.category);
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () => _send(action.prompt),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: color.withValues(alpha: 0.4)),
-                      ),
-                      child: Text('${action.emoji} ${action.label}',
-                        style: TextStyle(
-                          fontFamily: 'Poppins', fontSize: 12,
-                          fontWeight: FontWeight.w600, color: color)),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.flash_on_rounded,
+                    size: 14,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Quick Actions',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
                     ),
                   ),
-                );
-              }).toList(),
+                  const Spacer(),
+                  AnimatedRotation(
+                    turns: _quickActionsExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: const Icon(
+                      Icons.expand_more,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-      ],
-    ),
-  );
-}
 
-Color _categoryColor(String category) {
-  switch (category) {
-    case 'menu':    return Colors.orange;
-    case 'booking': return Colors.purple;
-    case 'export':  return Colors.green;
-    default:        return AppColors.primary;
+          // ── 2-column grid (only when expanded) ────────────────
+          if (_quickActionsExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 3.0,
+                ),
+                itemCount: _quickActionsV2.length,
+                itemBuilder: (_, i) {
+                  final action = _quickActionsV2[i];
+                  return _QuickActionButton(
+                    action: action,
+                    onTap: () => _send(action.prompt),
+                  );
+                },
+              ),
+            ),
+
+          // ── Horizontal scroll kecil saat collapsed ─────────────
+          if (!_quickActionsExpanded)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+              child: Row(
+                children: _quickActionsV2.map((action) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => _send(action.prompt),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _categoryIcon(action.category),
+                              size: 13,
+                              color: AppColors.accent,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              action.label,
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
   }
-}
 
   // ── Input ──────────────────────────────────────────────────────────
   Widget _buildInput(bool isTyping) => Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.border)),
-        ),
-        child: Row(
+    padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+    decoration: const BoxDecoration(
+      color: AppColors.surface,
+      border: Border(top: BorderSide(color: AppColors.border)),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
           children: [
             Expanded(
               child: TextField(
@@ -1617,7 +1971,7 @@ Color _categoryColor(String category) {
                 onSubmitted: (_) => _send(),
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Type a question...',
+                  hintText: 'Ask Pusaka Assistant...',
                   hintStyle: const TextStyle(
                     fontFamily: 'Poppins',
                     color: AppColors.textHint,
@@ -1626,21 +1980,23 @@ Color _categoryColor(String category) {
                   filled: true,
                   fillColor: AppColors.background,
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
-                    borderSide:
-                        const BorderSide(color: AppColors.border),
+                    borderSide: const BorderSide(color: AppColors.border),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
-                    borderSide:
-                        const BorderSide(color: AppColors.border),
+                    borderSide: const BorderSide(color: AppColors.border),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: const BorderSide(
-                        color: AppColors.primary, width: 1.5),
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
                   ),
                 ),
               ),
@@ -1653,19 +2009,32 @@ Color _categoryColor(String category) {
                 height: 44,
                 decoration: BoxDecoration(
                   color: isTyping
-                      ? AppColors.primary.withValues(alpha: 0.4)
-                      : AppColors.primary,
+                      ? AppColors.accent.withValues(alpha: 0.4)
+                      : AppColors.accent,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.send_rounded,
-                    color: Colors.white, size: 20),
+                child: const Icon(
+                  Icons.send_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
             ),
           ],
         ),
-      );
+        const SizedBox(height: 6),
+        const Text(
+          'AI generated info. Verify critical data.',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 10,
+            color: AppColors.textHint,
+          ),
+        ),
+      ],
+    ),
+  );
 }
-
 
 // ── Quick Action Button Widget ────────────────────────────────────────────────
 class _QuickActionButton extends StatelessWidget {
@@ -1675,40 +2044,39 @@ class _QuickActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _colorFor(action.category);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.35)),
+          border: Border.all(color: AppColors.border),
         ),
         child: Row(
           children: [
-            Text(action.emoji, style: const TextStyle(fontSize: 16)),
+            Icon(
+              _categoryIcon(action.category),
+              size: 15,
+              color: AppColors.accent,
+            ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(action.label,
+              child: Text(
+                action.label,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
-                style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 12,
-                  fontWeight: FontWeight.w600, color: color)),
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  static Color _colorFor(String category) {
-    switch (category) {
-      case 'menu':    return Colors.orange;
-      case 'booking': return Colors.purple;
-      case 'export':  return Colors.green;
-      default:        return AppColors.primary;
-    }
   }
 }
