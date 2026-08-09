@@ -509,7 +509,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
   Widget _buildWideLayout() => StaffShell(
         pageTitle: 'Cashier',
-        activeRoute: AppRoutes.order,
+        activeRoute: AppRoutes.cashier,
         topBarActions: _branchTopBarActions,
         body: Row(children: [
           SizedBox(width: 380, child: _buildOrderListBody()),
@@ -595,7 +595,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     }
     return StaffShell(
       pageTitle: 'Cashier',
-      activeRoute: AppRoutes.order,
+      activeRoute: AppRoutes.cashier,
       topBarActions: _branchTopBarActions,
       body: _buildOrderListBody(),
     );
