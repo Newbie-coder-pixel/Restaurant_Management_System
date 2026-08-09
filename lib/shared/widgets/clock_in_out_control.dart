@@ -15,37 +15,44 @@ import '../../features/staff/providers/attendance_clock_provider.dart';
 /// in/out), not automatic on login; verified server-side against the
 /// branch's GPS location by the clock_in/clock_out RPCs.
 class ClockInOutControl extends ConsumerWidget {
-  const ClockInOutControl({super.key});
+  /// True when embedded inline in a horizontal top bar (e.g. StaffHomeScreen's
+  /// header) rather than the vertical AppDrawer sidebar it was designed for —
+  /// drops the sidebar-only bottom margin so it doesn't inflate the row's height.
+  final bool compact;
+  const ClockInOutControl({super.key, this.compact = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final todayAsync = ref.watch(todayAttendanceProvider);
 
     return todayAsync.when(
-      loading: () => const _ControlShell(
-        child: SizedBox(
+      loading: () => _ControlShell(
+        compact: compact,
+        child: const SizedBox(
           height: 16,
           width: 16,
           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
         ),
       ),
-      error: (_, __) => const _ControlShell(
-        child: Text('Attendance unavailable',
+      error: (_, __) => _ControlShell(
+        compact: compact,
+        child: const Text('Attendance unavailable',
             style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white54)),
       ),
-      data: (today) => _ClockButton(today: today),
+      data: (today) => _ClockButton(today: today, compact: compact),
     );
   }
 }
 
 class _ControlShell extends StatelessWidget {
   final Widget child;
-  const _ControlShell({required this.child});
+  final bool compact;
+  const _ControlShell({required this.child, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      margin: compact ? EdgeInsets.zero : const EdgeInsets.fromLTRB(16, 0, 16, 16),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
@@ -58,7 +65,8 @@ class _ControlShell extends StatelessWidget {
 
 class _ClockButton extends ConsumerStatefulWidget {
   final AttendanceRecord? today;
-  const _ClockButton({required this.today});
+  final bool compact;
+  const _ClockButton({required this.today, this.compact = false});
 
   @override
   ConsumerState<_ClockButton> createState() => _ClockButtonState();
@@ -163,13 +171,13 @@ class _ClockButtonState extends ConsumerState<_ClockButton> {
       borderRadius: BorderRadius.circular(12),
       onTap: _isDoneForToday || _busy ? null : _handleTap,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        margin: widget.compact ? EdgeInsets.zero : const EdgeInsets.fromLTRB(16, 0, 16, 16),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(children: [
+        child: Row(mainAxisSize: widget.compact ? MainAxisSize.min : MainAxisSize.max, children: [
           if (_busy)
             const SizedBox(
               height: 16,
@@ -179,19 +187,28 @@ class _ClockButtonState extends ConsumerState<_ClockButton> {
           else
             Icon(icon, size: 18, color: Colors.white70),
           const SizedBox(width: 10),
-          Expanded(
-            child: Text(statusLine,
-                style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
-                overflow: TextOverflow.ellipsis),
-          ),
-          if (!_isDoneForToday && !_busy)
+          widget.compact
+              ? Flexible(
+                  child: Text(statusLine,
+                      style: const TextStyle(
+                          fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                      overflow: TextOverflow.ellipsis),
+                )
+              : Expanded(
+                  child: Text(statusLine,
+                      style: const TextStyle(
+                          fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
+                      overflow: TextOverflow.ellipsis),
+                ),
+          if (!_isDoneForToday && !_busy) ...[
+            const SizedBox(width: 10),
             Text(_isClockedIn ? 'Clock Out' : 'Clock In',
                 style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Colors.white)),
+          ],
         ]),
       ),
     );

@@ -282,7 +282,7 @@ class _Header extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const ClockInOutControl(),
+                      const ClockInOutControl(compact: true),
                       NotificationBell(branchId: staff!.branchId!),
                       const SizedBox(width: 4),
                     ],
