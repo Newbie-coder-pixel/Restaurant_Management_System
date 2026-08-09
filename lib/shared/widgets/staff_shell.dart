@@ -49,13 +49,13 @@ const staffShellSidebarItems = [
     label: 'Menu Items', icon: Icons.restaurant_menu_rounded,
     route: AppRoutes.menu, requiredFeature: 'Menu'),
   StaffShellSidebarItem(
-    label: 'Staff Shift', icon: Icons.badge_rounded,
+    label: 'Staff Shift', icon: Icons.people_rounded,
     route: AppRoutes.staff, requiredFeature: 'Staff'),
   StaffShellSidebarItem(
     label: 'Reports', icon: Icons.bar_chart_rounded,
     route: AppRoutes.reports, requiredFeature: 'Reports & Analytics'),
   StaffShellSidebarItem(
-    label: 'Multi Branch', icon: Icons.store_mall_directory_rounded,
+    label: 'Multi Branch', icon: Icons.store_rounded,
     route: AppRoutes.branches, requiredFeature: 'Multi Branch'),
 ];
 
