@@ -8,7 +8,8 @@ import '../../../core/models/staff_role.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import 'widgets/order_item_tile.dart';
 import 'widgets/menu_item_selector.dart';
-import '../../../shared/widgets/app_drawer.dart';
+import '../../../core/router/app_router.dart';
+import '../../../shared/widgets/staff_shell.dart';
 
 class OrderScreen extends ConsumerStatefulWidget {
   const OrderScreen({super.key});
@@ -452,83 +453,66 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      drawer: const AppDrawer(),
-      backgroundColor: AppColors.background,
+    return StaffShell(
+      pageTitle: 'Order Management',
+      activeRoute: AppRoutes.order,
+      topBarActions: [
+        // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+        if (_isSuperAdmin)
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              value: _selectedBranchId,
+              isDense: true,
+              dropdownColor: AppColors.surface,
+              iconEnabledColor: AppColors.textSecondary,
+              icon: const Icon(Icons.keyboard_arrow_down, size: 16),
+              style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 11, color: AppColors.textPrimary),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('All Branches',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 11, color: AppColors.textPrimary))),
+                ..._branches.map((b) => DropdownMenuItem<String?>(
+                  value: b['id'] as String,
+                  child: Text(b['name'] as String,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 11, color: AppColors.textPrimary)))),
+              ],
+              onChanged: (val) {
+                setState(() {
+                  _selectedBranchId = val;
+                  _orders = [];
+                  _history = [];
+                  _selectedGroup = '';
+                });
+                _load();
+                _subscribeRealtime();
+                if (_tab.index == 2) _loadHistory();
+              },
+            ),
+          ),
+        const SizedBox(width: 4),
+        IconButton(icon: const Icon(Icons.refresh, color: AppColors.textSecondary), onPressed: _load),
+      ],
       body: Column(children: [
-        // ── Custom AppBar ────────────────────────────────────────────────────
+        // Tab bar
         Container(
-          color: AppColors.primary,
-          child: SafeArea(
-            bottom: false,
-            child: Column(children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(children: [
-                  Builder(builder: (ctx) => IconButton(
-                    icon: const Icon(Icons.menu, color: Colors.white),
-                    onPressed: () => Scaffold.of(ctx).openDrawer())),
-                  const Expanded(
-                    child: Text('Order Management',
-                      style: TextStyle(fontFamily: 'Poppins', fontSize: 18,
-                        fontWeight: FontWeight.w600, color: Colors.white)),
-                  ),
-                  // ── BRANCH FILTER DROPDOWN (superadmin only) ──
-                  if (_isSuperAdmin)
-                    DropdownButtonHideUnderline(
-                      child: DropdownButton<String?>(
-                        value: _selectedBranchId,
-                        isDense: true,
-                        dropdownColor: AppColors.primary,
-                        iconEnabledColor: Colors.white60,
-                        icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                        style: const TextStyle(
-                          fontFamily: 'Poppins', fontSize: 11, color: Colors.white70),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('All Branches',
-                              style: TextStyle(
-                                fontFamily: 'Poppins', fontSize: 11, color: Colors.white70))),
-                          ..._branches.map((b) => DropdownMenuItem<String?>(
-                            value: b['id'] as String,
-                            child: Text(b['name'] as String,
-                              style: const TextStyle(
-                                fontFamily: 'Poppins', fontSize: 11, color: Colors.white)))),
-                        ],
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedBranchId = val;
-                            _orders = [];
-                            _history = [];
-                            _selectedGroup = '';
-                          });
-                          _load();
-                          _subscribeRealtime();
-                          if (_tab.index == 2) _loadHistory();
-                        },
-                      ),
-                    ),
-                  const SizedBox(width: 4),
-                  IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _load),
-                ]),
-              ),
-              // Tab bar
-              TabBar(
-                controller: _tab,
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white60,
-                indicatorColor: AppColors.accent,
-                indicatorWeight: 3,
-                labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13),
-                unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-                tabs: [
-                  Tab(text: 'Active (${_orders.where((o) => o.items.isNotEmpty).length})'),
-                  const Tab(text: 'New Order'),
-                  const Tab(text: 'History'),
-                ],
-              ),
-            ]),
+          color: AppColors.surface,
+          child: TabBar(
+            controller: _tab,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: AppColors.accent,
+            indicatorWeight: 3,
+            labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13),
+            unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+            tabs: [
+              Tab(text: 'Active (${_orders.where((o) => o.items.isNotEmpty).length})'),
+              const Tab(text: 'New Order'),
+              const Tab(text: 'History'),
+            ],
           ),
         ),
 
