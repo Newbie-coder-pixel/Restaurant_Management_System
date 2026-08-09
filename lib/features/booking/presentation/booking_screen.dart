@@ -12,6 +12,8 @@ import '../../../shared/widgets/diamond_pattern_painter.dart';
 import 'widgets/booking_card.dart';
 import 'widgets/add_booking_dialog.dart';
 import 'widgets/edit_booking_dialog.dart';
+import 'booking_stats_screen.dart';
+import 'restaurant_closure_screen.dart';
 
 class BookingScreen extends ConsumerStatefulWidget {
   const BookingScreen({super.key});
@@ -21,7 +23,12 @@ class BookingScreen extends ConsumerStatefulWidget {
 
 class _BookingScreenState extends ConsumerState<BookingScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tab;
+  // Length depends on role (4 tabs incl. Stats/Closed Days for
+  // superadmin/manager, 2 for waiter/host) — created lazily once staff
+  // loads, see build()'s `_tab == null` guard, since role isn't known yet
+  // at initState time.
+  TabController? _tab;
+  bool _isPrivileged = false;
 
   List<Map<String, dynamic>> _bookingsRaw = [];
   List<BookingModel> _bookings = [];
@@ -56,14 +63,20 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
-    _tab.addListener(() {
-      if (_tab.index == 1 && _history.isEmpty) _loadHistory();
-      setState(() {});
-    });
     _searchCtrl.addListener(() {
       setState(() => _searchQuery = _searchCtrl.text.toLowerCase());
     });
+  }
+
+  // Created lazily once staff/role is known — see build()'s `_tab == null`
+  // guard, since role isn't reliably available yet at initState time.
+  void _initTabController(bool isPrivileged) {
+    _isPrivileged = isPrivileged;
+    _tab = TabController(length: isPrivileged ? 4 : 2, vsync: this)
+      ..addListener(() {
+        if (_tab!.index == 1 && _history.isEmpty) _loadHistory();
+        setState(() {});
+      });
   }
 
   @override
@@ -88,7 +101,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   @override
   void dispose() {
     _realtimeChannel?.unsubscribe();
-    _tab.dispose();
+    _tab?.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -632,6 +645,8 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
   Widget build(BuildContext context) {
     final staff = ref.watch(currentStaffProvider);
     final isSuperadmin = staff != null && staff.role == StaffRole.superadmin;
+    final isPrivileged = staff != null &&
+        (staff.role == StaffRole.superadmin || staff.role == StaffRole.manager);
 
     if (staff != null && _branchId == null) {
       _branchId = staff.branchId;
@@ -643,12 +658,25 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
       });
     }
 
+    if (staff != null && _tab == null) {
+      _initTabController(isPrivileged);
+    }
+
+    final tab = _tab;
+    if (tab == null) {
+      return const StaffShell(
+        pageTitle: 'Bookings & Reservations',
+        activeRoute: AppRoutes.booking,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+
     final canFilterBranch = isSuperadmin;
 
     return StaffShell(
       pageTitle: 'Bookings & Reservations',
       activeRoute: AppRoutes.booking,
-      floatingActionButton: _tab.index == 0
+      floatingActionButton: tab.index == 0
           ? FloatingActionButton.extended(
               onPressed: _showAddBooking,
               backgroundColor: AppColors.accent,
@@ -715,8 +743,13 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           _buildTabSelector(),
           Expanded(
             child: TabBarView(
-              controller: _tab,
-              children: [_buildReservasi(), _buildHistory()],
+              controller: tab,
+              children: [
+                _buildReservasi(),
+                _buildHistory(),
+                if (_isPrivileged) const BookingStatsScreen(),
+                if (_isPrivileged) const RestaurantClosureScreen(),
+              ],
             ),
           ),
         ],
@@ -724,8 +757,18 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
     );
   }
 
-  // ── Pill-style tab selector (Reservations / History) ────────────────────
+  // ── Pill-style tab selector — Reservations / History, plus Stats /
+  // Closed Days for superadmin & manager (folded in from what used to be
+  // separate sidebar entries/routes). >2 tabs switches to a horizontally
+  // scrollable row of fixed-width pills so 4 labels don't get squeezed
+  // on narrow screens; the 2-tab case keeps its original full-width look.
   Widget _buildTabSelector() {
+    final labels = [
+      'Reservations',
+      'History',
+      if (_isPrivileged) 'Stats',
+      if (_isPrivileged) 'Closed Days',
+    ];
     return Container(
       color: AppColors.surface,
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -735,36 +778,48 @@ class _BookingScreenState extends ConsumerState<BookingScreen>
           color: AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm + 2),
         ),
-        child: Row(
-          children: [
-            _tabPill('Reservations', 0),
-            _tabPill('History', 1),
-          ],
-        ),
+        child: labels.length > 2
+            ? SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < labels.length; i++)
+                      Padding(
+                        padding: EdgeInsets.only(right: i == labels.length - 1 ? 0 : 4),
+                        child: _tabPill(labels[i], i, fixedWidth: true),
+                      ),
+                  ],
+                ),
+              )
+            : Row(
+                children: [
+                  for (var i = 0; i < labels.length; i++) _tabPill(labels[i], i),
+                ],
+              ),
       ),
     );
   }
 
-  Widget _tabPill(String label, int index) {
-    final selected = _tab.index == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _tab.animateTo(index)),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          ),
-          alignment: Alignment.center,
-          child: Text(label,
-              style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : AppColors.textSecondary)),
-        ),
+  Widget _tabPill(String label, int index, {bool fixedWidth = false}) {
+    final selected = _tab!.index == index;
+    final pill = AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: EdgeInsets.symmetric(vertical: 9, horizontal: fixedWidth ? 18 : 0),
+      decoration: BoxDecoration(
+        color: selected ? AppColors.primary : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
       ),
+      alignment: Alignment.center,
+      child: Text(label,
+          style: TextStyle(
+              fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : AppColors.textSecondary)),
     );
+    final tappable = GestureDetector(
+      onTap: () => setState(() => _tab!.animateTo(index)),
+      child: pill,
+    );
+    return fixedWidth ? tappable : Expanded(child: tappable);
   }
 
 

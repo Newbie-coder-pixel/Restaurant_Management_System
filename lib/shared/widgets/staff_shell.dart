@@ -44,9 +44,11 @@ const _allStaffRoles = {
 // Mirrors AppDrawer's _navItems (and StaffHomeScreen's portal tiles) so the
 // sidebar, drawer, and Service Portal grid never drift out of sync again —
 // gated by role directly rather than StaffRole.accessFeatures, since a few
-// of these routes (Closed Days, Operating Expense, Costing & COGS) have no
-// corresponding accessFeatures entry and are gated by role identity alone
-// in the router's _roleCanAccessRoute.
+// of these routes (Operating Expense, Costing & COGS) have no corresponding
+// accessFeatures entry and are gated by role identity alone in the router's
+// _roleCanAccessRoute. Reservation Stats / Closed Days used to be separate
+// entries here — they're now tabs inside the Reservations screen instead
+// (see BookingScreen), gated by role there rather than by a standalone route.
 const staffShellSidebarItems = [
   StaffShellSidebarItem(
     label: 'Floor Plan', icon: Icons.table_restaurant_rounded,
@@ -56,14 +58,6 @@ const staffShellSidebarItems = [
     label: 'Reservations', icon: Icons.calendar_month_rounded,
     route: AppRoutes.booking,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter}),
-  StaffShellSidebarItem(
-    label: 'Reservation Stats', icon: Icons.insert_chart_outlined_rounded,
-    route: AppRoutes.bookingStats,
-    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
-  StaffShellSidebarItem(
-    label: 'Closed Days', icon: Icons.event_busy_rounded,
-    route: AppRoutes.closures,
-    allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
     label: 'Orders', icon: Icons.receipt_long_rounded,
     route: AppRoutes.order,

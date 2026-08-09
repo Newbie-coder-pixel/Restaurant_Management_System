@@ -57,18 +57,6 @@ const _navItems = [
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
   ),
   _NavItem(
-    label: 'Reservation Statistics',
-    icon: Icons.insert_chart_outlined_rounded,
-    route: AppRoutes.bookingStats,
-    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-  ),
-  _NavItem(
-  label: 'Closed Days',
-  icon: Icons.event_busy_rounded,
-  route: AppRoutes.closures,
-  allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-  ),
-  _NavItem(
     label: 'Order',
     icon: Icons.receipt_long_rounded,
     route: AppRoutes.order,

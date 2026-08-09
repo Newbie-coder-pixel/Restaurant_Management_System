@@ -7,6 +7,7 @@ import '../../../shared/models/order_event_model.dart';
 import '../../../shared/providers/order_events_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/order_sound_service.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/widgets/staff_shell.dart';
 import '../../../core/models/staff_role.dart';
@@ -91,6 +92,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             event.oldValue == null;
         if (isNewOrder && mounted) {
           setState(() => _newOrderCount++);
+          OrderSoundService.playNewOrder();
         }
       });
     });

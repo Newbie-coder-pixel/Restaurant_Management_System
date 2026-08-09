@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../core/models/staff_role.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/widgets/staff_shell.dart';
 
 // Simple model for a branch
 class _Branch {
@@ -15,6 +13,10 @@ class _Branch {
   const _Branch({required this.id, required this.name});
 }
 
+/// Embedded as the "Closed Days" tab inside BookingScreen (see
+/// booking_screen.dart) rather than its own routed screen — no
+/// StaffShell/Scaffold of its own, just the content, with a title + refresh
+/// header row since it no longer owns a top bar to put a refresh button in.
 class RestaurantClosureScreen extends ConsumerStatefulWidget {
   const RestaurantClosureScreen({super.key});
 
@@ -275,10 +277,66 @@ class _RestaurantClosureScreenState
 
   @override
   Widget build(BuildContext context) {
-    return StaffShell(
-      pageTitle: 'Restaurant Closures',
-      activeRoute: AppRoutes.closures,
-      topBarActions: [
+    return _isLoading
+        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+        : RefreshIndicator(
+            onRefresh: _loadClosures,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  LayoutBuilder(builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 980;
+                    final left = _buildCalendar();
+                    final right = _buildAddClosurePanel();
+
+                    if (isWide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 2, child: left),
+                          const SizedBox(width: 20),
+                          SizedBox(width: 340, child: right),
+                        ],
+                      );
+                    }
+                    return Column(children: [left, const SizedBox(height: 20), right]);
+                  }),
+                  const SizedBox(height: 24),
+                  _buildUpcomingList(),
+                ],
+              ),
+            ),
+          );
+  }
+
+  // ── Page header — title + refresh/saving indicator ─────────────────────
+  Widget _buildHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Restaurant Closures',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary)),
+              SizedBox(height: 4),
+              Text('Block dates the restaurant is closed for bookings.',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
         if (_isSaving)
           const Padding(
             padding: EdgeInsets.only(right: 12),
@@ -294,38 +352,6 @@ class _RestaurantClosureScreenState
             onPressed: _loadClosures,
           ),
       ],
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : RefreshIndicator(
-              onRefresh: _loadClosures,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    LayoutBuilder(builder: (context, constraints) {
-                      final isWide = constraints.maxWidth >= 980;
-                      final left = _buildCalendar();
-                      final right = _buildAddClosurePanel();
-
-                      if (isWide) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 2, child: left),
-                            const SizedBox(width: 20),
-                            SizedBox(width: 340, child: right),
-                          ],
-                        );
-                      }
-                      return Column(children: [left, const SizedBox(height: 20), right]);
-                    }),
-                    const SizedBox(height: 24),
-                    _buildUpcomingList(),
-                  ],
-                ),
-              ),
-            ),
     );
   }
 

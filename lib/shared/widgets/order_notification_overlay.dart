@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/services/order_sound_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/customer/providers/active_orders_provider.dart';
@@ -47,6 +48,7 @@ class _OrderNotificationOverlayState
     _lastShownEventId = event.id;
     _dismissTimer?.cancel();
     setState(() => _visible = event);
+    OrderSoundService.playNewOrder();
     _dismissTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) setState(() => _visible = null);
     });

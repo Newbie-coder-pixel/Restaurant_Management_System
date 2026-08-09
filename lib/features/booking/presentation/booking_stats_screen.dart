@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
-import '../../../shared/widgets/staff_shell.dart';
 
+/// Embedded as the "Stats" tab inside BookingScreen (see booking_screen.dart)
+/// rather than its own routed screen — no StaffShell/Scaffold of its own,
+/// just the content, with the branch filter + refresh folded into its own
+/// header row since it no longer owns a top bar to put them in.
 class BookingStatsScreen extends ConsumerStatefulWidget {
   const BookingStatsScreen({super.key});
 
@@ -194,14 +196,78 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return StaffShell(
-      pageTitle: 'Booking Stats',
-      activeRoute: AppRoutes.reports,
-      topBarActions: [
-        // ── BRANCH FILTER DROPDOWN (superadmin only) ──
+    return _isLoading
+        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+        : RefreshIndicator(
+            onRefresh: _loadStats,
+            color: AppColors.primary,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 900;
+                return ListView(
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 24),
+                    _buildPeriodSelector(),
+                    const SizedBox(height: 20),
+                    _buildSummaryCards(isWide),
+                    const SizedBox(height: 20),
+                    if (isWide)
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(flex: 2, child: _buildPeakHoursChart()),
+                            const SizedBox(width: 20),
+                            Expanded(flex: 1, child: _buildStatusBreakdown()),
+                          ],
+                        ),
+                      )
+                    else ...[
+                      _buildPeakHoursChart(),
+                      const SizedBox(height: 20),
+                      _buildStatusBreakdown(),
+                    ],
+                    const SizedBox(height: 20),
+                    _buildSourceBreakdown(),
+                    const SizedBox(height: 20),
+                    _buildDailyTrend(),
+                    const SizedBox(height: 24),
+                  ],
+                );
+              },
+            ),
+          );
+  }
+
+  // ── Page header — title + branch filter (superadmin only) + refresh ────
+  Widget _buildHeader() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Booking Stats',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary)),
+              SizedBox(height: 4),
+              Text('Overview of reservation performance.',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
         if (_isSuperAdmin)
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: 8),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String?>(
                 value: _selectedBranchId,
@@ -231,73 +297,10 @@ class _BookingStatsScreenState extends ConsumerState<BookingStatsScreen> {
             ),
           ),
         IconButton(
+          tooltip: 'Refresh',
           icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
           onPressed: _loadStats,
         ),
-      ],
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : RefreshIndicator(
-              onRefresh: _loadStats,
-              color: AppColors.primary,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 900;
-                  return ListView(
-                    padding: const EdgeInsets.all(24),
-                    children: [
-                      _buildHeader(),
-                      const SizedBox(height: 24),
-                      _buildPeriodSelector(),
-                      const SizedBox(height: 20),
-                      _buildSummaryCards(isWide),
-                      const SizedBox(height: 20),
-                      if (isWide)
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(flex: 2, child: _buildPeakHoursChart()),
-                              const SizedBox(width: 20),
-                              Expanded(flex: 1, child: _buildStatusBreakdown()),
-                            ],
-                          ),
-                        )
-                      else ...[
-                        _buildPeakHoursChart(),
-                        const SizedBox(height: 20),
-                        _buildStatusBreakdown(),
-                      ],
-                      const SizedBox(height: 20),
-                      _buildSourceBreakdown(),
-                      const SizedBox(height: 20),
-                      _buildDailyTrend(),
-                      const SizedBox(height: 24),
-                    ],
-                  );
-                },
-              ),
-            ),
-    );
-  }
-
-  // ── Page header ─────────────────────────────────────────
-  Widget _buildHeader() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Booking Stats',
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary)),
-        SizedBox(height: 4),
-        Text('Overview of reservation performance.',
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: AppColors.textSecondary)),
       ],
     );
   }

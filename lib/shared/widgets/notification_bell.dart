@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../models/order_event_model.dart';
 import '../providers/order_events_provider.dart';
 
@@ -89,7 +90,7 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
       icon: Badge(
         isLabelVisible: unread > 0,
         label: Text(unread > 9 ? '9+' : '$unread'),
-        child: const Icon(Icons.notifications_rounded, color: Colors.white),
+        child: const Icon(Icons.notifications_rounded, color: AppColors.textSecondary),
       ),
     );
   }

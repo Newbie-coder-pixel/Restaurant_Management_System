@@ -38,8 +38,6 @@ abstract class AppRoutes {
   static const home           = '/home';
   static const tables         = '/tables';
   static const booking        = '/booking';
-  static const bookingStats   = '/booking-stats';
-  static const closures       = '/closures';
   static const order          = '/order';
   static const cashier        = '/cashier';
   static const kitchen        = '/kitchen';
@@ -115,7 +113,6 @@ bool _roleCanAccessRoute(StaffRole role, String path) {
     case AppRoutes.tables:
       return has('Table Management');
     case AppRoutes.booking:
-    case AppRoutes.bookingStats:
       return has('Reservations');
     case AppRoutes.order:
       return has('Order');
@@ -138,7 +135,6 @@ bool _roleCanAccessRoute(StaffRole role, String path) {
       return has('Multi Branch');
     // Sensitive financial/administrative features — manager & superadmin only,
     // even though there's no dedicated entry in StaffRole.accessFeatures.
-    case AppRoutes.closures:
     case AppRoutes.costing:
     case AppRoutes.operatingExpense:
       return role == StaffRole.manager;
@@ -365,12 +361,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.home,         builder: (_, __) => const StaffHomeScreen()),
       GoRoute(path: AppRoutes.tables,       builder: (_, __) => const TableScreen()),
       GoRoute(path: AppRoutes.booking,      builder: (_, __) => const BookingScreen()),
-      GoRoute(path: AppRoutes.bookingStats, builder: (_, __) => const BookingStatsScreen()),
       GoRoute(path: AppRoutes.order,        builder: (_, __) => const OrderScreen()),
       GoRoute(path: AppRoutes.cashier,      builder: (_, __) => const CashierScreen()),
       GoRoute(path: AppRoutes.kitchen,      builder: (_, __) => const KDSScreen()),
       GoRoute(path: AppRoutes.menu,         builder: (_, __) => const MenuScreen()),
-      GoRoute(path: AppRoutes.closures,     builder: (_, __) => const RestaurantClosureScreen()),
       GoRoute(path: AppRoutes.inventory,    builder: (_, __) => const InventoryScreen()),
       GoRoute(path: AppRoutes.staff,        builder: (_, __) => const StaffScreen()),
       GoRoute(path: AppRoutes.reports,      builder: (_, __) => const ReportsScreen()),
