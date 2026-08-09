@@ -17,7 +17,7 @@ class _PortalTile {
   final String subtitle;
   final IconData icon;
   final String route;
-  final String requiredFeature;
+  final Set<StaffRole> allowedRoles;
   final Color background;
   final Color foreground;
 
@@ -26,11 +26,20 @@ class _PortalTile {
     required this.subtitle,
     required this.icon,
     required this.route,
-    required this.requiredFeature,
+    required this.allowedRoles,
     required this.background,
     required this.foreground,
   });
 }
+
+const _allStaffRoles = {
+  StaffRole.superadmin,
+  StaffRole.manager,
+  StaffRole.cashier,
+  StaffRole.waiter,
+  StaffRole.kitchen,
+  StaffRole.host,
+};
 
 final _portalTiles = [
   _PortalTile(
@@ -38,16 +47,43 @@ final _portalTiles = [
     subtitle: 'FRONT OF HOUSE',
     icon: Icons.table_restaurant_rounded,
     route: AppRoutes.tables,
-    requiredFeature: 'Table Management',
+    allowedRoles: const {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
     background: AppColors.accent.withValues(alpha: 0.15),
     foreground: AppColors.accent,
+  ),
+  _PortalTile(
+    label: 'Reservations',
+    subtitle: 'BOOKINGS',
+    icon: Icons.calendar_month_rounded,
+    route: AppRoutes.booking,
+    allowedRoles: const {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
+    background: AppColors.reserved.withValues(alpha: 0.15),
+    foreground: AppColors.reserved,
+  ),
+  const _PortalTile(
+    label: 'Reservation Stats',
+    subtitle: 'BOOKING INSIGHTS',
+    icon: Icons.insert_chart_outlined_rounded,
+    route: AppRoutes.bookingStats,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
+    background: AppColors.surfaceVariant,
+    foreground: AppColors.textSecondary,
+  ),
+  const _PortalTile(
+    label: 'Closed Days',
+    subtitle: 'RESTAURANT CLOSURES',
+    icon: Icons.event_busy_rounded,
+    route: AppRoutes.closures,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
+    background: AppColors.surfaceVariant,
+    foreground: AppColors.textSecondary,
   ),
   _PortalTile(
     label: 'Orders',
     subtitle: 'ACTIVE TICKETS',
     icon: Icons.receipt_long_rounded,
     route: AppRoutes.order,
-    requiredFeature: 'Order',
+    allowedRoles: const {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier, StaffRole.waiter},
     background: AppColors.primary.withValues(alpha: 0.12),
     foreground: AppColors.primary,
   ),
@@ -56,7 +92,7 @@ final _portalTiles = [
     subtitle: 'KITCHEN DISPLAY',
     icon: Icons.soup_kitchen_rounded,
     route: AppRoutes.kitchen,
-    requiredFeature: 'Kitchen (KDS)',
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.kitchen},
     background: AppColors.primary,
     foreground: Colors.white,
   ),
@@ -65,7 +101,61 @@ final _portalTiles = [
     subtitle: 'PAYMENTS',
     icon: Icons.point_of_sale_rounded,
     route: AppRoutes.cashier,
-    requiredFeature: 'Cashier & Payment',
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier},
+    background: AppColors.surfaceVariant,
+    foreground: AppColors.textSecondary,
+  ),
+  const _PortalTile(
+    label: 'Menu',
+    subtitle: 'DISHES & PRICING',
+    icon: Icons.menu_book_rounded,
+    route: AppRoutes.menu,
+    allowedRoles: _allStaffRoles,
+    background: AppColors.accentOrange,
+    foreground: Colors.white,
+  ),
+  const _PortalTile(
+    label: 'Inventory',
+    subtitle: 'STOCK LEVELS',
+    icon: Icons.inventory_2_rounded,
+    route: AppRoutes.inventory,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
+    background: AppColors.surfaceVariant,
+    foreground: AppColors.textSecondary,
+  ),
+  const _PortalTile(
+    label: 'Staff',
+    subtitle: 'TEAM & SCHEDULES',
+    icon: Icons.people_rounded,
+    route: AppRoutes.staff,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
+    background: AppColors.surfaceVariant,
+    foreground: AppColors.textSecondary,
+  ),
+  const _PortalTile(
+    label: 'Multi Branch',
+    subtitle: 'ALL LOCATIONS',
+    icon: Icons.store_rounded,
+    route: AppRoutes.branches,
+    allowedRoles: {StaffRole.superadmin},
+    background: AppColors.iconAccentBlue,
+    foreground: Colors.white,
+  ),
+  const _PortalTile(
+    label: 'Operating Expense',
+    subtitle: 'COST ALLOCATION',
+    icon: Icons.payments_rounded,
+    route: AppRoutes.operatingExpense,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
+    background: AppColors.surfaceVariant,
+    foreground: AppColors.textSecondary,
+  ),
+  const _PortalTile(
+    label: 'Costing & COGS',
+    subtitle: 'RECIPE COSTING',
+    icon: Icons.calculate_rounded,
+    route: AppRoutes.costing,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
     background: AppColors.surfaceVariant,
     foreground: AppColors.textSecondary,
   ),
@@ -74,15 +164,16 @@ final _portalTiles = [
     subtitle: 'DAILY INSIGHTS',
     icon: Icons.bar_chart_rounded,
     route: AppRoutes.reports,
-    requiredFeature: 'Reports & Analytics',
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager},
     background: AppColors.surfaceVariant,
     foreground: AppColors.textSecondary,
   ),
 ];
 
 /// Landing hub shown to every staff role right after login. Tiles are
-/// filtered against [StaffRole.accessFeatures] — a role with access to only
-/// one of the five modules here (e.g. kitchen) still lands on this screen,
+/// filtered against each tile's [_PortalTile.allowedRoles], mirroring the
+/// role gating in AppDrawer and the router's _roleCanAccessRoute — a role
+/// with access to only one module (e.g. kitchen) still lands on this screen,
 /// just sees a single tile, rather than being redirected straight past it.
 /// See _defaultRouteForRole in app_router.dart.
 class StaffHomeScreen extends ConsumerWidget {
@@ -92,9 +183,7 @@ class StaffHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final staff = ref.watch(currentStaffProvider);
     final role = staff?.role ?? StaffRole.waiter;
-    final tiles = _portalTiles
-        .where((t) => role == StaffRole.superadmin || role.accessFeatures.contains(t.requiredFeature))
-        .toList();
+    final tiles = _portalTiles.where((t) => t.allowedRoles.contains(role)).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
