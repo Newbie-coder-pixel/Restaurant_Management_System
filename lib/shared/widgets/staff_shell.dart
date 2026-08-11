@@ -165,7 +165,12 @@ class _StaffShellState extends ConsumerState<StaffShell> {
     final isWide = MediaQuery.of(context).size.width >= kStaffShellSidebarBreakpoint;
 
     return Scaffold(
-      drawer: const AppDrawer(),
+      // Only attach the drawer on narrow layouts — on wide layouts the
+      // persistent sidebar below already covers navigation, and leaving
+      // the drawer attached let it be opened (via the settings button)
+      // as an overlay on top of that sidebar, producing a broken-looking
+      // double-sidebar overlap.
+      drawer: isWide ? null : const AppDrawer(),
       backgroundColor: AppColors.background,
       floatingActionButton: widget.floatingActionButton,
       body: SafeArea(
@@ -394,13 +399,17 @@ class _StaffShellState extends ConsumerState<StaffShell> {
             const SizedBox(width: 12),
           ],
           if (staff?.branchId != null) NotificationBell(branchId: staff!.branchId!),
-          Builder(
-            builder: (ctx) => IconButton(
-              icon: const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
-              tooltip: 'Menu',
-              onPressed: () => Scaffold.of(ctx).openDrawer(),
+          // Only relevant on narrow layouts — on wide layouts the persistent
+          // sidebar already exposes navigation, and no drawer is attached
+          // to the Scaffold to open here (see the `drawer:` guard above).
+          if (!isWide)
+            Builder(
+              builder: (ctx) => IconButton(
+                icon: const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
+                tooltip: 'Menu',
+                onPressed: () => Scaffold.of(ctx).openDrawer(),
+              ),
             ),
-          ),
         ],
       ),
     );
