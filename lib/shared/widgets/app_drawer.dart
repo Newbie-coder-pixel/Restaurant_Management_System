@@ -102,13 +102,13 @@ const _navItems = [
     // Operating Expense is filled in first because Costing & COGS needs the
     // operating expense allocation per portion to calculate accurate COGS.
     label: 'Operating Expense',
-    icon: Icons.bar_chart_rounded,
+    icon: Icons.payments_rounded,
     route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
     label: 'Costing & COGS',
-    icon: Icons.receipt_long_rounded,
+    icon: Icons.request_quote_rounded,
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),

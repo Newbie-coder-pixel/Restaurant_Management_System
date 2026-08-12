@@ -102,14 +102,25 @@ class _InventoryScreenContentState
             style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
               Navigator.pop(context);
-              await ref.read(inventoryNotifierProvider.notifier).rolloverDaily();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Rollover successful'),
-                    backgroundColor: AppColors.available,
-                  ),
-                );
+              try {
+                await ref.read(inventoryNotifierProvider.notifier).rolloverDaily();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Rollover successful'),
+                      backgroundColor: AppColors.available,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Rollover failed: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Rollover'),
