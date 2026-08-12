@@ -246,7 +246,15 @@ class _StaffShellState extends ConsumerState<StaffShell> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               children: items.map((item) {
                 final isActive = widget.activeRoute == item.route;
+                // Keyed by route: `items` is filtered by role, and the role
+                // resolves asynchronously (defaults to waiter's shorter list
+                // until currentStaffProvider loads), so the same list index
+                // can hold a different item across rebuilds. Without a key,
+                // Flutter updates the old Element in place instead of
+                // replacing it, which left some icons stuck showing a
+                // previous item's glyph (or blank) after the role list grew.
                 return Container(
+                  key: ValueKey(item.route),
                   margin: const EdgeInsets.only(bottom: 4),
                   decoration: BoxDecoration(
                     color: isActive ? AppColors.accent : Colors.transparent,
