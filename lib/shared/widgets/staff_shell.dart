@@ -212,11 +212,13 @@ class _StaffShellState extends ConsumerState<StaffShell> {
                   width: 44, height: 44,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.12),
+                    color: AppColors.accent,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.dashboard_rounded,
-                    color: AppColors.accent, size: 24),
+                  child: const Text('R',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 20,
+                      fontWeight: FontWeight.w800, color: Colors.white)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

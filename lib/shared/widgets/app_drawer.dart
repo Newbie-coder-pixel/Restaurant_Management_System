@@ -128,8 +128,11 @@ class AppDrawer extends ConsumerWidget {
                       color: AppColors.accent,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.restaurant_menu,
-                        color: Colors.white, size: 26),
+                    alignment: Alignment.center,
+                    child: const Text('R',
+                        style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 22,
+                          fontWeight: FontWeight.w800, color: Colors.white)),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
