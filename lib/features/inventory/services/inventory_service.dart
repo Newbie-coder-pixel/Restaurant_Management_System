@@ -14,6 +14,13 @@ class InventoryService {
     required String branchId,
     DateTime? date,
   }) async {
+    // branchId is empty for a beat while the staff/branch record is still
+    // loading (e.g. right after a hard refresh) — .eq('branch_id', '')
+    // against a uuid column is rejected by Postgres with 22P02 ("invalid
+    // input syntax for type uuid"), surfacing as an HTTP 400. Same race
+    // already seen (and fixed) on the Multi-Branch Overview screen.
+    if (branchId.isEmpty) return [];
+
     final targetDate = date ?? DateTime.now();
     final dateStr = targetDate.toIso8601String().split('T').first;
 
@@ -22,8 +29,10 @@ class InventoryService {
         .select()
         .eq('branch_id', branchId)
         .eq('date', dateStr)
-        .order('category')
-        .order('name');
+        // ✅ FIX: PostgrestTransformBuilder.order() defaults `ascending` to
+        // false, so these were silently sorting Z→A instead of A→Z.
+        .order('category', ascending: true)
+        .order('name', ascending: true);
 
     return (response as List)
         .map((e) => InventoryItem.fromMap(e as Map<String, dynamic>))
@@ -34,6 +43,11 @@ class InventoryService {
     required String branchId,
     DateTime? date,
   }) {
+    // Same empty-branchId guard as fetchInventoryItems above — an empty
+    // filter here would 400 the realtime stream's fallback fetch and tear
+    // down its underlying controller.
+    if (branchId.isEmpty) return Stream.value(const []);
+
     final dateStr =
         (date ?? DateTime.now()).toIso8601String().split('T').first;
 
@@ -41,7 +55,9 @@ class InventoryService {
         .from('inventory_items')
         .stream(primaryKey: ['id'])
         .eq('branch_id', branchId)
-        .order('name')
+        // ✅ FIX: SupabaseStreamBuilder.order() also defaults `ascending`
+        // to false — same silent Z→A sort bug as fetchInventoryItems.
+        .order('name', ascending: true)
         .map((rows) => rows
             .where((r) => r['date'] == dateStr)
             .map((e) => InventoryItem.fromMap(e))
@@ -49,6 +65,7 @@ class InventoryService {
   }
 
   Future<List<InventoryItem>> fetchLowStockItems(String branchId) async {
+    if (branchId.isEmpty) return [];
     final dateStr = DateTime.now().toIso8601String().split('T').first;
     final response = await _client
         .from('inventory_items')
