@@ -159,6 +159,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
           controller: _scrollController,
           slivers: [
             SliverToBoxAdapter(child: _buildTopNav(cart)),
+            SliverToBoxAdapter(child: _buildBranchBar()),
             SliverToBoxAdapter(child: _buildSearchBar()),
             SliverToBoxAdapter(child: _buildCategoryTabs()),
             if (featured != null)
@@ -250,7 +251,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
             onTap: () =>
                 context.canPop() ? context.pop() : context.go('/customer'),
             child: const Text(
-              'Pusaka',
+              'Cita Rasa',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,
@@ -279,8 +280,8 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                 ),
                 const SizedBox(width: 24),
                 _NavLink(
-                  label: 'Our Story',
-                  onTap: () => context.go('/customer'),
+                  label: 'Reservations',
+                  onTap: () => context.go('/customer?tab=1'),
                 ),
               ],
             ),
@@ -323,6 +324,40 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
                   ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Shown once the branch resolves — since "Menu" on the landing page now
+  // auto-picks a branch instead of asking, customers need to see (and be
+  // able to change) which branch they're actually ordering from.
+  Widget _buildBranchBar() {
+    if (_branchName.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Row(
+        children: [
+          const Icon(Icons.storefront_outlined,
+              size: 15, color: AppColors.textHint),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text('Ordering from $_branchName',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12.5,
+                    color: AppColors.textSecondary)),
+          ),
+          GestureDetector(
+            onTap: () => context.go('/customer'),
+            child: const Text('Change',
+                style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary)),
           ),
         ],
       ),

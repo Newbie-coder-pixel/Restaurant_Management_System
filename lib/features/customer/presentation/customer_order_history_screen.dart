@@ -191,7 +191,7 @@ class _CustomerOrderHistoryScreenState
     router.go('/customer/checkout');
   }
 
-  // ── TOP BAR (Pusaka header, shared visual language with other customer screens) ──
+  // ── TOP BAR (Cita Rasa header, shared visual language with other customer screens) ──
   Widget _buildTopBar() {
     return Container(
       decoration: const BoxDecoration(
@@ -204,7 +204,7 @@ class _CustomerOrderHistoryScreenState
           GestureDetector(
             onTap: () => context.go('/customer'),
             child: const Text(
-              'Pusaka',
+              'Cita Rasa',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,
@@ -221,7 +221,7 @@ class _CustomerOrderHistoryScreenState
                 const SizedBox(width: 24),
                 _NavLink(label: 'Locations', onTap: () => context.go('/customer')),
                 const SizedBox(width: 24),
-                _NavLink(label: 'Our Story', onTap: () => context.go('/customer')),
+                _NavLink(label: 'Reservations', onTap: () => context.go('/customer?tab=1')),
               ],
             ),
           ),

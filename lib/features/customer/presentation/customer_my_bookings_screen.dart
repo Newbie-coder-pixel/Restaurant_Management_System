@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/heritage_illustrations.dart';
 
 // ── User's bookings provider — JOIN branches ───────────────────────
 final _refreshTriggerProvider = StateProvider<int>((ref) => 0);
@@ -324,7 +325,7 @@ class _CustomerMyBookingsScreenState
     );
   }
 
-  // ── TOP BAR (Pusaka header, shared visual language with other customer screens) ──
+  // ── TOP BAR (Cita Rasa header, shared visual language with other customer screens) ──
   Widget _buildTopBar() {
     return Container(
       decoration: const BoxDecoration(
@@ -337,7 +338,7 @@ class _CustomerMyBookingsScreenState
           GestureDetector(
             onTap: () => context.go('/customer'),
             child: const Text(
-              'Pusaka',
+              'Cita Rasa',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,
@@ -358,8 +359,8 @@ class _CustomerMyBookingsScreenState
                 ),
                 const SizedBox(width: 24),
                 _NavLink(
-                  label: 'Our Story',
-                  onTap: () => context.go('/customer'),
+                  label: 'Reservations',
+                  onTap: () {},
                 ),
               ],
             ),
@@ -820,7 +821,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                             child: ElevatedButton.icon(
                               onPressed: () => launchUrl(
                                 _googleCalendarUrl(
-                                  title: 'Reservation at Pusaka'
+                                  title: 'Reservation at Cita Rasa'
                                       '${branchName != null ? ' – $branchName' : ''}',
                                   details: 'Table for $_guestCount guest(s).'
                                       '${confirmationCode != null ? ' Confirmation #$confirmationCode.' : ''}',
@@ -1090,7 +1091,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             const Text(
               'Experience the warmth of Modern Indonesian Heritage. Please '
               'provide your details below to secure your dining experience '
-              'at Pusaka.',
+              'at Cita Rasa.',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 15,
@@ -1107,11 +1108,8 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
                 alignment: Alignment.center,
-                child: const Icon(
-                  Icons.restaurant_outlined,
-                  size: 64,
-                  color: AppColors.textHint,
-                ),
+                padding: const EdgeInsets.all(28),
+                child: const TableReservationIllustration(),
               ),
             ),
           ],

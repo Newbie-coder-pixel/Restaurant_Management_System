@@ -22,6 +22,7 @@ import 'widgets/cart_bottom_bar.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/responsive_layout.dart';
+import '../../../shared/widgets/heritage_illustrations.dart';
 
 // ── Active branches provider ─────────────────────────────────────────
 final _customerBranchesProvider =
@@ -196,6 +197,35 @@ class _CustomerLandingScreenState
 
   void switchTab(int index) => _tabNotifier.value = index;
 
+  // "Menu" is a shortcut that skips the branch-picker: it auto-resolves a
+  // branch (nearest known, else first active branch) and opens that menu
+  // directly. Ordering is still branch-scoped under the hood (menu items,
+  // stock, and order routing all key off branch_id), so a branch gets
+  // picked either way — this just picks it for the customer instead of
+  // making them tap a location card first. They can still switch branches
+  // explicitly via "Locations", and the auto-picked branch is shown in the
+  // menu screen's top bar so it's never a silent guess.
+  Future<void> _openMenuDirectly() async {
+    final nearest = ref.read(_nearestBranchProvider);
+    if (nearest is _NearestLoaded) {
+      if (mounted) context.push('/customer/menu/${nearest.branch['id']}');
+      return;
+    }
+
+    final cached = ref.read(_customerBranchesProvider).valueOrNull;
+    final List<Map<String, dynamic>> branches =
+        cached ?? await ref.read(_customerBranchesProvider.future);
+
+    if (!mounted) return;
+    if (branches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No active branches available yet')),
+      );
+      return;
+    }
+    context.push('/customer/menu/${branches.first['id']}');
+  }
+
   @override
   Widget build(BuildContext context) {
     final userAsync = ref.watch(customerUserProvider);
@@ -327,7 +357,7 @@ class _CustomerLandingScreenState
               switchTab(0);
               _homeTabKey.currentState?.scrollToTop();
             },
-            child: const Text('Pusaka',
+            child: const Text('Cita Rasa',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 22,
@@ -340,19 +370,17 @@ class _CustomerLandingScreenState
                 ? Row(children: [
                     _NavLink(
                         label: 'Menu',
-                        onTap: () =>
-                            _homeTabKey.currentState?.scrollToLocations()),
+                        active: true,
+                        onTap: _openMenuDirectly),
                     const SizedBox(width: 24),
                     _NavLink(
                         label: 'Locations',
-                        active: true,
                         onTap: () =>
                             _homeTabKey.currentState?.scrollToLocations()),
                     const SizedBox(width: 24),
                     _NavLink(
-                        label: 'Our Story',
-                        onTap: () =>
-                            _homeTabKey.currentState?.scrollToTop()),
+                        label: 'Reservations',
+                        onTap: () => switchTab(1)),
                   ])
                 : const SizedBox.shrink(),
           ),
@@ -399,7 +427,7 @@ class _CustomerLandingScreenState
   Widget _buildDrawer(User user) {
     final displayName = _displayName(user);
     final firstName = displayName.split(' ').first;
-    final initial = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'P';
+    final initial = firstName.isNotEmpty ? firstName[0].toUpperCase() : 'U';
     final avatarUrl = _avatarUrl(user);
 
     Widget item(IconData icon, String label, int tabIndex) {
@@ -549,7 +577,7 @@ class _CustomerLandingScreenState
         Visibility(
           visible: _tab == 0,
           maintainState: true,
-          child: _HomeTab(key: _homeTabKey),
+          child: _HomeTab(key: _homeTabKey, onExploreMenu: _openMenuDirectly),
         ),
         Visibility(
           visible: _tab == 1,
@@ -951,7 +979,8 @@ class _EmbeddedOrderTrackerState extends State<_EmbeddedOrderTracker> {
 // HOME TAB
 // ════════════════════════════════════════════
 class _HomeTab extends ConsumerStatefulWidget {
-  const _HomeTab({super.key});
+  final VoidCallback onExploreMenu;
+  const _HomeTab({super.key, required this.onExploreMenu});
 
   @override
   ConsumerState<_HomeTab> createState() => _HomeTabState();
@@ -1095,7 +1124,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Pusaka',
+          const Text('Cita Rasa',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 44,
@@ -1112,21 +1141,41 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   color: AppColors.textSecondary,
                   height: 1.6)),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: scrollToLocations,
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                elevation: 0),
-            child: const Text('Explore Menu',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700)),
+          Row(
+            children: [
+              ElevatedButton(
+                onPressed: widget.onExploreMenu,
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 28, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    elevation: 0),
+                child: const Text('Explore Menu',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton(
+                onPressed: scrollToLocations,
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8))),
+                child: const Text('Browse Locations',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
           ),
         ],
       );
@@ -1141,8 +1190,8 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               end: Alignment.bottomRight),
         ),
         alignment: Alignment.center,
-        child: Icon(Icons.restaurant_rounded,
-            size: isWide ? 96 : 64, color: Colors.white.withValues(alpha: 0.85)),
+        padding: EdgeInsets.all(isWide ? 32 : 20),
+        child: const HeroPlatterIllustration(),
       );
 
       if (isWide) {

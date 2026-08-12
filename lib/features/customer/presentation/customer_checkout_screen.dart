@@ -553,7 +553,7 @@ class _CustomerCheckoutScreenState
           GestureDetector(
             onTap: () => context.go('/customer'),
             child: const Text(
-              'Pusaka',
+              'Cita Rasa',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,
