@@ -135,7 +135,7 @@ final _portalTiles = [
   const _PortalTile(
     label: 'Costing & COGS',
     subtitle: 'RECIPE COSTING',
-    icon: Icons.calculate_rounded,
+    icon: Icons.request_quote_rounded,
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
     background: AppColors.surfaceVariant,
