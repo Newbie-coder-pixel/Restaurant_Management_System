@@ -487,7 +487,7 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
           crossAxisCount: crossAxisCount,
           mainAxisSpacing: 14,
           crossAxisSpacing: 14,
-          childAspectRatio: 0.98,
+          childAspectRatio: 0.72,
         ),
         itemCount: items.length,
         itemBuilder: (_, i) => _menuItemCard(items[i]),
@@ -512,6 +512,14 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(height: 3, color: inCart ? AppColors.primary : AppColors.accentOrange),
+        AspectRatio(
+          aspectRatio: 16 / 10,
+          child: (item.imageUrl != null && item.imageUrl!.isNotEmpty)
+              ? Image.network(item.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _MenuCardMonogram(name: item.name))
+              : _MenuCardMonogram(name: item.name),
+        ),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -876,4 +884,22 @@ class _CartEntry {
   int qty;
   String notes;
   _CartEntry({required this.qty, required this.notes});
+}
+
+class _MenuCardMonogram extends StatelessWidget {
+  final String name;
+  const _MenuCardMonogram({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.surfaceVariant,
+      alignment: Alignment.center,
+      child: Text(
+        name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?',
+        style: const TextStyle(
+          fontFamily: 'Poppins', fontSize: 28,
+          fontWeight: FontWeight.w800, color: AppColors.textHint)),
+    );
+  }
 }

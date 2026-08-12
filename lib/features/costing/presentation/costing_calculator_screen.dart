@@ -613,6 +613,20 @@ class _CalculatorTab extends ConsumerWidget {
   }
 }
 
+class _RecipeMonogram extends StatelessWidget {
+  final String name;
+  const _RecipeMonogram({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?',
+      style: const TextStyle(
+        fontFamily: 'Poppins', fontSize: 26,
+        fontWeight: FontWeight.w800, color: AppColors.primary));
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LEFT COLUMN — Recipe identity + Bill of Materials-style cost breakdown
 // ─────────────────────────────────────────────────────────────────────────────
@@ -660,17 +674,16 @@ class _LeftColumn extends StatelessWidget {
               Container(
                 width: 64, height: 64,
                 alignment: Alignment.center,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                 ),
-                child: Text(
-                  menuNameCtrl.text.trim().isNotEmpty
-                      ? menuNameCtrl.text.trim()[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 26,
-                    fontWeight: FontWeight.w800, color: AppColors.primary)),
+                child: (pickedMenu?.imageUrl != null && pickedMenu!.imageUrl!.isNotEmpty)
+                    ? Image.network(pickedMenu!.imageUrl!,
+                        width: 64, height: 64, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _RecipeMonogram(name: menuNameCtrl.text))
+                    : _RecipeMonogram(name: menuNameCtrl.text),
               ),
               const SizedBox(width: 14),
               Expanded(
