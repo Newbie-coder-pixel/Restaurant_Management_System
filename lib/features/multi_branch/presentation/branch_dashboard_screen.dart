@@ -534,7 +534,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
             ],
           ),
         ),
-        FilledButton.icon(
+        FilledButton(
           onPressed: _navigateToTransferStock,
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.primary,
@@ -542,8 +542,7 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
           ),
-          icon: const Icon(Icons.swap_horiz_rounded, size: 18),
-          label: const Text('TRANSFER STOCK',
+          child: const Text('TRANSFER STOCK',
             style: TextStyle(
               fontFamily: 'Poppins', fontWeight: FontWeight.w800,
               fontSize: 13, letterSpacing: 0.4)),
@@ -578,6 +577,8 @@ class _BranchCard extends StatelessWidget {
     final address = branch['address'] as String?;
     final openStr  = fmtTime(branch['opening_time']);
     final closeStr = fmtTime(branch['closing_time']);
+    final name = branch['name'] as String? ?? '';
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?';
 
     return Container(
       decoration: BoxDecoration(
@@ -605,8 +606,10 @@ class _BranchCard extends StatelessWidget {
                         .withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                   ),
-                  child: Icon(Icons.storefront_rounded,
-                    color: isActive ? AppColors.primary : AppColors.textHint, size: 20),
+                  child: Text(initial,
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800,
+                      color: isActive ? AppColors.primary : AppColors.textHint)),
                 ),
                 const Spacer(),
                 Container(
@@ -685,7 +688,6 @@ class _BranchCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: const RoundedRectangleBorder(),
                   ),
-                  icon: const Icon(Icons.swap_horiz_rounded, size: 16),
                   label: const Text('Transfer',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
