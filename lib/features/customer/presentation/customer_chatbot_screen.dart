@@ -115,7 +115,7 @@ class _CustomerChatbotScreenState
     super.initState();
     // Welcome the customer — same for all modes
     _addBot(
-      'Welcome to Cita Rasa. How can I assist you in exploring our heritage menu today?',
+      'Welcome to Restaurant. How can I assist you in exploring our heritage menu today?',
     );
     _loadBranchData();
   }
@@ -1050,7 +1050,7 @@ IMPORTANT:
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Cita Rasa Guide',
+                  const Text('Restaurant Guide',
                       style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
                           fontSize: 17, fontWeight: FontWeight.w800)),
                   if (subtitle != null)

@@ -433,7 +433,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         children: [
           Column(
             children: [
-              const Text('Cita Rasa', textAlign: TextAlign.center,
+              const Text('Restaurant', textAlign: TextAlign.center,
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 40,
                   fontWeight: FontWeight.w800, color: AppColors.primary,
                   letterSpacing: -0.5)),
@@ -509,7 +509,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            _isSignUp ? 'Already have an account?' : 'New to Cita Rasa?',
+            _isSignUp ? 'Already have an account?' : 'New to Restaurant?',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
               color: AppColors.textSecondary)),
           TextButton(

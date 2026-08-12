@@ -325,7 +325,7 @@ class _CustomerMyBookingsScreenState
     );
   }
 
-  // ── TOP BAR (Cita Rasa header, shared visual language with other customer screens) ──
+  // ── TOP BAR (Restaurant header, shared visual language with other customer screens) ──
   Widget _buildTopBar() {
     return Container(
       decoration: const BoxDecoration(
@@ -338,7 +338,7 @@ class _CustomerMyBookingsScreenState
           GestureDetector(
             onTap: () => context.go('/customer'),
             child: const Text(
-              'Cita Rasa',
+              'Restaurant',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,
@@ -821,7 +821,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                             child: ElevatedButton.icon(
                               onPressed: () => launchUrl(
                                 _googleCalendarUrl(
-                                  title: 'Reservation at Cita Rasa'
+                                  title: 'Reservation at Restaurant'
                                       '${branchName != null ? ' – $branchName' : ''}',
                                   details: 'Table for $_guestCount guest(s).'
                                       '${confirmationCode != null ? ' Confirmation #$confirmationCode.' : ''}',
@@ -1091,7 +1091,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             const Text(
               'Experience the warmth of Modern Indonesian Heritage. Please '
               'provide your details below to secure your dining experience '
-              'at Cita Rasa.',
+              'at Restaurant.',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 15,

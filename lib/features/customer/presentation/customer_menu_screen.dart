@@ -251,7 +251,7 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
             onTap: () =>
                 context.canPop() ? context.pop() : context.go('/customer'),
             child: const Text(
-              'Cita Rasa',
+              'Restaurant',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,

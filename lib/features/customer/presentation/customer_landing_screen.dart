@@ -357,7 +357,7 @@ class _CustomerLandingScreenState
               switchTab(0);
               _homeTabKey.currentState?.scrollToTop();
             },
-            child: const Text('Cita Rasa',
+            child: const Text('Restaurant',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 22,
@@ -1124,7 +1124,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Cita Rasa',
+          const Text('Restaurant',
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 44,

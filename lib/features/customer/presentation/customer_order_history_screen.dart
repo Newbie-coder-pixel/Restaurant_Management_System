@@ -191,7 +191,7 @@ class _CustomerOrderHistoryScreenState
     router.go('/customer/checkout');
   }
 
-  // ── TOP BAR (Cita Rasa header, shared visual language with other customer screens) ──
+  // ── TOP BAR (Restaurant header, shared visual language with other customer screens) ──
   Widget _buildTopBar() {
     return Container(
       decoration: const BoxDecoration(
@@ -204,7 +204,7 @@ class _CustomerOrderHistoryScreenState
           GestureDetector(
             onTap: () => context.go('/customer'),
             child: const Text(
-              'Cita Rasa',
+              'Restaurant',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,
