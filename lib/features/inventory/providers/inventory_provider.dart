@@ -186,12 +186,12 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
 
   Future<void> addItem(InventoryItem item) async {
     await AsyncValue.guard(() => _service.addInventoryItem(item));
-    refresh();
+    await refresh();
   }
 
   Future<void> updateItem(InventoryItem item) async {
     await AsyncValue.guard(() => _service.updateInventoryItem(item));
-    refresh();
+    await refresh();
   }
 
   Future<void> recordPurchase({
@@ -207,7 +207,7 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
       note: note,
       createdBy: userId,
     );
-    refresh();
+    await refresh();
   }
 
   Future<void> recordWaste({
@@ -223,7 +223,7 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
       note: note,
       createdBy: userId,
     );
-    refresh();
+    await refresh();
   }
 
   Future<void> adjustStock({
@@ -239,7 +239,7 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
       reason: reason,
       createdBy: userId,
     );
-    refresh();
+    await refresh();
   }
 
 
@@ -263,12 +263,12 @@ class InventoryNotifier extends AsyncNotifier<List<InventoryItem>> {
       quantity: quantity,
       createdBy: userId,
     );
-    refresh();
+    await refresh();
   }
 
   Future<void> rolloverDaily() async {
     await _service.rolloverDailyStock(_branchId);
-    refresh();
+    await refresh();
   }
 }
 
