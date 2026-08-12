@@ -15,20 +15,14 @@ import '../../auth/providers/auth_provider.dart';
 class _PortalTile {
   final String label;
   final String subtitle;
-  final IconData icon;
   final String route;
   final Set<StaffRole> allowedRoles;
-  final Color background;
-  final Color foreground;
 
   const _PortalTile({
     required this.label,
     required this.subtitle,
-    required this.icon,
     required this.route,
     required this.allowedRoles,
-    required this.background,
-    required this.foreground,
   });
 }
 
@@ -41,114 +35,78 @@ const _allStaffRoles = {
   StaffRole.host,
 };
 
-final _portalTiles = [
+const _portalTiles = [
   _PortalTile(
     label: 'Floor Plan',
     subtitle: 'FRONT OF HOUSE',
-    icon: Icons.table_restaurant_rounded,
     route: AppRoutes.tables,
-    allowedRoles: const {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
-    background: AppColors.accent.withValues(alpha: 0.15),
-    foreground: AppColors.accent,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
   ),
   _PortalTile(
     label: 'Reservations',
     subtitle: 'BOOKINGS',
-    icon: Icons.calendar_month_rounded,
     route: AppRoutes.booking,
-    allowedRoles: const {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
-    background: AppColors.reserved.withValues(alpha: 0.15),
-    foreground: AppColors.reserved,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
   ),
   _PortalTile(
     label: 'Orders',
     subtitle: 'ACTIVE TICKETS',
-    icon: Icons.receipt_long_rounded,
     route: AppRoutes.order,
-    allowedRoles: const {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier, StaffRole.waiter},
-    background: AppColors.primary.withValues(alpha: 0.12),
-    foreground: AppColors.primary,
+    allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier, StaffRole.waiter},
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Kitchen',
     subtitle: 'KITCHEN DISPLAY',
-    icon: Icons.soup_kitchen_rounded,
     route: AppRoutes.kitchen,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.kitchen},
-    background: AppColors.primary,
-    foreground: Colors.white,
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Cashier',
     subtitle: 'PAYMENTS',
-    icon: Icons.point_of_sale_rounded,
     route: AppRoutes.cashier,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier},
-    background: AppColors.surfaceVariant,
-    foreground: AppColors.textSecondary,
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Menu',
     subtitle: 'DISHES & PRICING',
-    icon: Icons.menu_book_rounded,
     route: AppRoutes.menu,
     allowedRoles: _allStaffRoles,
-    background: AppColors.accentOrange,
-    foreground: Colors.white,
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Inventory',
     subtitle: 'STOCK LEVELS',
-    icon: Icons.inventory_2_rounded,
     route: AppRoutes.inventory,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-    background: AppColors.surfaceVariant,
-    foreground: AppColors.textSecondary,
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Staff',
     subtitle: 'TEAM & SCHEDULES',
-    icon: Icons.people_rounded,
     route: AppRoutes.staff,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-    background: AppColors.surfaceVariant,
-    foreground: AppColors.textSecondary,
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Multi Branch',
     subtitle: 'ALL LOCATIONS',
-    icon: Icons.store_rounded,
     route: AppRoutes.branches,
     allowedRoles: {StaffRole.superadmin},
-    background: AppColors.iconAccentBlue,
-    foreground: Colors.white,
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Operating Expense',
     subtitle: 'COST ALLOCATION',
-    icon: Icons.payments_rounded,
     route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-    background: AppColors.surfaceVariant,
-    foreground: AppColors.textSecondary,
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Costing & COGS',
     subtitle: 'RECIPE COSTING',
-    icon: Icons.request_quote_rounded,
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-    background: AppColors.surfaceVariant,
-    foreground: AppColors.textSecondary,
   ),
-  const _PortalTile(
+  _PortalTile(
     label: 'Reports',
     subtitle: 'DAILY INSIGHTS',
-    icon: Icons.bar_chart_rounded,
     route: AppRoutes.reports,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
-    background: AppColors.surfaceVariant,
-    foreground: AppColors.textSecondary,
   ),
 ];
 
@@ -180,9 +138,9 @@ class StaffHomeScreen extends ConsumerWidget {
                   constraints: const BoxConstraints(maxWidth: 1100),
                   child: CustomScrollView(
                     slivers: [
-                      SliverToBoxAdapter(
+                      const SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
+                          padding: EdgeInsets.fromLTRB(24, 40, 24, 32),
                           child: Column(
                             children: [
                               const Text('Service Portal',
@@ -309,21 +267,13 @@ class _PortalCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 64, height: 64,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: tile.background,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              ),
-              child: Icon(tile.icon, size: 30, color: tile.foreground),
-            ),
-            const SizedBox(height: 16),
             Text(tile.label,
+                textAlign: TextAlign.center,
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 17,
                     fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
             const SizedBox(height: 4),
             Text(tile.subtitle,
+                textAlign: TextAlign.center,
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 11,
                     fontWeight: FontWeight.w700, color: AppColors.textSecondary,
                     letterSpacing: 0.6)),

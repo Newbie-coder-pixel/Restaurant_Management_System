@@ -23,11 +23,10 @@ const double kStaffShellSidebarBreakpoint = 900;
 
 class StaffShellSidebarItem {
   final String label;
-  final IconData icon;
   final String route;
   final Set<StaffRole> allowedRoles;
   const StaffShellSidebarItem({
-    required this.label, required this.icon,
+    required this.label,
     required this.route, required this.allowedRoles,
   });
 }
@@ -51,51 +50,51 @@ const _allStaffRoles = {
 // (see BookingScreen), gated by role there rather than by a standalone route.
 const staffShellSidebarItems = [
   StaffShellSidebarItem(
-    label: 'Floor Plan', icon: Icons.table_restaurant_rounded,
+    label: 'Floor Plan',
     route: AppRoutes.tables,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter}),
   StaffShellSidebarItem(
-    label: 'Reservations', icon: Icons.calendar_month_rounded,
+    label: 'Reservations',
     route: AppRoutes.booking,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter}),
   StaffShellSidebarItem(
-    label: 'Orders', icon: Icons.receipt_long_rounded,
+    label: 'Orders',
     route: AppRoutes.order,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier, StaffRole.waiter}),
   StaffShellSidebarItem(
-    label: 'Kitchen', icon: Icons.soup_kitchen_rounded,
+    label: 'Kitchen',
     route: AppRoutes.kitchen,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.kitchen}),
   StaffShellSidebarItem(
-    label: 'Cashier', icon: Icons.point_of_sale_rounded,
+    label: 'Cashier',
     route: AppRoutes.cashier,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier}),
   StaffShellSidebarItem(
-    label: 'Menu Items', icon: Icons.restaurant_menu_rounded,
+    label: 'Menu Items',
     route: AppRoutes.menu,
     allowedRoles: _allStaffRoles),
   StaffShellSidebarItem(
-    label: 'Inventory', icon: Icons.inventory_2_rounded,
+    label: 'Inventory',
     route: AppRoutes.inventory,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
-    label: 'Staff Shift', icon: Icons.people_rounded,
+    label: 'Staff Shift',
     route: AppRoutes.staff,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
-    label: 'Multi Branch', icon: Icons.store_rounded,
+    label: 'Multi Branch',
     route: AppRoutes.branches,
     allowedRoles: {StaffRole.superadmin}),
   StaffShellSidebarItem(
-    label: 'Operating Expense', icon: Icons.payments_rounded,
+    label: 'Operating Expense',
     route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
-    label: 'Costing & COGS', icon: Icons.request_quote_rounded,
+    label: 'Costing & COGS',
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
-    label: 'Reports', icon: Icons.bar_chart_rounded,
+    label: 'Reports',
     route: AppRoutes.reports,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
 ];
@@ -262,8 +261,6 @@ class _StaffShellState extends ConsumerState<StaffShell> {
                   ),
                   child: ListTile(
                     dense: true,
-                    leading: Icon(item.icon, size: 20,
-                      color: isActive ? Colors.white : AppColors.textSecondary),
                     title: Text(item.label,
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 13,
@@ -286,8 +283,6 @@ class _StaffShellState extends ConsumerState<StaffShell> {
               children: [
                 ListTile(
                   dense: true,
-                  leading: const Icon(Icons.support_agent_rounded,
-                    size: 20, color: AppColors.textSecondary),
                   title: const Text('Support',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textPrimary)),
                   onTap: () => showDialog(
@@ -314,8 +309,6 @@ class _StaffShellState extends ConsumerState<StaffShell> {
                 ),
                 ListTile(
                   dense: true,
-                  leading: const Icon(Icons.logout_rounded,
-                    size: 20, color: Colors.redAccent),
                   title: const Text('Logout',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.redAccent)),
                   onTap: _confirmLogout,

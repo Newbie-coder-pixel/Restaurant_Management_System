@@ -10,13 +10,11 @@ import 'notification_bell.dart';
 
 class _NavItem {
   final String label;
-  final IconData icon;
   final String route;
   final Set<StaffRole> allowedRoles;
 
   const _NavItem({
     required this.label,
-    required this.icon,
     required this.route,
     required this.allowedRoles,
   });
@@ -34,67 +32,56 @@ const _allRoles = {
 const _navItems = [
   _NavItem(
     label: 'Service Portal',
-    icon: Icons.dashboard_rounded,
     route: AppRoutes.home,
     allowedRoles: _allRoles,
   ),
   _NavItem(
     label: 'Reports & Analytics',
-    icon: Icons.bar_chart_rounded,
     route: AppRoutes.reports,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
     label: 'Table Management',
-    icon: Icons.table_restaurant_rounded,
     route: AppRoutes.tables,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
   ),
   _NavItem(
     label: 'Reservations',
-    icon: Icons.calendar_month_rounded,
     route: AppRoutes.booking,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.host, StaffRole.waiter},
   ),
   _NavItem(
     label: 'Order',
-    icon: Icons.receipt_long_rounded,
     route: AppRoutes.order,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier, StaffRole.waiter},
   ),
   _NavItem(
     label: 'Cashier & Payment',
-    icon: Icons.point_of_sale_rounded,
     route: AppRoutes.cashier,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.cashier},
   ),
   _NavItem(
     label: 'Kitchen (KDS)',
-    icon: Icons.soup_kitchen_rounded,
     route: AppRoutes.kitchen,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager, StaffRole.kitchen},
   ),
   _NavItem(
     label: 'Menu',
-    icon: Icons.menu_book_rounded,
     route: AppRoutes.menu,
     allowedRoles: _allRoles,
   ),
   _NavItem(
     label: 'Inventory',
-    icon: Icons.inventory_2_rounded,
     route: AppRoutes.inventory,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
     label: 'Staff',
-    icon: Icons.people_rounded,
     route: AppRoutes.staff,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
     label: 'Multi Branch',
-    icon: Icons.store_rounded,
     route: AppRoutes.branches,
     allowedRoles: {StaffRole.superadmin},
   ),
@@ -102,13 +89,11 @@ const _navItems = [
     // Operating Expense is filled in first because Costing & COGS needs the
     // operating expense allocation per portion to calculate accurate COGS.
     label: 'Operating Expense',
-    icon: Icons.payments_rounded,
     route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
   _NavItem(
     label: 'Costing & COGS',
-    icon: Icons.request_quote_rounded,
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager},
   ),
@@ -224,9 +209,6 @@ class AppDrawer extends ConsumerWidget {
                     ),
                     child: ListTile(
                       dense: true,
-                      leading: Icon(item.icon,
-                        size: 22,
-                        color: isActive ? AppColors.accent : Colors.white60),
                       title: Text(item.label,
                         style: TextStyle(
                           fontFamily: 'Poppins',
@@ -253,8 +235,6 @@ class AppDrawer extends ConsumerWidget {
 
             // ── Logout ──
             ListTile(
-              leading: const Icon(Icons.logout_rounded,
-                  color: Colors.redAccent, size: 22),
               title: const Text('Logout',
                 style: TextStyle(
                   fontFamily: 'Poppins',
