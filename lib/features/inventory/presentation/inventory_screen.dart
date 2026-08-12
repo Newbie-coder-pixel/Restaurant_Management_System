@@ -157,6 +157,13 @@ class _InventoryScreenContentState
     return StaffShell(
       pageTitle: 'Inventory Status',
       activeRoute: AppRoutes.inventory,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openAddItem,
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Add Item',
+          style: TextStyle(color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13)),
+      ),
       topBarActions: _buildTopBarActions(),
       body: Column(
         children: [
@@ -372,21 +379,6 @@ class _InventoryScreenContentState
         tooltip: 'Refresh',
         icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
         onPressed: () => ref.read(inventoryNotifierProvider.notifier).refresh(),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(left: 4),
-        child: FilledButton.icon(
-          onPressed: _openAddItem,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
-          ),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add Item',
-            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13)),
-        ),
       ),
     ];
   }

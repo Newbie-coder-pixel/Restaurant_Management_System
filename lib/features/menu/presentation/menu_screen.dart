@@ -137,6 +137,15 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
     return StaffShell(
       pageTitle: 'Menu Items',
       activeRoute: AppRoutes.menu,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openAddMenu,
+        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('ADD MENU ITEM',
+          style: TextStyle(
+            color: Colors.white, fontFamily: 'Poppins',
+            fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.3)),
+      ),
       topBarActions: [
         // ── Branch filter (superadmin only) ──
         if (widget.isSuperAdmin && _branches.isNotEmpty)
@@ -173,23 +182,6 @@ class _MenuScreenContentState extends ConsumerState<_MenuScreenContent> {
           tooltip: 'Refresh',
           icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
           onPressed: () => ref.read(menuProvider.notifier).refresh(),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: FilledButton.icon(
-            onPressed: _openAddMenu,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
-            ),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('ADD MENU ITEM',
-              style: TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w800,
-                fontSize: 12, letterSpacing: 0.3)),
-          ),
         ),
       ],
       body: SingleChildScrollView(

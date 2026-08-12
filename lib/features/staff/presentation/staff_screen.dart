@@ -1233,6 +1233,17 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
     return StaffShell(
       pageTitle: _showArchived ? 'Staff — Archive' : 'Staff Management',
       activeRoute: AppRoutes.staff,
+      floatingActionButton: _showArchived
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _showAddStaffDialog,
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('ADD STAFF',
+                style: TextStyle(
+                  color: Colors.white, fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.3)),
+            ),
       topBarActions: [
         // ── Branch filter dropdown (superadmin only) ──
         if (isSuperadmin && _allBranches.isNotEmpty)
@@ -1320,24 +1331,6 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
           icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
           onPressed: _load,
         ),
-        if (!_showArchived)
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: FilledButton.icon(
-              onPressed: _showAddStaffDialog,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
-              ),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('ADD STAFF',
-                style: TextStyle(
-                  fontFamily: 'Poppins', fontWeight: FontWeight.w800,
-                  fontSize: 12, letterSpacing: 0.3)),
-            ),
-          ),
       ],
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
