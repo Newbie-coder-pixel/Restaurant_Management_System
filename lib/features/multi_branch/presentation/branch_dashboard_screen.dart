@@ -33,10 +33,27 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
   Map<String, _BranchStats> _stats = {};
   bool _isLoading = true;
 
+  bool _authKnown = false;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    final staff = ref.read(currentStaffProvider);
+    if (staff != null) {
+      _authKnown = true;
+      _load();
+    } else {
+      // On a hard page refresh the staff record hasn't been fetched from
+      // Supabase yet (AuthNotifier._fetchStaff is async) — reading
+      // currentStaffProvider synchronously here would see null and wrongly
+      // render "no access" before the real role is known. Wait for it.
+      ref.listenManual(currentStaffProvider, (_, next) {
+        if (next != null && !_authKnown && mounted) {
+          _authKnown = true;
+          _load();
+        }
+      });
+    }
   }
 
   bool get _isAuthorized =>
@@ -448,6 +465,11 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_authKnown) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     if (!_isAuthorized) {
       return const Scaffold(
         body: Center(
