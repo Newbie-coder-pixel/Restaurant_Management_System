@@ -39,31 +39,6 @@ class InventoryService {
         .toList();
   }
 
-  Stream<List<InventoryItem>> streamInventoryItems({
-    required String branchId,
-    DateTime? date,
-  }) {
-    // Same empty-branchId guard as fetchInventoryItems above — an empty
-    // filter here would 400 the realtime stream's fallback fetch and tear
-    // down its underlying controller.
-    if (branchId.isEmpty) return Stream.value(const []);
-
-    final dateStr =
-        (date ?? DateTime.now()).toIso8601String().split('T').first;
-
-    return _client
-        .from('inventory_items')
-        .stream(primaryKey: ['id'])
-        .eq('branch_id', branchId)
-        // ✅ FIX: SupabaseStreamBuilder.order() also defaults `ascending`
-        // to false — same silent Z→A sort bug as fetchInventoryItems.
-        .order('name', ascending: true)
-        .map((rows) => rows
-            .where((r) => r['date'] == dateStr)
-            .map((e) => InventoryItem.fromMap(e))
-            .toList());
-  }
-
   Future<List<InventoryItem>> fetchLowStockItems(String branchId) async {
     if (branchId.isEmpty) return [];
     final dateStr = DateTime.now().toIso8601String().split('T').first;

@@ -51,26 +51,34 @@ class InventoryFilter {
 final inventoryFilterProvider =
     StateProvider<InventoryFilter>((ref) => const InventoryFilter());
 
-// ─── MAIN INVENTORY PROVIDER (Stream) ────────────────────────────────────────
-
+// ─── MAIN INVENTORY PROVIDER ──────────────────────────────────────────────────
+// ✅ FIX: was a StreamProvider over Supabase Realtime's .stream() API. That
+// API's SupabaseStreamBuilder tears down its own underlying stream
+// controller on ANY fallback-fetch failure (e.g. a transient 400), and a
+// realtime event landing after that teardown throws "add after close" —
+// a raw, uncaught exception outside any Dart try/catch that blanks the
+// whole page. This screen already calls ref.invalidate(...) after every
+// mutation (see rolloverDaily/addItem/etc. and their call sites), so it
+// never actually depended on live realtime pushes for correctness — a
+// plain re-fetch on invalidate is just as correct and can't crash this way.
 final inventoryStreamProvider =
-    StreamProvider.family<List<InventoryItem>, String>((ref, branchId) {
+    FutureProvider.family<List<InventoryItem>, String>((ref, branchId) {
   final service = ref.watch(inventoryServiceProvider);
   final date = ref.watch(inventorySelectedDateProvider);
 
-  return service.streamInventoryItems(branchId: branchId, date: date);
+  return service.fetchInventoryItems(branchId: branchId, date: date);
 });
 
-// ─── FIX BUG: stream TODAY's inventory, independent of the date the ─────────
+// ─── FIX BUG: fetch TODAY's inventory, independent of the date the ──────────
 // user is currently browsing on the Inventory screen
 // (inventorySelectedDateProvider). Used by other features (e.g. "Add
 // Ingredient" in the menu form) that always need today's stock, so it
 // doesn't end up empty while the user is looking at another date on the
 // Inventory screen.
 final todayInventoryStreamProvider =
-    StreamProvider.family<List<InventoryItem>, String>((ref, branchId) {
+    FutureProvider.family<List<InventoryItem>, String>((ref, branchId) {
   final service = ref.watch(inventoryServiceProvider);
-  return service.streamInventoryItems(branchId: branchId, date: DateTime.now());
+  return service.fetchInventoryItems(branchId: branchId, date: DateTime.now());
 });
 
 // ─── FILTERED INVENTORY ───────────────────────────────────────────────────────
