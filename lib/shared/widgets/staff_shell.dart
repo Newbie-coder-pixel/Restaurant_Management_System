@@ -91,7 +91,7 @@ const staffShellSidebarItems = [
     route: AppRoutes.operatingExpense,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
-    label: 'Costing & COGS', icon: Icons.calculate_rounded,
+    label: 'Costing & COGS', icon: Icons.request_quote_rounded,
     route: AppRoutes.costing,
     allowedRoles: {StaffRole.superadmin, StaffRole.manager}),
   StaffShellSidebarItem(
@@ -216,7 +216,7 @@ class _StaffShellState extends ConsumerState<StaffShell> {
                     color: AppColors.accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.storefront_rounded,
+                  child: const Icon(Icons.dashboard_rounded,
                     color: AppColors.accent, size: 24),
                 ),
                 const SizedBox(width: 12),
@@ -286,13 +286,18 @@ class _StaffShellState extends ConsumerState<StaffShell> {
               children: [
                 ListTile(
                   dense: true,
-                  leading: const Icon(Icons.help_outline_rounded,
+                  leading: const Icon(Icons.support_agent_rounded,
                     size: 20, color: AppColors.textSecondary),
                   title: const Text('Support',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textPrimary)),
                   onTap: () => showDialog(
                     context: context,
-                    builder: (_) => AlertDialog(
+                    // Pop dialogContext, not the outer StaffShell context —
+                    // popping the outer context here was popping the current
+                    // GoRouter page underneath the dialog instead of just the
+                    // dialog, leaving the router in a state its redirect
+                    // logic didn't expect and crashing to a blank page.
+                    builder: (dialogContext) => AlertDialog(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       title: const Text('Need Help?',
                         style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -301,7 +306,7 @@ class _StaffShellState extends ConsumerState<StaffShell> {
                         style: TextStyle(fontFamily: 'Poppins')),
                       actions: [
                         TextButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.pop(dialogContext),
                           child: const Text('Close')),
                       ],
                     ),
