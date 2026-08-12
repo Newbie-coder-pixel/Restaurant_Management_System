@@ -74,6 +74,10 @@ class QrOrderRepository {
     String? notes,
     String? deviceId,
   }) async {
+    if (session.items.isEmpty) {
+      throw Exception('Cannot place an order with an empty cart.');
+    }
+
     await _assertBranchOpen(branchId);
     final queueNumber = await _generateQueueNumber(branchId);
 
@@ -145,8 +149,22 @@ class QrOrderRepository {
           return itemData;
         }).toList();
 
-await _client.from('order_items').insert(orderItemsData);
-        debugPrint('✅ ${orderItemsData.length} items saved');
+        try {
+          await _client.from('order_items').insert(orderItemsData);
+          debugPrint('✅ ${orderItemsData.length} items saved');
+        } catch (e) {
+          // The order row above already committed — clean it up rather than
+          // leaving an orphaned zero-item order sitting in 'created' status
+          // forever (invisible everywhere in the UI, still counted as
+          // "active" in dashboards). anon_update_recent_order already
+          // grants anon UPDATE on orders created within the last 3 hours.
+          debugPrint('⚠️ order_items insert failed, cancelling orphaned order $orderId: $e');
+          await _client.from('orders').update({
+            'status': 'cancelled',
+            'cancel_reason': 'Order items failed to save',
+          }).eq('id', orderId);
+          rethrow;
+        }
 
         // Inventory is deducted in order_screen.dart when status → preparing.
         // Not deducted here to avoid double deduction.

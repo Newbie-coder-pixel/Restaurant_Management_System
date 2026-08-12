@@ -380,7 +380,13 @@ class _StaffShellState extends ConsumerState<StaffShell> {
           // unclaimed rather than handing it back to the Spacer below, which
           // left the whole trailing cluster (branch filter/clock/bell/gear)
           // stranded short of the true right edge instead of flush against it.
+          // flex: 3 (vs. the Spacer's default flex: 1) so the title claims
+          // leftover space before the empty gap does — on screens with a
+          // wide topBarActions cluster (e.g. Inventory, Staff Management)
+          // an even flex split let the invisible Spacer win space the title
+          // needed, ellipsizing page titles down to a couple of characters.
           Expanded(
+            flex: 3,
             child: Text(widget.pageTitle,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

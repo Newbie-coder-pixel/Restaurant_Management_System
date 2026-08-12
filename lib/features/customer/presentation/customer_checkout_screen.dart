@@ -331,6 +331,17 @@ class _CustomerCheckoutScreenState
     try {
       final user = Supabase.instance.client.auth.currentUser;
 
+      // Bail out before the order row is ever inserted if the cart has
+      // nothing valid in it — checking this only after the order insert (as
+      // before) left an orphaned zero-item order committed in 'new' status,
+      // invisible everywhere in the UI (every screen filters on
+      // items.isNotEmpty) but still counted as "active" in dashboards.
+      final hasValidItems = ref
+          .read(cartProvider)
+          .items
+          .any((item) => item.menuItemId.isNotEmpty);
+      if (!hasValidItems) throw Exception('No valid items in cart.');
+
       // order_number is unique-constrained for the WEB- scheme at the DB
       // level (migration 20260803020000); retry with a fresh number on the
       // rare chance of a same-day random collision (postgres code 23505).
@@ -398,7 +409,21 @@ class _CustomerCheckoutScreenState
 
       if (orderItems.isEmpty) throw Exception('No valid items in cart.');
 
-      await Supabase.instance.client.from('order_items').insert(orderItems);
+      try {
+        await Supabase.instance.client.from('order_items').insert(orderItems);
+      } catch (_) {
+        // The order row above already committed — clean it up rather than
+        // leaving an orphaned zero-item order behind (see the upfront
+        // hasValidItems check above for why that matters). Requires the
+        // customer_update_own_recent_order RLS policy (migration
+        // 20260812010000) since customers otherwise have no UPDATE rights
+        // on `orders` at all.
+        await Supabase.instance.client.from('orders').update({
+          'status': 'cancelled',
+          'cancel_reason': 'Order items failed to save',
+        }).eq('id', orderId);
+        rethrow;
+      }
 
       ref.read(cartProvider.notifier).clear();
 

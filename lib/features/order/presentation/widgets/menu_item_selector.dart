@@ -259,21 +259,34 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
 
       final orderId = orderRes['id'] as String;
 
-      await Supabase.instance.client.from('order_items').insert(
-        _cart.entries.map((e) {
-          final m = _allItems.firstWhere((x) => x.id == e.key);
-          return {
-            'order_id':       orderId,
-            'menu_item_id':   m.id,
-            'menu_item_name': m.name,
-            'quantity':       e.value.qty,
-            'unit_price':     m.price,
-            // subtotal isn't inserted since it's a generated column in Supabase
-            'status':         'pending',
-            if (e.value.notes.isNotEmpty) 'special_requests': e.value.notes,
-          };
-        }).toList(),
-      );
+      try {
+        await Supabase.instance.client.from('order_items').insert(
+          _cart.entries.map((e) {
+            final m = _allItems.firstWhere((x) => x.id == e.key);
+            return {
+              'order_id':       orderId,
+              'menu_item_id':   m.id,
+              'menu_item_name': m.name,
+              'quantity':       e.value.qty,
+              'unit_price':     m.price,
+              // subtotal isn't inserted since it's a generated column in Supabase
+              'status':         'pending',
+              if (e.value.notes.isNotEmpty) 'special_requests': e.value.notes,
+            };
+          }).toList(),
+        );
+      } catch (_) {
+        // The order row above already committed. Without this, a failed
+        // items insert (network drop, RLS/validation error) leaves an
+        // orphaned order with zero items sitting in 'new' status forever —
+        // invisible everywhere in the UI (every screen filters on
+        // items.isNotEmpty) but still counted as "active" in dashboards.
+        await Supabase.instance.client.from('orders').update({
+          'status': 'cancelled',
+          'cancel_reason': 'Order items failed to save',
+        }).eq('id', orderId);
+        rethrow;
+      }
 
       if (_selectedTableId != null) {
         await Supabase.instance.client.from('restaurant_tables').update({
