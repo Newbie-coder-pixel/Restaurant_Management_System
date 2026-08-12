@@ -664,7 +664,13 @@ class _LeftColumn extends StatelessWidget {
                   color: AppColors.primary.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                 ),
-                child: const Icon(Icons.ramen_dining_rounded, color: AppColors.primary, size: 30),
+                child: Text(
+                  menuNameCtrl.text.trim().isNotEmpty
+                      ? menuNameCtrl.text.trim()[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 26,
+                    fontWeight: FontWeight.w800, color: AppColors.primary)),
               ),
               const SizedBox(width: 14),
               Expanded(

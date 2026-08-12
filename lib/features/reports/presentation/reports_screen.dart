@@ -94,13 +94,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     final isWide = constraints.maxWidth >= 760;
                     final cards = [
                       _kpiCard('Gross Revenue', _formatRupiahCompact(s.todayRevenue),
-                          Icons.payments_outlined, subtitle: 'payments settled today'),
+                          subtitle: 'payments settled today'),
                       _kpiCard('Orders Received', '${s.todayOrders}',
-                          Icons.receipt_long_outlined, subtitle: 'orders created today'),
-                      _kpiCard('Bookings Today', '${s.todayBookings}',
-                          Icons.event_available_outlined),
-                      _kpiCard('COGS Today', _formatRupiahCompact(s.todayCogs),
-                          Icons.calculate_outlined),
+                          subtitle: 'orders created today'),
+                      _kpiCard('Bookings Today', '${s.todayBookings}'),
+                      _kpiCard('COGS Today', _formatRupiahCompact(s.todayCogs)),
                     ];
                     if (isWide) {
                       return Row(children: [
@@ -123,7 +121,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     final chart = _SectionCard(
                       title: 'Revenue Trend',
                       subtitle: 'Daily gross sales · ${s.period.label}',
-                      icon: Icons.show_chart_rounded,
                       child: SizedBox(
                         height: 260,
                         child: _allZero(s.revenueSpots)
@@ -194,7 +191,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   if (s.isSuperAdmin) const SizedBox(height: 24),
 
                   // Recent orders
-                  const _SectionHeader(title: 'Recent Orders', icon: Icons.receipt_long_outlined),
+                  const _SectionHeader(title: 'Recent Orders'),
                   const SizedBox(height: 12),
                   Container(
                     decoration: BoxDecoration(
@@ -223,7 +220,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  Widget _kpiCard(String label, String value, IconData icon, {String? subtitle}) {
+  Widget _kpiCard(String label, String value, {String? subtitle}) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -234,27 +231,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(label.toUpperCase(),
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                        color: AppColors.textSecondary)),
-              ),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 16, color: AppColors.primary),
-              ),
-            ],
-          ),
+          Text(label.toUpperCase(),
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: AppColors.textSecondary)),
           const SizedBox(height: 12),
           Text(value,
               style: const TextStyle(
@@ -527,22 +510,12 @@ class _RevenueLineChart extends StatelessWidget {
 class _SectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
-  final IconData icon;
-  const _SectionHeader({required this.title, required this.icon, this.subtitle});
+  const _SectionHeader({required this.title, this.subtitle});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 15, color: AppColors.primary),
-        ),
-        const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -570,9 +543,8 @@ class _SectionHeader extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   final String title;
   final String? subtitle;
-  final IconData icon;
   final Widget child;
-  const _SectionCard({required this.title, required this.icon, required this.child, this.subtitle});
+  const _SectionCard({required this.title, required this.child, this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -586,7 +558,7 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader(title: title, subtitle: subtitle, icon: icon),
+          _SectionHeader(title: title, subtitle: subtitle),
           const SizedBox(height: 16),
           child,
         ],
@@ -616,7 +588,7 @@ class _TopSellersPanel extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: _SectionHeader(title: 'Top Sellers', icon: Icons.leaderboard_outlined),
+            child: _SectionHeader(title: 'Top Sellers'),
           ),
           if (top.isEmpty)
             const Padding(
@@ -1065,8 +1037,7 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
   }
 
   Widget _header() => _SectionHeader(
-      title: 'Best-Selling Menu · ${widget.period.label}',
-      icon: Icons.emoji_events_outlined);
+      title: 'Best-Selling Menu · ${widget.period.label}');
 
   Widget _categoryChips() {
     if (widget.categories.length <= 1) return const SizedBox.shrink();
@@ -1135,7 +1106,6 @@ class _MenuMarginSection extends StatelessWidget {
         const _SectionHeader(
           title: 'Margin per Menu',
           subtitle: 'Based on COGS from the costing module',
-          icon: Icons.insights_outlined,
         ),
         const SizedBox(height: 12),
         Container(
@@ -1316,7 +1286,6 @@ class _BranchRevenueSection extends StatelessWidget {
         const _SectionHeader(
           title: 'Branch Comparison',
           subtitle: 'This month\'s revenue per branch',
-          icon: Icons.storefront_outlined,
         ),
         const SizedBox(height: 12),
         Card(

@@ -309,26 +309,32 @@ class _InventoryScreenContentState
       Stack(
         clipBehavior: Clip.none,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: filter.showLowStockOnly == true
-                  ? AppColors.accent
-                  : AppColors.surfaceVariant,
+          Material(
+            color: filter.showLowStockOnly == true
+                ? AppColors.accent
+                : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            child: InkWell(
               borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-              border: Border.all(
-                color: filter.showLowStockOnly == true
-                    ? AppColors.accent
-                    : AppColors.border),
-            ),
-            child: IconButton(
-              tooltip: filter.showLowStockOnly == true ? 'Show all' : 'Low stock only',
-              icon: Icon(Icons.filter_alt_outlined,
-                color: filter.showLowStockOnly == true ? Colors.white : AppColors.textPrimary),
-              onPressed: () {
+              onTap: () {
                 final isFiltered = filter.showLowStockOnly == true;
                 ref.read(inventoryFilterProvider.notifier).update(
                     (s) => s.copyWith(showLowStockOnly: isFiltered ? null : true));
               },
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  border: Border.all(
+                    color: filter.showLowStockOnly == true
+                        ? AppColors.accent
+                        : AppColors.border),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                child: Text('Low Stock',
+                  style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600,
+                    color: filter.showLowStockOnly == true ? Colors.white : AppColors.textPrimary)),
+              ),
             ),
           ),
           if (lowCount > 0)
