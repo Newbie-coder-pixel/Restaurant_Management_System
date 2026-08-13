@@ -13,7 +13,9 @@ import '../../../core/theme/app_theme.dart';
 class _QrChatMessage {
   final String role;
   final String content;
-  const _QrChatMessage({required this.role, required this.content});
+  final DateTime timestamp;
+  _QrChatMessage({required this.role, required this.content})
+      : timestamp = DateTime.now();
 }
 
 const _quickActions = [
@@ -90,6 +92,7 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
   final List<_QrChatMessage> _messages = [];
   bool _isTyping = false;
   bool _loadingContext = true;
+  bool _quickActionsExpanded = false;
 
   String _branchId = '';
   String _branchName = 'Restaurant';
@@ -512,29 +515,31 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     );
   }
 
+  // Styled to match the staff app's Restaurant Assistant panel header
+  // (chatbot_screen.dart's _buildEmbeddedHeader) — light surface background
+  // with a bottom border, a small accent-colored icon box, and an
+  // ONLINE/status row, instead of the solid gold header this used to have.
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       decoration: const BoxDecoration(
-        color: AppColors.primary,
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
         borderRadius: BorderRadius.only(
             topLeft: Radius.circular(20), topRight: Radius.circular(20)),
       ),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primary, AppColors.accent],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+              color: AppColors.accent,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 18),
+            child: const Icon(Icons.restaurant_menu_rounded,
+                color: Colors.white, size: 17),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -543,17 +548,29 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text('Menu Assistant',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 16,
-                        fontWeight: FontWeight.w800, color: Colors.white)),
-                Text(_tableName,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 11.5,
-                        color: Colors.white70)),
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                        fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                          color: AppColors.available, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('$_tableName • ONLINE',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                            fontWeight: FontWeight.w600, letterSpacing: 0.3,
+                            color: AppColors.textSecondary)),
+                  ],
+                ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, size: 20, color: Colors.white),
+            icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.textSecondary),
             tooltip: 'Close',
             onPressed: widget.onClose,
           ),
@@ -562,73 +579,131 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     );
   }
 
+  String _fmtTime(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
   Widget _buildMessages() {
     if (_loadingContext && _messages.isEmpty) {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     return ListView.builder(
       controller: _scrollCtrl,
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       itemCount: _messages.length + (_isTyping ? 1 : 0),
       itemBuilder: (_, i) {
         if (i == _messages.length) return _buildTypingIndicator();
         final m = _messages[i];
-        final isUser = m.role == 'user';
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (!isUser) ...[
-                const CircleAvatar(
-                  radius: 14,
-                  backgroundColor: AppColors.surfaceVariant,
-                  child: Icon(Icons.smart_toy_rounded, size: 14, color: AppColors.primary),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: isUser ? AppColors.primary : AppColors.surface,
-                    border: isUser ? null : Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(14),
-                      topRight: const Radius.circular(14),
-                      bottomLeft: Radius.circular(isUser ? 14 : 4),
-                      bottomRight: Radius.circular(isUser ? 4 : 14),
-                    ),
-                  ),
-                  child: isUser
-                      ? Text(m.content,
-                          style: const TextStyle(fontFamily: 'Poppins', color: Colors.white,
-                              fontSize: 13.5, height: 1.4))
-                      : MarkdownBody(
-                          data: m.content,
-                          styleSheet: MarkdownStyleSheet(
-                            p: const TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary,
-                                fontSize: 13.5, height: 1.4),
-                          ),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        );
+        return m.role == 'user' ? _buildUserBubble(m) : _buildBotBubble(m);
       },
     );
   }
 
+  // User bubble — matches the staff app's ChatBubble (chat_bubble.dart):
+  // a right-aligned surfaceVariant pill with the timestamp under the text.
+  Widget _buildUserBubble(_QrChatMessage m) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.8,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(m.content,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                          color: AppColors.textPrimary, height: 1.4)),
+                  const SizedBox(height: 4),
+                  Text(_fmtTime(m.timestamp),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                          color: AppColors.textHint)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Bot bubble — matches the staff app's _buildBotBubble: an "ASSISTANT +
+  // timestamp" label row above a bordered card, instead of a chat-tail
+  // bubble with an avatar circle.
+  Widget _buildBotBubble(_QrChatMessage m) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: const Icon(Icons.restaurant_menu_rounded, color: Colors.white, size: 13),
+              ),
+              const SizedBox(width: 8),
+              const Text('ASSISTANT',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                      fontWeight: FontWeight.w700, letterSpacing: 0.6,
+                      color: AppColors.textSecondary)),
+              const SizedBox(width: 6),
+              Text(_fmtTime(m.timestamp),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, color: AppColors.textHint)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.86,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: MarkdownBody(
+              data: m.content,
+              styleSheet: MarkdownStyleSheet(
+                p: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                    color: AppColors.textPrimary, height: 1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTypingIndicator() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
         child: Row(
           children: [
-            const CircleAvatar(
-              radius: 14,
-              backgroundColor: AppColors.surfaceVariant,
-              child: Icon(Icons.smart_toy_rounded, size: 14, color: AppColors.primary),
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: const Icon(Icons.restaurant_menu_rounded, color: Colors.white, size: 13),
             ),
             const SizedBox(width: 8),
             Container(
@@ -636,14 +711,9 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 border: Border.all(color: AppColors.border),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(14),
-                  topRight: Radius.circular(14),
-                  bottomRight: Radius.circular(14),
-                  bottomLeft: Radius.circular(4),
-                ),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: SizedBox(
+              child: const SizedBox(
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
@@ -653,28 +723,64 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
         ),
       );
 
-  Widget _buildQuickActions() {
-    final replies = _awaitingWeatherReply ? _weatherFallbackReplies : _quickActions;
-    final featured = _awaitingWeatherReply ? null : replies.first;
-    final rest = _awaitingWeatherReply ? replies : replies.sublist(1);
+  // Maps a quick-action's leading emoji to a Material icon, mirroring the
+  // staff app's _categoryIcon — chips there use an icon glyph, not an emoji,
+  // so this keeps the two apps' quick-action chips visually consistent.
+  IconData _quickActionIcon(String label) {
+    if (label.contains('🔥')) return Icons.local_fire_department_rounded;
+    if (label.contains('🌿')) return Icons.eco_rounded;
+    if (label.contains('⚠️')) return Icons.warning_amber_rounded;
+    if (label.contains('💸')) return Icons.savings_rounded;
+    if (label.contains('❄️')) return Icons.ac_unit_rounded;
+    return Icons.bolt_rounded;
+  }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
+  String _stripEmoji(String label) =>
+      label.replaceFirst(RegExp(r'^[^\s]+\s*'), '');
+
+  // Styled to match the staff app's collapsible "Quick Actions" section
+  // (chatbot_screen.dart's _buildQuickActions): a toggleable header row,
+  // a horizontal chip scroller when collapsed, and a 2-column grid when
+  // expanded. The weather fallback question is left un-collapsible (the
+  // customer needs to answer it, not have it hidden behind a toggle), and
+  // the "Recommend something" CTA stays as its own prominent accent button
+  // above the section — this app grounds recommendations in live weather,
+  // so that action needs to stand out rather than blend into the chip row.
+  Widget _buildQuickActions() {
+    if (_awaitingWeatherReply) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _weatherFallbackReplies
+              .map((e) => _QrQuickChip(
+                    icon: _quickActionIcon(e.$1),
+                    label: _stripEmoji(e.$1),
+                    onTap: () => _send(e.$2),
+                  ))
+              .toList(),
+        ),
+      );
+    }
+
+    final featured = _quickActions.first;
+    final rest = _quickActions.sublist(1);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      color: AppColors.surface,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('QUICK ACTIONS',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
-                  fontWeight: FontWeight.w800, color: AppColors.textSecondary,
-                  letterSpacing: 0.6)),
-          const SizedBox(height: 8),
-          if (featured != null) ...[
-            GestureDetector(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+            child: GestureDetector(
               onTap: () => _send(featured.$2),
               child: Container(
                 width: double.infinity,
@@ -689,72 +795,186 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
                         fontWeight: FontWeight.w700, color: AppColors.accent)),
               ),
             ),
-            const SizedBox(height: 8),
-          ],
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: rest
-                .map((e) => GestureDetector(
-                      onTap: () => _send(e.$2),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceVariant,
-                          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Text(e.$1,
-                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
-                                fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                      ),
-                    ))
-                .toList(),
           ),
+          InkWell(
+            onTap: () => setState(() => _quickActionsExpanded = !_quickActionsExpanded),
+            child: Container(
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppColors.border),
+                  bottom: BorderSide(color: AppColors.border),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.flash_on_rounded, size: 14, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  const Text('Quick Actions',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                          fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  const Spacer(),
+                  AnimatedRotation(
+                    turns: _quickActionsExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: const Icon(Icons.expand_more, size: 18, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_quickActionsExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 3.0,
+                ),
+                itemCount: rest.length,
+                itemBuilder: (_, i) => _QrQuickChip(
+                  icon: _quickActionIcon(rest[i].$1),
+                  label: _stripEmoji(rest[i].$1),
+                  onTap: () => _send(rest[i].$2),
+                ),
+              ),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+              child: Row(
+                children: rest
+                    .map((e) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _QrQuickChip(
+                            icon: _quickActionIcon(e.$1),
+                            label: _stripEmoji(e.$1),
+                            onTap: () => _send(e.$2),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
         ],
       ),
     );
   }
 
+  // Styled to match the staff app's _buildInput: an outlined pill (not a
+  // filled, borderless field) with a highlighted focus border, a circular
+  // accent send button instead of a bare IconButton, and the same
+  // "AI generated info" disclaimer underneath.
   Widget _buildInput() => Container(
-        padding: const EdgeInsets.fromLTRB(14, 8, 10, 12),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
         decoration: const BoxDecoration(
           color: AppColors.surface,
           border: Border(top: BorderSide(color: AppColors.border)),
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _msgCtrl,
-                onSubmitted: (_) => _send(),
-                textInputAction: TextInputAction.send,
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
-                    color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Type a message...',
-                  hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
-                      color: AppColors.textHint),
-                  filled: true,
-                  fillColor: AppColors.surfaceVariant,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                  isDense: true,
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _msgCtrl,
+                    onSubmitted: (_) => _send(),
+                    textInputAction: TextInputAction.send,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                          color: AppColors.textHint),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: (_isTyping || _loadingContext) ? null : _send,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: (_isTyping || _loadingContext)
+                          ? AppColors.accent.withValues(alpha: 0.4)
+                          : AppColors.accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: (_isTyping || _loadingContext)
+                        ? const Padding(
+                            padding: EdgeInsets.all(13),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 6),
-            IconButton(
-              icon: (_isTyping || _loadingContext)
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent))
-                  : const Icon(Icons.send_rounded, color: AppColors.accent),
-              onPressed: (_isTyping || _loadingContext) ? null : _send,
-            ),
+            const SizedBox(height: 6),
+            const Text('AI generated info. Verify critical data.',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: AppColors.textHint)),
           ],
         ),
       );
+}
+
+// Quick-action chip — matches the staff app's _QuickActionButton
+// (chatbot_screen.dart): icon + single-line label in a bordered pill.
+class _QrQuickChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _QrQuickChip({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(label,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                      fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DiamondPatternPainter extends CustomPainter {
