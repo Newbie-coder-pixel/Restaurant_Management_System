@@ -975,14 +975,18 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                     final idx = entry.key;
                     final item = entry.value;
                     final qty = (item['qty'] as int).toDouble();
-                    // ONE consistent color for all bars — top-3 rank/position
-                    // is shown via bar length + medals in the legend below the
-                    // chart, NOT via color. Previously the top-3 were given
-                    // different hues (gold/silver/bronze): if the category filter
-                    // changed and a different item rose into the top-3, the
-                    // color would "move" to that item — color followed RANK
-                    // instead of menu identity, which made the re-coloring
-                    // confusing every time the filter changed.
+                    // Each bar gets its own color so items are distinguishable
+                    // at a glance, not just by their (small) axis label. Color
+                    // is keyed to the item NAME's hash, not to `idx` — so it
+                    // stays fixed to that menu item across re-renders even if
+                    // the category filter changes which items are shown/in
+                    // what order (the earlier single-color version deliberately
+                    // avoided coloring by rank/position for the same reason:
+                    // color following position instead of identity was
+                    // confusing whenever the filter changed).
+                    final itemName = item['name'] as String;
+                    final barColor = AppColors
+                        .chartPalette[itemName.hashCode.abs() % AppColors.chartPalette.length];
                     return BarChartGroupData(
                       x: idx,
                       barRods: [
@@ -991,11 +995,11 @@ class _TopMenuSectionState extends State<_TopMenuSection> {
                           width: (filtered.length <= 5 ? 28 : 18).toDouble(),
                           borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(4)),
-                          color: AppColors.primary,
+                          color: barColor,
                           backDrawRodData: BackgroundBarChartRodData(
                             show: true,
                             toY: chartMaxY,
-                            color: AppColors.primary.withValues(alpha: 0.06),
+                            color: barColor.withValues(alpha: 0.06),
                           ),
                         ),
                       ],

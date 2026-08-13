@@ -40,6 +40,25 @@ class AppColors {
   static const darkBackground    = Color(0xFF0F0F1A);
   static const darkSurface       = Color(0xFF1A1A2E);
   static const darkSurfaceVariant = Color(0xFF16213E);
+
+  // Categorical palette for charts with multiple distinct series (e.g. one
+  // bar per menu item) — built from hues already used elsewhere in the
+  // theme so a multi-color chart still reads as "on brand" rather than
+  // introducing arbitrary new colors. Assign by stable item identity (e.g.
+  // a hash of the item's name/id), never by array index/position — the
+  // Best-Selling Menu chart used to color its top-3 bars by rank and that
+  // was reverted because the color then "moved" to a different item
+  // whenever a filter changed the ranking.
+  static const chartPalette = [
+    primary,
+    iconAccentBlue,
+    accent,
+    available,
+    orderNew,
+    cleaning,
+    accentOrange,
+    statusClosed,
+  ];
 }
 
 class AppSpacing {
