@@ -41,6 +41,15 @@ migrate_working_dir/
 /build/unit_test_assets/
 /coverage/
 
+# Flutter web build-tool cache (scratch files regenerated on every
+# `flutter build web` / build_all.sh run — not part of the deployable
+# output, which lives in the committed build/staff, build/customer,
+# build/qr, build/web folders instead)
+/build/flutter_assets/
+/build/native_hooks/
+/build/*.cache.dill.track.dill
+/build/????????????????????????????????/
+
 # Symbolication related
 app.*.symbols
 
