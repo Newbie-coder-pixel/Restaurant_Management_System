@@ -86,7 +86,12 @@ class _InventoryScreenContentState
   void _showRolloverDialog() {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      // Pop dialogContext, not the outer screen context — popping the outer
+      // context here pops the current GoRouter page underneath the dialog
+      // instead of just the dialog, leaving the router in a state its
+      // redirect logic didn't expect and crashing to a blank page (same bug
+      // already fixed for the Support dialog in staff_shell.dart).
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Daily Stock Rollover',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -96,12 +101,12 @@ class _InventoryScreenContentState
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 await ref.read(inventoryNotifierProvider.notifier).rolloverDaily();
                 if (mounted) {
@@ -720,7 +725,9 @@ class _DetailPanel extends ConsumerWidget {
     final qtyCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      // Pop dialogContext, not the outer screen context — see the note in
+      // InventoryScreen._showRolloverDialog for why this matters.
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Order Restock — ${item.name}',
           style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -735,14 +742,14 @@ class _DetailPanel extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
               final qty = double.tryParse(qtyCtrl.text);
               if (qty == null || qty <= 0) return;
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               await ref.read(inventoryNotifierProvider.notifier).recordPurchase(
                     itemId: item.id, quantity: qty, note: 'Restock order');
               if (context.mounted) {
@@ -765,13 +772,13 @@ class _DetailPanel extends ConsumerWidget {
     if (item.availableStock > 0) {
       showDialog(
         context: context,
-        builder: (_) => AlertDialog(
+        builder: (dialogContext) => AlertDialog(
           title: const Text('Cannot Be Deleted'),
           content: Text(
             'Item "${item.name}" still has ${_fmtQty(item.availableStock)} ${item.unit} in stock. Clear the stock first.'),
           actions: [
             FilledButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('OK')),
           ],
         ),
@@ -781,17 +788,17 @@ class _DetailPanel extends ConsumerWidget {
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Item'),
         content: Text('Are you sure you want to delete "${item.name}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               await Supabase.instance.client
                   .from('inventory_items')
                   .delete()

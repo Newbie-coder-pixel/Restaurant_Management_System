@@ -314,14 +314,16 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
     if (hasStock) {
       showDialog(
         context: context,
-        builder: (_) => AlertDialog(
+        // Pop dialogContext, not the outer sheet context — see the note in
+        // InventoryScreen._showRolloverDialog for why this matters.
+        builder: (dialogContext) => AlertDialog(
           title: const Text('Cannot Be Deleted'),
           content: Text(
             'Item "${widget.item.name}" still has ${widget.item.availableStock} ${widget.item.unit} in stock. Clear the stock first.',
           ),
           actions: [
             FilledButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('OK'),
             ),
           ],
@@ -332,17 +334,19 @@ class _InventoryDetailSheetState extends ConsumerState<InventoryDetailSheet>
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Delete Item'),
         content: Text('Are you sure you want to delete "${widget.item.name}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
+              // Second pop closes the modal bottom sheet itself (this
+              // widget's own context, intentionally the outer one).
               Navigator.pop(context);
               await supabase
                   .from('inventory_items')
