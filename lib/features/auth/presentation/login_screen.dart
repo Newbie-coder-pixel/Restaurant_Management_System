@@ -10,15 +10,33 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen>
+    with TickerProviderStateMixin {
   final _emailCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
   bool _obscure = true;
+
+  // Card fade/slide-in on first mount, matching the customer login screen.
+  late final AnimationController _entranceCtrl;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 650));
+    _fade = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic));
+    _entranceCtrl.forward();
+  }
 
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passCtrl.dispose();
+    _entranceCtrl.dispose();
     super.dispose();
   }
 
@@ -273,120 +291,176 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildAuthCard(BuildContext context, AuthState authState) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 400),
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Staff Login',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 22,
-                  fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          const SizedBox(height: 4),
-          const Text('Enter your credentials to sign in.',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(height: 24),
-          TextField(
-            controller: _emailCtrl,
-            keyboardType: TextInputType.emailAddress,
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              prefixIcon: Icon(Icons.email_outlined),
+  // Full-bleed photo backdrop with a warm scrim, matching the customer
+  // login screen so both apps share the same modern look.
+  Widget _buildBackdrop() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset('assets/images/staff_login_background.jpg', fit: BoxFit.cover),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.primary.withValues(alpha: 0.55),
+                Colors.black.withValues(alpha: 0.45),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _passCtrl,
-            obscureText: _obscure,
-            onSubmitted: (_) => _handleLogin(),
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
-              suffixIcon: IconButton(
-                icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: (_isSubmitting || authState.isLoading) ? null : _forgotPassword,
-              child: const Text('Forgot Password?',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
-                      fontWeight: FontWeight.w600, color: AppColors.accent)),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 52,
-            child: ElevatedButton(
-              onPressed: (_isSubmitting || authState.isLoading) ? null : _handleLogin,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
-              ),
-              child: (_isSubmitting || authState.isLoading)
-                  ? const SizedBox(width: 20, height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Log In',
-                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15)),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text('Authorized staff only',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 11.5, color: AppColors.textHint)),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildBrandPanel() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.accent],
+  Widget _field({
+    required TextEditingController ctrl, required String label, required String hint,
+    required IconData icon,
+    TextInputType type = TextInputType.text,
+    bool obscure = false, Widget? suffix,
+    ValueChanged<String>? onSubmitted,
+  }) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+        fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      TextField(
+        controller: ctrl, keyboardType: type,
+        obscureText: obscure,
+        onSubmitted: onSubmitted,
+        style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+          color: AppColors.textPrimary),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+            color: AppColors.textHint),
+          prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
+          suffixIcon: suffix,
+          filled: true,
+          fillColor: AppColors.surfaceVariant,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.8)),
         ),
       ),
-      padding: const EdgeInsets.all(40),
-      alignment: Alignment.bottomLeft,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 64, height: 64,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
-            ),
-            child: const Icon(Icons.restaurant_menu, size: 32, color: Colors.white),
+    ]);
+
+  Widget _buildAuthCard(BuildContext context, AuthState authState) {
+    final loading = _isSubmitting || authState.isLoading;
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(32, 40, 32, 32),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                blurRadius: 40,
+                offset: const Offset(0, 16),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
-          const Text('RestaurantOS',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 30,
-                  fontWeight: FontWeight.w800, color: Colors.white)),
-          const SizedBox(height: 6),
-          Text('Multi-branch restaurant management, in one place.',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
-                  color: Colors.white.withValues(alpha: 0.8), height: 1.4)),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 56, height: 56,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [AppColors.primary, AppColors.accent],
+                        begin: Alignment.topLeft, end: Alignment.bottomRight),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.restaurant_menu_rounded, color: Colors.white, size: 26),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('RestaurantOS',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 24,
+                      fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+              const SizedBox(height: 6),
+              const Text('Sign in to manage your branch',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                      color: AppColors.textSecondary)),
+              const SizedBox(height: 28),
+              _field(ctrl: _emailCtrl, label: 'Email Address', hint: 'Enter your staff email',
+                type: TextInputType.emailAddress, icon: Icons.email_outlined),
+              const SizedBox(height: 18),
+              _field(ctrl: _passCtrl, label: 'Password', hint: 'Enter your password',
+                obscure: _obscure, icon: Icons.lock_outline_rounded,
+                onSubmitted: (_) => _handleLogin(),
+                suffix: IconButton(
+                  icon: Icon(_obscure
+                    ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    size: 20, color: AppColors.textHint),
+                  onPressed: () => setState(() => _obscure = !_obscure))),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _Pressable(
+                  onTap: loading ? null : _forgotPassword,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Text('Forgot password?',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                        color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _Pressable(
+                onTap: loading ? null : _handleLogin,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [AppColors.primary, AppColors.accent],
+                        begin: Alignment.centerLeft, end: Alignment.centerRight),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.35),
+                          blurRadius: 16, offset: const Offset(0, 8)),
+                    ],
+                  ),
+                  child: Center(child: loading
+                    ? const SizedBox(width: 22, height: 22,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                    : const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Sign In', style: TextStyle(fontFamily: 'Poppins',
+                              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+                        ],
+                      ))),
+              ),
+              const SizedBox(height: 20),
+              const Text('Authorized staff only',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 11.5, color: AppColors.textHint)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -416,30 +490,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth > 900;
-
-            final authCard = Center(
+      body: Stack(
+        children: [
+          Positioned.fill(child: _buildBackdrop()),
+          SafeArea(
+            child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: _buildAuthCard(context, authState),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: _buildAuthCard(context, authState),
+                ),
               ),
-            );
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-            if (!isWide) {
-              return authCard;
-            }
+// Tap-scale wrapper used by every button/link on this screen for a snappier,
+// more tactile feel than a bare GestureDetector.
+class _Pressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _Pressable({required this.child, required this.onTap});
 
-            return Row(
-              children: [
-                Expanded(child: _buildBrandPanel()),
-                Expanded(child: authCard),
-              ],
-            );
-          },
-        ),
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: widget.onTap == null ? null : (_) => setState(() => _pressed = true),
+      onTapUp: widget.onTap == null ? null : (_) => setState(() => _pressed = false),
+      onTapCancel: widget.onTap == null ? null : () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
       ),
     );
   }
