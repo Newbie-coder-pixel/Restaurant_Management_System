@@ -1,6 +1,9 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/heritage_illustrations.dart';
+import '../../../shared/widgets/diamond_pattern_painter.dart';
 
 class CustomerLoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -9,7 +12,8 @@ class CustomerLoginScreen extends StatefulWidget {
   State<CustomerLoginScreen> createState() => _CustomerLoginScreenState();
 }
 
-class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
+class _CustomerLoginScreenState extends State<CustomerLoginScreen>
+    with TickerProviderStateMixin {
   bool _loading = false;
   bool _obscure = true;
   bool _isSignUp = false;
@@ -19,12 +23,37 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
 
+  // Card fade/slide-in on first mount, and a slow, subtle float loop for the
+  // hero illustration — small motion touches that make the page feel alive
+  // instead of a static template.
+  late final AnimationController _entranceCtrl;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+  late final AnimationController _floatCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 650));
+    _fade = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic));
+    _entranceCtrl.forward();
+
+    _floatCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 4))
+      ..repeat(reverse: true);
+  }
+
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    _entranceCtrl.dispose();
+    _floatCtrl.dispose();
     super.dispose();
   }
 
@@ -397,57 +426,242 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          Positioned.fill(child: CustomPaint(painter: _StripeBackgroundPainter())),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(32, 40, 32, 32),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: _buildForm(),
-                  ),
-                ),
+      body: LayoutBuilder(builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 900;
+        return Stack(
+          children: [
+            Positioned.fill(child: _buildBackdrop()),
+            SafeArea(
+              child: isWide ? _buildWideLayout() : _buildNarrowLayout(),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  // Soft warm glow blobs instead of the old flat horizontal stripes —
+  // cheap (no blur filter) but reads as a modern gradient backdrop.
+  Widget _buildBackdrop() {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Container(color: AppColors.background),
+        ),
+        Positioned(
+          top: -140, left: -100,
+          child: _glowBlob(360, AppColors.primary.withValues(alpha: 0.10)),
+        ),
+        Positioned(
+          bottom: -160, right: -120,
+          child: _glowBlob(420, AppColors.accent.withValues(alpha: 0.08)),
+        ),
+      ],
+    );
+  }
+
+  Widget _glowBlob(double size, Color color) => Container(
+        width: size, height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
+        ),
+      );
+
+  Widget _buildWideLayout() {
+    return Row(
+      children: [
+        Expanded(flex: 6, child: _buildHeroPanel()),
+        Expanded(
+          flex: 5,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: _buildCard(showHeader: true, compactHeader: true),
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNarrowLayout() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: _buildCard(showHeader: true, compactHeader: false),
+        ),
+      ),
+    );
+  }
+
+  // Left-side hero panel (wide layouts only): gradient + diamond texture +
+  // a gently floating illustration + a few benefit chips, so the brand gets
+  // real visual weight instead of a small logo line above the form.
+  Widget _buildHeroPanel() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.accent],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: DiamondPatternPainter(
+                  step: 30, color: Colors.white.withValues(alpha: 0.5)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(48, 56, 48, 48),
+            // ConstrainedBox + SingleChildScrollView (rather than Spacer-based
+            // spacing) so the logo/illustration/tagline block never overlaps
+            // on shorter viewports — it scrolls instead of squeezing.
+            child: LayoutBuilder(builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 40, height: 40,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                          ),
+                          child: const Icon(Icons.restaurant_rounded, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('Restaurant',
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: 22,
+                                fontWeight: FontWeight.w800, color: Colors.white)),
+                      ]),
+                      const SizedBox(height: 32),
+                      Center(
+                        child: AnimatedBuilder(
+                          animation: _floatCtrl,
+                          builder: (context, child) => Transform.translate(
+                            offset: Offset(0, -8 * sin(_floatCtrl.value * pi)),
+                            child: child,
+                          ),
+                          child: const SizedBox(
+                            width: 220, height: 220,
+                            child: HeroPlatterIllustration(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 48),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Honest flavors from the archipelago',
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: 26,
+                                  fontWeight: FontWeight.w800, color: Colors.white, height: 1.2)),
+                          const SizedBox(height: 10),
+                          Text('Modern Indonesian Heritage',
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
+                                  fontStyle: FontStyle.italic,
+                                  color: Colors.white.withValues(alpha: 0.85))),
+                          const SizedBox(height: 24),
+                          const Wrap(spacing: 10, runSpacing: 10, children: [
+                            _HeroChip(icon: Icons.bolt_rounded, label: 'Book in seconds'),
+                            _HeroChip(icon: Icons.local_fire_department_rounded, label: 'Fresh daily'),
+                            _HeroChip(icon: Icons.location_on_rounded, label: 'Live order tracking'),
+                          ]),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildForm() => Column(
+  Widget _buildCard({required bool showHeader, required bool compactHeader}) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(32, 40, 32, 32),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                blurRadius: 40,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: _buildForm(showHeader: showHeader, compact: compactHeader),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm({required bool showHeader, required bool compact}) => Column(
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Stack(
-        alignment: Alignment.topRight,
-        children: [
-          Column(
+      if (showHeader) ...[
+        if (!compact) ...[
+          Center(
+            child: Container(
+              width: 56, height: 56,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.accent],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.restaurant_rounded, color: Colors.white, size: 26),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: Column(
+            key: ValueKey(_isSignUp),
             children: [
-              const Text('Restaurant', textAlign: TextAlign.center,
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 40,
-                  fontWeight: FontWeight.w800, color: AppColors.primary,
-                  letterSpacing: -0.5)),
+              Text(_isSignUp ? 'Create your account' : 'Welcome back',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 24,
+                      fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
               const SizedBox(height: 6),
-              Text(_isSignUp ? 'Create your account' : 'Modern Indonesian Heritage',
+              Text(
+                _isSignUp
+                    ? 'Sign up to start ordering and booking tables'
+                    : 'Sign in to continue to your account',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
-                  fontStyle: FontStyle.italic, color: AppColors.textSecondary)),
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                    color: AppColors.textSecondary)),
             ],
           ),
-          const Icon(Icons.star_rounded, color: AppColors.border, size: 22),
-        ],
-      ),
-      const SizedBox(height: 32),
+        ),
+        const SizedBox(height: 28),
+      ],
       _emailForm(),
     ]);
 
@@ -455,43 +669,60 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      if (_isSignUp) ...[
-        _field(ctrl: _nameCtrl, label: 'Full Name', hint: 'Enter your full name'),
-        const SizedBox(height: 20),
-        _field(ctrl: _phoneCtrl, label: 'Phone Number', hint: 'Example: 08123456789',
-          type: TextInputType.phone),
-        const SizedBox(height: 20),
-      ],
+      AnimatedSize(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeInOut,
+        alignment: Alignment.topCenter,
+        child: !_isSignUp
+            ? const SizedBox.shrink()
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _field(
+                      ctrl: _nameCtrl,
+                      label: 'Full Name',
+                      hint: 'Enter your full name',
+                      icon: Icons.person_outline_rounded),
+                  const SizedBox(height: 18),
+                  _field(
+                      ctrl: _phoneCtrl,
+                      label: 'Phone Number',
+                      hint: 'Example: 08123456789',
+                      type: TextInputType.phone,
+                      icon: Icons.phone_outlined),
+                  const SizedBox(height: 18),
+                ],
+              ),
+      ),
       _field(ctrl: _emailCtrl, label: 'Email Address', hint: 'Enter your email',
-        type: TextInputType.emailAddress),
-      const SizedBox(height: 20),
+        type: TextInputType.emailAddress, icon: Icons.email_outlined),
+      const SizedBox(height: 18),
       _field(ctrl: _passCtrl, label: 'Password', hint: 'Enter your password',
-        obscure: _obscure,
+        obscure: _obscure, icon: Icons.lock_outline_rounded,
         suffix: IconButton(
           icon: Icon(_obscure
             ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             size: 20, color: AppColors.textHint),
           onPressed: () => setState(() => _obscure = !_obscure))),
       if (!_isSignUp) ...[
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Align(
           alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: _forgotPassword,
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          child: _Pressable(
+            onTap: _forgotPassword,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Text('Forgot password?',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                  color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
             ),
-            child: const Text('Forgot password?',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
-                color: AppColors.textSecondary, fontWeight: FontWeight.w500))),
+          ),
         ),
       ],
-      const SizedBox(height: 28),
+      const SizedBox(height: 24),
       _primaryBtn(
         label: _isSignUp ? 'Create Account' : 'Sign In', onTap: _submitEmail),
-      const SizedBox(height: 24),
+      const SizedBox(height: 22),
       const Row(children: [
         Expanded(child: Divider(color: AppColors.border, thickness: 1)),
         Padding(padding: EdgeInsets.symmetric(horizontal: 14),
@@ -499,12 +730,12 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
             fontSize: 13, color: AppColors.textHint, fontWeight: FontWeight.w500))),
         Expanded(child: Divider(color: AppColors.border, thickness: 1)),
       ]),
-      const SizedBox(height: 24),
+      const SizedBox(height: 22),
       _outlineBtn(
         icon: SizedBox(width: 20, height: 20,
           child: CustomPaint(painter: _GoogleIconPainter())),
         label: 'Continue with Google', onTap: _signInGoogle),
-      const SizedBox(height: 24),
+      const SizedBox(height: 22),
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -512,31 +743,32 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
             _isSignUp ? 'Already have an account?' : 'New to Restaurant?',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
               color: AppColors.textSecondary)),
-          TextButton(
-            onPressed: () => setState(() {
+          _Pressable(
+            onTap: () => setState(() {
               _isSignUp = !_isSignUp;
               ScaffoldMessenger.of(context).clearSnackBars();
             }),
-            style: TextButton.styleFrom(
+            child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              minimumSize: Size.zero,
+              child: Text(
+                _isSignUp ? 'Sign In' : 'Create an account',
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                  color: AppColors.primary, fontWeight: FontWeight.w700)),
             ),
-            child: Text(
-              _isSignUp ? 'Sign In' : 'Create an account',
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
-                color: AppColors.primary, fontWeight: FontWeight.w700))),
+          ),
         ],
       ),
     ]);
 
   Widget _field({
     required TextEditingController ctrl, required String label, required String hint,
+    required IconData icon,
     TextInputType type = TextInputType.text,
     bool obscure = false, Widget? suffix,
   }) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+      Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
         fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
       const SizedBox(height: 8),
       TextField(
@@ -546,67 +778,126 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
           color: AppColors.textPrimary),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 15,
+          hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
             color: AppColors.textHint),
+          prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
           suffixIcon: suffix,
           filled: true,
           fillColor: AppColors.surfaceVariant,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
-              borderSide: const BorderSide(color: AppColors.border, width: 1.5)),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none),
           enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
-              borderSide: const BorderSide(color: AppColors.border, width: 1.5)),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(4),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.8)),
         ),
       ),
     ]);
 
   Widget _primaryBtn({required String label, required VoidCallback onTap}) =>
-    GestureDetector(
+    _Pressable(
       onTap: _loading ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(4),
+          gradient: const LinearGradient(
+              colors: [AppColors.primary, AppColors.accent],
+              begin: Alignment.centerLeft, end: Alignment.centerRight),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.35),
+                blurRadius: 16, offset: const Offset(0, 8)),
+          ],
         ),
         child: Center(child: _loading
           ? const SizedBox(width: 22, height: 22,
               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-          : Text(label, style: const TextStyle(fontFamily: 'Poppins',
-              color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)))));
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: const TextStyle(fontFamily: 'Poppins',
+                    color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+              ],
+            ))));
 
   Widget _outlineBtn({
     required Widget icon, required String label, required VoidCallback onTap,
-  }) => GestureDetector(
+  }) => _Pressable(
     onTap: _loading ? null : onTap,
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 15),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(4),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border, width: 1.5)),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         icon, const SizedBox(width: 12),
         Text(label, style: const TextStyle(fontFamily: 'Poppins',
-          fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
       ])));
 }
 
-class _StripeBackgroundPainter extends CustomPainter {
+// Small benefit chip shown on the hero panel — translucent white pill over
+// the gradient, matching the frosted-glass look used elsewhere in the app.
+class _HeroChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _HeroChip({required this.icon, required this.label});
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = AppColors.footerBackground.withValues(alpha: 0.35);
-    const stripeHeight = 6.0;
-    const gap = 20.0;
-    for (double y = 0; y < size.height; y += stripeHeight + gap) {
-      canvas.drawRect(Rect.fromLTWH(0, y, size.width, stripeHeight), paint);
-    }
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 14, color: Colors.white),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+            fontWeight: FontWeight.w600, color: Colors.white)),
+      ]),
+    );
   }
-  @override bool shouldRepaint(_) => false;
+}
+
+// Tap-scale wrapper used by every button/link on this screen for a snappier,
+// more tactile feel than a bare GestureDetector.
+class _Pressable extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _Pressable({required this.child, required this.onTap});
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: widget.onTap == null ? null : (_) => setState(() => _pressed = true),
+      onTapUp: widget.onTap == null ? null : (_) => setState(() => _pressed = false),
+      onTapCancel: widget.onTap == null ? null : () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 class _GoogleIconPainter extends CustomPainter {
