@@ -197,33 +197,21 @@ class _CustomerLandingScreenState
 
   void switchTab(int index) => _tabNotifier.value = index;
 
-  // "Menu" is a shortcut that skips the branch-picker: it auto-resolves a
-  // branch (nearest known, else first active branch) and opens that menu
-  // directly. Ordering is still branch-scoped under the hood (menu items,
-  // stock, and order routing all key off branch_id), so a branch gets
-  // picked either way — this just picks it for the customer instead of
-  // making them tap a location card first. They can still switch branches
-  // explicitly via "Locations", and the auto-picked branch is shown in the
-  // menu screen's top bar so it's never a silent guess.
-  Future<void> _openMenuDirectly() async {
-    final nearest = ref.read(_nearestBranchProvider);
-    if (nearest is _NearestLoaded) {
-      if (mounted) context.push('/customer/menu/${nearest.branch['id']}');
-      return;
-    }
-
-    final cached = ref.read(_customerBranchesProvider).valueOrNull;
-    final List<Map<String, dynamic>> branches =
-        cached ?? await ref.read(_customerBranchesProvider.future);
-
-    if (!mounted) return;
-    if (branches.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No active branches available yet')),
-      );
-      return;
-    }
-    context.push('/customer/menu/${branches.first['id']}');
+  // "Menu"/"Explore Menu" used to skip branch selection entirely: it
+  // auto-resolved a branch (nearest known, else first active branch) and
+  // pushed straight to /customer/menu/:id, only disclosing the pick
+  // afterwards via the menu screen's "Ordering from X · Change" banner.
+  // That silently locked in a branch before the customer had chosen
+  // anything, which they can only notice/undo AFTER already looking at
+  // (possibly the wrong) menu. Ordering is branch-scoped no matter what
+  // (menu items, stock, and order routing all key off branch_id, and each
+  // menu item belongs to exactly one branch — there's no shared-item/
+  // per-branch-availability concept to fall back on), so instead of
+  // guessing, send the customer to the Locations section to pick
+  // explicitly. The nearest-branch suggestion card there still offers a
+  // one-tap shortcut — it's just a suggestion now, not an auto-decision.
+  void _promptBranchSelection() {
+    _homeTabKey.currentState?.scrollToLocations();
   }
 
   @override
@@ -371,7 +359,7 @@ class _CustomerLandingScreenState
                     _NavLink(
                         label: 'Menu',
                         active: true,
-                        onTap: _openMenuDirectly),
+                        onTap: _promptBranchSelection),
                     const SizedBox(width: 24),
                     _NavLink(
                         label: 'Locations',
@@ -577,7 +565,7 @@ class _CustomerLandingScreenState
         Visibility(
           visible: _tab == 0,
           maintainState: true,
-          child: _HomeTab(key: _homeTabKey, onExploreMenu: _openMenuDirectly),
+          child: _HomeTab(key: _homeTabKey, onExploreMenu: _promptBranchSelection),
         ),
         Visibility(
           visible: _tab == 1,

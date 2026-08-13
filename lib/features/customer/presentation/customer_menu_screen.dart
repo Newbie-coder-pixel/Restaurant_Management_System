@@ -330,9 +330,10 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
     );
   }
 
-  // Shown once the branch resolves — since "Menu" on the landing page now
-  // auto-picks a branch instead of asking, customers need to see (and be
-  // able to change) which branch they're actually ordering from.
+  // Shown once the branch resolves, so customers always see (and can
+  // change) which branch they're ordering from — the branch was already
+  // picked explicitly on the landing page (via a Locations card or the
+  // nearest-branch suggestion) before reaching this screen.
   Widget _buildBranchBar() {
     if (_branchName.isEmpty) return const SizedBox.shrink();
     return Padding(
