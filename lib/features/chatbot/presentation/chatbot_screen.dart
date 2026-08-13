@@ -1331,7 +1331,7 @@ have instead.
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Pusaka Assistant'),
+                const Text('Restaurant Assistant'),
                 Row(
                   children: [
                     Container(
@@ -1496,7 +1496,7 @@ have instead.
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Pusaka Assistant',
+                  'Restaurant Assistant',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 14,
@@ -1971,7 +1971,7 @@ have instead.
                 onSubmitted: (_) => _send(),
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Ask Pusaka Assistant...',
+                  hintText: 'Ask Restaurant Assistant...',
                   hintStyle: const TextStyle(
                     fontFamily: 'Poppins',
                     color: AppColors.textHint,
