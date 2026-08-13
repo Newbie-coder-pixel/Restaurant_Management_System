@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/widgets/heritage_illustrations.dart';
 
 // ── User's bookings provider — JOIN branches ───────────────────────
 final _refreshTriggerProvider = StateProvider<int>((ref) => 0);
@@ -1103,13 +1102,20 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             AspectRatio(
               aspectRatio: 0.95,
               child: Container(
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  boxShadow: [
+                    BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.14),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14)),
+                  ],
                 ),
-                alignment: Alignment.center,
-                padding: const EdgeInsets.all(28),
-                child: const TableReservationIllustration(),
+                child: Image.asset(
+                  'assets/images/reserve_table_hero.jpg',
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ],

@@ -1,9 +1,6 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/widgets/heritage_illustrations.dart';
-import '../../../shared/widgets/diamond_pattern_painter.dart';
 
 class CustomerLoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
@@ -23,13 +20,11 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen>
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
 
-  // Card fade/slide-in on first mount, and a slow, subtle float loop for the
-  // hero illustration — small motion touches that make the page feel alive
-  // instead of a static template.
+  // Card fade/slide-in on first mount — a small motion touch that makes the
+  // page feel alive instead of a static template.
   late final AnimationController _entranceCtrl;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
-  late final AnimationController _floatCtrl;
 
   @override
   void initState() {
@@ -40,10 +35,6 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen>
     _slide = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
         .animate(CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic));
     _entranceCtrl.forward();
-
-    _floatCtrl = AnimationController(
-        vsync: this, duration: const Duration(seconds: 4))
-      ..repeat(reverse: true);
   }
 
   @override
@@ -53,7 +44,6 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen>
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _entranceCtrl.dispose();
-    _floatCtrl.dispose();
     super.dispose();
   }
 
@@ -426,172 +416,45 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: LayoutBuilder(builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 900;
-        return Stack(
-          children: [
-            Positioned.fill(child: _buildBackdrop()),
-            SafeArea(
-              child: isWide ? _buildWideLayout() : _buildNarrowLayout(),
-            ),
-          ],
-        );
-      }),
-    );
-  }
-
-  // Soft warm glow blobs instead of the old flat horizontal stripes —
-  // cheap (no blur filter) but reads as a modern gradient backdrop.
-  Widget _buildBackdrop() {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: Container(color: AppColors.background),
-        ),
-        Positioned(
-          top: -140, left: -100,
-          child: _glowBlob(360, AppColors.primary.withValues(alpha: 0.10)),
-        ),
-        Positioned(
-          bottom: -160, right: -120,
-          child: _glowBlob(420, AppColors.accent.withValues(alpha: 0.08)),
-        ),
-      ],
-    );
-  }
-
-  Widget _glowBlob(double size, Color color) => Container(
-        width: size, height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
-        ),
-      );
-
-  Widget _buildWideLayout() {
-    return Row(
-      children: [
-        Expanded(flex: 6, child: _buildHeroPanel()),
-        Expanded(
-          flex: 5,
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: _buildCard(showHeader: true, compactHeader: true),
+      body: Stack(
+        children: [
+          Positioned.fill(child: _buildBackdrop()),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: _buildCard(showHeader: true, compactHeader: false),
+                ),
               ),
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNarrowLayout() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: _buildCard(showHeader: true, compactHeader: false),
-        ),
-      ),
-    );
-  }
-
-  // Left-side hero panel (wide layouts only): gradient + diamond texture +
-  // a gently floating illustration + a few benefit chips, so the brand gets
-  // real visual weight instead of a small logo line above the form.
-  Widget _buildHeroPanel() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.primary, AppColors.accent],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: DiamondPatternPainter(
-                  step: 30, color: Colors.white.withValues(alpha: 0.5)),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(48, 56, 48, 48),
-            // ConstrainedBox + SingleChildScrollView (rather than Spacer-based
-            // spacing) so the logo/illustration/tagline block never overlaps
-            // on shorter viewports — it scrolls instead of squeezing.
-            child: LayoutBuilder(builder: (context, constraints) {
-              return SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(children: [
-                        Container(
-                          width: 40, height: 40,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
-                          ),
-                          child: const Icon(Icons.restaurant_rounded, color: Colors.white, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text('Restaurant',
-                            style: TextStyle(fontFamily: 'Poppins', fontSize: 22,
-                                fontWeight: FontWeight.w800, color: Colors.white)),
-                      ]),
-                      const SizedBox(height: 32),
-                      Center(
-                        child: AnimatedBuilder(
-                          animation: _floatCtrl,
-                          builder: (context, child) => Transform.translate(
-                            offset: Offset(0, -8 * sin(_floatCtrl.value * pi)),
-                            child: child,
-                          ),
-                          child: const SizedBox(
-                            width: 220, height: 220,
-                            child: HeroPlatterIllustration(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 48),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Honest flavors from the archipelago',
-                              style: TextStyle(fontFamily: 'Poppins', fontSize: 26,
-                                  fontWeight: FontWeight.w800, color: Colors.white, height: 1.2)),
-                          const SizedBox(height: 10),
-                          Text('Modern Indonesian Heritage',
-                              style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
-                                  fontStyle: FontStyle.italic,
-                                  color: Colors.white.withValues(alpha: 0.85))),
-                          const SizedBox(height: 24),
-                          const Wrap(spacing: 10, runSpacing: 10, children: [
-                            _HeroChip(icon: Icons.bolt_rounded, label: 'Book in seconds'),
-                            _HeroChip(icon: Icons.local_fire_department_rounded, label: 'Fresh daily'),
-                            _HeroChip(icon: Icons.location_on_rounded, label: 'Live order tracking'),
-                          ]),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
         ],
       ),
+    );
+  }
+
+  // Full-bleed photo backdrop with a warm scrim so the centered card stays
+  // readable regardless of how bright/busy the photo is underneath it.
+  Widget _buildBackdrop() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset('assets/images/login_background.jpg', fit: BoxFit.cover),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.primary.withValues(alpha: 0.55),
+                Colors.black.withValues(alpha: 0.45),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -842,32 +705,6 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen>
         Text(label, style: const TextStyle(fontFamily: 'Poppins',
           fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
       ])));
-}
-
-// Small benefit chip shown on the hero panel — translucent white pill over
-// the gradient, matching the frosted-glass look used elsewhere in the app.
-class _HeroChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _HeroChip({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: Colors.white),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
-            fontWeight: FontWeight.w600, color: Colors.white)),
-      ]),
-    );
-  }
 }
 
 // Tap-scale wrapper used by every button/link on this screen for a snappier,

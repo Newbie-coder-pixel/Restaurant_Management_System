@@ -22,7 +22,6 @@ import 'widgets/cart_bottom_bar.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/responsive_layout.dart';
-import '../../../shared/widgets/heritage_illustrations.dart';
 
 // ── Active branches provider ─────────────────────────────────────────
 final _customerBranchesProvider =
@@ -1170,16 +1169,20 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
 
       final image = Container(
         height: isWide ? 420 : 220,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          gradient: const LinearGradient(
-              colors: [AppColors.primary, AppColors.accent],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight),
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.18),
+                blurRadius: 32,
+                offset: const Offset(0, 16)),
+          ],
         ),
-        alignment: Alignment.center,
-        padding: EdgeInsets.all(isWide ? 32 : 20),
-        child: const HeroPlatterIllustration(),
+        child: Image.asset(
+          'assets/images/landing_hero.jpg',
+          fit: BoxFit.cover,
+        ),
       );
 
       if (isWide) {
