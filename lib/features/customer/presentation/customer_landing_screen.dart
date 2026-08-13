@@ -330,83 +330,96 @@ class _CustomerLandingScreenState
   }
 
   // ── TOP NAV ──────────────────────────────────────────────────
+  // Below `_navLinksBreakpoint`, the Menu/Locations/Reservations inline
+  // links don't fit next to the brand + cart + hamburger without
+  // overflowing — they're dropped in favor of the hamburger drawer and the
+  // hero's own "Explore Menu"/"Browse Locations" buttons, both of which
+  // reach the same destinations.
+  static const double _navLinksBreakpoint = 700;
+
   Widget _buildTopNav(User user, CartState cart) {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.background,
         border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              switchTab(0);
-              _homeTabKey.currentState?.scrollToTop();
-            },
-            child: const Text('Restaurant',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary)),
-          ),
-          const SizedBox(width: 28),
-          Expanded(
-            child: _tab == 0
-                ? Row(children: [
-                    _NavLink(
-                        label: 'Menu',
-                        active: true,
-                        onTap: _promptBranchSelection),
-                    const SizedBox(width: 24),
-                    _NavLink(
-                        label: 'Locations',
-                        onTap: () =>
-                            _homeTabKey.currentState?.scrollToLocations()),
-                    const SizedBox(width: 24),
-                    _NavLink(
-                        label: 'Reservations',
-                        onTap: () => switchTab(1)),
-                  ])
-                : const SizedBox.shrink(),
-          ),
-          GestureDetector(
-            onTap: cart.isEmpty
-                ? null
-                : () => context.go('/customer/checkout'),
-            child: Stack(clipBehavior: Clip.none, children: [
-              const Icon(Icons.shopping_cart_outlined,
-                  color: AppColors.textPrimary, size: 24),
-              if (!cart.isEmpty)
-                Positioned(
-                  right: -6,
-                  top: -6,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    constraints:
-                        const BoxConstraints(minWidth: 16, minHeight: 16),
-                    decoration: const BoxDecoration(
-                        color: AppColors.accent, shape: BoxShape.circle),
-                    child: Text('${cart.itemCount}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white)),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final showNavLinks = constraints.maxWidth >= _navLinksBreakpoint;
+        return Row(
+          children: [
+            GestureDetector(
+              onTap: () {
+                switchTab(0);
+                _homeTabKey.currentState?.scrollToTop();
+              },
+              child: const Text('Restaurant',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary)),
+            ),
+            if (showNavLinks) ...[
+              const SizedBox(width: 28),
+              Expanded(
+                child: _tab == 0
+                    ? Row(children: [
+                        _NavLink(
+                            label: 'Menu',
+                            active: true,
+                            onTap: _promptBranchSelection),
+                        const SizedBox(width: 24),
+                        _NavLink(
+                            label: 'Locations',
+                            onTap: () => _homeTabKey.currentState
+                                ?.scrollToLocations()),
+                        const SizedBox(width: 24),
+                        _NavLink(
+                            label: 'Reservations',
+                            onTap: () => switchTab(1)),
+                      ])
+                    : const SizedBox.shrink(),
+              ),
+            ] else
+              const Spacer(),
+            GestureDetector(
+              onTap: cart.isEmpty
+                  ? null
+                  : () => context.go('/customer/checkout'),
+              child: Stack(clipBehavior: Clip.none, children: [
+                const Icon(Icons.shopping_cart_outlined,
+                    color: AppColors.textPrimary, size: 24),
+                if (!cart.isEmpty)
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      constraints:
+                          const BoxConstraints(minWidth: 16, minHeight: 16),
+                      decoration: const BoxDecoration(
+                          color: AppColors.accent, shape: BoxShape.circle),
+                      child: Text('${cart.itemCount}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white)),
+                    ),
                   ),
-                ),
-            ]),
-          ),
-          const SizedBox(width: 20),
-          GestureDetector(
-            onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
-            child: const Icon(Icons.menu_rounded,
-                color: AppColors.textPrimary, size: 24),
-          ),
-        ],
-      ),
+              ]),
+            ),
+            const SizedBox(width: 16),
+            GestureDetector(
+              onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+              child: const Icon(Icons.menu_rounded,
+                  color: AppColors.textPrimary, size: 24),
+            ),
+          ],
+        );
+      }),
     );
   }
 
