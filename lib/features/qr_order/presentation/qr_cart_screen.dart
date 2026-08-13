@@ -543,7 +543,7 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                 onClear: () {
                   showDialog(
                     context: context,
-                    builder: (_) => AlertDialog(
+                    builder: (dialogCtx) => AlertDialog(
                       backgroundColor: AppColors.surface,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
@@ -553,13 +553,13 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
                           style: TextStyle(fontFamily: 'Poppins')),
                       actions: [
                         TextButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.pop(dialogCtx),
                           child: const Text('Cancel',
                               style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary))),
                         TextButton(
                           onPressed: () {
                             notifier.clearCart();
-                            Navigator.pop(context);
+                            Navigator.pop(dialogCtx);
                             context.pop();
                           },
                           style: TextButton.styleFrom(foregroundColor: AppColors.accent),

@@ -526,7 +526,7 @@ class _CustomerLandingScreenState
   void _confirmLogout() {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24)),
         title: const Text('Log out?',
@@ -536,14 +536,14 @@ class _CustomerLandingScreenState
             style: TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel',
                 style:
                     TextStyle(fontFamily: 'Poppins', color: Colors.grey)),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogCtx);
               await NotificationService.removeToken();
               await Supabase.instance.client.auth.signOut();
             },

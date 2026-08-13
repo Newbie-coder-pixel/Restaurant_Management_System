@@ -484,7 +484,7 @@ class _TableScreenState extends ConsumerState<TableScreen> {
       OutlinedButton.icon(
         onPressed: () => showDialog(
           context: context,
-          builder: (_) => AlertDialog(
+          builder: (dialogCtx) => AlertDialog(
             title: const Text('Load Sample Data?',
               style: TextStyle(
                 fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
@@ -494,11 +494,11 @@ class _TableScreenState extends ConsumerState<TableScreen> {
               style: TextStyle(fontFamily: 'Poppins')),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(dialogCtx),
                 child: const Text('Cancel')),
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.pop(dialogCtx);
                   _seedTables();
                 },
                 child: const Text('Yes, Load Data')),

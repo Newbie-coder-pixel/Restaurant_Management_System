@@ -127,19 +127,19 @@ class _MenuCardState extends ConsumerState<MenuCard>
   void _handleDelete() {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Delete Menu Item?'),
         content: Text('"${widget.menu.name}" will be permanently deleted.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel'),
           ),
           FilledButton(
             style:
                 FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogCtx);
               await ref
                   .read(menuProvider.notifier)
                   .deleteMenu(widget.menu.id);

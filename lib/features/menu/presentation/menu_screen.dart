@@ -429,7 +429,7 @@ class _MenuItemCardState extends ConsumerState<_MenuItemCard> {
   void _handleDelete() {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete Menu Item?',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -437,12 +437,12 @@ class _MenuItemCardState extends ConsumerState<_MenuItemCard> {
           style: const TextStyle(fontFamily: 'Poppins')),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogCtx);
               await ref.read(menuProvider.notifier).deleteMenu(widget.menu.id);
             },
             child: const Text('Delete'),
