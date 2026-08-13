@@ -116,6 +116,20 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       // other roles use their own _branchId
       final effectiveBranchId = _isSuperAdmin ? _selectedBranchId : _branchId;
 
+      // Bound "active" to today only — without this, an order that reaches
+      // e.g. 'served' and never gets moved to a terminal status stays in
+      // this result set forever, accumulating across days. Local midnight
+      // is converted with .toUtc() before sending to Postgres — sending a
+      // local DateTime's ISO string without it omits the UTC offset, so
+      // Postgres reads it as UTC and the "today" window shifts by the
+      // local offset (WIB = +7h here). Same pattern as reports_provider.dart.
+      final today = DateTime.now().toLocal();
+      final todayStart =
+          DateTime(today.year, today.month, today.day).toUtc().toIso8601String();
+      final tomorrowStart = DateTime(today.year, today.month, today.day + 1)
+          .toUtc()
+          .toIso8601String();
+
       final activeStatuses = ['new', 'created', 'paid', 'preparing', 'ready', 'served'];
       var ordQuery = Supabase.instance.client
           .from('orders')
@@ -128,7 +142,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
             restaurant_tables(table_number),
             order_items(*)
           ''')
-          .inFilter('status', activeStatuses);
+          .inFilter('status', activeStatuses)
+          .gte('created_at', todayStart)
+          .lt('created_at', tomorrowStart);
       if (effectiveBranchId != null) {
         ordQuery = ordQuery.eq('branch_id', effectiveBranchId);
       }

@@ -108,7 +108,9 @@ class _BranchDashboardState extends ConsumerState<BranchDashboardScreen> {
               .gte('created_at', todayStart.toIso8601String())
               .lt('created_at', tomorrowStart.toIso8601String()),
           client.from('orders').select('id')
-              .eq('branch_id', id).inFilter('status', activeStatuses),
+              .eq('branch_id', id).inFilter('status', activeStatuses)
+              .gte('created_at', todayStart.toIso8601String())
+              .lt('created_at', tomorrowStart.toIso8601String()),
           client.from('staff').select('id')
               .eq('branch_id', id).eq('is_active', true),
           client.from('attendance').select('id')
