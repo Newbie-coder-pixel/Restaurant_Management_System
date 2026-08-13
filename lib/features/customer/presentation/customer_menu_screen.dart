@@ -238,95 +238,117 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
   }
 
   // ── TOP NAV ──────────────────────────────────────────────────
+  // Below this width the Menu/Locations/Reservations inline links overflow
+  // next to the brand + cart icon, so they're dropped for a compact
+  // calendar-icon shortcut to Reservations — the one destination here not
+  // otherwise reachable (Menu is this page, Locations is the back/brand tap).
+  static const double _navLinksBreakpoint = 700;
+
   Widget _buildTopNav(CartState cart) {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.background,
         border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () =>
-                context.canPop() ? context.pop() : context.go('/customer'),
-            child: const Text(
-              'Restaurant',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final showNavLinks = constraints.maxWidth >= _navLinksBreakpoint;
+        return Row(
+          children: [
+            GestureDetector(
+              onTap: () =>
+                  context.canPop() ? context.pop() : context.go('/customer'),
+              child: const Text(
+                'Restaurant',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 28),
-          Expanded(
-            child: Row(
-              children: [
-                _NavLink(
-                  label: 'Menu',
-                  active: true,
-                  onTap: () => _scrollController.animateTo(
-                    0,
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeInOutCubic,
-                  ),
+            if (showNavLinks) ...[
+              const SizedBox(width: 28),
+              Expanded(
+                child: Row(
+                  children: [
+                    _NavLink(
+                      label: 'Menu',
+                      active: true,
+                      onTap: () => _scrollController.animateTo(
+                        0,
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOutCubic,
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    _NavLink(
+                      label: 'Locations',
+                      onTap: () => context.go('/customer'),
+                    ),
+                    const SizedBox(width: 24),
+                    _NavLink(
+                      label: 'Reservations',
+                      onTap: () => context.go('/customer?tab=1'),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 24),
-                _NavLink(
-                  label: 'Locations',
-                  onTap: () => context.go('/customer'),
-                ),
-                const SizedBox(width: 24),
-                _NavLink(
-                  label: 'Reservations',
-                  onTap: () => context.go('/customer?tab=1'),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: cart.isEmpty ? null : () => context.go('/customer/checkout'),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(
-                  Icons.shopping_cart_outlined,
+              ),
+            ] else ...[
+              const Spacer(),
+              GestureDetector(
+                onTap: () => context.go('/customer?tab=1'),
+                child: const Icon(
+                  Icons.calendar_today_outlined,
                   color: AppColors.textPrimary,
-                  size: 24,
+                  size: 22,
                 ),
-                if (!cart.isEmpty)
-                  Positioned(
-                    right: -6,
-                    top: -6,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
-                      decoration: const BoxDecoration(
-                        color: AppColors.accent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '${cart.itemCount}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+              ),
+              const SizedBox(width: 20),
+            ],
+            GestureDetector(
+              onTap: cart.isEmpty ? null : () => context.go('/customer/checkout'),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(
+                    Icons.shopping_cart_outlined,
+                    color: AppColors.textPrimary,
+                    size: 24,
+                  ),
+                  if (!cart.isEmpty)
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        decoration: const BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${cart.itemCount}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      }),
     );
   }
 
