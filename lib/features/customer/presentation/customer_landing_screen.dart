@@ -512,7 +512,8 @@ class _CustomerLandingScreenState
                       color: AppColors.accent)),
               onTap: () {
                 Navigator.of(context).pop();
-                _confirmLogout();
+                WidgetsBinding.instance
+                    .addPostFrameCallback((_) => _confirmLogout());
               },
             ),
             const SizedBox(height: 12),
