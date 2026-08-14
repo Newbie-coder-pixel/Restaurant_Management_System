@@ -8,6 +8,7 @@ import 'core/config/app_config.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/order_sound_service.dart';
 import 'shared/widgets/floating_chatbot_overlay.dart';
 import 'shared/widgets/order_notification_overlay.dart';
 import 'features/qr_order/presentation/qr_chatbot_overlay.dart';
@@ -20,27 +21,21 @@ external void _replaceState(JSAny? data, String title, String url);
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 1. Firebase dulu
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // 2. Supabase
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
     anonKey: AppConfig.supabaseAnonKey,
-    realtimeClientOptions: const RealtimeClientOptions(
-      eventsPerSecond: 40,
-    ),
+    realtimeClientOptions: const RealtimeClientOptions(eventsPerSecond: 40),
   );
 
   // 3. Midtrans SDK
@@ -136,54 +131,61 @@ class RestaurantApp extends ConsumerWidget {
       ),
       themeMode: ThemeMode.light,
       routerConfig: router,
-      builder: (context, child) => Overlay(
-        // The floating chatbot lives alongside `child` here, outside
-        // GoRouter's own Navigator — so it has no Overlay ancestor of its
-        // own, which Tooltip/OverlayPortal (used by these floating widgets)
-        // need. A plain Overlay supplies that without being a second,
-        // separate route stack: an earlier `Navigator(...)` here was a
-        // second root-ish Navigator that `showDialog(useRootNavigator:
-        // true)` (the default) would target instead of GoRouter's own
-        // Navigator, while the dialog's own pop calls (and, more subtly,
-        // Flutter's browser-back handling) resolved against GoRouter's
-        // Navigator — a mismatch that could pop the wrong thing or leave
-        // stale routes/render state behind after rapid browser
-        // back-navigation. Overlay can't receive a pushed route at all, so
-        // that whole class of bug can't happen here anymore.
-        initialEntries: [
-          OverlayEntry(
-            builder: (context) => Stack(
-              children: [
-                if (child != null) child,
-                const FloatingChatbotOverlay(),
-                // Rebuilds whenever GoRouter navigates so the QR menu
-                // assistant can show/hide itself based on the current route
-                // (see QrChatbotOverlay's doc comment for why it needs this
-                // instead of just reading GoRouterState from context).
-                ListenableBuilder(
-                  listenable: router.routerDelegate,
-                  builder: (context, _) => QrChatbotOverlay(
-                    currentPath: router.routerDelegate.currentConfiguration.uri.path,
+      builder: (context, child) => Listener(
+        // Primes OrderSoundService's shared player on the very first tap
+        // anywhere in the app — see its unlock() doc comment. Cheaper to
+        // hang this off every pointer-down than to track "has the user
+        // interacted yet" state ourselves; unlock() already no-ops after
+        // the first successful call.
+        onPointerDown: (_) => OrderSoundService.unlock(),
+        child: Overlay(
+          // The floating chatbot lives alongside `child` here, outside
+          // GoRouter's own Navigator — so it has no Overlay ancestor of its
+          // own, which Tooltip/OverlayPortal (used by these floating widgets)
+          // need. A plain Overlay supplies that without being a second,
+          // separate route stack: an earlier `Navigator(...)` here was a
+          // second root-ish Navigator that `showDialog(useRootNavigator:
+          // true)` (the default) would target instead of GoRouter's own
+          // Navigator, while the dialog's own pop calls (and, more subtly,
+          // Flutter's browser-back handling) resolved against GoRouter's
+          // Navigator — a mismatch that could pop the wrong thing or leave
+          // stale routes/render state behind after rapid browser
+          // back-navigation. Overlay can't receive a pushed route at all, so
+          // that whole class of bug can't happen here anymore.
+          initialEntries: [
+            OverlayEntry(
+              builder: (context) => Stack(
+                children: [
+                  if (child != null) child,
+                  const FloatingChatbotOverlay(),
+                  // Rebuilds whenever GoRouter navigates so the QR menu
+                  // assistant can show/hide itself based on the current route
+                  // (see QrChatbotOverlay's doc comment for why it needs this
+                  // instead of just reading GoRouterState from context).
+                  ListenableBuilder(
+                    listenable: router.routerDelegate,
+                    builder: (context, _) => QrChatbotOverlay(
+                      currentPath:
+                          router.routerDelegate.currentConfiguration.uri.path,
+                    ),
                   ),
-                ),
-                // Global order-progress banner (staff/customer/qr) — see
-                // OrderNotificationOverlay's doc comment.
-                ListenableBuilder(
-                  listenable: router.routerDelegate,
-                  builder: (context, _) => OrderNotificationOverlay(
-                    currentPath: router.routerDelegate.currentConfiguration.uri.path,
+                  // Global order-progress banner (staff/customer/qr) — see
+                  // OrderNotificationOverlay's doc comment.
+                  ListenableBuilder(
+                    listenable: router.routerDelegate,
+                    builder: (context, _) => OrderNotificationOverlay(
+                      currentPath:
+                          router.routerDelegate.currentConfiguration.uri.path,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       localizationsDelegates: const [],
-      supportedLocales: const [
-        Locale('id'),
-        Locale('en'),
-      ],
+      supportedLocales: const [Locale('id'), Locale('en')],
     );
   }
 }
