@@ -191,64 +191,20 @@ class _CustomerOrderHistoryScreenState
     router.go('/customer/checkout');
   }
 
-  // ── TOP BAR (Restaurant header, shared visual language with other customer screens) ──
-  Widget _buildTopBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => context.go('/customer'),
-            child: const Text(
-              'Restaurant',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 28),
-          Expanded(
-            child: Row(
-              children: [
-                _NavLink(label: 'Menu', onTap: () => context.go('/customer')),
-                const SizedBox(width: 24),
-                _NavLink(label: 'Locations', onTap: () => context.go('/customer')),
-                const SizedBox(width: 24),
-                _NavLink(label: 'Reservations', onTap: () => context.go('/customer?tab=1')),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () => context.go('/customer/checkout'),
-            child: const Icon(
-              Icons.shopping_cart_outlined,
-              color: AppColors.textPrimary,
-              size: 24,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // This screen is only ever embedded as the "History" sub-tab of the
+  // landing page's Orders tab (see _OrderTab in customer_landing_screen.dart),
+  // which already provides its own Scaffold and tab bar — so this screen
+  // renders its content directly rather than wrapping in another
+  // Scaffold + duplicate "Restaurant" top nav.
   @override
   Widget build(BuildContext context) {
     final historyAsync = ref.watch(_orderHistoryProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(),
-            Expanded(
+    return SafeArea(
+      top: false,
+      child: Column(
+        children: [
+          Expanded(
               child: historyAsync.when(
                 loading: () => const Center(
                   child: Column(
@@ -303,9 +259,8 @@ class _CustomerOrderHistoryScreenState
                   return _buildContent(orders);
                 },
               ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -458,28 +413,6 @@ class _CustomerOrderHistoryScreenState
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd)))),
       ])));
-}
-
-class _NavLink extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _NavLink({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontFamily: 'Poppins',
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textSecondary,
-        ),
-      ),
-    );
-  }
 }
 
 // ── Order History Card ─────────────────────────────────────────────

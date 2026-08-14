@@ -210,13 +210,29 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     );
   }
 
+  // Fixed-behavior SnackBars pin to the very bottom of the Scaffold, which
+  // on narrow/tablet-portrait widths collides with `_buildCompactCartBar`
+  // (only shown there, not on wide layouts with the side order panel — see
+  // `build()`). Floating with a bottom margin clearing that bar's rough
+  // height avoids the overlap either way.
+  void _showSnack(String message, {required Color backgroundColor, Duration? duration}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: backgroundColor,
+      duration: duration ?? const Duration(seconds: 4),
+      behavior: SnackBarBehavior.floating,
+      margin: EdgeInsets.only(
+        left: 16, right: 16,
+        bottom: _cartTotal > 0 ? 140 : 16,
+      ),
+    ));
+  }
+
   // ── Submit ─────────────────────────────────────────────────────────────────
   Future<void> _submitOrder() async {
     if (_cart.isEmpty) return;
     if (_nameCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Customer name is required.'),
-        backgroundColor: AppColors.accent));
+      _showSnack('Customer name is required.', backgroundColor: AppColors.accent);
       return;
     }
 
@@ -307,18 +323,14 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
           _estimatedMinutes = null;
           _isSubmitting = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('✅ Order successfully sent to the kitchen!$estimateText'),
-          backgroundColor: const Color(0xFF43A047),
-          duration: const Duration(seconds: 4),
-        ));
+        _showSnack('✅ Order successfully sent to the kitchen!$estimateText',
+            backgroundColor: const Color(0xFF43A047));
         widget.onOrderCreated();
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'), backgroundColor: AppColors.accent));
+        _showSnack('Error: $e', backgroundColor: AppColors.accent);
       }
     }
   }
