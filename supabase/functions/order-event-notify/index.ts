@@ -55,17 +55,32 @@ type OrderEventRecord = {
   table_name_snapshot: string | null;
 };
 
+// Roles that can open the Kitchen (KDS) screen — mirrors StaffRole
+// .accessFeatures's 'Kitchen (KDS)' entries in
+// lib/core/models/staff_role.dart. Kept as a manual duplicate since this
+// function runs in Deno, outside the Flutter build; update both lists
+// together if kitchen access is ever granted to another role.
+const KITCHEN_ACCESS_ROLES = ["superadmin", "kitchen"];
+
+function uniqueRoles(roles: string[]): string[] {
+  return [...new Set(roles)];
+}
+
 // ── Staff role→event matrix ────────────────────────────────────────────────
-// Deliberately conservative defaults (not every event pushes to every role)
-// to avoid paging staff for progress they already see live on KDS/order
-// screens — only pushed for the events that matter when a staff member
-// ISN'T looking at a screen. Easy to retune later since this is plain
-// function logic, not schema.
+// Every role with Kitchen (KDS) access hears every order status change —
+// including superadmin, so logging in as superadmin is enough to verify the
+// notification pipeline end to end without needing a dedicated kitchen
+// account. waiter is added on top for the two transitions it specifically
+// needs (new order, ready-to-serve); other roles stay untouched.
 function staffRolesForEvent(e: OrderEventRecord): string[] {
   if (e.event_type === "status_changed") {
-    if (e.old_value === null) return ["kitchen", "waiter"]; // new order
-    if (e.new_value === "ready") return ["waiter"];
-    return [];
+    if (e.old_value === null) {
+      return uniqueRoles([...KITCHEN_ACCESS_ROLES, "waiter"]); // new order
+    }
+    if (e.new_value === "ready") {
+      return uniqueRoles([...KITCHEN_ACCESS_ROLES, "waiter"]);
+    }
+    return KITCHEN_ACCESS_ROLES; // other in-progress transitions (e.g. preparing)
   }
   if (e.event_type === "bill_requested") return ["waiter", "cashier"];
   if (e.event_type === "cancelled") return ["manager", "superadmin"];
@@ -186,15 +201,31 @@ serve(async (req: Request) => {
       event_type: record.event_type,
     };
 
-    // ── Staff recipients (branch-scoped, role-filtered) ──────────────────
+    // ── Staff recipients (role-filtered; branch-scoped except superadmin) ─
+    // superadmin's own `staff.branch_id` is just their assigned home branch
+    // (often none), not a statement of which branches they oversee — same
+    // reason the client's RLS policy and Realtime subscription both treat
+    // superadmin as "all branches" (is_superadmin() OR branch_id =
+    // get_my_branch_id() — see order_events_staff_select policy, and
+    // OrderNotificationOverlay's null-branchId handling). A plain
+    // .eq('branch_id', record.branch_id) here would silently drop
+    // superadmin for every branch other than their own.
     const staffRoles = staffRolesForEvent(record);
     if (staffRoles.length > 0) {
-      const { data: staffRows, error: staffErr } = await supabase
-        .from("staff")
-        .select("user_id")
-        .eq("branch_id", record.branch_id)
-        .eq("is_active", true)
-        .in("role", staffRoles);
+      const branchScopedRoles = staffRoles.filter((r) => r !== "superadmin");
+      const wantsSuperadmin = staffRoles.includes("superadmin");
+
+      let staffQuery = supabase.from("staff").select("user_id").eq("is_active", true);
+      if (wantsSuperadmin && branchScopedRoles.length > 0) {
+        staffQuery = staffQuery.or(
+          `role.eq.superadmin,and(branch_id.eq.${record.branch_id},role.in.(${branchScopedRoles.join(",")}))`,
+        );
+      } else if (wantsSuperadmin) {
+        staffQuery = staffQuery.eq("role", "superadmin");
+      } else {
+        staffQuery = staffQuery.eq("branch_id", record.branch_id).in("role", branchScopedRoles);
+      }
+      const { data: staffRows, error: staffErr } = await staffQuery;
 
       if (staffErr) {
         console.error("[order-event-notify] staff lookup error:", staffErr.message);
