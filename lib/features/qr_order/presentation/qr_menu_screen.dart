@@ -20,6 +20,18 @@ final _tableInfoProvider = FutureProvider.family<Map<String, dynamic>?, String>(
   (ref, tableId) async => ref.read(qrOrderRepositoryProvider).fetchTableInfo(tableId),
 );
 
+// Gates entry on the `t=` query param matching today's server-computed
+// token for this table — see validate_qr_token() in
+// supabase/migrations/20260814020000_table_qr_rotation.sql. This is what
+// actually makes a table's QR code stop working the day after it was
+// printed/scanned (or immediately, if staff regenerates it early).
+final _qrTokenValidProvider =
+    FutureProvider.family<bool, ({String tableId, String? token})>(
+  (ref, args) async => ref
+      .read(qrOrderRepositoryProvider)
+      .validateQrToken(args.tableId, args.token),
+);
+
 // Prevents disconnected duplicate orders: if this table already has an
 // active (unpaid, uncancelled) order, a fresh QR scan should offer to join
 // it rather than silently starting an unrelated second order.
@@ -40,7 +52,8 @@ final _clockTickProvider = StreamProvider<int>((ref) {
 
 class QrMenuScreen extends ConsumerStatefulWidget {
   final String tableId;
-  const QrMenuScreen({super.key, required this.tableId});
+  final String? qrToken;
+  const QrMenuScreen({super.key, required this.tableId, this.qrToken});
 
   @override
   ConsumerState<QrMenuScreen> createState() => _QrMenuScreenState();
@@ -183,8 +196,23 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    final tokenValidAsync = ref.watch(
+      _qrTokenValidProvider((tableId: widget.tableId, token: widget.qrToken)),
+    );
     final tableInfoAsync = ref.watch(_tableInfoProvider(widget.tableId));
     ref.watch(_clockTickProvider); // forces a rebuild every 30s; value unused
+
+    // Checked before anything else loads — a stale/missing token means this
+    // link shouldn't work at all, regardless of table/branch state.
+    if (tokenValidAsync.valueOrNull == false) {
+      return const _QrExpiredScreen();
+    }
+    if (!tokenValidAsync.hasValue) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
 
     ref.listen<AsyncValue<QrOrderModel?>>(
       _activeOrderForTableProvider(widget.tableId),
@@ -360,6 +388,58 @@ class _BranchClosedScreen extends ConsumerWidget {
                   label: const Text('Check again',
                       style: TextStyle(fontFamily: 'Poppins', color: AppColors.primary,
                           fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── QR Expired Screen ──────────────────────────────────────────────────────────
+// Shown when the `t=` token on this link doesn't match today's server-computed
+// token for the table — i.e. this is a code from a previous day (rotates
+// automatically every midnight WIB) or one staff force-regenerated early. See
+// supabase/migrations/20260814020000_table_qr_rotation.sql.
+class _QrExpiredScreen extends StatelessWidget {
+  const _QrExpiredScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.qr_code_2_outlined, color: AppColors.accent, size: 40),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'This QR code has expired',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 22,
+                      color: AppColors.textPrimary, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Table QR codes refresh daily for security. Please scan the '
+                  'current code on your table, or ask a staff member for help.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                      color: AppColors.textSecondary, height: 1.5),
                 ),
               ],
             ),

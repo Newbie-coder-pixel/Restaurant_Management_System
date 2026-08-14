@@ -12,6 +12,7 @@ import '../../../shared/widgets/staff_shell.dart';
 import '../../../shared/widgets/diamond_pattern_painter.dart';
 import 'widgets/table_card.dart' show showTableDetailSheet;
 import 'widgets/add_table_dialog.dart';
+import 'table_qr_codes_screen.dart';
 
 class TableScreen extends ConsumerStatefulWidget {
   const TableScreen({super.key});
@@ -298,6 +299,24 @@ class _TableScreenState extends ConsumerState<TableScreen> {
               ),
             ),
           ),
+        IconButton(
+          tooltip: (_userRole == StaffRole.superadmin && _selectedBranchId == null)
+              ? 'Select a branch first'
+              : 'Table QR Codes',
+          icon: const Icon(Icons.qr_code_2, color: AppColors.textSecondary),
+          onPressed: () {
+            final targetBranch = (_userRole == StaffRole.superadmin)
+                ? _selectedBranchId
+                : _branchId;
+            if (targetBranch == null) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TableQrCodesScreen(branchId: targetBranch),
+              ),
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
           onPressed: _load,

@@ -686,6 +686,25 @@ class QrOrderRepository {
     }
   }
 
+  // Checks whether the `t=` token on a scanned/bookmarked QR link is still
+  // today's valid code for that table — see validate_qr_token() in
+  // supabase/migrations/20260814020000_table_qr_rotation.sql. Fails closed:
+  // any error (network, table not found, etc.) is treated as invalid rather
+  // than silently letting an unverifiable link through.
+  Future<bool> validateQrToken(String tableId, String? token) async {
+    if (token == null || token.isEmpty) return false;
+    try {
+      final res = await _client.rpc(
+        'validate_qr_token',
+        params: {'p_table_id': tableId, 'p_token': token},
+      );
+      return res as bool? ?? false;
+    } catch (e) {
+      debugPrint('validateQrToken error: $e');
+      return false;
+    }
+  }
+
   // ── Report a table status mismatch from the QR gate ─────────────────────
   // e.g. status says "cleaning" but the table looks fine to the customer, or
   // vice versa. Staff see a badge on the table card; it's cleared the next

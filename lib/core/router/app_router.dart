@@ -308,9 +308,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'qrMenu',
         pageBuilder: (context, state) {
           final tableId = state.pathParameters['tableId']!;
+          final token = state.uri.queryParameters['t'];
           return NoTransitionPage(
             key: state.pageKey,
-            child: QrMenuScreen(tableId: tableId),
+            child: QrMenuScreen(tableId: tableId, qrToken: token),
           );
         },
         routes: [
