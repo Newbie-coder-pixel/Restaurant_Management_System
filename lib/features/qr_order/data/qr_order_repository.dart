@@ -106,7 +106,15 @@ class QrOrderRepository {
             'source': 'dine_in',
             if (notes != null && notes.isNotEmpty) 'notes': notes,
             if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
-            'created_at': DateTime.now().toIso8601String(),
+            // Deliberately omitted: the DB column default (now(), always
+            // correctly UTC) is what the staff and customer order-creation
+            // paths already rely on. This used to send
+            // DateTime.now().toIso8601String() — Dart's DateTime.now() is
+            // LOCAL time, and toIso8601String() on a local (non-UTC)
+            // DateTime produces a string with no 'Z'/offset marker, which
+            // Postgres then reads as if it WERE UTC — shifting the stored
+            // value ~7 hours (WIB = UTC+7) into the future and making the
+            // KDS "Wait Time" for QR orders show as negative.
           })
           // NOT .select() (== select=*): PostgREST does INSERT ... RETURNING
           // <selected columns>, which requires SELECT privilege on every

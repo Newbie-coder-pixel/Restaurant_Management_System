@@ -157,25 +157,40 @@ class RestaurantApp extends ConsumerWidget {
               builder: (context) => Stack(
                 children: [
                   if (child != null) child,
-                  const FloatingChatbotOverlay(),
+                  // These three float alongside `child` rather than inside
+                  // it, so — unlike every real screen, which gets one from
+                  // its own Scaffold — they have no Material ancestor of
+                  // their own. Any InkWell/ink effect inside them (e.g. the
+                  // QR chatbot's InkWell at qr_chatbot_screen.dart:799)
+                  // throws "No Material widget found" without this.
+                  const Material(
+                    type: MaterialType.transparency,
+                    child: FloatingChatbotOverlay(),
+                  ),
                   // Rebuilds whenever GoRouter navigates so the QR menu
                   // assistant can show/hide itself based on the current route
                   // (see QrChatbotOverlay's doc comment for why it needs this
                   // instead of just reading GoRouterState from context).
-                  ListenableBuilder(
-                    listenable: router.routerDelegate,
-                    builder: (context, _) => QrChatbotOverlay(
-                      currentPath:
-                          router.routerDelegate.currentConfiguration.uri.path,
+                  Material(
+                    type: MaterialType.transparency,
+                    child: ListenableBuilder(
+                      listenable: router.routerDelegate,
+                      builder: (context, _) => QrChatbotOverlay(
+                        currentPath: router.routerDelegate.currentConfiguration
+                            .uri.path,
+                      ),
                     ),
                   ),
                   // Global order-progress banner (staff/customer/qr) — see
                   // OrderNotificationOverlay's doc comment.
-                  ListenableBuilder(
-                    listenable: router.routerDelegate,
-                    builder: (context, _) => OrderNotificationOverlay(
-                      currentPath:
-                          router.routerDelegate.currentConfiguration.uri.path,
+                  Material(
+                    type: MaterialType.transparency,
+                    child: ListenableBuilder(
+                      listenable: router.routerDelegate,
+                      builder: (context, _) => OrderNotificationOverlay(
+                        currentPath: router.routerDelegate.currentConfiguration
+                            .uri.path,
+                      ),
                     ),
                   ),
                 ],

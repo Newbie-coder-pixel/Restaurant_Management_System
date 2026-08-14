@@ -372,7 +372,13 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   }
 
   String _elapsedLabel(DateTime since) {
+    // Clamped to zero: a negative elapsed time is never meaningful (it
+    // means `since` is in the future relative to this client, e.g. clock
+    // skew or a timestamp stored without a timezone offset — see the fix
+    // in qr_order_repository.dart for one such case) and showing "-19:-58"
+    // instead of "00:00" just reads as broken rather than informative.
     final elapsed = DateTime.now().difference(since);
+    if (elapsed.isNegative) return '00:00';
     final mm = elapsed.inMinutes.remainder(100).toString().padLeft(2, '0');
     final ss = elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$mm:$ss';
