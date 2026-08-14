@@ -300,6 +300,10 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
             tableName: tableName,
             branchId: branchId,
           );
+          // Carried through to the order INSERT so the anon_insert_app_orders
+          // RLS policy can re-verify it server-side — see
+          // supabase/migrations/20260814030000_qr_order_token_binding.sql.
+          ref.read(activeQrTokenProvider.notifier).state = widget.qrToken;
         });
 
         return _MenuBody(

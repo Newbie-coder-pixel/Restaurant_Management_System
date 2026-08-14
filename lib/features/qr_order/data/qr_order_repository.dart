@@ -73,6 +73,12 @@ class QrOrderRepository {
     required String branchId,
     String? notes,
     String? deviceId,
+    // The validated token from this session's QR scan (see
+    // activeQrTokenProvider / validate_qr_token()). Required by the
+    // anon_insert_app_orders RLS policy for order_type='qr_order' — see
+    // supabase/migrations/20260814030000_qr_order_token_binding.sql. A
+    // missing/stale token fails the insert server-side, not just the UI gate.
+    String? qrAccessToken,
   }) async {
     if (session.items.isEmpty) {
       throw Exception('Cannot place an order with an empty cart.');
@@ -106,6 +112,8 @@ class QrOrderRepository {
             'source': 'dine_in',
             if (notes != null && notes.isNotEmpty) 'notes': notes,
             if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
+            if (qrAccessToken != null && qrAccessToken.isNotEmpty)
+              'qr_access_token': qrAccessToken,
             // Deliberately omitted: the DB column default (now(), always
             // correctly UTC) is what the staff and customer order-creation
             // paths already rely on. This used to send

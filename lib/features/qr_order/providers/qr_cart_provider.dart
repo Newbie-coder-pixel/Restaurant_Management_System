@@ -207,6 +207,16 @@ final activeQrTableProvider =
   (ref) => (tableId: '', tableName: null, branchId: ''),
 );
 
+// The token QrMenuScreen validated to even load (see validate_qr_token()).
+// Kept separate from activeQrTableProvider rather than added as a field on
+// it — that record is also the qrCartProvider family key, and folding the
+// token in there would reset the customer's in-progress cart every time the
+// token value changed identity. Read once at order-submit time in
+// qr_cart_screen.dart and sent to QrOrderRepository.createOrder so the
+// anon_insert_app_orders RLS policy can verify it server-side, not just at
+// the UI gate.
+final activeQrTokenProvider = StateProvider<String?>((ref) => null);
+
 final activeQrCartProvider = Provider<QrOrderSession>((ref) {
   final table = ref.watch(activeQrTableProvider);
   return ref.watch(qrCartProvider(table));

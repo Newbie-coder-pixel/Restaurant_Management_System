@@ -333,10 +333,12 @@ class _QrCartScreenState extends ConsumerState<QrCartScreen> {
     try {
       final correctedSession = cart.copyWith(tableId: tableId);
       final deviceId = await QrDeviceIdService.getDeviceId();
+      final qrAccessToken = ref.read(activeQrTokenProvider);
       final order = await repo.createOrder(
         session:  correctedSession,
         branchId: branchId,
         deviceId: deviceId,
+        qrAccessToken: qrAccessToken,
       );
 
       notifier.clearCart();
