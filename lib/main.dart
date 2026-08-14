@@ -136,39 +136,48 @@ class RestaurantApp extends ConsumerWidget {
       ),
       themeMode: ThemeMode.light,
       routerConfig: router,
-      builder: (context, child) => Navigator(
+      builder: (context, child) => Overlay(
         // The floating chatbot lives alongside `child` here, outside
-        // GoRouter's own Navigator — so it has no Overlay/Navigator ancestor
-        // of its own. Tooltip (OverlayPortal) and DropdownButton (which pushes
-        // a route) both need one; this nested Navigator supplies it without
-        // touching GoRouter's navigation stack.
-        onGenerateRoute: (settings) => PageRouteBuilder(
-          settings: settings,
-          pageBuilder: (context, animation, secondaryAnimation) => Stack(
-            children: [
-              if (child != null) child,
-              const FloatingChatbotOverlay(),
-              // Rebuilds whenever GoRouter navigates so the QR menu
-              // assistant can show/hide itself based on the current route
-              // (see QrChatbotOverlay's doc comment for why it needs this
-              // instead of just reading GoRouterState from context).
-              ListenableBuilder(
-                listenable: router.routerDelegate,
-                builder: (context, _) => QrChatbotOverlay(
-                  currentPath: router.routerDelegate.currentConfiguration.uri.path,
+        // GoRouter's own Navigator — so it has no Overlay ancestor of its
+        // own, which Tooltip/OverlayPortal (used by these floating widgets)
+        // need. A plain Overlay supplies that without being a second,
+        // separate route stack: an earlier `Navigator(...)` here was a
+        // second root-ish Navigator that `showDialog(useRootNavigator:
+        // true)` (the default) would target instead of GoRouter's own
+        // Navigator, while the dialog's own pop calls (and, more subtly,
+        // Flutter's browser-back handling) resolved against GoRouter's
+        // Navigator — a mismatch that could pop the wrong thing or leave
+        // stale routes/render state behind after rapid browser
+        // back-navigation. Overlay can't receive a pushed route at all, so
+        // that whole class of bug can't happen here anymore.
+        initialEntries: [
+          OverlayEntry(
+            builder: (context) => Stack(
+              children: [
+                if (child != null) child,
+                const FloatingChatbotOverlay(),
+                // Rebuilds whenever GoRouter navigates so the QR menu
+                // assistant can show/hide itself based on the current route
+                // (see QrChatbotOverlay's doc comment for why it needs this
+                // instead of just reading GoRouterState from context).
+                ListenableBuilder(
+                  listenable: router.routerDelegate,
+                  builder: (context, _) => QrChatbotOverlay(
+                    currentPath: router.routerDelegate.currentConfiguration.uri.path,
+                  ),
                 ),
-              ),
-              // Global order-progress banner (staff/customer/qr) — see
-              // OrderNotificationOverlay's doc comment.
-              ListenableBuilder(
-                listenable: router.routerDelegate,
-                builder: (context, _) => OrderNotificationOverlay(
-                  currentPath: router.routerDelegate.currentConfiguration.uri.path,
+                // Global order-progress banner (staff/customer/qr) — see
+                // OrderNotificationOverlay's doc comment.
+                ListenableBuilder(
+                  listenable: router.routerDelegate,
+                  builder: (context, _) => OrderNotificationOverlay(
+                    currentPath: router.routerDelegate.currentConfiguration.uri.path,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
       localizationsDelegates: const [],
       supportedLocales: const [
