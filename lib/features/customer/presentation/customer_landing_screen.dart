@@ -583,7 +583,7 @@ class _CustomerLandingScreenState
         Visibility(
           visible: _tab == 1,
           maintainState: false,
-          child: const CustomerMyBookingsScreen(),
+          child: const CustomerMyBookingsScreen(embedded: true),
         ),
         // ← REPLACED _EmbeddedOrderTracker with _OrderTab
         Visibility(

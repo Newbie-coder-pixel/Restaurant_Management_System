@@ -62,7 +62,13 @@ String? _validatePhone(String phone) {
 // MAIN SCREEN
 // ─────────────────────────────────────────────────────────────────
 class CustomerMyBookingsScreen extends ConsumerStatefulWidget {
-  const CustomerMyBookingsScreen({super.key});
+  // True when rendered as the "Table Booking" tab inside
+  // CustomerLandingScreen, which already supplies its own Scaffold and top
+  // nav — without this, both screens' top bars stacked on top of each
+  // other. False (default) keeps the standalone /customer/booking/:branchId
+  // route's own Scaffold + top bar.
+  final bool embedded;
+  const CustomerMyBookingsScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<CustomerMyBookingsScreen> createState() =>
@@ -266,63 +272,73 @@ class _CustomerMyBookingsScreenState
     final screenW = MediaQuery.of(context).size.width;
     final isDesktop = screenW > 700;
 
+    final content = Column(
+      children: [
+        if (!widget.embedded) _buildTopBar(),
+        Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            border: Border(bottom: BorderSide(color: AppColors.border)),
+          ),
+          child: TabBar(
+            controller: _tabCtrl,
+            labelStyle: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+            ),
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: AppColors.primary,
+            indicatorWeight: 3,
+            indicatorSize: TabBarIndicatorSize.label,
+            tabs: const [
+              Tab(
+                icon: Icon(Icons.add_circle_outline, size: 20),
+                text: 'New Reservation',
+              ),
+              Tab(
+                icon: Icon(Icons.calendar_month_outlined, size: 20),
+                text: 'My Reservations',
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabCtrl,
+            children: [
+              _BookingForm(
+                isDesktop: isDesktop,
+                onSuccess: () {
+                  ref.read(_refreshTriggerProvider.notifier).state++;
+                  _tabCtrl.animateTo(1);
+                },
+              ),
+              _BookingHistory(isDesktop: isDesktop),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (widget.embedded) return content;
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          _buildTopBar(),
-          Container(
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: TabBar(
-              controller: _tabCtrl,
-              labelStyle: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 14,
-              ),
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
-              indicatorWeight: 3,
-              indicatorSize: TabBarIndicatorSize.label,
-              tabs: const [
-                Tab(
-                  icon: Icon(Icons.add_circle_outline, size: 20),
-                  text: 'New Reservation',
-                ),
-                Tab(
-                  icon: Icon(Icons.calendar_month_outlined, size: 20),
-                  text: 'My Reservations',
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabCtrl,
-              children: [
-                _BookingForm(
-                  isDesktop: isDesktop,
-                  onSuccess: () {
-                    ref.read(_refreshTriggerProvider.notifier).state++;
-                    _tabCtrl.animateTo(1);
-                  },
-                ),
-                _BookingHistory(isDesktop: isDesktop),
-              ],
-            ),
-          ),
-        ],
-      ),
+      body: content,
     );
   }
+
+  // Below this width the Menu/Locations/Reservations inline links overflow
+  // next to the brand + cart icon. They're dropped rather than replaced —
+  // Menu/Locations both just go to '/customer' (reachable via the brand
+  // tap) and Reservations is already this screen.
+  static const double _navLinksBreakpoint = 700;
 
   // ── TOP BAR (Restaurant header, shared visual language with other customer screens) ──
   Widget _buildTopBar() {
@@ -331,49 +347,55 @@ class _CustomerMyBookingsScreenState
         color: AppColors.background,
         border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => context.go('/customer'),
-            child: const Text(
-              'Restaurant',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final showNavLinks = constraints.maxWidth >= _navLinksBreakpoint;
+        return Row(
+          children: [
+            GestureDetector(
+              onTap: () => context.go('/customer'),
+              child: const Text(
+                'Restaurant',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 28),
-          Expanded(
-            child: Row(
-              children: [
-                _NavLink(label: 'Menu', onTap: () => context.go('/customer')),
-                const SizedBox(width: 24),
-                _NavLink(
-                  label: 'Locations',
-                  onTap: () => context.go('/customer'),
+            if (showNavLinks) ...[
+              const SizedBox(width: 28),
+              Expanded(
+                child: Row(
+                  children: [
+                    _NavLink(label: 'Menu', onTap: () => context.go('/customer')),
+                    const SizedBox(width: 24),
+                    _NavLink(
+                      label: 'Locations',
+                      onTap: () => context.go('/customer'),
+                    ),
+                    const SizedBox(width: 24),
+                    _NavLink(
+                      label: 'Reservations',
+                      onTap: () {},
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 24),
-                _NavLink(
-                  label: 'Reservations',
-                  onTap: () {},
-                ),
-              ],
+              ),
+            ] else
+              const Spacer(),
+            GestureDetector(
+              onTap: () => context.go('/customer/checkout'),
+              child: const Icon(
+                Icons.shopping_cart_outlined,
+                color: AppColors.textPrimary,
+                size: 24,
+              ),
             ),
-          ),
-          GestureDetector(
-            onTap: () => context.go('/customer/checkout'),
-            child: const Icon(
-              Icons.shopping_cart_outlined,
-              color: AppColors.textPrimary,
-              size: 24,
-            ),
-          ),
-        ],
-      ),
+          ],
+        );
+      }),
     );
   }
 }
