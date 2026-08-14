@@ -19,7 +19,11 @@ const _maxRecentEvents = 30;
 /// (acceptable trade-off, can be upgraded later without touching the
 /// order_events schema).
 class NotificationBell extends ConsumerStatefulWidget {
-  final String branchId;
+  // Null = superadmin with no fixed home branch → "all branches" feed
+  // (see order_events_repository.dart's watchBranchEvents). Previously
+  // this widget required a non-null branchId, so every call site hid it
+  // entirely for such staff, leaving them with no notification bell at all.
+  final String? branchId;
   const NotificationBell({super.key, required this.branchId});
 
   @override

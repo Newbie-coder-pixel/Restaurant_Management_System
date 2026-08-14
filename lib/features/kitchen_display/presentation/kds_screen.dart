@@ -27,6 +27,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   String? _branchId;       // branch belonging to the logged-in staff
   StaffRole? _userRole;
   RealtimeChannel? _channel;
+  ProviderSubscription<AsyncValue<OrderEvent>>? _orderEventsSub;
   bool _initialized = false;
   final _kitchenInventoryService =
       KitchenInventoryService(Supabase.instance.client);
@@ -79,14 +80,26 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
     }
   }
 
-  /// Feeds the "N new orders" banner below — a lightweight second
-  /// subscription alongside _subscribeRealtime()'s existing full-grid
-  /// refetch, sourced from order_events (see order_events_provider.dart)
-  /// rather than reinventing another raw orders/order_items channel here.
+  /// Feeds the "N new orders" banner below and the new-order chime — a
+  /// lightweight second subscription alongside _subscribeRealtime()'s
+  /// existing full-grid refetch, sourced from order_events (see
+  /// order_events_provider.dart) rather than reinventing another raw
+  /// orders/order_items channel here.
+  ///
+  /// Uses the same nullable-branch pattern as _subscribeRealtime() (null =
+  /// superadmin "All Branches") and must be re-called whenever
+  /// _selectedBranchId changes — previously this only ever watched the
+  /// staff's own _branchId once at startup, so a superadmin with no fixed
+  /// home branch (branchId null) never subscribed to anything and got no
+  /// chime for ANY order, and a superadmin who *did* have one only heard
+  /// chimes for that one branch regardless of which branch the "All
+  /// Branches"/branch-switcher dropdown was actually showing.
   void _subscribeOrderEvents() {
-    final branchId = _branchId;
-    if (branchId == null) return;
-    ref.listenManual(orderEventsForBranchProvider(branchId), (prev, next) {
+    if (!_isMultiBranchRole && _branchId == null) return;
+    final targetBranch = _isMultiBranchRole ? _selectedBranchId : _branchId;
+    _orderEventsSub?.close();
+    _orderEventsSub =
+        ref.listenManual(orderEventsForBranchProvider(targetBranch), (prev, next) {
       next.whenData((event) {
         final isNewOrder = event.eventType == OrderEventType.statusChanged &&
             event.oldValue == null;
@@ -224,6 +237,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
   @override
   void dispose() {
     _channel?.unsubscribe();
+    _orderEventsSub?.close();
     _tickTimer?.cancel();
     super.dispose();
   }
@@ -457,6 +471,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
                   });
                   _load();
                   _subscribeRealtime();
+                  _subscribeOrderEvents();
                 },
               ),
             ),

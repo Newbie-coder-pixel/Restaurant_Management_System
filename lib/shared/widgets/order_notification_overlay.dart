@@ -94,12 +94,14 @@ class _OrderNotificationOverlayState
     if (_suppressedForRoute) return const SizedBox.shrink();
 
     if (appMode == 'staff') {
+      // null branchId (superadmin with no fixed home branch) means "all
+      // branches" — see order_events_repository.dart's watchBranchEvents.
+      // This used to skip subscribing entirely when null, so a superadmin
+      // got no banner/chime anywhere in the staff app, not just on KDS.
       final branchId = ref.watch(currentBranchIdProvider);
-      if (branchId != null) {
-        ref.listen(orderEventsForBranchProvider(branchId), (prev, next) {
-          next.whenData(_show);
-        });
-      }
+      ref.listen(orderEventsForBranchProvider(branchId), (prev, next) {
+        next.whenData(_show);
+      });
     } else if (appMode == 'customer') {
       final orderId = ref.watch(myActiveOrderIdProvider).value;
       if (orderId != null) {

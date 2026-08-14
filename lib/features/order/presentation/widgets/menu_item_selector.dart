@@ -4,7 +4,6 @@ import '../../../../shared/models/menu_model.dart';
 import '../../../../shared/models/table_model.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/prep_time_service.dart'; // ← ML Service
-import '../../../../core/config/app_config.dart';
 import '../../../../shared/services/order_number_service.dart';
 
 const double _kPosPanelBreakpoint = 900;
@@ -94,8 +93,16 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
     return a + item.price * e.value.qty;
   });
 
-  double get _cartTax   => _cartPrice * AppConfig.defaultTaxRate;
-  double get _cartGrandTotal => _cartPrice + _cartTax;
+  // Matches the customer app (cart_provider.dart) and QR app
+  // (qr_cart_provider.dart) formula exactly, so staff-created (POS/dine-in)
+  // orders total the same as customer/QR orders for identical items —
+  // service charge 3% of subtotal, then PB1 10% of (subtotal + service
+  // charge), ~13.3% combined. This used to be a flat 11% "Tax" only, with
+  // no service charge at all, silently undercharging staff-created orders
+  // relative to the other two channels.
+  double get _cartServiceCharge => _cartPrice * 0.03;
+  double get _cartPb1 => (_cartPrice + _cartServiceCharge) * 0.10;
+  double get _cartGrandTotal => _cartPrice + _cartServiceCharge + _cartPb1;
 
   void _addToCart(MenuItem item) {
     setState(() {
@@ -250,9 +257,10 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
       // after this, and the price-integrity trigger (trg_enforce_order_total_sanity)
       // rejects the resulting orders.subtotal recompute if total_amount is left
       // at its 0 default, since total_amount must never be < subtotal - discount.
-      final subtotal   = _cartPrice;
-      final taxAmount  = subtotal * AppConfig.defaultTaxRate;
-      final totalAmount = subtotal + taxAmount;
+      final subtotal      = _cartPrice;
+      final serviceCharge = subtotal * 0.03;
+      final pb1Amount     = (subtotal + serviceCharge) * 0.10;
+      final totalAmount   = subtotal + serviceCharge + pb1Amount;
 
       final orderRes = await Supabase.instance.client.from('orders').insert({
         'branch_id':      widget.branchId,
@@ -265,7 +273,11 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
         'customer_phone': _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
         'discount_amount': 0,
         'subtotal':       subtotal,
-        'tax_amount':     taxAmount,
+        'service_charge_amount': serviceCharge,
+        'pb1_amount':     pb1Amount,
+        // Consistent with the QR flow's convention: tax_amount stores pb1
+        // (VAT itself was removed app-wide; see cart_provider.dart).
+        'tax_amount':     pb1Amount,
         'total_amount':   totalAmount,
         'payment_status': 'unpaid', // required so the order shows up on the cashier screen
         // Store the ML estimate in the DB so the KDS can show it without re-predicting
@@ -697,7 +709,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
           child: Column(children: [
             _totalRow('Subtotal', _cartPrice),
             const SizedBox(height: 4),
-            _totalRow('Tax (${(AppConfig.defaultTaxRate * 100).toStringAsFixed(0)}%)', _cartTax),
+            _totalRow('Service Charge (3%)', _cartServiceCharge),
+            const SizedBox(height: 4),
+            _totalRow('PB1 (10%)', _cartPb1),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Divider(height: 1, color: AppColors.border)),

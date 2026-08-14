@@ -213,7 +213,7 @@ class _Header extends StatelessWidget {
                         color: AppColors.textPrimary)),
                 const SizedBox(width: 14),
               ],
-              if (staff?.branchId != null)
+              if (staff != null)
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.primary,
@@ -222,8 +222,13 @@ class _Header extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const ClockInOutControl(compact: true),
-                      NotificationBell(branchId: staff!.branchId!),
+                      // Clock-in is inherently branch-scoped (unlike the
+                      // notification bell below, which now supports a null
+                      // branchId as "all branches") — a superadmin with no
+                      // fixed home branch has nothing to clock into here.
+                      if (staff!.branchId != null)
+                        const ClockInOutControl(compact: true),
+                      NotificationBell(branchId: staff!.branchId),
                       const SizedBox(width: 4),
                     ],
                   ),

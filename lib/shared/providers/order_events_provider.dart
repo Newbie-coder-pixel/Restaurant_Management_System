@@ -18,10 +18,11 @@ final orderEventsForOrderProvider =
   return ref.read(orderEventsRepositoryProvider).watchOrderEvents(orderId);
 });
 
-/// Stream of individual order_events rows for a whole branch — used by the
-/// staff notification overlay, the KDS "new order" banner, and the
-/// AppDrawer notification bell.
+/// Stream of individual order_events rows for a branch, or every branch
+/// when [branchId] is null (superadmins commonly have no fixed home
+/// branch) — used by the staff notification overlay, the KDS "new order"
+/// banner, and the AppDrawer notification bell.
 final orderEventsForBranchProvider =
-    StreamProvider.family<OrderEvent, String>((ref, branchId) {
+    StreamProvider.family<OrderEvent, String?>((ref, branchId) {
   return ref.read(orderEventsRepositoryProvider).watchBranchEvents(branchId);
 });

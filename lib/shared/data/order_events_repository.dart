@@ -50,24 +50,31 @@ class OrderEventsRepository {
     return controller.stream;
   }
 
-  /// Live feed of events for a whole branch (staff overlay/KDS banner/bell).
-  Stream<OrderEvent> watchBranchEvents(String branchId) {
+  /// Live feed of events for a branch (staff overlay/KDS banner/bell), or
+  /// for every branch when [branchId] is null — the superadmin "All
+  /// Branches" view, which staff.branchId alone can't express since
+  /// superadmins commonly have no fixed home branch. Mirrors
+  /// kds_screen.dart's _subscribeRealtime(), which already applies this
+  /// same nullable-filter pattern for the board's own realtime refresh.
+  Stream<OrderEvent> watchBranchEvents(String? branchId) {
     late StreamController<OrderEvent> controller;
     RealtimeChannel? channel;
 
     controller = StreamController<OrderEvent>(
       onListen: () {
         channel = _client
-            .channel('order_events_branch_$branchId')
+            .channel('order_events_branch_${branchId ?? 'all'}')
             .onPostgresChanges(
               event: PostgresChangeEvent.insert,
               schema: 'public',
               table: 'order_events',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: 'branch_id',
-                value: branchId,
-              ),
+              filter: branchId != null
+                  ? PostgresChangeFilter(
+                      type: PostgresChangeFilterType.eq,
+                      column: 'branch_id',
+                      value: branchId,
+                    )
+                  : null,
               callback: (payload) {
                 if (controller.isClosed) return;
                 try {

@@ -55,7 +55,4 @@ class AppConfig {
 
   // ── Order Number Prefix (per branch code) ─────────────────
   static const String defaultOrderPrefix = 'A';
-
-  // ── Tax Rate ──────────────────────────────────────────────
-  static const double defaultTaxRate = 0.11;
 }
