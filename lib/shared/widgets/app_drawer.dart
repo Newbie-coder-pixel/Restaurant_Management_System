@@ -156,8 +156,7 @@ class AppDrawer extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  if (staff != null)
-                    NotificationBell(branchId: staff.branchId),
+                  if (staff != null) const NotificationBell(),
                 ],
               ),
             ),

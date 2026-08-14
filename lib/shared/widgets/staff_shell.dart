@@ -412,7 +412,7 @@ class _StaffShellState extends ConsumerState<StaffShell> {
                 fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(width: 12),
           ],
-          if (staff != null) NotificationBell(branchId: staff.branchId),
+          if (staff != null) const NotificationBell(),
           // Only relevant on narrow layouts — on wide layouts the persistent
           // sidebar already exposes navigation, and no drawer is attached
           // to the Scaffold to open here (see the `drawer:` guard above).

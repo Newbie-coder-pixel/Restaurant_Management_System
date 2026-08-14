@@ -5,33 +5,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../models/order_event_model.dart';
-import '../providers/order_events_provider.dart';
+import '../providers/recent_order_events_provider.dart';
 
 const _lastSeenPrefsKey = 'order_events_last_seen';
-const _maxRecentEvents = 30;
 
-/// Bell + unread badge for the staff AppDrawer header. Unread state is a
+/// Bell + unread badge for the staff AppDrawer/shell header. The event
+/// history itself lives in [recentOrderEventsProvider] (app-root-scoped),
+/// not in this widget's own State — see that file for why. "Unread" is a
 /// client-side "last seen" timestamp (shared_preferences), not a per-user
-/// read-receipts table — this is a deliberate v1 simplification: a restaurant
-/// floor is realistically one device per staff member per shift, so a local
-/// timestamp is trivially correct and costs zero DB writes, at the cost of
-/// not syncing "read" state across a staff member's own multiple devices
-/// (acceptable trade-off, can be upgraded later without touching the
-/// order_events schema).
+/// read-receipts table — a restaurant floor is realistically one device per
+/// staff member per shift, so a local timestamp is trivially correct and
+/// costs zero DB writes (doesn't sync "read" state across a staff member's
+/// own multiple devices, an acceptable trade-off). The badge count resets
+/// on open, but the event list itself only ever clears when the staff
+/// member taps Clear All.
 class NotificationBell extends ConsumerStatefulWidget {
-  // Null = superadmin with no fixed home branch → "all branches" feed
-  // (see order_events_repository.dart's watchBranchEvents). Previously
-  // this widget required a non-null branchId, so every call site hid it
-  // entirely for such staff, leaving them with no notification bell at all.
-  final String? branchId;
-  const NotificationBell({super.key, required this.branchId});
+  const NotificationBell({super.key});
 
   @override
   ConsumerState<NotificationBell> createState() => _NotificationBellState();
 }
 
 class _NotificationBellState extends ConsumerState<NotificationBell> {
-  final List<OrderEvent> _recent = [];
   DateTime? _lastSeen;
   bool _prefsLoaded = false;
 
@@ -39,18 +34,6 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
   void initState() {
     super.initState();
     _loadLastSeen();
-    ref.listenManual(orderEventsForBranchProvider(widget.branchId),
-        (prev, next) {
-      next.whenData((event) {
-        if (!mounted) return;
-        setState(() {
-          _recent.insert(0, event);
-          if (_recent.length > _maxRecentEvents) {
-            _recent.removeRange(_maxRecentEvents, _recent.length);
-          }
-        });
-      });
-    });
   }
 
   Future<void> _loadLastSeen() async {
@@ -63,10 +46,10 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
     });
   }
 
-  int get _unreadCount {
+  int _unreadCount(List<OrderEvent> recent) {
     if (!_prefsLoaded) return 0;
-    if (_lastSeen == null) return _recent.length;
-    return _recent.where((e) => e.createdAt.isAfter(_lastSeen!)).length;
+    if (_lastSeen == null) return recent.length;
+    return recent.where((e) => e.createdAt.isAfter(_lastSeen!)).length;
   }
 
   Future<void> _openList() async {
@@ -77,7 +60,7 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => _RecentEventsSheet(events: _recent),
+      builder: (context) => const _RecentEventsSheet(),
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastSeenPrefsKey, now.toIso8601String());
@@ -87,7 +70,8 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
 
   @override
   Widget build(BuildContext context) {
-    final unread = _unreadCount;
+    final recent = ref.watch(recentOrderEventsProvider);
+    final unread = _unreadCount(recent);
     return IconButton(
       tooltip: 'Recent order updates',
       onPressed: _openList,
@@ -100,20 +84,33 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
   }
 }
 
-class _RecentEventsSheet extends StatelessWidget {
-  final List<OrderEvent> events;
-  const _RecentEventsSheet({required this.events});
+class _RecentEventsSheet extends ConsumerWidget {
+  const _RecentEventsSheet();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final events = ref.watch(recentOrderEventsProvider);
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Recent Order Updates',
-                style: Theme.of(context).textTheme.titleMedium),
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Recent Order Updates',
+                      style: Theme.of(context).textTheme.titleMedium),
+                ),
+                TextButton(
+                  onPressed: events.isEmpty
+                      ? null
+                      : () =>
+                          ref.read(recentOrderEventsProvider.notifier).clearAll(),
+                  child: const Text('Clear All'),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             if (events.isEmpty)
               const Padding(

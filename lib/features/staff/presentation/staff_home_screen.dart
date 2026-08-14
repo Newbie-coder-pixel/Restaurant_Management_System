@@ -228,7 +228,7 @@ class _Header extends StatelessWidget {
                       // fixed home branch has nothing to clock into here.
                       if (staff!.branchId != null)
                         const ClockInOutControl(compact: true),
-                      NotificationBell(branchId: staff!.branchId),
+                      const NotificationBell(),
                       const SizedBox(width: 4),
                     ],
                   ),
