@@ -302,17 +302,24 @@ class _CustomerCheckoutScreenState
     }
 
     final phone = _phoneCtrl.text.trim();
-    if (phone.isNotEmpty) {
-      final phoneRegex = RegExp(r'^08[0-9]{8,11}$');
-      if (!phoneRegex.hasMatch(phone)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid phone number format. Example: 08123456789'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number is required'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    final phoneRegex = RegExp(r'^08[0-9]{8,11}$');
+    if (!phoneRegex.hasMatch(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid phone number format. Example: 08123456789'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
 
     for (final entry in _itemNotesCtrls.entries) {
@@ -698,7 +705,7 @@ class _CustomerCheckoutScreenState
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
-            hintText: 'Phone number (e.g. 08123456789)',
+            hintText: 'Phone number * (e.g. 08123456789)',
             hintStyle: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
