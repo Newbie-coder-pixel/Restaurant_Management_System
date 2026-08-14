@@ -5,8 +5,6 @@
 // Written exclusively by DB triggers on `orders` — never inserted from the
 // client — so this model is read-only (fromJson only, no toJson).
 
-import '../../core/models/staff_role.dart';
-
 enum OrderEventType {
   statusChanged,
   paymentStatusChanged,
@@ -135,12 +133,4 @@ class OrderEvent {
         return category;
     }
   }
-
-  /// Whether [role] should even see this event — mirrors the router's own
-  /// "does this role have this feature" check (superadmin's accessFeatures
-  /// already lists every feature, so it always passes). A role with no
-  /// access to the relevant screen (e.g. host, who has neither Kitchen nor
-  /// Cashier access) has no use for being interrupted by that screen's
-  /// events.
-  bool isRelevantToRole(StaffRole role) => role.accessFeatures.contains(category);
 }

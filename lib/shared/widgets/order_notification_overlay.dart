@@ -10,7 +10,9 @@ import '../../core/theme/app_theme.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/customer/providers/active_orders_provider.dart';
 import '../models/order_event_model.dart';
+import '../models/staff_notification.dart';
 import '../providers/order_events_provider.dart';
+import '../providers/table_events_provider.dart';
 
 /// Global "order progress" banner, floating above every screen in all three
 /// app modes — the in-app half of the notification system (see
@@ -33,8 +35,8 @@ class OrderNotificationOverlay extends ConsumerStatefulWidget {
 
 class _OrderNotificationOverlayState
     extends ConsumerState<OrderNotificationOverlay> {
-  OrderEvent? _visible;
-  String? _lastShownEventId;
+  StaffNotification? _visible;
+  String? _lastShownId;
   Timer? _dismissTimer;
 
   @override
@@ -43,12 +45,12 @@ class _OrderNotificationOverlayState
     super.dispose();
   }
 
-  void _show(OrderEvent event) {
-    if (event.id == _lastShownEventId) return;
-    _lastShownEventId = event.id;
+  void _show(StaffNotification notification) {
+    if (notification.id == _lastShownId) return;
+    _lastShownId = notification.id;
     _dismissTimer?.cancel();
-    setState(() => _visible = event);
-    OrderSoundService.playNewOrder();
+    setState(() => _visible = notification);
+    OrderSoundService.play(notification.sound);
     _dismissTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) setState(() => _visible = null);
     });
@@ -100,33 +102,41 @@ class _OrderNotificationOverlayState
       // got no banner/chime anywhere in the staff app, not just on KDS.
       final branchId = ref.watch(currentBranchIdProvider);
       final role = ref.watch(currentStaffProvider)?.role;
+
+      void showIfRelevant(StaffNotification notification) {
+        // Same feature-access gate as the notification bell — a role with
+        // no access to a notification's feature (e.g. host, who has
+        // neither Kitchen nor Cashier access) doesn't get interrupted by
+        // a banner/chime for it either.
+        if (role != null && !notification.isRelevantToRole(role)) return;
+        _show(notification);
+      }
+
       ref.listen(orderEventsForBranchProvider(branchId), (prev, next) {
-        next.whenData((event) {
-          // Same feature-access gate as the notification bell — a role
-          // with no access to an event's feature (e.g. host, who has
-          // neither Kitchen nor Cashier access) doesn't get interrupted
-          // by a banner/chime for it either.
-          if (role != null && !event.isRelevantToRole(role)) return;
-          _show(event);
-        });
+        next.whenData((event) =>
+            showIfRelevant(StaffNotification.fromOrderEvent(event)));
+      });
+      ref.listen(tableEventsForBranchProvider(branchId), (prev, next) {
+        next.whenData((event) =>
+            showIfRelevant(StaffNotification.fromTableEvent(event)));
       });
     } else if (appMode == 'customer') {
       final orderId = ref.watch(myActiveOrderIdProvider).value;
       if (orderId != null) {
         ref.listen(orderEventsForOrderProvider(orderId), (prev, next) {
-          next.whenData(_show);
+          next.whenData((event) => _show(StaffNotification.fromOrderEvent(event)));
         });
       }
     } else if (appMode == 'qr') {
       final orderId = _qrOrderIdFromPath;
       if (orderId != null) {
         ref.listen(orderEventsForOrderProvider(orderId), (prev, next) {
-          next.whenData(_show);
+          next.whenData((event) => _show(StaffNotification.fromOrderEvent(event)));
         });
       }
     }
 
-    final event = _visible;
+    final notification = _visible;
     return SafeArea(
       child: Align(
         alignment: Alignment.topCenter,
@@ -139,25 +149,27 @@ class _OrderNotificationOverlayState
             ).animate(animation),
             child: FadeTransition(opacity: animation, child: child),
           ),
-          child: event == null
+          child: notification == null
               ? const SizedBox.shrink(key: ValueKey('empty'))
               : _Banner(
-                  key: ValueKey(event.id),
-                  event: event,
+                  key: ValueKey(notification.id),
+                  notification: notification,
                   onDismiss: _dismiss,
                   onTap: () {
                     _dismiss();
                     if (appMode == 'staff') {
-                      context.go(AppRoutes.order);
+                      context.go(notification.kind == StaffNotificationKind.table
+                          ? AppRoutes.tables
+                          : AppRoutes.order);
                     } else if (appMode == 'customer') {
-                      context.go('/customer/track/${event.orderNumber}');
+                      context.go('/customer/track/${notification.orderNumber}');
                     } else if (appMode == 'qr') {
                       final segments = widget.currentPath
                           .split('/')
                           .where((s) => s.isNotEmpty)
                           .toList();
                       if (segments.length >= 2 && segments[0] == 'qr') {
-                        context.go('/qr/${segments[1]}/track/${event.orderId}');
+                        context.go('/qr/${segments[1]}/track/${notification.orderId}');
                       }
                     }
                   },
@@ -169,21 +181,24 @@ class _OrderNotificationOverlayState
 }
 
 class _Banner extends StatelessWidget {
-  final OrderEvent event;
+  final StaffNotification notification;
   final VoidCallback onDismiss;
   final VoidCallback onTap;
 
   const _Banner({
     super.key,
-    required this.event,
+    required this.notification,
     required this.onDismiss,
     required this.onTap,
   });
 
   IconData get _icon {
-    switch (event.eventType) {
+    if (notification.kind == StaffNotificationKind.table) {
+      return Icons.room_service_rounded;
+    }
+    switch (notification.orderEventType) {
       case OrderEventType.statusChanged:
-        return event.oldValue == null
+        return notification.isNewOrder
             ? Icons.receipt_long_rounded
             : Icons.autorenew_rounded;
       case OrderEventType.paymentStatusChanged:
@@ -192,6 +207,8 @@ class _Banner extends StatelessWidget {
         return Icons.request_page_rounded;
       case OrderEventType.cancelled:
         return Icons.cancel_rounded;
+      case null:
+        return Icons.notifications_rounded;
     }
   }
 
@@ -214,7 +231,7 @@ class _Banner extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    event.message,
+                    notification.message,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,

@@ -105,7 +105,7 @@ class _KDSScreenState extends ConsumerState<KDSScreen> {
             event.oldValue == null;
         if (isNewOrder && mounted) {
           setState(() => _newOrderCount++);
-          OrderSoundService.playNewOrder();
+          OrderSoundService.play(NotificationSound.kitchen);
         }
       });
     });

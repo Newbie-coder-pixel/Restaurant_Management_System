@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../models/order_event_model.dart';
+import '../models/staff_notification.dart';
 import '../providers/recent_order_events_provider.dart';
 
 const _lastSeenPrefsKey = 'order_events_last_seen';
@@ -46,7 +46,7 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
     });
   }
 
-  int _unreadCount(List<OrderEvent> recent) {
+  int _unreadCount(List<StaffNotification> recent) {
     if (!_prefsLoaded) return 0;
     if (_lastSeen == null) return recent.length;
     return recent.where((e) => e.createdAt.isAfter(_lastSeen!)).length;
@@ -161,6 +161,8 @@ class _CategoryChip extends StatelessWidget {
         return AppColors.orderReady;
       case 'Payment':
         return AppColors.iconAccentBlue;
+      case 'Table':
+        return AppColors.accent;
       default:
         return AppColors.textSecondary;
     }
