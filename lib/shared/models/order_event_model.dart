@@ -5,6 +5,8 @@
 // Written exclusively by DB triggers on `orders` — never inserted from the
 // client — so this model is read-only (fromJson only, no toJson).
 
+import '../../core/models/staff_role.dart';
+
 enum OrderEventType {
   statusChanged,
   paymentStatusChanged,
@@ -90,4 +92,55 @@ class OrderEvent {
         return 'Order $orderNumber was cancelled';
     }
   }
+
+  /// Which StaffRole.accessFeatures entry this event belongs to — the same
+  /// feature-string vocabulary the router's route guard already uses (see
+  /// _roleCanAccessRoute in app_router.dart), so "does this role care about
+  /// this event" reuses the exact same access model as "can this role open
+  /// this screen" instead of a separate, driftable list. Order-lifecycle
+  /// events split by what the *new* status means operationally: kitchen owns
+  /// getting food cooked (new/preparing), the floor owns getting it served
+  /// (ready/served), cashier owns money (paid).
+  String get category {
+    switch (eventType) {
+      case OrderEventType.statusChanged:
+        switch (newValue) {
+          case 'ready':
+          case 'served':
+            return 'Order';
+          case 'paid':
+            return 'Cashier & Payment';
+          default: // new, created, preparing
+            return 'Kitchen (KDS)';
+        }
+      case OrderEventType.paymentStatusChanged:
+        return 'Cashier & Payment';
+      case OrderEventType.billRequested:
+        return 'Cashier & Payment';
+      case OrderEventType.cancelled:
+        return 'Order';
+    }
+  }
+
+  /// Short label for the category chip shown next to [message].
+  String get categoryLabel {
+    switch (category) {
+      case 'Kitchen (KDS)':
+        return 'Kitchen';
+      case 'Cashier & Payment':
+        return 'Payment';
+      case 'Order':
+        return 'Service';
+      default:
+        return category;
+    }
+  }
+
+  /// Whether [role] should even see this event — mirrors the router's own
+  /// "does this role have this feature" check (superadmin's accessFeatures
+  /// already lists every feature, so it always passes). A role with no
+  /// access to the relevant screen (e.g. host, who has neither Kitchen nor
+  /// Cashier access) has no use for being interrupted by that screen's
+  /// events.
+  bool isRelevantToRole(StaffRole role) => role.accessFeatures.contains(category);
 }

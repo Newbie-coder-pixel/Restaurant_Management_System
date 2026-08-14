@@ -29,7 +29,14 @@ final recentOrderEventsProvider =
   final branchId = ref.watch(currentBranchIdProvider);
   final notifier = RecentOrderEventsNotifier();
   ref.listen(orderEventsForBranchProvider(branchId), (prev, next) {
-    next.whenData(notifier.add);
+    next.whenData((event) {
+      final role = ref.read(currentStaffProvider)?.role;
+      // Only show events for a feature this role actually has access to —
+      // e.g. a kitchen-only staff member never sees a "payment received"
+      // notification, same access model as the route guard.
+      if (role != null && !event.isRelevantToRole(role)) return;
+      notifier.add(event);
+    });
   });
   return notifier;
 });

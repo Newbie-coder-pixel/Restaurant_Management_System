@@ -99,8 +99,16 @@ class _OrderNotificationOverlayState
       // This used to skip subscribing entirely when null, so a superadmin
       // got no banner/chime anywhere in the staff app, not just on KDS.
       final branchId = ref.watch(currentBranchIdProvider);
+      final role = ref.watch(currentStaffProvider)?.role;
       ref.listen(orderEventsForBranchProvider(branchId), (prev, next) {
-        next.whenData(_show);
+        next.whenData((event) {
+          // Same feature-access gate as the notification bell — a role
+          // with no access to an event's feature (e.g. host, who has
+          // neither Kitchen nor Cashier access) doesn't get interrupted
+          // by a banner/chime for it either.
+          if (role != null && !event.isRelevantToRole(role)) return;
+          _show(event);
+        });
       });
     } else if (appMode == 'customer') {
       final orderId = ref.watch(myActiveOrderIdProvider).value;

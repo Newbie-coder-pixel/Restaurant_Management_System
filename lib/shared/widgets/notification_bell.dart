@@ -129,6 +129,7 @@ class _RecentEventsSheet extends ConsumerWidget {
                       leading: const Icon(Icons.circle_notifications_rounded),
                       title: Text(event.message),
                       subtitle: Text(_relativeTime(event.createdAt)),
+                      trailing: _CategoryChip(label: event.categoryLabel),
                     );
                   },
                 ),
@@ -145,5 +146,43 @@ class _RecentEventsSheet extends ConsumerWidget {
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  final String label;
+  const _CategoryChip({required this.label});
+
+  Color get _color {
+    switch (label) {
+      case 'Kitchen':
+        return AppColors.orderPreparing;
+      case 'Service':
+        return AppColors.orderReady;
+      case 'Payment':
+        return AppColors.iconAccentBlue;
+      default:
+        return AppColors.textSecondary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: _color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: _color,
+        ),
+      ),
+    );
   }
 }
