@@ -444,6 +444,17 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   int _guestCount = 2;
+  // Static presets only — free-text duration input is deliberately not
+  // offered so a customer can't block a table for an arbitrarily long time.
+  // Matches the staff-side duration dropdown (add/edit_booking_dialog.dart)
+  // so the same intervals are used everywhere overlap is checked.
+  static const List<(int minutes, String label)> _durationOptions = [
+    (60, '1 hour'),
+    (90, '1.5 hours (recommended)'),
+    (120, '2 hours'),
+    (180, '3 hours'),
+  ];
+  int _durationMinutes = 90;
   bool _submitting = false;
 
   @override
@@ -613,6 +624,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
             'guest_count': _guestCount,
             'booking_date': dateStr,
             'booking_time': timeStr,
+            'duration_minutes': _durationMinutes,
             'status': 'pending',
             'source': 'app',
             if (notes.isNotEmpty) 'special_requests': notes,
@@ -632,6 +644,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                   'p_guest_count': _guestCount,
                   'p_booking_date': dateStr,
                   'p_booking_time': '$timeStr:00',
+                  'p_duration_minutes': _durationMinutes,
                 },
               )
               as Map<String, dynamic>;
@@ -710,9 +723,6 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
         '${date.day.toString().padLeft(2, '0')} at $hour12:$minute $period';
   }
 
-  // Booking duration isn't user-selectable in this form (DB defaults to
-  // 120 min — see assign_table_to_booking / other booking flows), so the
-  // calendar event end time assumes the same default.
   Uri _googleCalendarUrl({
     required String title,
     required String details,
@@ -720,7 +730,7 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
     required DateTime startWib,
   }) {
     final startUtc = startWib.subtract(const Duration(hours: 7));
-    final endUtc = startUtc.add(const Duration(minutes: 120));
+    final endUtc = startUtc.add(Duration(minutes: _durationMinutes));
     String fmt(DateTime d) =>
         '${d.year.toString().padLeft(4, '0')}${d.month.toString().padLeft(2, '0')}'
         '${d.day.toString().padLeft(2, '0')}T${d.hour.toString().padLeft(2, '0')}'
@@ -809,6 +819,14 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                               Icons.calendar_today_outlined,
                               'DATE & TIME',
                               dateTimeLabel,
+                            ),
+                            const Divider(color: AppColors.border, height: 1),
+                            _successRow(
+                              Icons.timer_outlined,
+                              'DURATION',
+                              _durationOptions
+                                  .firstWhere((o) => o.$1 == _durationMinutes)
+                                  .$2,
                             ),
                             const Divider(color: AppColors.border, height: 1),
                             _successRow(
@@ -1162,6 +1180,9 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
               _sectionHeader('Time'),
               _timeSlotGrid(openTime, closeTime),
               const SizedBox(height: 28),
+              _sectionHeader('Duration'),
+              _durationList(),
+              const SizedBox(height: 28),
               _sectionHeader('Party Size'),
               _guestPicker(),
               const SizedBox(height: 28),
@@ -1434,6 +1455,21 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
       ],
     );
   }
+
+  Widget _durationList() => Column(
+    children: [
+      for (int i = 0; i < _durationOptions.length; i++) ...[
+        _radioRow(
+          label: _durationOptions[i].$2,
+          selected: _durationMinutes == _durationOptions[i].$1,
+          onTap: () =>
+              setState(() => _durationMinutes = _durationOptions[i].$1),
+        ),
+        if (i != _durationOptions.length - 1)
+          const Divider(color: AppColors.border, height: 1),
+      ],
+    ],
+  );
 
   Widget _guestPicker() => Row(
     children: [
