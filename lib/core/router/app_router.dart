@@ -146,9 +146,19 @@ bool _roleCanAccessRoute(StaffRole role, String path) {
 String _getInitialLocation() {
   if (kIsWeb) {
     final uri = Uri.base;
+    // A plain (no-hash) deep link like a scanned QR sticker's
+    // /qr/<tableId>?t=<token> carries its query string in uri.query, NOT in
+    // uri.fragment — using uri.path alone here silently dropped it, so the
+    // router's initial location became just "/qr/<tableId>" with no token.
+    // That location then gets written back into the URL as the app's hash
+    // route (see below), permanently losing the token even though it's
+    // still sitting unused in the address bar's ?query. Every fresh QR scan
+    // hit this, regardless of how recently the code was generated — see
+    // supabase/migrations/20260814020000_table_qr_rotation.sql's token gate,
+    // which this bug made impossible to ever pass on a cold load.
     final path = uri.fragment.isNotEmpty
         ? '/${uri.fragment}'
-        : uri.path;
+        : (uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path);
     if (path.isNotEmpty && path != '/') return path;
   }
 
