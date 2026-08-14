@@ -35,6 +35,11 @@ class _TableQrCodesScreenState extends State<TableQrCodesScreen> {
   List<TableModel> _tables = [];
   // table_id → today's token
   final Map<String, String> _tokens = {};
+  // table_id → when its code last changed (regenerate, or the table row's
+  // own updated_at as a fallback) — shown per card so staff can tell at a
+  // glance whether a code someone's about to scan (e.g. from an older
+  // screenshot/printout) predates a regenerate and would now be rejected.
+  final Map<String, DateTime> _lastChanged = {};
   final Set<String> _regenerating = {};
   bool _regeneratingAll = false;
 
@@ -78,6 +83,10 @@ class _TableQrCodesScreenState extends State<TableQrCodesScreen> {
         _tokens
           ..clear()
           ..addEntries(tokens);
+        _lastChanged.clear();
+        for (final t in tables) {
+          if (t.updatedAt != null) _lastChanged[t.id] = t.updatedAt!;
+        }
         _loading = false;
       });
     } catch (e) {
@@ -103,9 +112,13 @@ class _TableQrCodesScreenState extends State<TableQrCodesScreen> {
         params: {'p_table_id': table.id},
       ) as String;
       if (!mounted) return;
-      setState(() => _tokens[table.id] = newToken);
-      _snack('Table ${table.tableNumber}\'s QR code was regenerated. '
-          'The old code no longer works.');
+      setState(() {
+        _tokens[table.id] = newToken;
+        _lastChanged[table.id] = DateTime.now();
+      });
+      _snack('Table ${table.tableNumber}\'s QR code was regenerated. Only '
+          'the code shown now is valid — rescan it, any earlier screenshot '
+          'or printout (including from a few minutes ago) will show as expired.');
     } catch (e) {
       if (mounted) _snack('Failed to regenerate: $e', isError: true);
     } finally {
@@ -128,8 +141,16 @@ class _TableQrCodesScreenState extends State<TableQrCodesScreen> {
         return MapEntry(t.id, token);
       }));
       if (!mounted) return;
-      setState(() => _tokens.addEntries(results));
-      _snack('Regenerated QR codes for all ${_tables.length} tables.');
+      final now = DateTime.now();
+      setState(() {
+        _tokens.addEntries(results);
+        for (final t in _tables) {
+          _lastChanged[t.id] = now;
+        }
+      });
+      _snack('Regenerated QR codes for all ${_tables.length} tables. Only '
+          'the codes shown now are valid — any earlier screenshot or '
+          'printout will show as expired.');
     } catch (e) {
       if (mounted) _snack('Failed to regenerate all: $e', isError: true);
     } finally {
@@ -327,6 +348,7 @@ class _TableQrCodesScreenState extends State<TableQrCodesScreen> {
                               itemBuilder: (context, i) => _TableQrCard(
                                 table: _tables[i],
                                 url: _urlFor(_tables[i].id),
+                                lastChanged: _lastChanged[_tables[i].id],
                                 regenerating: _regenerating.contains(_tables[i].id),
                                 onRegenerate: () => _regenerate(_tables[i]),
                               ),
@@ -342,15 +364,28 @@ class _TableQrCodesScreenState extends State<TableQrCodesScreen> {
 class _TableQrCard extends StatelessWidget {
   final TableModel table;
   final String url;
+  final DateTime? lastChanged;
   final bool regenerating;
   final VoidCallback onRegenerate;
 
   const _TableQrCard({
     required this.table,
     required this.url,
+    required this.lastChanged,
     required this.regenerating,
     required this.onRegenerate,
   });
+
+  // Relative "time ago" label so staff can tell at a glance whether the code
+  // on screen right now is different from whatever's on an older
+  // screenshot/printout someone might be about to scan instead.
+  static String _relativeTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -378,6 +413,12 @@ class _TableQrCard extends StatelessWidget {
               style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14)),
           Text('${table.capacity} seats',
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textSecondary)),
+          if (lastChanged != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('Code updated ${_relativeTime(lastChanged!)}',
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, color: AppColors.textHint)),
+            ),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
