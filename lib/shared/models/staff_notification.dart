@@ -43,11 +43,17 @@ class StaffNotification {
   });
 
   factory StaffNotification.fromOrderEvent(OrderEvent e) {
-    final sound = switch (e.category) {
-      'Kitchen (KDS)' => NotificationSound.kitchen,
-      'Cashier & Payment' => NotificationSound.payment,
-      _ => NotificationSound.service,
-    };
+    // billRequested keeps the 'Cashier & Payment' category (so cashier-role
+    // access gating stays the same) but gets its own chime, distinct from a
+    // completed-payment chime — a cashier needs to tell "customer wants the
+    // bill" and "payment just went through" apart by ear.
+    final sound = e.eventType == OrderEventType.billRequested
+        ? NotificationSound.billRequested
+        : switch (e.category) {
+            'Kitchen (KDS)' => NotificationSound.kitchen,
+            'Cashier & Payment' => NotificationSound.payment,
+            _ => NotificationSound.service,
+          };
     return StaffNotification(
       id: e.id,
       kind: StaffNotificationKind.order,

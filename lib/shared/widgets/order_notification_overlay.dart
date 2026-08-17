@@ -39,6 +39,14 @@ class _OrderNotificationOverlayState
   String? _lastShownId;
   Timer? _dismissTimer;
 
+  // _show() used to just overwrite _visible outright, so a second event
+  // arriving while a banner was still up instantly replaced it — the
+  // first notification's text was never actually readable, only its
+  // chime and its entry in the notification bell's history survived.
+  // Queue instead: every notification gets its own turn on screen.
+  final List<StaffNotification> _pending = [];
+  static const _maxPending = 12;
+
   @override
   void dispose() {
     _dismissTimer?.cancel();
@@ -47,18 +55,46 @@ class _OrderNotificationOverlayState
 
   void _show(StaffNotification notification) {
     if (notification.id == _lastShownId) return;
+    if (_visible?.id == notification.id) return;
+    if (_pending.any((n) => n.id == notification.id)) return;
+
+    // The chime fires immediately regardless of banner backlog — it's the
+    // real-time alert, and OrderSoundService's own queue (see
+    // order_sound_service.dart) already makes sure simultaneous chimes
+    // play one after another instead of cutting each other off.
+    OrderSoundService.play(notification.sound);
+
+    if (_visible == null) {
+      _display(notification);
+    } else if (_pending.length < _maxPending) {
+      _pending.add(notification);
+    }
+  }
+
+  void _display(StaffNotification notification) {
     _lastShownId = notification.id;
     _dismissTimer?.cancel();
     setState(() => _visible = notification);
-    OrderSoundService.play(notification.sound);
-    _dismissTimer = Timer(const Duration(seconds: 5), () {
+    // Drain a backlog faster than the normal 5s-per-banner pace so a
+    // burst of events doesn't leave stale ones on screen for a minute.
+    final duration = _pending.length > 3
+        ? const Duration(seconds: 2, milliseconds: 500)
+        : const Duration(seconds: 5);
+    _dismissTimer = Timer(duration, _advance);
+  }
+
+  void _advance() {
+    if (_pending.isEmpty) {
       if (mounted) setState(() => _visible = null);
-    });
+      return;
+    }
+    final next = _pending.removeAt(0);
+    if (mounted) _display(next);
   }
 
   void _dismiss() {
     _dismissTimer?.cancel();
-    if (mounted) setState(() => _visible = null);
+    _advance();
   }
 
   /// Route segments this overlay must stay silent on: payment flows (never

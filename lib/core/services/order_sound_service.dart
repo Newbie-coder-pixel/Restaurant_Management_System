@@ -7,13 +7,14 @@ import 'package:flutter/foundation.dart';
 /// "customer needs help at their table" call are very different levels of
 /// urgency). See StaffNotification's factories for the category→sound
 /// mapping.
-enum NotificationSound { kitchen, service, payment, table }
+enum NotificationSound { kitchen, service, payment, table, billRequested }
 
 const _assetFor = {
   NotificationSound.kitchen: 'sounds/new_order.wav',
   NotificationSound.service: 'sounds/service_update.wav',
   NotificationSound.payment: 'sounds/payment_update.wav',
   NotificationSound.table: 'sounds/table_call.wav',
+  NotificationSound.billRequested: 'sounds/bill_requested.wav',
 };
 
 /// Plays the chime used to alert staff to order/table updates — KDS's
@@ -69,12 +70,43 @@ class OrderSoundService {
     }
   }
 
+  // Several events can land within the same second (e.g. a batch of QR
+  // orders submitted back-to-back). play() used to call _player.stop()
+  // immediately before every new chime, which cut the previous one off
+  // mid-playback — so a burst of events only ever produced one audible,
+  // garbled chime instead of each event getting its own. Queue instead:
+  // every call's chime plays to completion before the next one starts.
+  // Capped so a genuine flood (a bug elsewhere, or an unrealistic burst)
+  // can't leave staff listening to a minutes-long backlog of chimes — the
+  // banner queue and notification bell's history already keep a full
+  // record of every event regardless of whether its chime got queued.
+  static final List<NotificationSound> _queue = [];
+  static bool _draining = false;
+  static const _maxQueue = 8;
+
   static Future<void> play(NotificationSound sound) async {
+    if (_queue.length >= _maxQueue) return;
+    _queue.add(sound);
+    if (_draining) return;
+    await _drainQueue();
+  }
+
+  static Future<void> _drainQueue() async {
+    _draining = true;
     try {
-      await _player.stop();
-      await _player.play(AssetSource(_assetFor[sound]!));
-    } catch (e) {
-      debugPrint('[OrderSoundService] play error: $e');
+      while (_queue.isNotEmpty) {
+        final sound = _queue.removeAt(0);
+        try {
+          await _player.stop();
+          await _player.play(AssetSource(_assetFor[sound]!));
+          await _player.onPlayerComplete.first
+              .timeout(const Duration(seconds: 3), onTimeout: () {});
+        } catch (e) {
+          debugPrint('[OrderSoundService] play error: $e');
+        }
+      }
+    } finally {
+      _draining = false;
     }
   }
 }
