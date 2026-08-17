@@ -248,24 +248,27 @@ class _TrackerHeader extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          ValueListenableBuilder<bool?>(
-            valueListenable: CustomerSoundPreference.value,
-            builder: (context, enabled, _) => IconButton(
-              tooltip: enabled == true
-                  ? 'Sound notifications on'
-                  : 'Sound notifications off',
-              onPressed: () =>
-                  CustomerSoundPreference.setEnabled(enabled != true),
-              icon: Icon(
-                enabled == true
-                    ? Icons.volume_up_rounded
-                    : Icons.volume_off_rounded,
-                size: 20,
-                color: enabled == true
-                    ? AppColors.primary
-                    : AppColors.textHint,
-              ),
-            ),
+          ValueListenableBuilder<int>(
+            valueListenable: CustomerSoundPreference.revision,
+            builder: (context, _, __) {
+              final enabled = CustomerSoundPreference.valueFor(order.id);
+              return IconButton(
+                tooltip: enabled == true
+                    ? 'Sound notifications on'
+                    : 'Sound notifications off',
+                onPressed: () =>
+                    CustomerSoundPreference.setEnabled(order.id, enabled != true),
+                icon: Icon(
+                  enabled == true
+                      ? Icons.volume_up_rounded
+                      : Icons.volume_off_rounded,
+                  size: 20,
+                  color: enabled == true
+                      ? AppColors.primary
+                      : AppColors.textHint,
+                ),
+              );
+            },
           ),
           SizedBox(
             width: 24,

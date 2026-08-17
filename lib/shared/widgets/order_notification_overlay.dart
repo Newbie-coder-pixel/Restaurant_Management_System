@@ -48,14 +48,6 @@ class _OrderNotificationOverlayState
   final List<StaffNotification> _pending = [];
   static const _maxPending = 12;
 
-  // Claimed synchronously (before any await) the first time
-  // _maybeShowSoundPrompt runs, so multiple build()s scheduling it in the
-  // same frame still only ever show the dialog once per page session —
-  // same "weather app asking to enable location for forecasts" pattern:
-  // ask once, right when the diner lands on the screen where it matters
-  // (the order tracker), remember the answer via CustomerSoundPreference.
-  bool _soundPromptHandled = false;
-
   @override
   void dispose() {
     _dismissTimer?.cancel();
@@ -75,23 +67,20 @@ class _OrderNotificationOverlayState
     return false;
   }
 
-  Future<void> _maybeShowSoundPrompt(BuildContext context) async {
-    if (_soundPromptHandled) return;
-    _soundPromptHandled = true;
+  // Consent is scoped to one order, not the device — every fresh order
+  // gets asked, even on a device that already said yes for a previous
+  // one, and the flag naturally resets on any page reload (in-memory
+  // only, see customer_sound_preference.dart). [_soundPromptHandled]
+  // exists purely to stop the *same* build() rebuilding from re-showing
+  // the dialog while it's already open/pending for this exact order.
+  String? _soundPromptedForOrderId;
 
-    await CustomerSoundPreference.ensureLoaded();
-    if (!mounted) return;
+  Future<void> _maybeShowSoundPrompt(BuildContext context, String orderId) async {
+    if (_soundPromptedForOrderId == orderId) return;
+    _soundPromptedForOrderId = orderId;
 
-    final current = CustomerSoundPreference.value.value;
-    if (current == true) {
-      // Already opted in on a previous visit — this is still a fresh page
-      // session as far as the browser's audio policy is concerned, so
-      // re-prime quietly (best-effort; if it doesn't land, the very next
-      // tap anywhere still does via main.dart's global pointer-down hook).
-      OrderSoundService.unlock();
-      return;
-    }
-    if (current == false) return; // diner already declined — don't nag
+    final current = CustomerSoundPreference.valueFor(orderId);
+    if (current != null) return; // already decided for this exact order
     if (!context.mounted) return;
 
     final enable = await showDialog<bool>(
@@ -99,7 +88,7 @@ class _OrderNotificationOverlayState
       barrierDismissible: false,
       builder: (_) => const _SoundPermissionDialog(),
     );
-    await CustomerSoundPreference.setEnabled(enable ?? false);
+    CustomerSoundPreference.setEnabled(orderId, enable ?? false);
   }
 
   void _show(StaffNotification notification) {
@@ -112,13 +101,13 @@ class _OrderNotificationOverlayState
     // order_sound_service.dart) already makes sure simultaneous chimes
     // play one after another instead of cutting each other off. Staff
     // always gets sound (no opt-out); customer/qr respects whatever the
-    // diner answered in the permission dialog (see
-    // _maybeShowSoundPrompt) — default to silent if they haven't been
-    // asked yet at all (shouldn't normally happen on a track route, but
-    // e.g. the active-orders banner can fire from other customer screens
-    // too, before the prompt has had a chance to run).
-    final soundAllowed =
-        appMode == 'staff' || CustomerSoundPreference.value.value == true;
+    // diner answered for *this specific order's* permission dialog (see
+    // _maybeShowSoundPrompt) — defaults to silent if there's no decision
+    // on record for this order yet (e.g. the prompt hasn't resolved, or
+    // this event fired before it even had a chance to run).
+    final soundAllowed = appMode == 'staff' ||
+        (notification.orderId != null &&
+            CustomerSoundPreference.valueFor(notification.orderId!) == true);
     if (soundAllowed) OrderSoundService.play(notification.sound);
 
     if (_visible == null) {
@@ -197,13 +186,27 @@ class _OrderNotificationOverlayState
     return segments[3];
   }
 
+  /// True the instant an order event signals the transaction is done —
+  /// either the payment_status column landing on 'paid', or (the "Pay
+  /// After Dining" flow) the order's own status reaching its terminal
+  /// 'paid' step. Consent doesn't outlive the order it was granted for.
+  bool _isPaymentComplete(OrderEvent e) =>
+      e.newValue == 'paid' &&
+      (e.eventType == OrderEventType.paymentStatusChanged ||
+          e.eventType == OrderEventType.statusChanged);
+
   @override
   Widget build(BuildContext context) {
     if (_suppressedForRoute) return const SizedBox.shrink();
 
-    if ((appMode == 'customer' || appMode == 'qr') && _onOrderTrackRoute) {
+    final trackOrderId = appMode == 'qr'
+        ? _qrOrderIdFromPath
+        : appMode == 'customer'
+            ? ref.watch(myActiveOrderIdProvider).value
+            : null;
+    if (trackOrderId != null && _onOrderTrackRoute) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _maybeShowSoundPrompt(context);
+        if (mounted) _maybeShowSoundPrompt(context, trackOrderId);
       });
     }
 
@@ -243,18 +246,20 @@ class _OrderNotificationOverlayState
         next.whenData((event) =>
             showIfRelevant(StaffNotification.fromTableEvent(event)));
       });
-    } else if (appMode == 'customer') {
-      final orderId = ref.watch(myActiveOrderIdProvider).value;
+    } else if (appMode == 'customer' || appMode == 'qr') {
+      final orderId =
+          appMode == 'customer' ? ref.watch(myActiveOrderIdProvider).value : _qrOrderIdFromPath;
       if (orderId != null) {
         ref.listen(orderEventsForOrderProvider(orderId), (prev, next) {
-          next.whenData((event) => _show(StaffNotification.fromOrderEvent(event)));
-        });
-      }
-    } else if (appMode == 'qr') {
-      final orderId = _qrOrderIdFromPath;
-      if (orderId != null) {
-        ref.listen(orderEventsForOrderProvider(orderId), (prev, next) {
-          next.whenData((event) => _show(StaffNotification.fromOrderEvent(event)));
+          next.whenData((event) {
+            // Show (and, if consent was on, chime for) the payment-complete
+            // event itself first — it's the last one consent should still
+            // cover — then revoke so anything from here on stays silent.
+            _show(StaffNotification.fromOrderEvent(event));
+            if (_isPaymentComplete(event)) {
+              CustomerSoundPreference.revokeForOrder(orderId);
+            }
+          });
         });
       }
     }

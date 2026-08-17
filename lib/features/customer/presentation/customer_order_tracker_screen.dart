@@ -543,26 +543,32 @@ class _CustomerOrderTrackerScreenState
               ],
             ),
           ),
-          ValueListenableBuilder<bool?>(
-            valueListenable: CustomerSoundPreference.value,
-            builder: (context, enabled, _) => GestureDetector(
-              onTap: () => CustomerSoundPreference.setEnabled(enabled != true),
-              child: Tooltip(
-                message: enabled == true
-                    ? 'Sound notifications on'
-                    : 'Sound notifications off',
-                child: Icon(
-                  enabled == true
-                      ? Icons.volume_up_rounded
-                      : Icons.volume_off_rounded,
-                  color: enabled == true
-                      ? AppColors.primary
-                      : AppColors.textPrimary,
-                  size: 22,
-                ),
-              ),
+          if (_order?['id'] != null)
+            ValueListenableBuilder<int>(
+              valueListenable: CustomerSoundPreference.revision,
+              builder: (context, _, __) {
+                final orderId = _order!['id'] as String;
+                final enabled = CustomerSoundPreference.valueFor(orderId);
+                return GestureDetector(
+                  onTap: () =>
+                      CustomerSoundPreference.setEnabled(orderId, enabled != true),
+                  child: Tooltip(
+                    message: enabled == true
+                        ? 'Sound notifications on'
+                        : 'Sound notifications off',
+                    child: Icon(
+                      enabled == true
+                          ? Icons.volume_up_rounded
+                          : Icons.volume_off_rounded,
+                      color: enabled == true
+                          ? AppColors.primary
+                          : AppColors.textPrimary,
+                      size: 22,
+                    ),
+                  ),
+                );
+              },
             ),
-          ),
           const SizedBox(width: 20),
           GestureDetector(
             onTap: () => context.go('/customer/checkout'),
