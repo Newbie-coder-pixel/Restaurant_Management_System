@@ -47,9 +47,40 @@ class _OrderNotificationOverlayState
   final List<StaffNotification> _pending = [];
   static const _maxPending = 12;
 
+  // The staff app naturally gets clicked around constantly, so
+  // OrderSoundService.unlock() (primed on every pointer-down, see
+  // main.dart) is almost always already armed by the time a real chime
+  // needs to play there. A customer/QR order-tracking page is different —
+  // it's meant to be watched passively while food cooks, so a diner can
+  // easily never tap the screen at all before a status-change chime tries
+  // to fire, and iOS Safari silently drops it. This one-time, self-
+  // dismissing hint exists purely to get a single tap out of them so the
+  // page's shared AudioPlayer is unlocked before it's actually needed —
+  // the banner already renders fine either way, so it's only the audio
+  // policy this is compensating for.
+  bool _showSoundHint = appMode == 'customer' || appMode == 'qr';
+  Timer? _soundHintTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_showSoundHint) {
+      _soundHintTimer = Timer(const Duration(seconds: 8), () {
+        if (mounted) setState(() => _showSoundHint = false);
+      });
+    }
+  }
+
+  void _dismissSoundHint() {
+    _soundHintTimer?.cancel();
+    OrderSoundService.unlock();
+    if (mounted) setState(() => _showSoundHint = false);
+  }
+
   @override
   void dispose() {
     _dismissTimer?.cancel();
+    _soundHintTimer?.cancel();
     super.dispose();
   }
 
@@ -197,43 +228,92 @@ class _OrderNotificationOverlayState
     }
 
     final notification = _visible;
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          transitionBuilder: (child, animation) => SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, -1),
-              end: Offset.zero,
-            ).animate(animation),
-            child: FadeTransition(opacity: animation, child: child),
+    return Stack(
+      children: [
+        SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, animation) => SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, -1),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: FadeTransition(opacity: animation, child: child),
+              ),
+              child: notification == null
+                  ? const SizedBox.shrink(key: ValueKey('empty'))
+                  : _Banner(
+                      key: ValueKey(notification.id),
+                      notification: notification,
+                      onDismiss: _dismiss,
+                      onTap: () {
+                        _dismiss();
+                        if (appMode == 'staff') {
+                          context.go(notification.kind == StaffNotificationKind.table
+                              ? AppRoutes.tables
+                              : AppRoutes.order);
+                        } else if (appMode == 'customer') {
+                          context.go('/customer/track/${notification.orderNumber}');
+                        } else if (appMode == 'qr') {
+                          final segments = widget.currentPath
+                              .split('/')
+                              .where((s) => s.isNotEmpty)
+                              .toList();
+                          if (segments.length >= 2 && segments[0] == 'qr') {
+                            context.go('/qr/${segments[1]}/track/${notification.orderId}');
+                          }
+                        }
+                      },
+                    ),
+            ),
           ),
-          child: notification == null
-              ? const SizedBox.shrink(key: ValueKey('empty'))
-              : _Banner(
-                  key: ValueKey(notification.id),
-                  notification: notification,
-                  onDismiss: _dismiss,
-                  onTap: () {
-                    _dismiss();
-                    if (appMode == 'staff') {
-                      context.go(notification.kind == StaffNotificationKind.table
-                          ? AppRoutes.tables
-                          : AppRoutes.order);
-                    } else if (appMode == 'customer') {
-                      context.go('/customer/track/${notification.orderNumber}');
-                    } else if (appMode == 'qr') {
-                      final segments = widget.currentPath
-                          .split('/')
-                          .where((s) => s.isNotEmpty)
-                          .toList();
-                      if (segments.length >= 2 && segments[0] == 'qr') {
-                        context.go('/qr/${segments[1]}/track/${notification.orderId}');
-                      }
-                    }
-                  },
+        ),
+        if (_showSoundHint)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 12,
+            child: SafeArea(
+              top: false,
+              child: _SoundHintChip(onTap: _dismissSoundHint),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SoundHintChip extends StatelessWidget {
+  final VoidCallback onTap;
+  const _SoundHintChip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(999),
+      color: AppColors.textPrimary,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.volume_up_rounded, color: Colors.white, size: 16),
+              SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Ketuk untuk aktifkan suara notifikasi pesanan',
+                  style: TextStyle(color: Colors.white, fontSize: 12),
+                  maxLines: 2,
                 ),
+              ),
+            ],
+          ),
         ),
       ),
     );
