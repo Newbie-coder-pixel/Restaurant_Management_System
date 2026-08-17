@@ -10,6 +10,7 @@ import '../providers/qr_cart_provider.dart';
 import '../services/qr_device_id_service.dart';
 import '../../payment/models/midtrans_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/services/customer_sound_preference.dart';
 
 class QrOrderTrackerScreen extends ConsumerWidget {
   final String orderId;
@@ -247,8 +248,27 @@ class _TrackerHeader extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          ValueListenableBuilder<bool?>(
+            valueListenable: CustomerSoundPreference.value,
+            builder: (context, enabled, _) => IconButton(
+              tooltip: enabled == true
+                  ? 'Sound notifications on'
+                  : 'Sound notifications off',
+              onPressed: () =>
+                  CustomerSoundPreference.setEnabled(enabled != true),
+              icon: Icon(
+                enabled == true
+                    ? Icons.volume_up_rounded
+                    : Icons.volume_off_rounded,
+                size: 20,
+                color: enabled == true
+                    ? AppColors.primary
+                    : AppColors.textHint,
+              ),
+            ),
+          ),
           SizedBox(
-            width: 48,
+            width: 24,
             child: order.isActive
                 ? const Center(child: _PulsingDot(color: AppColors.primary))
                 : null,

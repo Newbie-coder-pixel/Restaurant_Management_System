@@ -13,6 +13,7 @@ import '../models/order_event_model.dart';
 import '../models/staff_notification.dart';
 import '../providers/order_events_provider.dart';
 import '../providers/table_events_provider.dart';
+import '../services/customer_sound_preference.dart';
 
 /// Global "order progress" banner, floating above every screen in all three
 /// app modes — the in-app half of the notification system (see
@@ -47,41 +48,58 @@ class _OrderNotificationOverlayState
   final List<StaffNotification> _pending = [];
   static const _maxPending = 12;
 
-  // The staff app naturally gets clicked around constantly, so
-  // OrderSoundService.unlock() (primed on every pointer-down, see
-  // main.dart) is almost always already armed by the time a real chime
-  // needs to play there. A customer/QR order-tracking page is different —
-  // it's meant to be watched passively while food cooks, so a diner can
-  // easily never tap the screen at all before a status-change chime tries
-  // to fire, and iOS Safari silently drops it. This one-time, self-
-  // dismissing hint exists purely to get a single tap out of them so the
-  // page's shared AudioPlayer is unlocked before it's actually needed —
-  // the banner already renders fine either way, so it's only the audio
-  // policy this is compensating for.
-  bool _showSoundHint = appMode == 'customer' || appMode == 'qr';
-  Timer? _soundHintTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    if (_showSoundHint) {
-      _soundHintTimer = Timer(const Duration(seconds: 8), () {
-        if (mounted) setState(() => _showSoundHint = false);
-      });
-    }
-  }
-
-  void _dismissSoundHint() {
-    _soundHintTimer?.cancel();
-    OrderSoundService.unlock();
-    if (mounted) setState(() => _showSoundHint = false);
-  }
+  // Claimed synchronously (before any await) the first time
+  // _maybeShowSoundPrompt runs, so multiple build()s scheduling it in the
+  // same frame still only ever show the dialog once per page session —
+  // same "weather app asking to enable location for forecasts" pattern:
+  // ask once, right when the diner lands on the screen where it matters
+  // (the order tracker), remember the answer via CustomerSoundPreference.
+  bool _soundPromptHandled = false;
 
   @override
   void dispose() {
     _dismissTimer?.cancel();
-    _soundHintTimer?.cancel();
     super.dispose();
+  }
+
+  bool get _onOrderTrackRoute {
+    final segments =
+        widget.currentPath.split('/').where((s) => s.isNotEmpty).toList();
+    if (segments.isEmpty) return false;
+    if (segments[0] == 'customer' && segments.length > 1 && segments[1] == 'track') {
+      return true;
+    }
+    if (segments[0] == 'qr' && segments.length > 2 && segments[2] == 'track') {
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _maybeShowSoundPrompt(BuildContext context) async {
+    if (_soundPromptHandled) return;
+    _soundPromptHandled = true;
+
+    await CustomerSoundPreference.ensureLoaded();
+    if (!mounted) return;
+
+    final current = CustomerSoundPreference.value.value;
+    if (current == true) {
+      // Already opted in on a previous visit — this is still a fresh page
+      // session as far as the browser's audio policy is concerned, so
+      // re-prime quietly (best-effort; if it doesn't land, the very next
+      // tap anywhere still does via main.dart's global pointer-down hook).
+      OrderSoundService.unlock();
+      return;
+    }
+    if (current == false) return; // diner already declined — don't nag
+    if (!context.mounted) return;
+
+    final enable = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _SoundPermissionDialog(),
+    );
+    await CustomerSoundPreference.setEnabled(enable ?? false);
   }
 
   void _show(StaffNotification notification) {
@@ -92,8 +110,16 @@ class _OrderNotificationOverlayState
     // The chime fires immediately regardless of banner backlog — it's the
     // real-time alert, and OrderSoundService's own queue (see
     // order_sound_service.dart) already makes sure simultaneous chimes
-    // play one after another instead of cutting each other off.
-    OrderSoundService.play(notification.sound);
+    // play one after another instead of cutting each other off. Staff
+    // always gets sound (no opt-out); customer/qr respects whatever the
+    // diner answered in the permission dialog (see
+    // _maybeShowSoundPrompt) — default to silent if they haven't been
+    // asked yet at all (shouldn't normally happen on a track route, but
+    // e.g. the active-orders banner can fire from other customer screens
+    // too, before the prompt has had a chance to run).
+    final soundAllowed =
+        appMode == 'staff' || CustomerSoundPreference.value.value == true;
+    if (soundAllowed) OrderSoundService.play(notification.sound);
 
     if (_visible == null) {
       _display(notification);
@@ -175,6 +201,12 @@ class _OrderNotificationOverlayState
   Widget build(BuildContext context) {
     if (_suppressedForRoute) return const SizedBox.shrink();
 
+    if ((appMode == 'customer' || appMode == 'qr') && _onOrderTrackRoute) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeShowSoundPrompt(context);
+      });
+    }
+
     if (appMode == 'staff') {
       // null branchId (superadmin with no fixed home branch) means "all
       // branches" — see order_events_repository.dart's watchBranchEvents.
@@ -228,92 +260,129 @@ class _OrderNotificationOverlayState
     }
 
     final notification = _visible;
-    return Stack(
-      children: [
-        SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              transitionBuilder: (child, animation) => SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, -1),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: FadeTransition(opacity: animation, child: child),
-              ),
-              child: notification == null
-                  ? const SizedBox.shrink(key: ValueKey('empty'))
-                  : _Banner(
-                      key: ValueKey(notification.id),
-                      notification: notification,
-                      onDismiss: _dismiss,
-                      onTap: () {
-                        _dismiss();
-                        if (appMode == 'staff') {
-                          context.go(notification.kind == StaffNotificationKind.table
-                              ? AppRoutes.tables
-                              : AppRoutes.order);
-                        } else if (appMode == 'customer') {
-                          context.go('/customer/track/${notification.orderNumber}');
-                        } else if (appMode == 'qr') {
-                          final segments = widget.currentPath
-                              .split('/')
-                              .where((s) => s.isNotEmpty)
-                              .toList();
-                          if (segments.length >= 2 && segments[0] == 'qr') {
-                            context.go('/qr/${segments[1]}/track/${notification.orderId}');
-                          }
-                        }
-                      },
-                    ),
-            ),
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          transitionBuilder: (child, animation) => SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, -1),
+              end: Offset.zero,
+            ).animate(animation),
+            child: FadeTransition(opacity: animation, child: child),
           ),
+          child: notification == null
+              ? const SizedBox.shrink(key: ValueKey('empty'))
+              : _Banner(
+                  key: ValueKey(notification.id),
+                  notification: notification,
+                  onDismiss: _dismiss,
+                  onTap: () {
+                    _dismiss();
+                    if (appMode == 'staff') {
+                      context.go(notification.kind == StaffNotificationKind.table
+                          ? AppRoutes.tables
+                          : AppRoutes.order);
+                    } else if (appMode == 'customer') {
+                      context.go('/customer/track/${notification.orderNumber}');
+                    } else if (appMode == 'qr') {
+                      final segments = widget.currentPath
+                          .split('/')
+                          .where((s) => s.isNotEmpty)
+                          .toList();
+                      if (segments.length >= 2 && segments[0] == 'qr') {
+                        context.go('/qr/${segments[1]}/track/${notification.orderId}');
+                      }
+                    }
+                  },
+                ),
         ),
-        if (_showSoundHint)
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: SafeArea(
-              top: false,
-              child: _SoundHintChip(onTap: _dismissSoundHint),
-            ),
-          ),
-      ],
+      ),
     );
   }
 }
 
-class _SoundHintChip extends StatelessWidget {
-  final VoidCallback onTap;
-  const _SoundHintChip({required this.onTap});
+/// Modal "ask once" permission prompt for order-progress chimes, shown the
+/// first time a diner lands on their order tracker (see
+/// _OrderNotificationOverlayState._maybeShowSoundPrompt) — same UX pattern
+/// as a weather app asking to enable location before it can push forecast
+/// alerts: explain the value up front, ask for one deliberate tap, then
+/// never ask again (CustomerSoundPreference persists the answer).
+class _SoundPermissionDialog extends StatelessWidget {
+  const _SoundPermissionDialog();
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      elevation: 4,
-      borderRadius: BorderRadius.circular(999),
-      color: AppColors.textPrimary,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.volume_up_rounded, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'Ketuk untuk aktifkan suara notifikasi pesanan',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
-                  maxLines: 2,
-                ),
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
               ),
-            ],
-          ),
+              child: const Icon(Icons.volume_up_rounded,
+                  color: AppColors.primary, size: 28),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Aktifkan Suara Notifikasi?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Kami akan memberi tahu progres pesanan Anda lewat suara — '
+              'mulai dimasak, siap disajikan, hingga pembayaran — supaya '
+              'Anda tidak perlu terus memantau layar.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Aktifkan Suara',
+                    style: TextStyle(
+                        fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              ),
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Nanti Saja',
+                style: TextStyle(
+                    fontFamily: 'Poppins', color: AppColors.textSecondary),
+              ),
+            ),
+          ],
         ),
       ),
     );

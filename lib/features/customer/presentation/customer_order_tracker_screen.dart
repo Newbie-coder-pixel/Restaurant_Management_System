@@ -7,6 +7,7 @@ import '../../../core/services/prep_time_service.dart';
 import '../../../shared/models/order_model.dart';
 import '../../payment/services/receipt_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/services/customer_sound_preference.dart';
 
 // ── Order Success Screen ───────────────────────────────────────────
 class CustomerOrderSuccessScreen extends StatelessWidget {
@@ -542,6 +543,27 @@ class _CustomerOrderTrackerScreenState
               ],
             ),
           ),
+          ValueListenableBuilder<bool?>(
+            valueListenable: CustomerSoundPreference.value,
+            builder: (context, enabled, _) => GestureDetector(
+              onTap: () => CustomerSoundPreference.setEnabled(enabled != true),
+              child: Tooltip(
+                message: enabled == true
+                    ? 'Sound notifications on'
+                    : 'Sound notifications off',
+                child: Icon(
+                  enabled == true
+                      ? Icons.volume_up_rounded
+                      : Icons.volume_off_rounded,
+                  color: enabled == true
+                      ? AppColors.primary
+                      : AppColors.textPrimary,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
           GestureDetector(
             onTap: () => context.go('/customer/checkout'),
             child: const Icon(
