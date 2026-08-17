@@ -14,7 +14,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'customer_login_screen.dart';
 import 'customer_my_bookings_screen.dart';
-import 'customer_chatbot_screen.dart';
 import 'customer_order_history_screen.dart'; // ← ADDED THIS
 import '../providers/customer_auth_provider.dart';
 import '../providers/cart_provider.dart';
@@ -161,7 +160,6 @@ class _CustomerLandingScreenState
   User? _cachedUser;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _homeTabKey = GlobalKey<_HomeTabState>();
-  bool _chatOpen = false;
 
   @override
   void initState() {
@@ -194,7 +192,23 @@ class _CustomerLandingScreenState
     super.dispose();
   }
 
-  void switchTab(int index) => _tabNotifier.value = index;
+  // Keeps the `?tab=` query param in sync with every in-app tab switch
+  // (drawer items, top-nav "Reservations", logo tap). Without this, only
+  // switches that went through an explicit context.go(...) (e.g. the menu
+  // screen's Reservations shortcut) updated the URL, so tapping "Home"
+  // afterwards flipped the visible tab locally while the URL stayed on the
+  // previous tab — invisible until a refresh/bookmark silently reopened the
+  // wrong tab. CustomerLandingScreen has no route key, so this context.go
+  // reuses the existing State (initState/_tab aren't re-run) rather than
+  // remounting the screen.
+  void switchTab(int index) {
+    _tabNotifier.value = index;
+    if (!mounted) return;
+    final uri = GoRouterState.of(context).uri;
+    if (uri.queryParameters['tab'] != '$index') {
+      context.go('/customer?tab=$index');
+    }
+  }
 
   // "Menu"/"Explore Menu" used to skip branch selection entirely: it
   // auto-resolved a branch (nearest known, else first active branch) and
@@ -245,15 +259,10 @@ class _CustomerLandingScreenState
       backgroundColor: AppColors.background,
       endDrawer: _buildDrawer(user),
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                _buildTopNav(user, cart),
-                Expanded(child: _buildBody()),
-              ],
-            ),
-            ..._buildChatOverlayLayers(),
+            _buildTopNav(user, cart),
+            Expanded(child: _buildBody()),
           ],
         ),
       ),
@@ -264,44 +273,6 @@ class _CustomerLandingScreenState
             )
           : null,
     );
-  }
-
-  // ── Floating chat bubble + panel (persistent across all tabs) ──────
-  List<Widget> _buildChatOverlayLayers() {
-    final size = MediaQuery.of(context).size;
-    final panelWidth = size.width < 420 ? size.width - 32 : 380.0;
-    final panelHeight = (size.height * 0.72).clamp(420.0, 640.0);
-
-    return [
-      AnimatedPositioned(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        right: 16,
-        bottom: 88,
-        child: Offstage(
-          // Not removed so the conversation survives closing/reopening the panel.
-          offstage: !_chatOpen,
-          child: SizedBox(
-            width: panelWidth,
-            height: panelHeight,
-            child: CustomerChatbotScreen(
-              onClose: () => setState(() => _chatOpen = false),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        right: 16,
-        bottom: 20,
-        child: FloatingActionButton(
-          heroTag: 'customer_chatbot_fab',
-          backgroundColor: AppColors.primary,
-          onPressed: () => setState(() => _chatOpen = !_chatOpen),
-          child: Icon(_chatOpen ? Icons.close_rounded : Icons.chat_rounded,
-              color: Colors.white),
-        ),
-      ),
-    ];
   }
 
   String _displayName(User user) {
@@ -449,21 +420,6 @@ class _CustomerLandingScreenState
       );
     }
 
-    Widget actionItem(IconData icon, String label, VoidCallback onTap) {
-      return ListTile(
-        leading: Icon(icon, color: AppColors.textSecondary),
-        title: Text(label,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary)),
-        onTap: () {
-          Navigator.of(context).pop();
-          onTap();
-        },
-      );
-    }
-
     return Drawer(
       backgroundColor: AppColors.surface,
       child: SafeArea(
@@ -511,8 +467,6 @@ class _CustomerLandingScreenState
             item(Icons.home_rounded, 'Home', 0),
             item(Icons.calendar_today_rounded, 'Table Booking', 1),
             item(Icons.receipt_long_rounded, 'Orders', 2),
-            actionItem(Icons.smart_toy_rounded, 'AI Chat',
-                () => setState(() => _chatOpen = true)),
             const Spacer(),
             const Divider(height: 1, color: AppColors.border),
             ListTile(

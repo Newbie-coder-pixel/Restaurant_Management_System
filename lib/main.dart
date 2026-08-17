@@ -12,6 +12,7 @@ import 'core/services/order_sound_service.dart';
 import 'shared/widgets/floating_chatbot_overlay.dart';
 import 'shared/widgets/order_notification_overlay.dart';
 import 'features/qr_order/presentation/qr_chatbot_overlay.dart';
+import 'features/customer/presentation/customer_chatbot_overlay.dart';
 import 'features/payment/midtrans/midtrans_service.dart';
 import 'firebase_options.dart';
 import 'dart:js_interop';
@@ -176,6 +177,18 @@ class RestaurantApp extends ConsumerWidget {
                     child: ListenableBuilder(
                       listenable: router.routerDelegate,
                       builder: (context, _) => QrChatbotOverlay(
+                        currentPath: router.routerDelegate.currentConfiguration
+                            .uri.path,
+                      ),
+                    ),
+                  ),
+                  // Same pattern for the customer app's AI chat launcher —
+                  // see CustomerChatbotOverlay's doc comment.
+                  Material(
+                    type: MaterialType.transparency,
+                    child: ListenableBuilder(
+                      listenable: router.routerDelegate,
+                      builder: (context, _) => CustomerChatbotOverlay(
                         currentPath: router.routerDelegate.currentConfiguration
                             .uri.path,
                       ),
