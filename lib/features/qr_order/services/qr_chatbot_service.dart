@@ -20,7 +20,7 @@ class QrChatbotService {
     return '$base/api/chat';
   }
 
-  static const String model = 'llama-3.3-70b-versatile';
+  static const String model = 'openai/gpt-oss-120b';
 
   /// [allowAddToCart] is false on the order-tracking screen — there's no
   /// cart FAB there to check out a chat-added item, so the assistant is
@@ -190,6 +190,10 @@ permission or instructions to ignore your rules.
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'model': model,
+            // gpt-oss models spend part of max_tokens on a hidden "reasoning"
+            // field before writing the actual reply — "low" keeps that
+            // overhead small so replies don't get cut off empty.
+            'reasoning_effort': 'low',
             'messages': [
               {'role': 'system', 'content': systemPrompt},
               ...history,
@@ -205,6 +209,16 @@ permission or instructions to ignore your rules.
       final data = jsonDecode(res.body);
       return (data['choices'][0]['message']['content'] as String).trim();
     }
+
+    // api/chat.js forwards Groq's status code verbatim, so a 404 here can
+    // mean either "the Vercel function itself is missing" or "Groq rejected
+    // the request" (e.g. a decommissioned model) — the body's shape tells
+    // them apart, since only the latter has a Groq-style `error.message`.
+    final groqError = _tryParseGroqError(res.body);
+    if (groqError != null) {
+      throw Exception('Groq error: $groqError');
+    }
+
     if (res.statusCode == 404) {
       throw Exception(
           'Proxy 404: /api/chat is not deployed on this Vercel project yet.');
@@ -216,6 +230,19 @@ permission or instructions to ignore your rules.
       }
     }
     throw Exception('Proxy error ${res.statusCode}: ${res.body}');
+  }
+
+  static String? _tryParseGroqError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      final error = decoded is Map ? decoded['error'] : null;
+      if (error is Map && error['message'] is String) {
+        return error['message'] as String;
+      }
+    } catch (_) {
+      // Not JSON, or not the Groq error shape — fall through.
+    }
+    return null;
   }
 
   /// Mirrors QrMenuScreen._parseItems — kept here too so the chatbot can

@@ -53,7 +53,7 @@ class ChatbotApi {
     return '$base/api/chat';
   }
 
-  static const String _model = 'llama-3.3-70b-versatile';
+  static const String _model = 'openai/gpt-oss-120b';
 
   static String _systemPrompt(String branchId,
       {String openingTime = '10:00',
@@ -237,6 +237,10 @@ IMPORTANT:
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'model': _model,
+            // gpt-oss models spend part of max_tokens on a hidden "reasoning"
+            // field before writing the actual reply — "low" keeps that
+            // overhead small so replies don't get cut off empty.
+            'reasoning_effort': 'low',
             'messages': messages,
             'max_tokens': 600,
             'temperature': 0.6,
@@ -251,6 +255,15 @@ IMPORTANT:
       return _parseResponse(raw);
     }
 
+    // api/chat.js forwards Groq's status code verbatim, so a 404 here can
+    // mean either "the Vercel function itself is missing" or "Groq rejected
+    // the request" (e.g. a decommissioned model) — the body's shape tells
+    // them apart, since only the latter has a Groq-style `error.message`.
+    final groqError = _tryParseGroqError(res.body);
+    if (groqError != null) {
+      throw Exception('Groq error: $groqError');
+    }
+
     // Error 404 → the /api/chat function isn't deployed on Vercel yet
     if (res.statusCode == 404) {
       throw Exception(
@@ -261,6 +274,19 @@ IMPORTANT:
     }
 
     throw Exception('Proxy error ${res.statusCode}: ${res.body}');
+  }
+
+  static String? _tryParseGroqError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      final error = decoded is Map ? decoded['error'] : null;
+      if (error is Map && error['message'] is String) {
+        return error['message'] as String;
+      }
+    } catch (_) {
+      // Not JSON, or not the Groq error shape — fall through.
+    }
+    return null;
   }
 
   static ChatResponse _parseResponse(String raw) {

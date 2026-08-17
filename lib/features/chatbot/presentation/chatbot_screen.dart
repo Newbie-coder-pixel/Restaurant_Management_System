@@ -973,7 +973,11 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           Uri.parse(_proxyUrl),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
-            'model': 'llama-3.3-70b-versatile',
+            'model': 'openai/gpt-oss-120b',
+            // gpt-oss models spend part of max_tokens on a hidden "reasoning"
+            // field before writing the actual reply — "low" keeps that
+            // overhead small so replies don't get cut off empty.
+            'reasoning_effort': 'low',
             'messages': [
               {'role': 'system', 'content': systemPrompt},
               ...history,
@@ -988,6 +992,17 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     if (res.statusCode == 200) {
       final d = jsonDecode(res.body);
       return (d['choices'][0]['message']['content'] as String).trim();
+    }
+
+    // api/chat.js forwards Groq's status code verbatim, so a 404 here can
+    // mean either "the Vercel function itself is missing" (body isn't JSON,
+    // or has no Groq-shaped `error` field) or "Groq rejected the request"
+    // (e.g. a decommissioned model — body has `error.message`/`error.code`).
+    // Surface the real Groq error instead of misdiagnosing every 404 as a
+    // missing proxy.
+    final groqError = _tryParseGroqError(res.body);
+    if (groqError != null) {
+      throw Exception('Groq error: $groqError');
     }
 
     if (res.statusCode == 404) {
@@ -1007,6 +1022,19 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     }
 
     throw Exception('Proxy error ${res.statusCode}: ${res.body}');
+  }
+
+  static String? _tryParseGroqError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      final error = decoded is Map ? decoded['error'] : null;
+      if (error is Map && error['message'] is String) {
+        return error['message'] as String;
+      }
+    } catch (_) {
+      // Not JSON, or not the Groq error shape — fall through.
+    }
+    return null;
   }
 
   // ── Show Export Sheet ─────────────────────────────────────────────
