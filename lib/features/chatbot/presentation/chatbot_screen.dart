@@ -1074,13 +1074,19 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     final text = (quick ?? _msgCtrl.text).trim();
     final chatNotifier = ref.read(chatProvider.notifier);
 
-    if (text.isEmpty || ref.read(chatProvider).isTyping) return;
+    if (text.isEmpty) return;
 
-    // Intercept export quick action
+    // Intercept export quick action before the isTyping gate below — export
+    // is a local Supabase→PDF/CSV job that never touches the AI request
+    // pipeline, so it shouldn't be blocked just because another quick
+    // action's AI call is still in flight (isTyping can stay true for up to
+    // the 30s request timeout).
     if (text == '__export__') {
       await _showExportSheet();
       return;
     }
+
+    if (ref.read(chatProvider).isTyping) return;
 
     // Hard block BEFORE anything reaches the LLM — see _jailbreakTriggers.
     if (_looksLikeJailbreakAttempt(text)) {
