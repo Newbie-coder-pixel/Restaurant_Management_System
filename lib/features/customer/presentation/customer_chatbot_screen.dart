@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -66,6 +67,7 @@ class _CustomerChatbotScreenState
   final _tableService = TableAssignmentService();
 
   bool _isTyping = false;
+  bool _quickActionsExpanded = false;
   String? _sessionId;
 
   String? _cachedMenuText;
@@ -1025,7 +1027,10 @@ IMPORTANT:
                 ],
               ),
             ),
-            if (_needsBranchSelection) _buildBranchPicker(),
+            if (_needsBranchSelection)
+              _buildBranchPicker()
+            else
+              _buildQuickActions(),
             _buildInput(),
           ],
         ),
@@ -1033,17 +1038,29 @@ IMPORTANT:
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────
+  // ── Header — matches the staff/QR chatbot panels: a light surface bar
+  // with a small accent icon box and an ONLINE status row, instead of a
+  // solid gold header, so all three apps' AI panels read as one design.
   Widget _buildHeader(String? subtitle) => Container(
-        padding: const EdgeInsets.fromLTRB(18, 16, 8, 16),
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
         decoration: const BoxDecoration(
-          color: AppColors.primary,
+          color: AppColors.surface,
+          border: Border(bottom: BorderSide(color: AppColors.border)),
           borderRadius:
               BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 17),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -1051,13 +1068,33 @@ IMPORTANT:
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text('Restaurant Guide',
-                      style: TextStyle(fontFamily: 'Poppins', color: Colors.white,
-                          fontSize: 17, fontWeight: FontWeight.w800)),
-                  if (subtitle != null)
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                          fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  if (_cachedBranchName != null)
+                    Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                              color: AppColors.available, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text('$subtitle • ONLINE',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                                  fontWeight: FontWeight.w600, letterSpacing: 0.3,
+                                  color: AppColors.textSecondary)),
+                        ),
+                      ],
+                    )
+                  else if (subtitle != null)
                     Text(subtitle,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontFamily: 'Poppins',
-                            color: Colors.white70, fontSize: 11)),
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                            fontWeight: FontWeight.w600, letterSpacing: 0.3,
+                            color: AppColors.textSecondary)),
                 ],
               ),
             ),
@@ -1066,7 +1103,8 @@ IMPORTANT:
               if (cartCount == 0) return const SizedBox.shrink();
               return Stack(clipBehavior: Clip.none, children: [
                 IconButton(
-                  icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white, size: 20),
+                  icon: const Icon(Icons.shopping_cart_outlined,
+                      color: AppColors.textSecondary, size: 20),
                   tooltip: 'View Cart',
                   onPressed: () {
                     widget.onClose();
@@ -1088,7 +1126,7 @@ IMPORTANT:
               ]);
             }),
             IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+              icon: const Icon(Icons.refresh_rounded, size: 20, color: AppColors.textSecondary),
               tooltip: 'New Chat',
               onPressed: () {
                 setState(() {
@@ -1109,7 +1147,7 @@ IMPORTANT:
               },
             ),
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+              icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.textSecondary),
               tooltip: 'Close',
               onPressed: widget.onClose,
             ),
@@ -1182,203 +1220,315 @@ IMPORTANT:
 
   Widget _buildMessages() => ListView.builder(
         controller: _scrollCtrl,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         itemCount: _messages.length + (_isTyping ? 1 : 0),
         itemBuilder: (_, i) {
           if (i == _messages.length) return _buildTypingIndicator();
           final m = _messages[i];
-          final isUser = m.role == 'user';
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment:
-                      isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (!isUser) ...[
-                      const CircleAvatar(
-                        radius: 15,
-                        backgroundColor: AppColors.surfaceVariant,
-                        child: Icon(Icons.restaurant, size: 15, color: AppColors.primary),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isUser ? AppColors.primary : AppColors.surface,
-                          border: isUser ? null : Border.all(color: AppColors.border),
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(16),
-                            topRight: const Radius.circular(16),
-                            bottomLeft: isUser
-                                ? const Radius.circular(16)
-                                : const Radius.circular(4),
-                            bottomRight: isUser
-                                ? const Radius.circular(4)
-                                : const Radius.circular(16),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(m.content,
-                                style: TextStyle(
-                                    color: isUser ? Colors.white : AppColors.textPrimary,
-                                    fontFamily: 'Poppins',
-                                    fontSize: 13.5,
-                                    height: 1.5)),
-                            const SizedBox(height: 4),
-                            Text(_formatTime(m.timestamp),
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 10,
-                                    color: isUser
-                                        ? Colors.white.withValues(alpha: 0.7)
-                                        : AppColors.textHint)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (isUser) ...[
-                      const SizedBox(width: 8),
-                      const CircleAvatar(
-                        radius: 15,
-                        backgroundColor: AppColors.accent,
-                        child: Icon(Icons.person, size: 15, color: Colors.white),
-                      ),
-                    ],
-                  ],
-                ),
-                // Quick-reply chips ride along with the welcome message only.
-                if (!isUser && i == 0) ...[
-                  const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 38),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _quickActions
-                          .map((e) => _quickChip(e.$1, e.$2))
-                          .toList(),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          );
+          return m.role == 'user' ? _buildUserBubble(m) : _buildBotBubble(m);
         },
       );
 
-  Widget _quickChip(String label, String query) => GestureDetector(
-        onTap: () => _send(query),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
+  // User bubble — matches the staff/QR chatbot panels: a right-aligned
+  // surfaceVariant pill with the timestamp under the text.
+  Widget _buildUserBubble(_ChatMessage m) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Container(
+              constraints:
+                  BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(m.content,
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 13.5,
+                          color: AppColors.textPrimary, height: 1.4)),
+                  const SizedBox(height: 4),
+                  Text(_formatTime(m.timestamp),
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                          color: AppColors.textHint)),
+                ],
+              ),
+            ),
           ),
-          child: Text(label,
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5,
-                  fontWeight: FontWeight.w600, color: AppColors.primary)),
-        ),
-      );
+        ],
+      ),
+    );
+  }
+
+  // Bot bubble — matches the staff/QR chatbot panels: an "ASSISTANT +
+  // timestamp" label row above a bordered markdown card.
+  Widget _buildBotBubble(_ChatMessage m) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 13),
+              ),
+              const SizedBox(width: 8),
+              const Text('ASSISTANT',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                      fontWeight: FontWeight.w700, letterSpacing: 0.6,
+                      color: AppColors.textSecondary)),
+              const SizedBox(width: 6),
+              Text(_formatTime(m.timestamp),
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                      color: AppColors.textHint)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            constraints:
+                BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.86),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: MarkdownBody(
+              data: m.content,
+              styleSheet: MarkdownStyleSheet(
+                p: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                    color: AppColors.textPrimary, height: 1.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildTypingIndicator() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
         child: Row(
           children: [
-            const CircleAvatar(
-              radius: 15,
-              backgroundColor: AppColors.surfaceVariant,
-              child: Icon(Icons.restaurant, size: 15, color: AppColors.primary),
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 13),
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 border: Border.all(color: AppColors.border),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(4),
-                ),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _dot(0),
-                  const SizedBox(width: 4),
-                  _dot(150),
-                  const SizedBox(width: 4),
-                  _dot(300),
-                ],
+              child: const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
               ),
             ),
           ],
         ),
       );
 
-  Widget _dot(int delayMs) => TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0.3, end: 1.0),
-        duration: Duration(milliseconds: 600 + delayMs),
-        builder: (_, v, __) => Opacity(
-          opacity: v,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-          ),
-        ),
-      );
+  // Icon per quick-action label — mirrors the staff/QR chip icon mapping so
+  // customer chips look the same, since these labels carry no emoji of
+  // their own to derive an icon from.
+  IconData _quickActionIcon(String label) {
+    switch (label) {
+      case 'Recommend a dish':
+        return Icons.auto_awesome_rounded;
+      case "Where's my order?":
+        return Icons.receipt_long_rounded;
+      case 'Book a table':
+        return Icons.event_seat_rounded;
+      case 'View Menu':
+        return Icons.menu_book_rounded;
+      case 'Order Food':
+        return Icons.shopping_cart_rounded;
+      case 'Vegetarian Options':
+        return Icons.eco_rounded;
+      case 'Allergen Info':
+        return Icons.warning_amber_rounded;
+      case 'Opening Hours':
+        return Icons.access_time_rounded;
+      default:
+        return Icons.bolt_rounded;
+    }
+  }
 
+  // Styled to match the staff/QR chatbot panels' collapsible "Quick
+  // Actions" section: a toggleable header row, a horizontal chip scroller
+  // when collapsed, and a 2-column grid when expanded — replaces the old
+  // chip row that only ever appeared once, under the welcome message.
+  Widget _buildQuickActions() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      color: AppColors.surface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () =>
+                setState(() => _quickActionsExpanded = !_quickActionsExpanded),
+            child: Container(
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppColors.border),
+                  bottom: BorderSide(color: AppColors.border),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.flash_on_rounded, size: 14, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  const Text('Quick Actions',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                          fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  const Spacer(),
+                  AnimatedRotation(
+                    turns: _quickActionsExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: const Icon(Icons.expand_more, size: 18, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_quickActionsExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 3.0,
+                ),
+                itemCount: _quickActions.length,
+                itemBuilder: (_, i) => _CustomerQuickChip(
+                  icon: _quickActionIcon(_quickActions[i].$1),
+                  label: _quickActions[i].$1,
+                  onTap: () => _send(_quickActions[i].$2),
+                ),
+              ),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+              child: Row(
+                children: _quickActions
+                    .map((e) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _CustomerQuickChip(
+                            icon: _quickActionIcon(e.$1),
+                            label: e.$1,
+                            onTap: () => _send(e.$2),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Styled to match the staff/QR chatbot panels' _buildInput: an outlined
+  // pill (not an underlined field) with a highlighted focus border, a
+  // circular accent send button, and the same disclaimer underneath.
   Widget _buildInput() => Container(
-        padding: const EdgeInsets.fromLTRB(16, 8, 12, 14),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
         decoration: const BoxDecoration(
           color: AppColors.surface,
           border: Border(top: BorderSide(color: AppColors.border)),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _msgCtrl,
-                onSubmitted: (_) => _send(),
-                textInputAction: TextInputAction.send,
-                maxLines: 4,
-                minLines: 1,
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
-                    color: AppColors.textPrimary),
-                decoration: const InputDecoration(
-                  hintText: 'Type your message...',
-                  hintStyle: TextStyle(fontFamily: 'Poppins', fontSize: 14,
-                      color: AppColors.textHint),
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10),
-                  enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.border)),
-                  focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.primary, width: 2)),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _msgCtrl,
+                    onSubmitted: (_) => _send(),
+                    textInputAction: TextInputAction.send,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                          color: AppColors.textHint),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: (_isTyping || _needsBranchSelection) ? null : () => _send(),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: (_isTyping || _needsBranchSelection)
+                          ? AppColors.accent.withValues(alpha: 0.4)
+                          : AppColors.accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: _isTyping
+                        ? const Padding(
+                            padding: EdgeInsets.all(13),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: _isTyping
-                  ? const SizedBox(width: 20, height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                  : const Icon(Icons.send_rounded, color: AppColors.primary, size: 22),
-              onPressed: _isTyping ? null : () => _send(),
-            ),
+            const SizedBox(height: 6),
+            const Text('AI generated info. Verify critical data.',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: AppColors.textHint)),
           ],
         ),
       );
@@ -1394,6 +1544,44 @@ IMPORTANT:
     return '${time.day}/${time.month} '
         '${time.hour.toString().padLeft(2, '0')}:'
         '${time.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// Quick-action chip — matches the staff/QR chatbot panels' chip: icon +
+// single-line label in a bordered pill.
+class _CustomerQuickChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _CustomerQuickChip({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(label,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
+                      fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
