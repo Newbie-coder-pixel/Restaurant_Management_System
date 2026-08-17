@@ -925,13 +925,21 @@ class _BookingFormState extends ConsumerState<_BookingForm> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
-                        child: Container(
-                          color: AppColors.surfaceVariant,
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.restaurant_outlined,
-                            size: 64,
-                            color: AppColors.textHint,
+                        child: ClipRect(
+                          child: Container(
+                            color: AppColors.surfaceVariant,
+                            alignment: Alignment.center,
+                            child: SizedBox.expand(
+                              child: Image.asset(
+                                'assets/images/reservation_confirmation.jpg',
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.restaurant_outlined,
+                                  size: 64,
+                                  color: AppColors.textHint,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
