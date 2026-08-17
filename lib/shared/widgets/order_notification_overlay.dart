@@ -97,15 +97,22 @@ class _OrderNotificationOverlayState
     _advance();
   }
 
-  /// Route segments this overlay must stay silent on: payment flows (never
-  /// interrupt an in-progress transaction) and the KDS screen (which shows
-  /// its own dedicated new-order banner — see kds_screen.dart's
-  /// _buildNewOrderBanner — so the two mechanisms don't compete).
+  /// Route segments this overlay must stay silent on entirely: payment
+  /// flows, so it never interrupts an in-progress transaction. This is
+  /// deliberately narrower than it used to be — the KDS screen was also
+  /// blanket-suppressed here, which meant a multi-access role (e.g.
+  /// superadmin, who can see Kitchen *and* Cashier *and* Table
+  /// Management) got no banner/chime for anything — a payment completing,
+  /// a table call — while just looking at the kitchen board. That's
+  /// wrong: a role's access to a feature shouldn't depend on which
+  /// screen they happen to be on right now. Only the literal new-order
+  /// chime KDS already plays itself (see kds_screen.dart's
+  /// _subscribeOrderEvents) is skipped here now, in [showIfRelevant]
+  /// below — everything else this role has access to still gets through.
   bool get _suppressedForRoute {
     final segments =
         widget.currentPath.split('/').where((s) => s.isNotEmpty).toList();
     if (segments.isEmpty) return false;
-    if (segments[0] == 'kitchen') return true; // staff KDS
     if (segments[0] == 'customer' &&
         segments.length > 1 &&
         segments[1] == 'payment') {
@@ -113,6 +120,12 @@ class _OrderNotificationOverlayState
     }
     if (segments[0] == 'qr' && segments.contains('pay')) return true;
     return false;
+  }
+
+  bool get _onKitchenRoute {
+    final segments =
+        widget.currentPath.split('/').where((s) => s.isNotEmpty).toList();
+    return segments.isNotEmpty && segments[0] == 'kitchen';
   }
 
   /// Order id for the QR app mode, read from the current route
@@ -145,6 +158,17 @@ class _OrderNotificationOverlayState
         // neither Kitchen nor Cashier access) doesn't get interrupted by
         // a banner/chime for it either.
         if (role != null && !notification.isRelevantToRole(role)) return;
+        // Skip only the exact new-order chime KDS already plays itself
+        // while staff is looking at that screen — everything else (a
+        // payment completing, a table call, a bill request, even a
+        // non-"new" Kitchen status change) still needs to reach a
+        // multi-access role like superadmin/manager regardless of which
+        // screen they're currently on.
+        if (_onKitchenRoute &&
+            notification.kind == StaffNotificationKind.order &&
+            notification.isNewOrder) {
+          return;
+        }
         _show(notification);
       }
 
