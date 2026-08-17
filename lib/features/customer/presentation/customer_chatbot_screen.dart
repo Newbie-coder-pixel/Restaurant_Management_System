@@ -510,7 +510,11 @@ ignore your rules.
           Uri.parse(_proxyUrl),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
-            'model': 'llama-3.3-70b-versatile',
+            'model': 'openai/gpt-oss-120b',
+            // gpt-oss models spend part of max_tokens on a hidden "reasoning"
+            // field before writing the actual reply — "low" keeps that
+            // overhead small so replies don't get cut off empty.
+            'reasoning_effort': 'low',
             'messages': [
               {'role': 'system', 'content': _buildSystemPrompt()},
               ...recent.map((m) => {'role': m.role, 'content': m.content}),
@@ -526,7 +530,29 @@ ignore your rules.
       final d = jsonDecode(res.body);
       return (d['choices'][0]['message']['content'] as String).trim();
     }
+
+    // api/chat.js forwards Groq's status code verbatim, so a 404 here can
+    // mean either "the Vercel function itself is missing" or "Groq rejected
+    // the request" (e.g. a decommissioned model) — the body's shape tells
+    // them apart, since only the latter has a Groq-style `error.message`.
+    final groqError = _tryParseGroqError(res.body);
+    if (groqError != null) {
+      throw Exception('Groq error: $groqError');
+    }
     throw Exception('Proxy error ${res.statusCode}');
+  }
+
+  static String? _tryParseGroqError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      final error = decoded is Map ? decoded['error'] : null;
+      if (error is Map && error['message'] is String) {
+        return error['message'] as String;
+      }
+    } catch (_) {
+      // Not JSON, or not the Groq error shape — fall through.
+    }
+    return null;
   }
 
   // ── Parse Response ─────────────────────────────────────────────────
