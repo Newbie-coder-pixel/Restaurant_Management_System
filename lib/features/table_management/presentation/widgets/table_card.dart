@@ -722,8 +722,13 @@ class _StatusBottomSheetState extends State<_StatusBottomSheet> {
         ? const Color(0xFF4CAF50)
         : AppColors.accent;
     final payLabel = o.paymentStatus == 'paid' ? 'Paid' : 'Unpaid';
+    // createdAt is parsed from a UTC ISO timestamp (see the model's
+    // fromJson below) — without .toLocal() this showed the UTC hour
+    // instead of WIB (e.g. 11:08 UTC displayed as "11:08" instead of the
+    // correct 18:08 WIB).
+    final orderLocal = o.createdAt.toLocal();
     final orderTime =
-        '${o.createdAt.hour.toString().padLeft(2, '0')}:${o.createdAt.minute.toString().padLeft(2, '0')} WIB';
+        '${orderLocal.hour.toString().padLeft(2, '0')}:${orderLocal.minute.toString().padLeft(2, '0')} WIB';
 
     return Container(
       padding: const EdgeInsets.all(16),
