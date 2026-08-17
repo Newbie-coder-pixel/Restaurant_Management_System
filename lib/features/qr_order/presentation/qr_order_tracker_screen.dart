@@ -1041,8 +1041,18 @@ class _TrackerActionsState extends ConsumerState<_TrackerActions> {
     final table = ref.read(activeQrTableProvider);
     ref.read(qrCartProvider(table).notifier).clearCart();
 
-    // Push to the menu screen (not go, so we can back out to the tracker)
-    context.push('/qr/${order.tableId}');
+    // Push to the menu screen (not go, so we can back out to the tracker).
+    // Must carry the `t=` token this session already validated on the
+    // original scan (see activeQrTokenProvider, set by QrMenuScreen once
+    // validateQrToken() passes) — QrMenuScreen re-validates the token on
+    // every entry including this one, and validateQrToken() treats a
+    // missing token as invalid outright (no server round-trip at all), so
+    // omitting it here always landed on the "QR code has expired" screen
+    // even for the still-current code the customer scanned minutes ago.
+    final token = ref.read(activeQrTokenProvider);
+    context.push(
+      '/qr/${order.tableId}${token != null && token.isNotEmpty ? '?t=$token' : ''}',
+    );
   }
 
   @override
