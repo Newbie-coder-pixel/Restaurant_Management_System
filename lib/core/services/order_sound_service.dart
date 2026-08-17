@@ -21,7 +21,6 @@ const _assetFor = {
 /// instead of each owning their own AudioPlayer.
 class OrderSoundService {
   static final AudioPlayer _player = AudioPlayer();
-  static bool _unlocked = false;
   static bool _unlocking = false;
 
   /// Primes the shared player inside a real user-gesture call stack.
@@ -34,20 +33,35 @@ class OrderSoundService {
   /// very first chime (and on strict browsers, every chime) silently
   /// fails with a NotAllowedError that nothing in the UI surfaces.
   ///
-  /// Call this from the first pointer-down anywhere in the app (see
-  /// main.dart's RestaurantApp) — safe to call repeatedly, it only
-  /// actually unlocks once per page session. Only needs to prime one
-  /// asset — once the browser has granted audio playback for this page,
-  /// every asset through the same AudioPlayer plays freely.
+  /// Two WebKit-specific gotchas this has to work around (found via
+  /// audioplayers_web's WrappedPlayer source):
+  /// - `setUrl()` tears down and recreates the underlying `<audio>`
+  ///   element (and its Web Audio graph) every time a *different* sound
+  ///   URL is played — priming only one asset left the other three
+  ///   chimes permanently unprimed on strict browsers. So this now
+  ///   primes every entry in [_assetFor], not just the kitchen chime.
+  /// - the shared `AudioContext` gets auto-suspended by iOS Safari
+  ///   whenever the tab loses focus or the screen locks; `start()`
+  ///   calls `AudioContext.resume()` on every play, which silently
+  ///   fails once there's no live user gesture (i.e. exactly when a
+  ///   realtime chime tries to play after the tab was backgrounded).
+  ///   So this deliberately re-primes on *every* pointer-down instead
+  ///   of only the first one — cheap (muted, near-instant) and it's the
+  ///   only way to re-resume a context WebKit re-suspended after the
+  ///   initial unlock.
+  ///
+  /// Call this from every pointer-down anywhere in the app (see
+  /// main.dart's RestaurantApp).
   static Future<void> unlock() async {
-    if (_unlocked || _unlocking) return;
+    if (_unlocking) return;
     _unlocking = true;
     try {
       await _player.setVolume(0);
-      await _player.play(AssetSource(_assetFor[NotificationSound.kitchen]!));
-      await _player.stop();
+      for (final sound in NotificationSound.values) {
+        await _player.play(AssetSource(_assetFor[sound]!));
+        await _player.stop();
+      }
       await _player.setVolume(1);
-      _unlocked = true;
     } catch (e) {
       debugPrint('[OrderSoundService] unlock error: $e');
     } finally {
