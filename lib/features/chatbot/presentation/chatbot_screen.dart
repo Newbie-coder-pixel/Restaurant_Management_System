@@ -115,6 +115,35 @@ const _exportKeywords = [
   'jadi pdf', 'ubah ke pdf',
 ];
 
+// Deterministic pre-LLM block for "ignore your instructions"/"abaikan semua
+// batasan"-style prompt-injection attempts, so an off-topic answer can never
+// slip through on a model turn that doesn't fully honor the SCOPE rule
+// already in this screen's system prompt — the system prompt is a second
+// line of defense, not the only one.
+const _jailbreakTriggers = [
+  // English
+  'ignore all', 'ignore your instruction', 'ignore previous instruction',
+  'ignore the instruction', 'ignore any instruction',
+  'disregard your instruction', 'disregard previous instruction',
+  'disregard the instruction', 'forget your instruction',
+  'forget previous instruction', 'forget the rules', 'forget the above',
+  'no restrictions', 'without restrictions', 'unrestricted mode',
+  'developer mode', 'dev mode', 'jailbreak', 'act as if', 'pretend you are',
+  'pretend to be', 'you are now', 'reveal your prompt', 'reveal your system',
+  'bypass your', 'override your instruction', 'do anything now',
+  // Indonesian
+  'abaikan semua', 'abaikan instruksi', 'abaikan aturan', 'abaikan batasan',
+  'lupakan instruksi', 'lupakan aturan', 'lupakan batasan',
+  'tanpa batasan', 'tanpa aturan', 'mode pengembang', 'berpura-pura jadi',
+  'berperan sebagai', 'kamu sekarang adalah', 'anggap kamu adalah',
+  'anggap dirimu',
+];
+
+bool _looksLikeJailbreakAttempt(String text) {
+  final lower = text.toLowerCase();
+  return _jailbreakTriggers.any((t) => lower.contains(t));
+}
+
 // ── Screen ─────────────────────────────────────────────────────────────
 class ChatbotScreen extends ConsumerStatefulWidget {
   /// When true, renders as a compact panel (rounded card + slim header with
@@ -1022,6 +1051,19 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     // Intercept export quick action
     if (text == '__export__') {
       await _showExportSheet();
+      return;
+    }
+
+    // Hard block BEFORE anything reaches the LLM — see _jailbreakTriggers.
+    if (_looksLikeJailbreakAttempt(text)) {
+      chatNotifier.addMessage(
+        ChatMessage(role: 'user', content: text, timestamp: DateTime.now()),
+      );
+      _addBot(
+        "I'm only able to help with questions about this restaurant's "
+        "operations — sales, menu, inventory, bookings, and staff. Is "
+        "there something restaurant-related I can help with?",
+      );
       return;
     }
 

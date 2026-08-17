@@ -18,6 +18,35 @@ class _QrChatMessage {
       : timestamp = DateTime.now();
 }
 
+// Deterministic pre-LLM block for "ignore your instructions"/"abaikan semua
+// batasan"-style prompt-injection attempts, so an off-topic answer can never
+// slip through on a model turn that doesn't fully honor the SCOPE rule in
+// QrChatbotService.buildSystemPrompt — the system prompt is a second line
+// of defense, not the only one (same reasoning as _mentionsAnotherQueue).
+const _jailbreakTriggers = [
+  // English
+  'ignore all', 'ignore your instruction', 'ignore previous instruction',
+  'ignore the instruction', 'ignore any instruction',
+  'disregard your instruction', 'disregard previous instruction',
+  'disregard the instruction', 'forget your instruction',
+  'forget previous instruction', 'forget the rules', 'forget the above',
+  'no restrictions', 'without restrictions', 'unrestricted mode',
+  'developer mode', 'dev mode', 'jailbreak', 'act as if', 'pretend you are',
+  'pretend to be', 'you are now', 'reveal your prompt', 'reveal your system',
+  'bypass your', 'override your instruction', 'do anything now',
+  // Indonesian
+  'abaikan semua', 'abaikan instruksi', 'abaikan aturan', 'abaikan batasan',
+  'lupakan instruksi', 'lupakan aturan', 'lupakan batasan',
+  'tanpa batasan', 'tanpa aturan', 'mode pengembang', 'berpura-pura jadi',
+  'berperan sebagai', 'kamu sekarang adalah', 'anggap kamu adalah',
+  'anggap dirimu',
+];
+
+bool _looksLikeJailbreakAttempt(String text) {
+  final lower = text.toLowerCase();
+  return _jailbreakTriggers.any((t) => lower.contains(t));
+}
+
 const _quickActions = [
   ('✨ Recommend something', 'Recommend a menu for me'),
   ('🔥 Popular picks', "What's popular here?"),
@@ -230,6 +259,19 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     if (text.isEmpty || _isTyping || _loadingContext) return;
 
     _msgCtrl.clear();
+
+    // Hard block BEFORE anything reaches the LLM — see _jailbreakTriggers.
+    if (_looksLikeJailbreakAttempt(text)) {
+      setState(() {
+        _messages.add(_QrChatMessage(role: 'user', content: text));
+      });
+      _scrollToBottom();
+      _addBot(
+        "I can only help with $_branchName's menu and your order here. "
+        "Is there something on the menu I can help you with?",
+      );
+      return;
+    }
 
     // Hard block BEFORE anything reaches the LLM: if we're tracking an
     // order and the customer's message names a different queue/order
