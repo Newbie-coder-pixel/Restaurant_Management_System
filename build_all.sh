@@ -26,6 +26,19 @@ write_vercel_json() {
 EOF
 }
 
+# api/chat.js dan api/notify.js pakai sintaks ESM ("export default"). Tanpa
+# package.json ber-"type":"module" di sebelah folder api/, Vercel gagal
+# mem-build function-nya (SyntaxError saat parse), function tidak ke-deploy,
+# dan /api/chat/notify langsung 404 walau filenya ada. Cukup field "type" ini
+# saja — chat.js/notify.js tidak import package npm apapun saat runtime.
+write_package_json() {
+  cat > "$1/package.json" << 'EOF'
+{
+  "type": "module"
+}
+EOF
+}
+
 # ── 1. Staff App ──────────────────────────────────────────────────────────────
 echo ""
 echo "▶ [1/3] Building STAFF app..."
@@ -38,6 +51,7 @@ rm -rf build/staff
 cp -r build/web build/staff
 cp -r api build/staff/api
 write_vercel_json build/staff
+write_package_json build/staff
 echo "✓ Staff build selesai → build/staff (+ api/ + vercel.json ikut)"
 
 # ── 2. Customer App ───────────────────────────────────────────────────────────
@@ -59,6 +73,7 @@ rm -rf build/customer
 cp -r build/web build/customer
 cp -r api build/customer/api
 write_vercel_json build/customer
+write_package_json build/customer
 echo "✓ Customer build selesai → build/customer (+ api/ + vercel.json ikut)"
 
 # ── 3. QR App ─────────────────────────────────────────────────────────────────
@@ -74,6 +89,7 @@ rm -rf build/qr
 cp -r build/web build/qr
 cp -r api build/qr/api
 write_vercel_json build/qr
+write_package_json build/qr
 echo "✓ QR build selesai → build/qr (+ api/ + vercel.json ikut)"
 
 # ── Done ──────────────────────────────────────────────────────────────────────

@@ -41,6 +41,12 @@ jobs:
         run: |
           cp -r api build/web/api
           cp vercel.json build/web/vercel.json
+          # api/chat.js and api/notify.js use ESM ("export default"). Without a
+          # package.json with "type": "module" next to api/, Vercel can't parse
+          # the function and silently fails to deploy it, so /api/chat returns
+          # 404 even though the file is right there. Neither function imports
+          # an npm package at runtime, so this one field is all that's needed.
+          echo '{ "type": "module" }' > build/web/package.json
 
       # Content sanity check — fails the build loudly instead of silently
       # deploying stale/wrong output. index.html should always exist; the
@@ -50,6 +56,7 @@ jobs:
         run: |
           test -f build/web/index.html || { echo "❌ index.html missing from build/web"; exit 1; }
           test -f build/web/api/chat.js || { echo "❌ api/chat.js missing from build/web"; exit 1; }
+          grep -q '"type": *"module"' build/web/package.json || { echo "❌ build/web/package.json missing or not ESM — api/chat.js will 404"; exit 1; }
           echo "main.dart.js size: $(wc -c < build/web/main.dart.js) bytes"
           if [ "${{ matrix.mode }}" = "qr" ]; then
             grep -q "Menu Assistant" build/web/main.dart.js || { echo "❌ QR build is missing the AI menu assistant — stale/wrong build, refusing to deploy"; exit 1; }
