@@ -16,11 +16,75 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # CATATAN: block "functions" DIHAPUS karena Vercel modern (v2+) otomatis
 # mendeteksi api/*.js sebagai Node.js serverless function.
 # Format "nodejs18.x" menyebabkan error: "Function Runtimes must have a valid version"
+#
+# The headers block mirrors the root vercel.json (which the CI workflow
+# copies as-is — see CLAUDE.md). Without it, Vercel's default caching
+# applies to every static asset, including assets/fonts/MaterialIcons-Regular.otf
+# — whose filename never changes between builds even though its content does
+# (Flutter's icon tree-shaker regenerates the glyph subset per build to match
+# whichever Icons.* constants are actually referenced). A visitor whose
+# browser/CDN edge already cached an older MaterialIcons-Regular.otf then
+# never re-fetches it, so any icon added in a later commit renders as a blank
+# glyph for them — was actually being served that way for the QR-codes
+# button icon (Icons.qr_code_2) — even though the button's tooltip/tap
+# handler works fine, since those come from main.dart.js, not the font file.
 write_vercel_json() {
   cat > "$1/vercel.json" << 'EOF'
 {
   "rewrites": [
     { "source": "/((?!api).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" }
+      ]
+    },
+    {
+      "source": "/flutter_bootstrap.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/main.dart.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/(.*\\.js)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/(.*\\.wasm)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/assets/(fonts/.*|AssetManifest.*|FontManifest.json)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/assets/((?!fonts/|AssetManifest|FontManifest.json).*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/icons/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
   ]
 }
 EOF
