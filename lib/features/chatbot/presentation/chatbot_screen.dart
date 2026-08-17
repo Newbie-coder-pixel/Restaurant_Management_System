@@ -9,6 +9,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/providers/auth_provider.dart';
 import '../../../shared/models/staff_model.dart';
@@ -1050,8 +1051,17 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         : (_branches.where((b) => b.id == _myBranchId).firstOrNull?.name ??
               'My Branch');
 
+    // The embedded (floating-overlay) chatbot lives in a sibling Overlay to
+    // GoRouter's own Navigator (see the comment in main.dart), so this
+    // widget's own `context` has no Navigator ancestor and showModalBottomSheet
+    // would throw a null-check error trying to find one. Go through the
+    // router's navigatorKey instead — it resolves to a context that always
+    // has one, whether the chatbot is embedded or reached via /chatbot.
+    final sheetContext = rootNavigatorKey.currentContext;
+    if (sheetContext == null || !sheetContext.mounted) return;
+
     final result = await showModalBottomSheet<bool>(
-      context: context,
+      context: sheetContext,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => ReportExportSheet(

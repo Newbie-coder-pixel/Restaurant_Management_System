@@ -168,11 +168,19 @@ String _getInitialLocation() {
   return AppRoutes.customer; // staff defaults to customer first, redirect handles the rest
 }
 
+// Exposed so widgets that live outside GoRouter's own Navigator (the
+// floating chatbot/QR/customer overlays in main.dart sit in a sibling
+// `Overlay`, not inside GoRouter's route tree — see the comment there) can
+// still reach a context with a real Navigator ancestor, e.g. to call
+// showModalBottomSheet/showDialog from the embedded chatbot's export sheet.
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final notifier = _AuthChangeNotifier(ref);
   ref.onDispose(notifier.dispose);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: _getInitialLocation(),
     debugLogDiagnostics: true,
     refreshListenable: notifier,
