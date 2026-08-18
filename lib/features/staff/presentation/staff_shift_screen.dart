@@ -611,9 +611,9 @@ class _StaffShiftScreenState extends State<StaffShiftScreen> with SingleTickerPr
                       child: Column(children: [
                         // header row
                         Container(
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.surfaceVariant,
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusMd)),
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.radiusMd)),
                           ),
                           child: Row(children: [
                             const SizedBox(width: 96, child: Padding(

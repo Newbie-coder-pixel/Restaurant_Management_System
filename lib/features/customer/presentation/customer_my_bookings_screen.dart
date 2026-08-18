@@ -276,9 +276,9 @@ class _CustomerMyBookingsScreenState
       children: [
         if (!widget.embedded) _buildTopBar(),
         Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.surface,
-            border: Border(bottom: BorderSide(color: AppColors.border)),
+            border: const Border(bottom: BorderSide(color: AppColors.border)),
           ),
           child: TabBar(
             controller: _tabCtrl,
@@ -343,9 +343,9 @@ class _CustomerMyBookingsScreenState
   // ── TOP BAR (Restaurant header, shared visual language with other customer screens) ──
   Widget _buildTopBar() {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+        border: const Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: LayoutBuilder(builder: (context, constraints) {

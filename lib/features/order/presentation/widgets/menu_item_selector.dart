@@ -442,9 +442,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   Widget _buildCategorySidebar() {
     return Container(
       width: 90,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.border))),
+        border: const Border(right: BorderSide(color: AppColors.border))),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 10),
         children: [
@@ -639,9 +639,9 @@ class _MenuItemSelectorState extends State<MenuItemSelector> {
   Widget _buildOrderPanel() {
     return Container(
       width: 340,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(left: BorderSide(color: AppColors.border))),
+        border: const Border(left: BorderSide(color: AppColors.border))),
       child: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),

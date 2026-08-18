@@ -28,18 +28,61 @@ class AppColors {
   static const badgeDark        = Color(0xFF22284A);
   static const iconAccentBlue   = Color(0xFF4C5FD5);
 
-  static const background     = Color(0xFFFAF6ED);
-  static const surface        = Color(0xFFFDFBF5);
-  static const surfaceVariant = Color(0xFFF1EDE2);
-  static const footerBackground = Color(0xFFE2DED4);
+  static const _lightBackground     = Color(0xFFFAF6ED);
+  static const _lightSurface        = Color(0xFFFDFBF5);
+  static const _lightSurfaceVariant = Color(0xFFF1EDE2);
+  static const _lightFooterBackground = Color(0xFFE2DED4);
+
+  static const darkBackground    = Color(0xFF0F0F1A);
+  static const darkSurface       = Color(0xFF1A1A2E);
+  static const darkSurfaceVariant = Color(0xFF16213E);
+
+  // Muted warm-gray dark variant — deliberately NOT as dark as
+  // darkBackground/darkSurface above (those are tuned for KDS's own
+  // ThemeData.dark, which colors its text via Flutter's ColorScheme
+  // rather than the AppColors.textPrimary/textSecondary/border constants
+  // every other screen in the app hardcodes). textPrimary et al. stay
+  // fixed `static const` (near-black) — turning THEM into runtime-
+  // resolved getters too would need `const` stripped from every one of
+  // their ~900 call sites app-wide (each one cascades to every enclosing
+  // const wrapper), which is too large/risky a change to land safely
+  // right now. So this dark variant is picked light enough to keep that
+  // fixed near-black text legible against it, rather than aiming for a
+  // true black/white-text dark theme.
+  static const _mutedDarkBackground     = Color(0xFFACA192);
+  static const _mutedDarkSurface        = Color(0xFFC1B7A7);
+  static const _mutedDarkSurfaceVariant = Color(0xFFD3CAB9);
+  static const _mutedDarkFooterBackground = Color(0xFF938875);
+
   static const border         = Color(0xFFE4DFD2);
   static const textPrimary    = Color(0xFF221F1B);
   static const textSecondary  = Color(0xFF6E6A63);
   static const textHint       = Color(0xFF9C9690);
 
-  static const darkBackground    = Color(0xFF0F0F1A);
-  static const darkSurface       = Color(0xFF1A1A2E);
-  static const darkSurfaceVariant = Color(0xFF16213E);
+  // Set once per RestaurantApp rebuild from themeModeProvider's resolved
+  // Brightness (see main.dart) — background/surface/surfaceVariant/
+  // footerBackground below read this instead of being fixed consts, so
+  // toggling Light/Dark actually repaints every screen using these
+  // tokens rather than only the handful of unstyled default Material
+  // widgets that would otherwise be the sole thing to respond to
+  // MaterialApp's themeMode. Deliberately NOT itself reactive (no
+  // ChangeNotifier/Riverpod link) — RestaurantApp.build() sets it
+  // directly before building the widget tree, so every screen already
+  // rebuilds via the normal ref.watch(themeModeProvider) → MaterialApp →
+  // GoRouter page-builder rebuild cascade; this only needed to stop
+  // being `const` so those rebuilds actually pick up the new value
+  // instead of reusing a canonicalized const widget instance.
+  static Brightness _brightness = Brightness.light;
+  static void setBrightness(Brightness b) => _brightness = b;
+  static bool get isDark => _brightness == Brightness.dark;
+
+  static Color get background =>
+      isDark ? _mutedDarkBackground : _lightBackground;
+  static Color get surface => isDark ? _mutedDarkSurface : _lightSurface;
+  static Color get surfaceVariant =>
+      isDark ? _mutedDarkSurfaceVariant : _lightSurfaceVariant;
+  static Color get footerBackground =>
+      isDark ? _mutedDarkFooterBackground : _lightFooterBackground;
 
   // Categorical palette for charts with multiple distinct series (e.g. one
   // bar per menu item) — built from hues already used elsewhere in the
@@ -87,7 +130,7 @@ class AppTheme {
         surface: AppColors.background,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
@@ -104,7 +147,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          side: const BorderSide(color: AppColors.border, width: 1),
+          side: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -131,7 +174,7 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
@@ -142,11 +185,11 @@ class AppTheme {
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusSm)),
       ),
-      dividerTheme: const DividerThemeData(
+      dividerTheme: DividerThemeData(
         color: AppColors.border,
         thickness: 1,
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textHint,

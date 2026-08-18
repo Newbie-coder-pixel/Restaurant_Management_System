@@ -560,9 +560,9 @@ class _RestaurantClosureScreenState
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.surfaceVariant,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
+              border: const Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Row(children: [
               Icon(_selectedIsClosed ? Icons.event_available_rounded : Icons.add_circle_outline_rounded,

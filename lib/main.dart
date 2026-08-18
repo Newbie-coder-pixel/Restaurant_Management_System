@@ -111,6 +111,18 @@ class RestaurantApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
 
+    // AppColors' background/surface/text/border tokens read this flag
+    // instead of being fixed consts (see app_theme.dart) — set it here,
+    // synchronously before building anything below, so the whole tree
+    // this build() produces already reflects the resolved brightness.
+    // ThemeMode.system has no fixed Brightness of its own, so resolve it
+    // against the platform the same way MaterialApp itself would.
+    final themeMode = ref.watch(themeModeProvider);
+    final resolvedBrightness = themeMode == ThemeMode.system
+        ? WidgetsBinding.instance.platformDispatcher.platformBrightness
+        : (themeMode == ThemeMode.dark ? Brightness.dark : Brightness.light);
+    AppColors.setBrightness(resolvedBrightness);
+
     return MaterialApp.router(
       title: 'Restaurant Management System',
       debugShowCheckedModeBanner: false,

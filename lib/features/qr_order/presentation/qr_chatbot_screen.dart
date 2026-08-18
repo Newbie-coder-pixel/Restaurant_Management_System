@@ -564,10 +564,10 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-        borderRadius: BorderRadius.only(
+        border: const Border(bottom: BorderSide(color: AppColors.border)),
+        borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(20), topRight: Radius.circular(20)),
       ),
       child: Row(
@@ -792,9 +792,9 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
     if (_awaitingWeatherReply) {
       return Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.border)),
+          border: const Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Wrap(
           spacing: 8,
@@ -914,9 +914,9 @@ class _QrChatbotScreenState extends ConsumerState<QrChatbotScreen> {
   // "AI generated info" disclaimer underneath.
   Widget _buildInput() => Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.border)),
+          border: const Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

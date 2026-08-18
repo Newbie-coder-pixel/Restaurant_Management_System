@@ -1555,9 +1555,9 @@ have instead.
   Widget _buildEmbeddedHeader(StaffMember? staff) {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: const Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
@@ -2042,9 +2042,9 @@ have instead.
   // ── Input ──────────────────────────────────────────────────────────
   Widget _buildInput(bool isTyping) => Container(
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       color: AppColors.surface,
-      border: Border(top: BorderSide(color: AppColors.border)),
+      border: const Border(top: BorderSide(color: AppColors.border)),
     ),
     child: Column(
       mainAxisSize: MainAxisSize.min,

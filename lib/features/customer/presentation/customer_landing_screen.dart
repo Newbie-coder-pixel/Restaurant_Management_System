@@ -241,9 +241,9 @@ class _CustomerLandingScreenState
     );
 
     if (user == null && userAsync.isLoading) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.background,
-        body: Center(
+        body: const Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
@@ -310,9 +310,9 @@ class _CustomerLandingScreenState
 
   Widget _buildTopNav(User user, CartState cart) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+        border: const Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: LayoutBuilder(builder: (context, constraints) {
@@ -1605,9 +1605,9 @@ class _LocationPermissionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
       padding: EdgeInsets.fromLTRB(
           24, 16, 24, MediaQuery.of(context).padding.bottom + 24),
       child: Column(

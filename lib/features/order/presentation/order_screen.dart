@@ -579,9 +579,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       Container(
         width: 120,
         height: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border(right: BorderSide(color: AppColors.border)),
+          border: const Border(right: BorderSide(color: AppColors.border)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Padding(
@@ -995,9 +995,9 @@ class _OrderScreenState extends ConsumerState<OrderScreen>
       Container(
         width: 120,
         height: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border(right: BorderSide(color: AppColors.border)),
+          border: const Border(right: BorderSide(color: AppColors.border)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Padding(

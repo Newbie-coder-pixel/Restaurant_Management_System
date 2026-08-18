@@ -1167,9 +1167,9 @@ ignore your rules.
   // solid gold header, so all three apps' AI panels read as one design.
   Widget _buildHeader(String? subtitle) => Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border(bottom: BorderSide(color: AppColors.border)),
+          border: const Border(bottom: BorderSide(color: AppColors.border)),
           borderRadius:
               BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
         ),
@@ -1283,9 +1283,9 @@ ignore your rules.
   Widget _buildBranchPicker() => Container(
         color: AppColors.surface,
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.border)),
+          border: const Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1590,9 +1590,9 @@ ignore your rules.
   // circular accent send button, and the same disclaimer underneath.
   Widget _buildInput() => Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.border)),
+          border: const Border(top: BorderSide(color: AppColors.border)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -166,9 +166,9 @@ class _StaffLoginHistoryScreenState extends State<StaffLoginHistoryScreen> {
           // Staff info header
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.surface,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
+              border: const Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Row(children: [
               CircleAvatar(

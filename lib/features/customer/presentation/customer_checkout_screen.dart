@@ -550,9 +550,9 @@ class _CustomerCheckoutScreenState
   // ── TOP BAR ──────────────────────────────────────────────────────────────
   Widget _buildTopBar() {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+        border: const Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       child: Row(

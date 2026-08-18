@@ -246,9 +246,9 @@ class _CustomerMenuScreenState extends ConsumerState<CustomerMenuScreen> {
 
   Widget _buildTopNav(CartState cart) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+        border: const Border(bottom: BorderSide(color: AppColors.border, width: 1)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: LayoutBuilder(builder: (context, constraints) {
@@ -773,9 +773,9 @@ class _MenuCard extends StatelessWidget {
           children: [
             Container(
               height: 120,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.surfaceVariant,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
               ),
               clipBehavior: Clip.antiAlias,
               child: item['image_url'] != null

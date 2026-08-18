@@ -255,9 +255,9 @@ class _QrPayNowScreenState extends ConsumerState<QrPayNowScreen> {
                       child: Container(
                         width: double.infinity,
                         padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 16),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: AppColors.background,
-                          border: Border(top: BorderSide(color: AppColors.border)),
+                          border: const Border(top: BorderSide(color: AppColors.border)),
                         ),
                         child: SizedBox(
                           width: double.infinity,
@@ -318,9 +318,9 @@ class _PayNowHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: const Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [

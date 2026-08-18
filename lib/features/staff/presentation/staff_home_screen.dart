@@ -197,9 +197,9 @@ class _Header extends StatelessWidget {
         final showGreeting = constraints.maxWidth > 640;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.background,
-            border: Border(bottom: BorderSide(color: AppColors.border)),
+            border: const Border(bottom: BorderSide(color: AppColors.border)),
           ),
           child: Row(
             children: [

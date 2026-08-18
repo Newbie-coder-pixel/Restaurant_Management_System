@@ -208,9 +208,9 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
       return const _QrExpiredScreen();
     }
     if (!tokenValidAsync.hasValue) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
 
@@ -238,9 +238,9 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
     );
 
     return tableInfoAsync.when(
-      loading: () => const Scaffold(
+      loading: () => Scaffold(
         backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body: const Center(child: CircularProgressIndicator(color: AppColors.primary)),
       ),
       error: (e, _) => Scaffold(
         backgroundColor: AppColors.background,
@@ -250,9 +250,9 @@ class _QrMenuScreenState extends ConsumerState<QrMenuScreen> with SingleTickerPr
         final branchId = (tableData?['branch_id'] as String?)?.trim() ?? '';
 
         if (branchId.isEmpty) {
-          return const Scaffold(
+          return Scaffold(
             backgroundColor: AppColors.background,
-            body: Center(child: Text('Branch ID not found for this table')),
+            body: const Center(child: Text('Branch ID not found for this table')),
           );
         }
 
@@ -756,9 +756,9 @@ class _CategorySidebar extends StatelessWidget {
 
     return Container(
       width: 180,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(right: BorderSide(color: AppColors.border)),
+        border: const Border(right: BorderSide(color: AppColors.border)),
       ),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
