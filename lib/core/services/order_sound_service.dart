@@ -99,7 +99,18 @@ class OrderSoundService {
         try {
           await _player.stop();
           await _player.play(AssetSource(_assetFor[sound]!));
+          // onPlayerComplete is declared Stream<void> but audioplayers
+          // actually hands back its internal Stream<AudioEvent> upcast —
+          // void's special covariance lets that compile, but Dart's
+          // generics are reified, so .first's *runtime* type is
+          // Future<AudioEvent>, not Future<void>. timeout() then requires
+          // onTimeout to return a (FutureOr<AudioEvent>), and a bare
+          // `() {}` (which returns Null) fails that check with a
+          // TypeError on every single call — silently, since it's inside
+          // this try/catch, making every chime a no-op. .then<void>(...)
+          // forces a genuinely void-typed Future before timeout() sees it.
           await _player.onPlayerComplete.first
+              .then<void>((_) {})
               .timeout(const Duration(seconds: 3), onTimeout: () {});
         } catch (e) {
           debugPrint('[OrderSoundService] play error: $e');

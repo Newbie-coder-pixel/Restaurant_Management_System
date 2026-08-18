@@ -75,16 +75,26 @@ class _OrderNotificationOverlayState
   // the dialog while it's already open/pending for this exact order.
   String? _soundPromptedForOrderId;
 
-  Future<void> _maybeShowSoundPrompt(BuildContext context, String orderId) async {
+  Future<void> _maybeShowSoundPrompt(String orderId) async {
     if (_soundPromptedForOrderId == orderId) return;
     _soundPromptedForOrderId = orderId;
 
     final current = CustomerSoundPreference.valueFor(orderId);
     if (current != null) return; // already decided for this exact order
-    if (!context.mounted) return;
+
+    // This overlay lives in a sibling Overlay to GoRouter's own Navigator
+    // (see the comment in main.dart), so its own `context` has no Navigator
+    // ancestor and showDialog would throw "context does not include a
+    // Navigator" instead of ever showing — which also corrupts the shared
+    // Overlay's render tree (_RenderTheater), taking the notification
+    // banner down with it for the rest of the session. Go through the
+    // router's navigatorKey instead, same fix as chatbot_screen.dart's
+    // showModalBottomSheet call.
+    final dialogContext = rootNavigatorKey.currentContext;
+    if (dialogContext == null || !dialogContext.mounted) return;
 
     final enable = await showDialog<bool>(
-      context: context,
+      context: dialogContext,
       barrierDismissible: false,
       builder: (_) => const _SoundPermissionDialog(),
     );
@@ -206,7 +216,7 @@ class _OrderNotificationOverlayState
             : null;
     if (trackOrderId != null && _onOrderTrackRoute) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _maybeShowSoundPrompt(context, trackOrderId);
+        if (mounted) _maybeShowSoundPrompt(trackOrderId);
       });
     }
 
