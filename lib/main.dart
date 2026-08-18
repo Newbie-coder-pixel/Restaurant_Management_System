@@ -11,6 +11,8 @@ import 'core/services/notification_service.dart';
 import 'core/services/order_sound_service.dart';
 import 'shared/widgets/floating_chatbot_overlay.dart';
 import 'shared/widgets/order_notification_overlay.dart';
+import 'shared/widgets/theme_mode_toggle.dart';
+import 'core/providers/theme_mode_provider.dart';
 import 'features/qr_order/presentation/qr_chatbot_overlay.dart';
 import 'features/customer/presentation/customer_chatbot_overlay.dart';
 import 'features/payment/midtrans/midtrans_service.dart';
@@ -130,7 +132,7 @@ class RestaurantApp extends ConsumerWidget {
           ],
         ),
       ),
-      themeMode: ThemeMode.light,
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
       builder: (context, child) => Listener(
         // Primes OrderSoundService's shared player on the very first tap
@@ -206,6 +208,15 @@ class RestaurantApp extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  // Global Light/Dark/System toggle — see ThemeModeToggle's
+                  // doc comment. Bottom-left so it never collides with the
+                  // chatbot FABs (bottom-right) or the notification banner
+                  // (top). Positioned must be a direct Stack child (unlike
+                  // the other overlay widgets above, which wrap themselves
+                  // in Material here since they don't return Positioned as
+                  // their own root) — ThemeModeToggle owns its own Material
+                  // internally instead.
+                  const ThemeModeToggle(),
                 ],
               ),
             ),
